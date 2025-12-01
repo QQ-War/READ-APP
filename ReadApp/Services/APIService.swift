@@ -21,17 +21,96 @@ class APIService: ObservableObject {
         return "\(serverURL)/api/\(Self.apiVersion)"
     }
     
+    var publicBaseURL: String? {
+        let publicServerURL = UserPreferences.shared.publicServerURL
+        guard !publicServerURL.isEmpty else { return nil }
+        return "\(publicServerURL)/api/\(Self.apiVersion)"
+    }
+    
     private var accessToken: String {
         UserPreferences.shared.accessToken
     }
     
     private init() {}
     
+    // MARK: - Failback 请求方法
+    /// 通用网络请求方法，支持自动failback到公网服务器
+    private func requestWithFailback(endpoint: String, queryItems: [URLQueryItem], timeoutInterval: TimeInterval = 15) async throws -> (Data, HTTPURLResponse) {
+        // 先尝试局域网
+        let localURL = "\(baseURL)/\(endpoint)"
+        
+        do {
+            return try await performRequest(urlString: localURL, queryItems: queryItems, timeoutInterval: timeoutInterval)
+        } catch let localError as NSError {
+            // 检查是否是网络连接错误，如果是则尝试公网
+            if shouldTryPublicServer(error: localError), let publicBase = publicBaseURL {
+                LogManager.shared.log("局域网连接失败，尝试公网服务器...", category: "网络")
+                let publicURL = "\(publicBase)/\(endpoint)"
+                
+                do {
+                    return try await performRequest(urlString: publicURL, queryItems: queryItems, timeoutInterval: timeoutInterval)
+                } catch {
+                    // 公网也失败，抛出原始错误
+                    LogManager.shared.log("公网服务器也失败: \(error)", category: "网络错误")
+                    throw localError
+                }
+            }
+            
+            // 没有公网服务器或不需要failback，直接抛出错误
+            throw localError
+        }
+    }
+    
+    /// 判断是否应该尝试公网服务器
+    private func shouldTryPublicServer(error: NSError) -> Bool {
+        if error.domain == NSURLErrorDomain {
+            switch error.code {
+            case NSURLErrorTimedOut,
+                 NSURLErrorCannotConnectToHost,
+                 NSURLErrorNetworkConnectionLost,
+                 NSURLErrorCannotFindHost:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
+    }
+    
+    /// 执行实际的网络请求
+    private func performRequest(urlString: String, queryItems: [URLQueryItem], timeoutInterval: TimeInterval) async throws -> (Data, HTTPURLResponse) {
+        guard var components = URLComponents(string: urlString) else {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL: \(urlString)"])
+        }
+        
+        components.queryItems = queryItems
+        
+        guard let url = components.url else {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无法构建URL"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = timeoutInterval
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "无效的响应类型"])
+        }
+        
+        return (data, httpResponse)
+    }
+    
     // MARK: - 登录
     func login(username: String, password: String) async throws -> String {
         let urlString = "\(baseURL)/login"
+        LogManager.shared.log("登录请求 URL: \(urlString)", category: "网络")
+        
         guard var components = URLComponents(string: urlString) else {
-            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
+            let error = "无效的URL: \(urlString)"
+            LogManager.shared.log(error, category: "网络错误")
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: error])
         }
         
         // 获取设备型号（在主线程同步获取）
@@ -44,24 +123,65 @@ class APIService: ObservableObject {
         ]
         
         guard let url = components.url else {
-            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
+            let error = "无法构建URL"
+            LogManager.shared.log(error, category: "网络错误")
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: error])
         }
+        
+        LogManager.shared.log("完整登录 URL: \(url.absoluteString)", category: "网络")
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 15
         
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
-        }
-        
-        let apiResponse = try JSONDecoder().decode(APIResponse<LoginResponse>.self, from: data)
-        
-        if apiResponse.isSuccess, let loginData = apiResponse.data {
-            return loginData.accessToken
-        } else {
-            throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "登录失败"])
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                let error = "无效的响应类型"
+                LogManager.shared.log(error, category: "网络错误")
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: error])
+            }
+            
+            LogManager.shared.log("HTTP 状态码: \(httpResponse.statusCode)", category: "网络")
+            
+            if httpResponse.statusCode != 200 {
+                let responseText = String(data: data, encoding: .utf8) ?? "无法解析响应"
+                let error = "服务器错误(状态码: \(httpResponse.statusCode)): \(responseText)"
+                LogManager.shared.log(error, category: "网络错误")
+                throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: error])
+            }
+            
+            let apiResponse = try JSONDecoder().decode(APIResponse<LoginResponse>.self, from: data)
+            
+            if apiResponse.isSuccess, let loginData = apiResponse.data {
+                LogManager.shared.log("登录成功", category: "网络")
+                return loginData.accessToken
+            } else {
+                let error = apiResponse.errorMsg ?? "登录失败"
+                LogManager.shared.log("登录失败: \(error)", category: "网络错误")
+                throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: error])
+            }
+        } catch let error as NSError {
+            // 检查是否是网络连接错误
+            if error.domain == NSURLErrorDomain {
+                var errorMsg = "网络连接失败: "
+                switch error.code {
+                case NSURLErrorTimedOut:
+                    errorMsg += "请求超时，请检查服务器地址和网络连接"
+                case NSURLErrorCannotConnectToHost:
+                    errorMsg += "无法连接到服务器 \(baseURL)"
+                case NSURLErrorNetworkConnectionLost:
+                    errorMsg += "网络连接已断开"
+                case NSURLErrorNotConnectedToInternet:
+                    errorMsg += "设备未连接到互联网"
+                default:
+                    errorMsg += error.localizedDescription
+                }
+                LogManager.shared.log(errorMsg, category: "网络错误")
+                throw NSError(domain: "APIService", code: error.code, userInfo: [NSLocalizedDescriptionKey: errorMsg])
+            }
+            throw error
         }
     }
     
@@ -108,26 +228,14 @@ class APIService: ObservableObject {
             throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
         }
         
-        let urlString = "\(baseURL)/getBookshelf"
-        guard var components = URLComponents(string: urlString) else {
-            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
-        }
-        
-        components.queryItems = [
+        let queryItems = [
             URLQueryItem(name: "accessToken", value: accessToken),
             URLQueryItem(name: "version", value: "1.0.0")
         ]
         
-        guard let url = components.url else {
-            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
-        }
+        let (data, httpResponse) = try await requestWithFailback(endpoint: "getBookshelf", queryItems: queryItems)
         
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+        guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
         }
         
@@ -144,11 +252,6 @@ class APIService: ObservableObject {
     
     // MARK: - 获取章节列表
     func fetchChapterList(bookUrl: String, bookSourceUrl: String?) async throws -> [BookChapter] {
-        let urlString = "\(baseURL)/getChapterList"
-        guard var components = URLComponents(string: urlString) else {
-            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
-        }
-        
         var queryItems = [
             URLQueryItem(name: "accessToken", value: accessToken),
             URLQueryItem(name: "url", value: bookUrl)
@@ -158,18 +261,9 @@ class APIService: ObservableObject {
             queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
         }
         
-        components.queryItems = queryItems
+        let (data, httpResponse) = try await requestWithFailback(endpoint: "getChapterList", queryItems: queryItems)
         
-        guard let url = components.url else {
-            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+        guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
         }
         
@@ -192,11 +286,6 @@ class APIService: ObservableObject {
             return cachedContent
         }
         
-        let urlString = "\(baseURL)/getBookContent"
-        guard var components = URLComponents(string: urlString) else {
-            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
-        }
-        
         var queryItems = [
             URLQueryItem(name: "accessToken", value: accessToken),
             URLQueryItem(name: "url", value: bookUrl),
@@ -208,18 +297,9 @@ class APIService: ObservableObject {
             queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
         }
         
-        components.queryItems = queryItems
+        let (data, httpResponse) = try await requestWithFailback(endpoint: "getBookContent", queryItems: queryItems)
         
-        guard let url = components.url else {
-            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+        guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
         }
         

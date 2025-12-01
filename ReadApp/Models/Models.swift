@@ -97,6 +97,12 @@ class UserPreferences: ObservableObject {
         }
     }
     
+    @Published var publicServerURL: String {
+        didSet {
+            UserDefaults.standard.set(publicServerURL, forKey: "publicServerURL")
+        }
+    }
+    
     @Published var accessToken: String {
         didSet {
             UserDefaults.standard.set(accessToken, forKey: "accessToken")
@@ -190,6 +196,7 @@ class UserPreferences: ObservableObject {
         self.speechRate = savedSpeechRate == 0 ? 10.0 : savedSpeechRate
         
         self.serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? ""
+        self.publicServerURL = UserDefaults.standard.string(forKey: "publicServerURL") ?? ""
         self.accessToken = UserDefaults.standard.string(forKey: "accessToken") ?? ""
         self.username = UserDefaults.standard.string(forKey: "username") ?? ""
         self.isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
@@ -197,7 +204,7 @@ class UserPreferences: ObservableObject {
         self.bookshelfSortByRecent = UserDefaults.standard.bool(forKey: "bookshelfSortByRecent")
         
         let savedPreloadCount = UserDefaults.standard.integer(forKey: "ttsPreloadCount")
-        self.ttsPreloadCount = savedPreloadCount == 0 ? 3 : savedPreloadCount
+        self.ttsPreloadCount = savedPreloadCount == 0 ? 10 : savedPreloadCount
     }
     
     func logout() {

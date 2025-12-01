@@ -24,13 +24,27 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    HStack {
-                        Text("服务器")
-                        Spacer()
-                        Text(preferences.serverURL)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("局域网服务器")
+                            Spacer()
+                            Text(preferences.serverURL)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                        
+                        if !preferences.publicServerURL.isEmpty {
+                            HStack {
+                                Text("公网服务器")
+                                    .font(.caption)
+                                Spacer()
+                                Text(preferences.publicServerURL)
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                                    .lineLimit(1)
+                            }
+                        }
                     }
                     
                     Button(action: { showLogoutAlert = true }) {
@@ -89,7 +103,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    Stepper(value: $preferences.ttsPreloadCount, in: 0...10) {
+                    Stepper(value: $preferences.ttsPreloadCount, in: 0...50) {
                         HStack {
                             Text("预载段数")
                             Spacer()
@@ -98,7 +112,7 @@ struct SettingsView: View {
                         }
                     }
                     
-                    Text("提前下载接下来的音频段，减少等待时间（0表示不预载）")
+                    Text("提前下载接下来的音频段，减少等待时间。设置越大，切换章节越流畅（建议 10-20 段）")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

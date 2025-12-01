@@ -293,6 +293,9 @@ struct ReadingView: View {
                             ttsManager.stop()
                         }
                     }
+                    
+                    // 预加载下一章内容到缓存
+                    preloadNextChapter()
                 }
             } catch {
                 await MainActor.run {
@@ -351,11 +354,36 @@ struct ReadingView: View {
             currentIndex: currentChapterIndex,
             bookUrl: book.bookUrl ?? "",
             bookSourceUrl: book.origin,
-            bookTitle: book.name ?? "未知书名"
+            bookTitle: book.name ?? "未知书名",
+            coverUrl: book.displayCoverUrl
         ) { newIndex in
             currentChapterIndex = newIndex
             loadChapterContent()
             saveProgress()
+        }
+    }
+    
+    // MARK: - 预加载下一章
+    private func preloadNextChapter() {
+        // 检查是否有下一章
+        guard currentChapterIndex < chapters.count - 1 else { return }
+        
+        let nextChapterIndex = currentChapterIndex + 1
+        
+        // 在后台预加载下一章内容
+        Task {
+            do {
+                // 调用 fetchChapterContent 会自动将内容存入 APIService 的缓存
+                _ = try await apiService.fetchChapterContent(
+                    bookUrl: book.bookUrl ?? "",
+                    bookSourceUrl: book.origin,
+                    index: nextChapterIndex
+                )
+                print("✅ 已预加载下一章：\(chapters[nextChapterIndex].title)")
+            } catch {
+                // 预加载失败不影响当前阅读，静默处理
+                print("⚠️ 预加载下一章失败: \(error.localizedDescription)")
+            }
         }
     }
     
