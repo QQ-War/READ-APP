@@ -31,6 +31,7 @@ class TTSManager: NSObject, ObservableObject {
     private var preloadQueue: [Int] = []       // 等待预载的队列
     private var isPreloading = false           // 是否正在执行预载任务
     private let maxPreloadRetries = 3          // 最大重试次数
+    private let maxConcurrentDownloads = 6     // 最大并发下载数
     
     // 下一章预载
     private var nextChapterSentences: [String] = []  // 下一章的段落
@@ -747,7 +748,7 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - 处理预载队列 (顺序下载 + 重试)
+    // MARK: - 处理预载队列 (并发下载 + 顺序优先)
     private func processPreloadQueue() {
         guard !isPreloading else { return }
         
@@ -756,18 +757,41 @@ class TTSManager: NSObject, ObservableObject {
         Task { [weak self] in
             guard let self = self else { return }
             
-            while !self.preloadQueue.isEmpty {
-                // 再次检查是否被停止
-                if !self.isPreloading { break }
+            await withTaskGroup(of: Void.self) { group in
+                var activeDownloads = 0
+                var queueIndex = 0
                 
-                // 取出第一个
-                let index = self.preloadQueue.removeFirst()
-                
-                // double check cache
-                if self.audioCache[index] != nil { continue }
-                
-                // 顺序下载并重试
-                await self.downloadAudioWithRetry(at: index)
+                while queueIndex < self.preloadQueue.count || activeDownloads > 0 {
+                    // 检查是否被停止
+                    if !self.isPreloading {
+                        group.cancelAll()
+                        break
+                    }
+                    
+                    // 启动新的下载任务（在并发限制内）
+                    while activeDownloads < self.maxConcurrentDownloads && queueIndex < self.preloadQueue.count {
+                        let index = self.preloadQueue[queueIndex]
+                        queueIndex += 1
+                        
+                        // 跳过已缓存的
+                        if self.audioCache[index] != nil {
+                            continue
+                        }
+                        
+                        activeDownloads += 1
+                        
+                        group.addTask { [weak self] in
+                            guard let self = self else { return }
+                            await self.downloadAudioWithRetry(at: index)
+                        }
+                    }
+                    
+                    // 等待至少一个任务完成
+                    if activeDownloads > 0 {
+                        await group.next()
+                        activeDownloads -= 1
+                    }
+                }
             }
             
             self.isPreloading = false
