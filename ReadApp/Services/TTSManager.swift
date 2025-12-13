@@ -1246,26 +1246,29 @@ class TTSManager: NSObject, ObservableObject {
 // MARK: - AVAudioPlayerDelegate
 extension TTSManager: AVAudioPlayerDelegate {
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        logger.log("音频播放完成 - 成功: \(flag)", category: "TTS")
-        
-        // 播放间隙启动保活
-        startKeepAlive()
-        
-        // 如果正在朗读章节名，播放完后开始朗读内容
-        if isReadingChapterTitle {
-            isReadingChapterTitle = false
-            speakNextSentence()
-            return
-        }
-        
-        if flag {
-            // 播放下一句
-            currentSentenceIndex += 1
-            speakNextSentence()
-        } else {
-            logger.log("音频播放失败，跳过", category: "TTS错误")
-            currentSentenceIndex += 1
-            speakNextSentence()
+        // AVAudioPlayer 的回调线程不保证在主线程，统一切换到主线程更新状态
+        DispatchQueue.main.async {
+            self.logger.log("音频播放完成 - 成功: \(flag)", category: "TTS")
+
+            // 播放间隙启动保活
+            self.startKeepAlive()
+
+            // 如果正在朗读章节名，播放完后开始朗读内容
+            if self.isReadingChapterTitle {
+                self.isReadingChapterTitle = false
+                self.speakNextSentence()
+                return
+            }
+
+            if flag {
+                // 播放下一句
+                self.currentSentenceIndex += 1
+                self.speakNextSentence()
+            } else {
+                self.logger.log("音频播放失败，跳过", category: "TTS错误")
+                self.currentSentenceIndex += 1
+                self.speakNextSentence()
+            }
         }
     }
     
