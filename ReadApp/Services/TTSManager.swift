@@ -36,7 +36,6 @@ class TTSManager: NSObject, ObservableObject {
     // 下一章预载
     private var nextChapterSentences: [String] = []  // 下一章的段落
     private var nextChapterCache: [Int: Data] = [:]  // 下一章的音频缓存（索引-1为章节名）
-    private var hasTriggeredNextChapterPreload = false  // 是否已经触发下一章预载
     
     // 章节名朗读
     private var isReadingChapterTitle = false  // 是否正在朗读章节名
@@ -291,7 +290,6 @@ class TTSManager: NSObject, ObservableObject {
         isPreloading = false
         nextChapterCache.removeAll()
         nextChapterSentences.removeAll()
-        hasTriggeredNextChapterPreload = false
         
         // 分句
         sentences = splitTextIntoSentences(text)
@@ -601,8 +599,6 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 朗读下一句
     private func speakNextSentence() {
-        checkAndPreloadNextChapter()
-
         guard currentSentenceIndex < sentences.count else {
             logger.log("当前章节朗读完成，准备下一章", category: "TTS")
             // 当前章节读完，自动读下一章
@@ -726,10 +722,7 @@ class TTSManager: NSObject, ObservableObject {
     // MARK: - 开始预载
     private func startPreloading() {
         let preloadCount = UserPreferences.shared.ttsPreloadCount
-
-        // 无论当前章节是否还有预载任务，提前检查下一章预载条件
-        checkAndPreloadNextChapter()
-
+        
         // 预载当前章节的段落
         if preloadCount > 0 {
             let startIndex = currentSentenceIndex + 1
@@ -968,19 +961,23 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 检查当前章节是否预载完成，并预载下一章
     private func checkAndPreloadNextChapter() {
-        guard nextChapterSentences.isEmpty else { return }
-        guard !hasTriggeredNextChapterPreload else { return }
-        guard currentChapterIndex < chapters.count - 1 else { return }
-
+        // 如果已经在预载下一章，跳过
+        guard nextChapterSentences.isEmpty else {
+            return
+        }
+        
+        guard currentChapterIndex < chapters.count - 1 else {
+            return
+        }
+        
         // 计算进度百分比
         let progress = Double(currentSentenceIndex) / Double(max(sentences.count, 1))
-
+        
+        // 当播放到章节的 50% 时，开始预载下一章
+        // 或者剩余段落少于 20 段时也开始预载
         let remainingSentences = sentences.count - currentSentenceIndex
-
-        let preloadThreshold = max(UserPreferences.shared.ttsPreloadCount * 2, 20)
-
-        // 当播放到章节的 30% 或剩余段落低于动态阈值时，就提前预载下一章
-        if progress >= 0.3 || remainingSentences <= preloadThreshold {
+        
+        if progress >= 0.5 || remainingSentences <= 20 {
             logger.log("📖 播放进度 \(Int(progress * 100))%，剩余 \(remainingSentences) 段，触发预载下一章", category: "TTS")
             preloadNextChapter()
         }
@@ -991,9 +988,7 @@ class TTSManager: NSObject, ObservableObject {
         // 如果已经在预载下一章或已有下一章数据，跳过
         guard nextChapterSentences.isEmpty else { return }
         guard currentChapterIndex < chapters.count - 1 else { return }
-
-        hasTriggeredNextChapterPreload = true
-
+        
         let nextChapterIndex = currentChapterIndex + 1
         logger.log("开始预载下一章: \(nextChapterIndex)", category: "TTS")
         
@@ -1024,7 +1019,6 @@ class TTSManager: NSObject, ObservableObject {
                 }
             } catch {
                 logger.log("预载下一章失败: \(error)", category: "TTS错误")
-                hasTriggeredNextChapterPreload = false
             }
         }
     }
@@ -1162,8 +1156,7 @@ class TTSManager: NSObject, ObservableObject {
             sentences = nextChapterSentences
             totalSentences = sentences.count
             currentSentenceIndex = 0
-            hasTriggeredNextChapterPreload = false
-
+            
             // 将下一章的缓存移动到当前章节（包括章节名索引-1和正文段落）
             audioCache = nextChapterCache
             preloadedIndices = Set(nextChapterCache.keys)
@@ -1213,8 +1206,7 @@ class TTSManager: NSObject, ObservableObject {
                     sentences = splitTextIntoSentences(content)
                     totalSentences = sentences.count
                     currentSentenceIndex = 0
-                    hasTriggeredNextChapterPreload = false
-
+                    
                     // 清空当前章节的缓存
                     audioCache.removeAll()
                     preloadQueue.removeAll()
