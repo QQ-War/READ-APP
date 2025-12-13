@@ -960,7 +960,7 @@ class TTSManager: NSObject, ObservableObject {
     }
     
     // MARK: - 检查当前章节是否预载完成，并预载下一章
-    private func checkAndPreloadNextChapter() {
+    private func checkAndPreloadNextChapter(force: Bool = false) {
         // 如果已经在预载下一章，跳过
         guard nextChapterSentences.isEmpty else {
             return
@@ -970,6 +970,13 @@ class TTSManager: NSObject, ObservableObject {
             return
         }
         
+        // 章节切换后强制预载下一章，避免切换时卡顿
+        if force {
+            logger.log("章节切换后立即预载下一章", category: "TTS")
+            preloadNextChapter()
+            return
+        }
+
         // 计算进度百分比
         let progress = Double(currentSentenceIndex) / Double(max(sentences.count, 1))
         
@@ -1173,6 +1180,9 @@ class TTSManager: NSObject, ObservableObject {
                 updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
             }
             
+            // 章节切换后提前准备下一章，避免章节衔接等待
+            checkAndPreloadNextChapter(force: true)
+
             // 先朗读章节名
             speakChapterTitle()
             
@@ -1220,6 +1230,9 @@ class TTSManager: NSObject, ObservableObject {
                         updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
                     }
                     
+                    // 章节切换后提前准备下一章，避免章节衔接等待
+                    checkAndPreloadNextChapter(force: true)
+
                     // 先朗读章节名
                     speakChapterTitle()
                 }
