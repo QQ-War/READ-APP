@@ -689,7 +689,10 @@ class TTSManager: NSObject, ObservableObject {
         
         // 保存进度
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex)
-        
+
+        // 提前准备后续段落，尽量消除句间空档
+        startPreloading()
+
         // 检查是否选择了 TTS 引擎
         let ttsId = UserPreferences.shared.selectedTTSId
         if ttsId.isEmpty {
@@ -938,6 +941,7 @@ class TTSManager: NSObject, ObservableObject {
             audioPlayer = try AVAudioPlayer(data: data)
             audioPlayer?.delegate = self
             audioPlayer?.volume = 1.0
+            audioPlayer?.prepareToPlay() // 预解码，减少播放前的等待
             
             logger.log("创建 AVAudioPlayer 成功", category: "TTS")
             logger.log("音频时长: \(audioPlayer?.duration ?? 0) 秒", category: "TTS")
