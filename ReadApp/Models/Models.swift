@@ -9,7 +9,10 @@ struct APIResponse<T: Codable>: Codable {
 
 // MARK: - Book Model
 struct Book: Codable, Identifiable {
-    var id: String { bookUrl ?? UUID().uuidString }
+    // 使用持久的备用ID，避免在没有 bookUrl 时因 UUID 变化导致列表状态丢失
+    private let fallbackId = UUID().uuidString
+
+    var id: String { bookUrl ?? fallbackId }
     let name: String?
     let author: String?
     let bookUrl: String?
@@ -25,6 +28,24 @@ struct Book: Codable, Identifiable {
     let kind: String?
     let type: Int?
     let durChapterTime: Int64?  // 最后阅读时间（时间戳）
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case author
+        case bookUrl
+        case origin
+        case originName
+        case coverUrl
+        case intro
+        case durChapterTitle
+        case durChapterIndex
+        case durChapterPos
+        case totalChapterNum
+        case latestChapterTitle
+        case kind
+        case type
+        case durChapterTime
+    }
     
     var displayCoverUrl: String? {
         if let url = coverUrl, !url.isEmpty {
