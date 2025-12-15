@@ -26,7 +26,7 @@ class ReadViewModel(private val context: Context) : ViewModel() {
 
     private val preferences = UserPreferences(context)
     private val repository = ReadRepository { endpoint ->
-        ReadApiService.create(endpoint) { _ -> _uiState.value.accessToken }
+        ReadApiService.create(endpoint) { _uiState.value.accessToken }
     }
     private val player = PlayerHolder.get(context)
     private val chapterContentCache = mutableMapOf<Int, String>()

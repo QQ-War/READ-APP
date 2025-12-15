@@ -6,6 +6,7 @@ import com.readapp.android.model.HttpTTS
 import com.readapp.android.model.LoginResponse
 import com.readapp.android.model.UserInfo
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import retrofit2.Response
 
 class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
@@ -89,7 +90,7 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
 
     fun buildTtsAudioUrl(baseUrl: String, accessToken: String, ttsId: String, text: String, speechRate: Double): String? {
         val normalized = ensureTrailingSlash(baseUrl)
-        val url = HttpUrl.parse("${normalized}tts")?.newBuilder()
+        val url = "${normalized}tts".toHttpUrlOrNull()?.newBuilder()
             ?.addQueryParameter("accessToken", accessToken)
             ?.addQueryParameter("id", ttsId)
             ?.addQueryParameter("speakText", text)

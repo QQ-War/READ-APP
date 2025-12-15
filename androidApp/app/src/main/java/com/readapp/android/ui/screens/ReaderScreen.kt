@@ -254,7 +254,13 @@ fun ReaderScreen(
                             .weight(1f)
                             .padding(8.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(brush ?: animatedBackground),
+                            .then(
+                                if (brush != null) {
+                                    Modifier.background(brush)
+                                } else {
+                                    Modifier.background(animatedBackground)
+                                }
+                            ),
                         maxLines = Int.MAX_VALUE
                     )
                 }
