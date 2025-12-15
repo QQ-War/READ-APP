@@ -120,7 +120,7 @@ class ReadAudioService : MediaSessionService() {
             getPendingIntent(0, PendingIntent.FLAG_IMMUTABLE)
         }
 
-        val metadata = session.controller.mediaMetadata
+        val metadata = session.player.mediaMetadata
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(metadata.title)
             .setContentText(metadata.subtitle)
