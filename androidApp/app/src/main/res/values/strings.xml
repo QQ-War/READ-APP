@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">ReadApp</string>
+    <string name="server_url_label">服务器地址</string>
+    <string name="public_server_url_label">公网备选地址（可选）</string>
+</resources>
