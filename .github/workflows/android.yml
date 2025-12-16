@@ -1,0 +1,38 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Build release APK
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.2.1
+          build-root-directory: androidApp
+          arguments: assembleRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReadApp-android-apk
+          path: androidApp/app/build/outputs/apk/release/app-release.apk
