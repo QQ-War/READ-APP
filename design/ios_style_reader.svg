@@ -1,0 +1,24 @@
+<svg width="1170" height="2532" viewBox="0 0 1170 2532" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1170" height="2532" fill="#FDFDFC"/>
+  <rect x="0" y="0" width="1170" height="180" fill="white"/>
+  <text x="70" y="95" font-size="50" font-family="SF Pro Display" fill="#0A84FF">◁</text>
+  <text x="585" y="90" font-size="46" font-family="SF Pro Display" text-anchor="middle" fill="#111">岛上书店 · 第3章</text>
+  <text x="950" y="95" font-size="44" font-family="SF Pro Display" fill="#0A84FF">Aa  ⚙︎</text>
+  <rect x="60" y="220" width="1050" height="1260" rx="32" fill="white"/>
+  <text x="100" y="300" font-size="40" font-family="SF Pro Display" fill="#111">在一个名为Alice的小岛上，有一家开在角落里的书店...</text>
+  <text x="100" y="380" font-size="40" font-family="SF Pro Display" fill="#111">\n店主T.S.最喜欢做的事，就是给客人推荐书。</text>
+  <rect x="0" y="2272" width="1170" height="260" fill="white"/>
+  <text x="120" y="2350" font-size="44" font-family="SF Pro Display" fill="#111">15s ◁    ▶︎    ▷ 15s</text>
+  <rect x="80" y="2410" width="1010" height="40" rx="20" fill="#E5E5EA"/>
+  <text x="585" y="2390" font-size="36" font-family="SF Pro Display" text-anchor="middle" fill="#111">00:12 / 18:45</text>
+  <g font-family="SF Pro Display" font-size="38" transform="translate(80 2170)">
+    <rect width="160" height="70" rx="24" fill="#0A84FF"/>
+    <text x="50" y="48" fill="white">播放</text>
+    <rect x="190" width="160" height="70" rx="24" fill="#E5E5EA"/>
+    <text x="240" y="48" fill="#111">章节</text>
+    <rect x="380" width="160" height="70" rx="24" fill="#E5E5EA"/>
+    <text x="430" y="48" fill="#111">笔记</text>
+    <rect x="570" width="160" height="70" rx="24" fill="#E5E5EA"/>
+    <text x="620" y="48" fill="#111">设置</text>
+  </g>
+</svg>

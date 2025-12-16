@@ -1,0 +1,42 @@
+<svg width="1170" height="2532" viewBox="0 0 1170 2532" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1170" height="2532" fill="#F4F5F7"/>
+  <rect x="0" y="0" width="1170" height="180" fill="white"/>
+  <text x="585" y="90" font-size="52" font-family="SF Pro Display" text-anchor="middle" fill="#111">ReadApp · 书架</text>
+  <text x="1020" y="98" font-size="44" font-family="SF Pro Display" fill="#0A84FF">设置</text>
+  <rect x="60" y="220" width="1050" height="100" rx="28" fill="white"/>
+  <text x="90" y="285" font-size="40" font-family="SF Pro Display" fill="#8A8A8F">🔍 搜索或筛选书籍</text>
+  <g fill="#E5E5EA" font-family="SF Pro Display" font-size="36" transform="translate(60 350)">
+    <rect width="160" height="80" rx="20"/>
+    <text x="30" y="54" fill="#111">最新</text>
+    <rect x="190" width="160" height="80" rx="20"/>
+    <text x="220" y="54" fill="#111">已读</text>
+    <rect x="380" width="160" height="80" rx="20"/>
+    <text x="410" y="54" fill="#111">未读</text>
+    <rect x="570" width="240" height="80" rx="20"/>
+    <text x="600" y="54" fill="#111">本地缓存</text>
+  </g>
+  <g transform="translate(60 470)" font-family="SF Pro Display" fill="#111">
+    <rect width="1050" height="320" rx="32" fill="white"/>
+    <rect x="30" y="40" width="200" height="240" rx="16" fill="#D1D1D6"/>
+    <text x="280" y="110" font-size="46">岛上书店</text>
+    <text x="280" y="180" font-size="36" fill="#8A8A8F">现已更新·2章未读</text>
+    <text x="280" y="240" font-size="40" fill="#0A84FF">•••</text>
+    <text x="880" y="120" font-size="40" fill="#0A84FF">▶︎ 继续播放</text>
+  </g>
+  <g transform="translate(60 830)" font-family="SF Pro Display" fill="#111">
+    <rect width="1050" height="320" rx="32" fill="white"/>
+    <rect x="30" y="40" width="200" height="240" rx="16" fill="#D1D1D6"/>
+    <text x="280" y="110" font-size="46">解忧杂货店</text>
+    <text x="280" y="180" font-size="36" fill="#8A8A8F">日式温暖治愈</text>
+    <text x="280" y="240" font-size="40" fill="#0A84FF">•••</text>
+    <text x="880" y="120" font-size="40" fill="#0A84FF">▶︎ 继续播放</text>
+  </g>
+  <g transform="translate(60 1190)" font-family="SF Pro Display" fill="#111">
+    <rect width="1050" height="320" rx="32" fill="white"/>
+    <rect x="30" y="40" width="200" height="240" rx="16" fill="#D1D1D6"/>
+    <text x="280" y="110" font-size="46">The Pragmatic Programmer</text>
+    <text x="280" y="180" font-size="36" fill="#8A8A8F">英文·进度 35%</text>
+    <text x="280" y="240" font-size="40" fill="#0A84FF">•••</text>
+    <text x="880" y="120" font-size="40" fill="#0A84FF">▶︎ 继续播放</text>
+  </g>
+</svg>
