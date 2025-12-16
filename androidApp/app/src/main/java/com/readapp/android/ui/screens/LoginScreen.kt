@@ -2,7 +2,6 @@ package com.readapp.android.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,18 +20,15 @@ import androidx.compose.ui.unit.dp
 fun LoginScreen(
     isLoading: Boolean,
     serverUrl: String,
-    publicServerUrl: String,
     onLogin: (String, String) -> Unit,
     onServerSave: (String, String?) -> Unit
 ) {
     val username = remember { mutableStateOf("") }
     val password = remember { mutableStateOf("") }
     val server = remember { mutableStateOf(serverUrl) }
-    val publicServer = remember { mutableStateOf(publicServerUrl) }
 
-    LaunchedEffect(serverUrl, publicServerUrl) {
+    LaunchedEffect(serverUrl) {
         server.value = serverUrl
-        publicServer.value = publicServerUrl
     }
 
     Column(
@@ -47,12 +43,6 @@ fun LoginScreen(
             value = server.value,
             onValueChange = { server.value = it },
             label = { Text("服务器地址，例如 http://192.168.1.10:8080/api/5") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = publicServer.value,
-            onValueChange = { publicServer.value = it },
-            label = { Text("公网备用地址（可选）") },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -70,24 +60,14 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-                onClick = {
-                    onServerSave(server.value, publicServer.value.takeIf { it.isNotBlank() })
-                },
-                enabled = !isLoading
-            ) {
-                Text("保存服务器")
-            }
-            Button(
-                onClick = {
-                    onServerSave(server.value, publicServer.value.takeIf { it.isNotBlank() })
-                    onLogin(username.value, password.value)
-                },
-                enabled = !isLoading
-            ) {
-                Text("登录")
-            }
+        Button(
+            onClick = {
+                onServerSave(server.value, null)
+                onLogin(username.value, password.value)
+            },
+            enabled = !isLoading
+        ) {
+            Text("登录")
         }
     }
 }

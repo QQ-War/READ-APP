@@ -1,0 +1,38 @@
+<svg width="1080" height="2340" viewBox="0 0 1080 2340" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1080" height="2340" fill="#0B0C0F"/>
+  <rect x="60" y="100" width="960" height="200" rx="32" fill="#0F1116" stroke="#1E2A3A" stroke-width="4"/>
+  <text x="110" y="190" fill="#FFFFFF" font-size="64" font-family="SF Pro Display, Inter" font-weight="700">设置</text>
+  <text x="110" y="240" fill="#A6B4C8" font-size="30" font-family="PingFang SC">管理服务器、缓存与显示样式</text>
+
+  <g transform="translate(60 340)">
+    <rect width="960" height="320" rx="32" fill="#10141C" stroke="#1F2A38"/>
+    <text x="40" y="90" fill="#FFFFFF" font-size="36" font-family="PingFang SC" font-weight="700">服务器</text>
+    <text x="40" y="140" fill="#7F8B9C" font-size="28" font-family="PingFang SC">设置主站点与公网备用地址</text>
+    <rect x="40" y="180" width="880" height="70" rx="18" fill="#161A22" stroke="#1F2A38"/>
+    <text x="60" y="226" fill="#A6B4C8" font-size="28" font-family="PingFang SC">https://example.com</text>
+    <rect x="40" y="260" width="880" height="70" rx="18" fill="#161A22" stroke="#1F2A38"/>
+    <text x="60" y="306" fill="#A6B4C8" font-size="28" font-family="PingFang SC">https://public-backup.com</text>
+  </g>
+
+  <g transform="translate(60 700)">
+    <rect width="960" height="220" rx="32" fill="#10141C" stroke="#1F2A38"/>
+    <text x="40" y="90" fill="#FFFFFF" font-size="36" font-family="PingFang SC" font-weight="700">缓存</text>
+    <text x="40" y="140" fill="#7F8B9C" font-size="28" font-family="PingFang SC">清理本地缓存与历史记录</text>
+    <rect x="700" y="70" width="200" height="80" rx="24" fill="#203044"/>
+    <text x="750" y="122" fill="#FFFFFF" font-size="30" font-family="PingFang SC">清理</text>
+  </g>
+
+  <g transform="translate(60 960)">
+    <rect width="960" height="420" rx="32" fill="#10141C" stroke="#1F2A38"/>
+    <text x="40" y="90" fill="#FFFFFF" font-size="36" font-family="PingFang SC" font-weight="700">阅读外观</text>
+    <text x="40" y="140" fill="#7F8B9C" font-size="28" font-family="PingFang SC">字体大小、行间距与沉浸模式</text>
+    <text x="40" y="210" fill="#A6B4C8" font-size="28" font-family="PingFang SC">字体大小 1.0x</text>
+    <rect x="40" y="230" width="720" height="10" rx="5" fill="#1F2A38"/>
+    <rect x="40" y="230" width="360" height="10" rx="5" fill="#2F7DF7"/>
+    <text x="40" y="300" fill="#A6B4C8" font-size="28" font-family="PingFang SC">行间距 1.2x</text>
+    <rect x="40" y="320" width="720" height="10" rx="5" fill="#1F2A38"/>
+    <rect x="40" y="320" width="420" height="10" rx="5" fill="#2F7DF7"/>
+    <rect x="800" y="70" width="160" height="80" rx="24" fill="#2F4361"/>
+    <text x="836" y="122" fill="#FFFFFF" font-size="30" font-family="PingFang SC">沉浸</text>
+  </g>
+</svg>
