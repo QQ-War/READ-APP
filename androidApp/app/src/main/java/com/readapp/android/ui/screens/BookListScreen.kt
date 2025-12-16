@@ -312,6 +312,8 @@ private fun BookListItem(
                     Icon(imageVector = Icons.Outlined.BookmarkBorder, contentDescription = null)
                 }
             }
+
+            item { Spacer(modifier = Modifier.height(8.dp)) }
         }
     }
 }
