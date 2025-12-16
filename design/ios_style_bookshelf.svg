@@ -1,47 +1,96 @@
 <svg width="1080" height="2340" viewBox="0 0 1080 2340" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1080" height="2340" fill="#0B0C0F"/>
-  <rect x="40" y="80" width="1000" height="200" rx="32" fill="#0F1116" stroke="#1E2A3A" stroke-width="4"/>
-  <text x="90" y="170" fill="#5DA8FF" font-size="36" font-family="PingFang SC, Inter" font-weight="600">LiveContainer</text>
-  <text x="90" y="230" fill="#FFFFFF" font-size="70" font-family="SF Pro Display, Inter" font-weight="700">书架</text>
-  <rect x="80" y="300" width="920" height="80" rx="20" fill="#161A22" stroke="#1F2A38"/>
-  <text x="130" y="352" fill="#7F8B9C" font-size="32" font-family="PingFang SC">搜索书名或作者</text>
-  <g transform="translate(80 410)">
-    <rect width="170" height="64" rx="18" fill="#1B2B3D"/>
-    <text x="46" y="42" fill="#FFFFFF" font-size="30" font-family="PingFang SC">倒序</text>
-    <rect x="190" width="170" height="64" rx="18" fill="#2F4361"/>
-    <text x="236" y="42" fill="#FFFFFF" font-size="30" font-family="PingFang SC">正序</text>
-    <rect x="380" width="260" height="64" rx="18" fill="#1B2B3D"/>
-    <text x="422" y="42" fill="#FFFFFF" font-size="30" font-family="PingFang SC">最近阅读</text>
+  <defs>
+    <linearGradient id="bg" x1="540" y1="0" x2="540" y2="2340" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C2735"/>
+      <stop offset="0.45" stop-color="#0F1218"/>
+      <stop offset="1" stop-color="#0B0C10"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="320" y2="200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2E3D5A" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#1E2635" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="bookCard" x1="120" y1="0" x2="520" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3456FF" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#7C4DFF" stop-opacity="0.26"/>
+    </linearGradient>
+    <linearGradient id="coverArt" x1="28" y1="28" x2="158" y2="208" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5CE1FF" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#7F5BFF" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="coverOverlay" x1="28" y1="108" x2="158" y2="208" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#05070A00"/>
+      <stop offset="1" stop-color="#0B0F19" stop-opacity="0.45"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="2340" fill="url(#bg)"/>
+
+  <!-- Top bar -->
+  <g transform="translate(40 70)">
+    <circle cx="48" cy="48" r="48" fill="#151A24" stroke="#273246" stroke-width="3"/>
+    <rect x="480" y="10" width="120" height="24" rx="12" fill="#202735"/>
+    <text x="540" y="28" text-anchor="middle" fill="#7F8B9C" font-family="SF Pro Display, Inter" font-size="22">LiveContainer</text>
+    <text x="540" y="108" text-anchor="middle" fill="#FFFFFF" font-family="SF Pro Display, Inter" font-size="70" font-weight="700">书架</text>
+    <text x="540" y="150" text-anchor="middle" fill="#96A5BF" font-family="PingFang SC, Inter" font-size="28">精致卡片 · 一键操作</text>
+    <circle cx="960" cy="48" r="48" fill="#151A24" stroke="#273246" stroke-width="3"/>
   </g>
-  <g transform="translate(80 520)">
-    <rect width="420" height="68" rx="18" fill="#203044"/>
-    <text x="110" y="44" fill="#FFFFFF" font-size="30" font-family="PingFang SC">刷新</text>
-    <rect x="440" width="420" height="68" rx="18" fill="#203044"/>
-    <text x="550" y="44" fill="#FFFFFF" font-size="30" font-family="PingFang SC">清理缓存</text>
+
+  <!-- Hero stats cards -->
+  <g transform="translate(40 210)" fill="url(#card)">
+    <rect width="300" height="160" rx="28"/>
+    <rect x="340" width="300" height="160" rx="28"/>
+    <rect x="680" width="300" height="160" rx="28"/>
   </g>
-  <text x="80" y="650" fill="#FFFFFF" font-size="40" font-family="PingFang SC" font-weight="600">我的书籍</text>
-  <g transform="translate(60 690)">
-    <rect width="960" height="220" rx="28" fill="#10141C" stroke="#1F2A38"/>
-    <rect x="26" y="26" width="120" height="168" rx="16" fill="#203044"/>
-    <text x="76" y="120" fill="#C9D7FF" font-size="50" font-family="PingFang SC" font-weight="700">书</text>
-    <text x="170" y="96" fill="#FFFFFF" font-size="40" font-family="PingFang SC" font-weight="700">重生我的新手礼包居然是</text>
-    <text x="170" y="146" fill="#7F8B9C" font-size="30" font-family="PingFang SC">第33章 标题文字占位</text>
-    <text x="170" y="192" fill="#A6B4C8" font-size="28" font-family="PingFang SC">作者名 · 自定义来源 · 最新第651章</text>
+  <g transform="translate(70 250)" fill="#A6B6D6" font-family="SF Pro Display, Inter" font-size="26">
+    <text x="0" y="0">在读</text>
+    <text x="340" y="0">书目</text>
+    <text x="680" y="0">来源</text>
   </g>
-  <g transform="translate(60 940)">
-    <rect width="960" height="220" rx="28" fill="#10141C" stroke="#1F2A38"/>
-    <rect x="26" y="26" width="120" height="168" rx="16" fill="#382B1E"/>
-    <text x="72" y="120" fill="#F2D6A2" font-size="50" font-family="PingFang SC" font-weight="700">书</text>
-    <text x="170" y="96" fill="#FFFFFF" font-size="40" font-family="PingFang SC" font-weight="700">宇宙职业选手</text>
-    <text x="170" y="146" fill="#7F8B9C" font-size="30" font-family="PingFang SC">某个章节标题展示</text>
-    <text x="170" y="192" fill="#A6B4C8" font-size="28" font-family="PingFang SC">作者名 · 自定义来源 · 最新第654章</text>
+  <g transform="translate(70 300)" fill="#FFFFFF" font-family="SF Pro Display, Inter" font-size="54" font-weight="700">
+    <text x="0" y="0">8</text>
+    <text x="340" y="0">26</text>
+    <text x="680" y="0">5</text>
   </g>
-  <g transform="translate(60 1190)">
-    <rect width="960" height="220" rx="28" fill="#10141C" stroke="#1F2A38"/>
-    <rect x="26" y="26" width="120" height="168" rx="16" fill="#24392A"/>
-    <text x="76" y="120" fill="#C5EBC5" font-size="50" font-family="PingFang SC" font-weight="700">书</text>
-    <text x="170" y="96" fill="#FFFFFF" font-size="40" font-family="PingFang SC" font-weight="700">莫言民间故事</text>
-    <text x="170" y="146" fill="#7F8B9C" font-size="30" font-family="PingFang SC">更新描述占位</text>
-    <text x="170" y="192" fill="#A6B4C8" font-size="28" font-family="PingFang SC">作者名 · 自定义来源 · 最新第140章</text>
+  <g transform="translate(70 340)" fill="#7F8B9C" font-family="PingFang SC, Inter" font-size="24">
+    <text x="0" y="0">继续上次章节</text>
+    <text x="340" y="0">书架总览</text>
+    <text x="680" y="0">分发渠道</text>
+  </g>
+
+  <!-- Search -->
+  <rect x="80" y="420" width="920" height="88" rx="26" fill="#11151E" stroke="#232C3D"/>
+  <text x="140" y="478" fill="#6F7C90" font-family="PingFang SC" font-size="30">搜索书名或作者</text>
+
+  <!-- Quick actions -->
+  <g transform="translate(80 530)">
+    <rect width="190" height="64" rx="18" fill="#1E2B3E"/>
+    <text x="32" y="42" fill="#FFFFFF" font-family="PingFang SC" font-size="28">正序显示</text>
+    <rect x="210" width="190" height="64" rx="18" fill="#1E2B3E"/>
+    <text x="242" y="42" fill="#FFFFFF" font-family="PingFang SC" font-size="28">按最新更新</text>
+    <rect x="420" width="170" height="64" rx="18" fill="#20344D"/>
+    <text x="460" y="42" fill="#FFFFFF" font-family="PingFang SC" font-size="28">刷新</text>
+    <rect x="610" width="190" height="64" rx="18" fill="#20344D"/>
+    <text x="642" y="42" fill="#FFFFFF" font-family="PingFang SC" font-size="28">清理缓存</text>
+  </g>
+
+  <!-- Book card -->
+  <g transform="translate(80 660)">
+    <rect width="920" height="240" rx="26" fill="#0F131B" stroke="#1E2738" stroke-width="3"/>
+    <rect x="3" y="3" width="914" height="234" rx="24" fill="url(#bookCard)"/>
+    <rect x="28" y="28" width="130" height="180" rx="18" fill="url(#coverArt)"/>
+    <rect x="28" y="28" width="130" height="180" rx="18" fill="url(#coverOverlay)"/>
+    <rect x="48" y="56" width="90" height="12" rx="6" fill="#E8F4FF" fill-opacity="0.9"/>
+    <rect x="48" y="82" width="76" height="10" rx="5" fill="#C7D7FF" fill-opacity="0.85"/>
+    <rect x="48" y="106" width="96" height="10" rx="5" fill="#C7D7FF" fill-opacity="0.8"/>
+    <rect x="48" y="140" width="62" height="28" rx="10" fill="#0F1A2C" stroke="#93C5FF" stroke-opacity="0.5" stroke-width="2"/>
+    <text x="60" y="161" fill="#FFFFFF" font-family="SF Pro Display, Inter" font-size="18" font-weight="700">封面</text>
+    <text x="190" y="96" fill="#FFFFFF" font-family="PingFang SC, Inter" font-size="38" font-weight="700">纳尼亚传奇</text>
+    <rect x="720" y="60" width="160" height="52" rx="18" fill="#1E2D44"/>
+    <text x="748" y="95" fill="#D6E2FF" font-family="PingFang SC" font-size="26">待更新</text>
+    <text x="190" y="150" fill="#D6E2FF" font-family="PingFang SC" font-size="28">继续阅读 · 第 12 章</text>
+    <rect x="190" y="180" width="180" height="44" rx="14" fill="#1B2738"/>
+    <text x="208" y="210" fill="#FFFFFF" font-family="PingFang SC" font-size="24">C.S.刘易斯</text>
+    <rect x="380" y="180" width="220" height="44" rx="14" fill="#1B2738"/>
+    <text x="408" y="210" fill="#FFFFFF" font-family="PingFang SC" font-size="24">古腾堡来源</text>
+    <text x="720" y="210" fill="#8EA1C3" font-family="PingFang SC" font-size="24">最新 第 15 章</text>
   </g>
 </svg>

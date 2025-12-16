@@ -2,6 +2,7 @@ package com.readapp.android.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,9 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.MoreVert
@@ -45,9 +48,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.readapp.android.model.Book
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,78 +100,99 @@ fun BookListScreen(
         query.value = searchQuery
     }
 
+    val backgroundBrush = Brush.verticalGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+            MaterialTheme.colorScheme.surface
+        )
+    )
+
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
         topBar = {
-            Surface(tonalElevation = 3.dp, color = MaterialTheme.colorScheme.background) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { showSettings.value = true }) {
-                            Icon(imageVector = Icons.Rounded.Settings, contentDescription = "打开设置")
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = "书架", style = MaterialTheme.typography.headlineMedium)
-                            Text(
-                                text = "搜索、刷新或排序",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            Surface(color = Color.Transparent) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                    MaterialTheme.colorScheme.background
+                                )
                             )
-                        }
-                        Box {
-                            IconButton(onClick = { showActions.value = true }) {
-                                Icon(Icons.Outlined.MoreVert, contentDescription = "更多操作")
+                        )
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { showSettings.value = true }) {
+                                Icon(imageVector = Icons.Rounded.Settings, contentDescription = "打开设置")
                             }
-                            DropdownMenu(
-                                expanded = showActions.value,
-                                onDismissRequest = { showActions.value = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(if (ascending.value) "切换为倒序" else "切换为正序") },
-                                    onClick = {
-                                        ascending.value = !ascending.value
-                                        onSortAscendingChange(ascending.value)
-                                        showActions.value = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (sortRecent.value) "按最新更新" else "按最近阅读") },
-                                    onClick = {
-                                        sortRecent.value = !sortRecent.value
-                                        onSortByRecentChange(sortRecent.value)
-                                        showActions.value = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("刷新书架") },
-                                    enabled = !isLoading,
-                                    onClick = {
-                                        onRefresh()
-                                        showActions.value = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("清理缓存") },
-                                    enabled = !isLoading,
-                                    onClick = {
-                                        onClearCaches()
-                                        showActions.value = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (showSettings.value) "收起设置" else "服务器设置") },
-                                    onClick = {
-                                        showSettings.value = !showSettings.value
-                                        showActions.value = false
-                                    }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = "书架", style = MaterialTheme.typography.headlineMedium)
+                                Text(
+                                    text = "精致卡片与一键操作",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                 )
                             }
+                            Box {
+                                IconButton(onClick = { showActions.value = true }) {
+                                    Icon(Icons.Outlined.MoreVert, contentDescription = "更多操作")
+                                }
+                                DropdownMenu(
+                                    expanded = showActions.value,
+                                    onDismissRequest = { showActions.value = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text(if (ascending.value) "切换为倒序" else "切换为正序") },
+                                        onClick = {
+                                            ascending.value = !ascending.value
+                                            onSortAscendingChange(ascending.value)
+                                            showActions.value = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(if (sortRecent.value) "按最新更新" else "按最近阅读") },
+                                        onClick = {
+                                            sortRecent.value = !sortRecent.value
+                                            onSortByRecentChange(sortRecent.value)
+                                            showActions.value = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("刷新书架") },
+                                        enabled = !isLoading,
+                                        onClick = {
+                                            onRefresh()
+                                            showActions.value = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("清理缓存") },
+                                        enabled = !isLoading,
+                                        onClick = {
+                                            onClearCaches()
+                                            showActions.value = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(if (showSettings.value) "收起设置" else "服务器设置") },
+                                        onClick = {
+                                            showSettings.value = !showSettings.value
+                                            showActions.value = false
+                                        }
+                                    )
+                                }
+                            }
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HeroStatsRow(books = books)
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
         }
@@ -169,6 +200,7 @@ fun BookListScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .background(backgroundBrush)
                 .padding(innerPadding),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -185,8 +217,24 @@ fun BookListScreen(
                         placeholder = { Text("搜索书名或作者") },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp)),
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
                         singleLine = true
+                    )
+                    QuickActionRow(
+                        isLoading = isLoading,
+                        ascending = ascending.value,
+                        sortRecent = sortRecent.value,
+                        onToggleAscending = {
+                            ascending.value = !ascending.value
+                            onSortAscendingChange(ascending.value)
+                        },
+                        onToggleRecent = {
+                            sortRecent.value = !sortRecent.value
+                            onSortByRecentChange(sortRecent.value)
+                        },
+                        onRefresh = onRefresh,
+                        onClearCaches = onClearCaches
                     )
                 }
             }
@@ -249,6 +297,96 @@ fun BookListScreen(
 }
 
 @Composable
+private fun HeroStatsRow(books: List<Book>) {
+    val totalBooks = books.size
+    val readingBooks = books.count { !it.durChapterTitle.isNullOrBlank() }
+    val sources = books.mapNotNull { it.originName ?: it.origin }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .size
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        StatCard(title = "在读", value = "$readingBooks", subtitle = "继续上次章节")
+        StatCard(title = "书目", value = "$totalBooks", subtitle = "书架总览")
+        StatCard(title = "来源", value = "$sources", subtitle = "分发渠道")
+    }
+}
+
+@Composable
+private fun StatCard(title: String, value: String, subtitle: String) {
+    ElevatedCard(
+        modifier = Modifier.weight(1f),
+        shape = RoundedCornerShape(18.dp),
+        colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                            MaterialTheme.colorScheme.surface
+                        )
+                    )
+                )
+                .padding(vertical = 12.dp, horizontal = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(text = title, style = MaterialTheme.typography.bodyMedium)
+            Text(text = value, style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActionRow(
+    isLoading: Boolean,
+    ascending: Boolean,
+    sortRecent: Boolean,
+    onToggleAscending: () -> Unit,
+    onToggleRecent: () -> Unit,
+    onRefresh: () -> Unit,
+    onClearCaches: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        AssistChip(
+            onClick = onToggleAscending,
+            label = { Text(if (ascending) "正序显示" else "倒序显示") }
+        )
+        AssistChip(
+            onClick = onToggleRecent,
+            label = { Text(if (sortRecent) "按最新更新" else "按最近阅读") }
+        )
+        AssistChip(
+            onClick = onRefresh,
+            enabled = !isLoading,
+            leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
+            label = { Text("刷新") }
+        )
+        AssistChip(
+            onClick = onClearCaches,
+            enabled = !isLoading,
+            label = { Text("清理缓存") }
+        )
+    }
+}
+
+@Composable
 private fun BookListItem(
     book: Book,
     onBookClick: () -> Unit
@@ -263,57 +401,114 @@ private fun BookListItem(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
         )
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)
+                        )
+                    )
+                )
         ) {
-            val coverInitial = book.name?.firstOrNull()?.toString() ?: "书"
-            Box(
-                modifier = Modifier
-                    .size(58.dp, 76.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = coverInitial, style = MaterialTheme.typography.titleLarge)
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = book.name ?: "未命名",
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = book.durChapterTitle?.let { "${it} ..." } ?: "快速开始阅读",
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    AssistChip(onClick = {}, label = { Text(book.author.orEmpty().ifBlank { "未知作者" }) })
-                    AssistChip(onClick = {}, label = { Text(book.originName ?: book.origin ?: "自定义来源") })
+            Row(
+                modifier = Modifier.padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { 
+                val coverInitial = book.name?.firstOrNull()?.toString() ?: "书"
+                val context = LocalContext.current
+                val coverModifier = Modifier
+                    .size(64.dp, 84.dp)
+                    .clip(RoundedCornerShape(12.dp))
+
+                Box(modifier = coverModifier) {
+                    if (!book.coverUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(book.coverUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "${book.name ?: "书籍"}封面",
+                            modifier = Modifier.matchParentSize(),
+                            contentScale = ContentScale.Crop,
+                            placeholder = ColorPainter(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                            error = ColorPainter(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.Transparent,
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
+                                        )
+                                    )
+                                )
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
+                                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.28f)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = coverInitial, style = MaterialTheme.typography.titleLarge)
+                        }
+                    }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = book.name ?: "未命名",
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        AssistChip(onClick = {}, label = { Text(book.latestChapterTitle ?: "待更新") })
+                    }
                     Text(
-                        text = "最新 ${book.latestChapterTitle ?: "-"}",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = book.durChapterTitle?.let { "继续阅读 · ${it}" } ?: "点击开始阅读",
+                        style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Icon(imageVector = Icons.Outlined.BookmarkBorder, contentDescription = null)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AssistChip(onClick = {}, label = { Text(book.author.orEmpty().ifBlank { "未知作者" }) })
+                        AssistChip(onClick = {}, label = { Text(book.originName ?: book.origin ?: "自定义来源") })
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "最新 ${book.latestChapterTitle ?: "-"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Icon(imageVector = Icons.Outlined.BookmarkBorder, contentDescription = null)
+                    }
                 }
             }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
         }
     }
 }
