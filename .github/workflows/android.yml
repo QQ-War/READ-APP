@@ -24,20 +24,6 @@ jobs:
         run: |
           yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Prepare debug keystore for signing
-        run: |
-          if [ -z "${XDG_CONFIG_HOME}" ]; then
-            export XDG_CONFIG_HOME="$HOME/.config"
-          fi
-          KEYSTORE_DIR="$XDG_CONFIG_HOME/.android"
-          mkdir -p "$KEYSTORE_DIR"
-          KEYSTORE="$KEYSTORE_DIR/debug.keystore"
-          if [ ! -f "$KEYSTORE" ]; then
-            keytool -genkeypair -v -keystore "$KEYSTORE" \
-              -alias androiddebugkey -storepass android -keypass android \
-              -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
-          fi
-
       - name: Build release APK
         uses: gradle/gradle-build-action@v2
         with:
@@ -49,4 +35,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ReadApp-android-apk
-          path: androidApp/app/build/outputs/apk/release/*.apk
+          path: androidApp/app/build/outputs/apk/release/app-release.apk

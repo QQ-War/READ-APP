@@ -80,73 +80,73 @@ class UserPreferences(private val context: Context) {
     }
 
     suspend fun saveServerUrl(value: String) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.ServerUrl] = value
         }
     }
 
     suspend fun savePublicServerUrl(value: String) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.PublicServerUrl] = value
         }
     }
 
     suspend fun saveAccessToken(value: String) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.AccessToken] = value
         }
     }
 
     suspend fun saveUsername(value: String) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.Username] = value
         }
     }
 
     suspend fun saveFontScale(value: Float) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.FontScale] = value
         }
     }
 
     suspend fun saveLineSpacing(value: Float) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.LineSpacing] = value
         }
     }
 
     suspend fun saveSortByRecent(value: Boolean) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.SortByRecent] = value
         }
     }
 
     suspend fun saveSortAscending(value: Boolean) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.SortAscending] = value
         }
     }
 
     suspend fun saveReverseChapterList(value: Boolean) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.ReverseChapterList] = value
         }
     }
 
     suspend fun saveSelectedTtsId(value: String) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.SelectedTtsId] = value
         }
     }
 
     suspend fun saveSpeechRate(value: Double) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.SpeechRate] = value
         }
     }
 
     suspend fun savePreloadSegments(value: Int) {
-        context.dataStore.edit { prefs ->
+        context.dataStore.edit { prefs: Preferences ->
             prefs[Keys.PreloadSegments] = value
         }
     }

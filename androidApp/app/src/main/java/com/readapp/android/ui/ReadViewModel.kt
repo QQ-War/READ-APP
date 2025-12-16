@@ -106,8 +106,6 @@ class ReadViewModel(private val context: Context) : ViewModel() {
     }
 
     fun updateServers(serverUrl: String, publicUrl: String?) {
-        // Update UI state immediately so subsequent login actions use the fresh endpoints,
-        // then persist asynchronously.
         _uiState.update { it.copy(serverUrl = serverUrl, publicServerUrl = publicUrl.orEmpty()) }
         viewModelScope.launch(Dispatchers.IO) {
             preferences.saveServerUrl(serverUrl)
