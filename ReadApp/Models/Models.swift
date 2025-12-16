@@ -159,6 +159,29 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(speechRate, forKey: "speechRate")
         }
     }
+
+    /// 旁白使用的 TTS 引擎 ID（默认回落到 selectedTTSId）
+    @Published var narrationTTSId: String {
+        didSet {
+            UserDefaults.standard.set(narrationTTSId, forKey: "narrationTTSId")
+        }
+    }
+
+    /// 默认对话使用的 TTS 引擎 ID（默认回落到 selectedTTSId）
+    @Published var dialogueTTSId: String {
+        didSet {
+            UserDefaults.standard.set(dialogueTTSId, forKey: "dialogueTTSId")
+        }
+    }
+
+    /// 发言人名称 -> TTS ID
+    @Published var speakerTTSMapping: [String: String] {
+        didSet {
+            if let data = try? JSONEncoder().encode(speakerTTSMapping) {
+                UserDefaults.standard.set(data, forKey: "speakerTTSMapping")
+            }
+        }
+    }
     
     @Published var selectedTTSId: String {
         didSet {
@@ -222,10 +245,23 @@ class UserPreferences: ObservableObject {
         self.username = UserDefaults.standard.string(forKey: "username") ?? ""
         self.isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
         self.selectedTTSId = UserDefaults.standard.string(forKey: "selectedTTSId") ?? ""
+        self.narrationTTSId = UserDefaults.standard.string(forKey: "narrationTTSId") ?? ""
+        self.dialogueTTSId = UserDefaults.standard.string(forKey: "dialogueTTSId") ?? ""
+
+        if let mappingData = UserDefaults.standard.data(forKey: "speakerTTSMapping"),
+           let mapping = try? JSONDecoder().decode([String: String].self, from: mappingData) {
+            self.speakerTTSMapping = mapping
+        } else {
+            self.speakerTTSMapping = [:]
+        }
         self.bookshelfSortByRecent = UserDefaults.standard.bool(forKey: "bookshelfSortByRecent")
-        
+
         let savedPreloadCount = UserDefaults.standard.integer(forKey: "ttsPreloadCount")
         self.ttsPreloadCount = savedPreloadCount == 0 ? 10 : savedPreloadCount
+
+        // 兼容旧版：如果没有单独设置旁白/对话 TTS，则使用原有的 selectedTTSId
+        if narrationTTSId.isEmpty { narrationTTSId = selectedTTSId }
+        if dialogueTTSId.isEmpty { dialogueTTSId = selectedTTSId }
     }
     
     func logout() {

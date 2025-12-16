@@ -594,6 +594,67 @@ class TTSManager: NSObject, ObservableObject {
         
         return paragraphs
     }
+
+    // MARK: - TTS 选择逻辑
+    private func resolvedNarrationTTSId() -> String {
+        let prefs = UserPreferences.shared
+        if !prefs.narrationTTSId.isEmpty { return prefs.narrationTTSId }
+        return prefs.selectedTTSId
+    }
+
+    private func resolvedDialogueTTSId() -> String {
+        let prefs = UserPreferences.shared
+        if !prefs.dialogueTTSId.isEmpty { return prefs.dialogueTTSId }
+        return resolvedNarrationTTSId()
+    }
+
+    private func isDialogueSentence(_ sentence: String) -> Bool {
+        // 粗略判断：包含中文/英文引号时认为是对话
+        return sentence.contains("“") || sentence.contains("\"")
+    }
+
+    private func extractSpeaker(from sentence: String) -> String? {
+        // 匹配“张三：”或“张三说：”等格式
+        let pattern = "^\\s*([\\p{Han}A-Za-z0-9_·]{1,12})[\\s　]*[：:，,]?\\s*[\"“]"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
+        let range = NSRange(location: 0, length: sentence.utf16.count)
+        if let match = regex.firstMatch(in: sentence, options: [], range: range),
+           let nameRange = Range(match.range(at: 1), in: sentence) {
+            let name = sentence[nameRange].trimmingCharacters(in: .whitespaces)
+            return name
+        }
+        return nil
+    }
+
+    private func ttsId(for sentence: String, isChapterTitle: Bool = false) -> String? {
+        let prefs = UserPreferences.shared
+
+        if isChapterTitle {
+            let narrationId = resolvedNarrationTTSId()
+            return narrationId.isEmpty ? nil : narrationId
+        }
+
+        var targetId = resolvedNarrationTTSId()
+
+        if isDialogueSentence(sentence) {
+            let speakerName = extractSpeaker(from: sentence)
+            if let speaker = speakerName,
+               let mappedId = prefs.speakerTTSMapping[speaker] ?? prefs.speakerTTSMapping[speaker.replacingOccurrences(of: " ", with: "")] {
+                targetId = mappedId
+            } else {
+                targetId = resolvedDialogueTTSId()
+            }
+        }
+
+        if targetId.isEmpty { targetId = prefs.selectedTTSId }
+        return targetId.isEmpty ? nil : targetId
+    }
+
+    private func buildAudioURL(for sentence: String, isChapterTitle: Bool = false) -> URL? {
+        guard let ttsId = ttsId(for: sentence, isChapterTitle: isChapterTitle) else { return nil }
+        let speechRate = UserPreferences.shared.speechRate
+        return APIService.shared.buildTTSAudioURL(ttsId: ttsId, text: sentence, speechRate: speechRate)
+    }
     
     // MARK: - 朗读章节名
     private func speakChapterTitle() {
@@ -607,15 +668,13 @@ class TTSManager: NSObject, ObservableObject {
         
         isReadingChapterTitle = true
         
-        // 检查是否选择了 TTS 引擎
-        let ttsId = UserPreferences.shared.selectedTTSId
-        if ttsId.isEmpty {
+        guard let audioURL = buildAudioURL(for: chapterTitle, isChapterTitle: true) else {
             logger.log("未选择 TTS 引擎，跳过章节名朗读", category: "TTS")
             isReadingChapterTitle = false
             speakNextSentence()
             return
         }
-        
+
         // 检查是否有预载的章节名缓存（使用索引-1表示章节名）
         if let cachedTitleData = cachedAudio(for: -1) {
             logger.log("✅ 使用预载的章节名音频", category: "TTS")
@@ -623,20 +682,6 @@ class TTSManager: NSObject, ObservableObject {
             // 在章节名开始播放时就启动预载，避免阻塞
             logger.log("章节名播放中，同时启动内容预载", category: "TTS")
             startPreloading()
-            return
-        }
-        
-        let speechRate = UserPreferences.shared.speechRate
-        
-        // 构建 TTS 音频 URL
-        guard let audioURL = APIService.shared.buildTTSAudioURL(
-            ttsId: ttsId,
-            text: chapterTitle,
-            speechRate: speechRate
-        ) else {
-            logger.log("构建章节名音频 URL 失败", category: "TTS错误")
-            isReadingChapterTitle = false
-            speakNextSentence()
             return
         }
         
@@ -693,31 +738,17 @@ class TTSManager: NSObject, ObservableObject {
         // 提前准备后续段落，尽量消除句间空档
         startPreloading()
 
-        // 检查是否选择了 TTS 引擎
-        let ttsId = UserPreferences.shared.selectedTTSId
-        if ttsId.isEmpty {
+        guard let audioURL = buildAudioURL(for: sentence) else {
             logger.log("未选择 TTS 引擎，停止播放", category: "TTS错误")
             stop()
             return
         }
-        
+
         let speechRate = UserPreferences.shared.speechRate
-        
+
         logger.log("朗读句子 \(currentSentenceIndex + 1)/\(totalSentences) - 语速: \(speechRate)", category: "TTS")
         logger.log("句子内容: \(sentence.prefix(50))...", category: "TTS")
-        
-        // 构建 TTS 音频 URL
-        guard let audioURL = APIService.shared.buildTTSAudioURL(
-            ttsId: ttsId,
-            text: sentence,
-            speechRate: speechRate
-        ) else {
-            logger.log("构建音频 URL 失败", category: "TTS错误")
-            currentSentenceIndex += 1
-            speakNextSentence()
-            return
-        }
-        
+
         // 播放音频
         playAudio(url: audioURL)
         
@@ -905,12 +936,7 @@ class TTSManager: NSObject, ObservableObject {
             return true
         }
         
-        let speechRate = UserPreferences.shared.speechRate
-        guard let encodedText = sentence.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return false }
-        
-        let urlString = "\(UserPreferences.shared.serverURL)/api/\(APIService.apiVersion)/tts?accessToken=\(UserPreferences.shared.accessToken)&id=\(UserPreferences.shared.selectedTTSId)&speakText=\(encodedText)&speechRate=\(speechRate)"
-        
-        guard let url = URL(string: urlString) else { return false }
+        guard let url = buildAudioURL(for: sentence) else { return false }
         
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
@@ -1103,22 +1129,9 @@ class TTSManager: NSObject, ObservableObject {
         guard nextChapterCache[-1] == nil else { return }
         
         let chapterTitle = chapters[chapterIndex].title
-        let speechRate = UserPreferences.shared.speechRate
-        let ttsId = UserPreferences.shared.selectedTTSId
-        
-        guard !ttsId.isEmpty else { return }
-        
         logger.log("预载下一章章节名: \(chapterTitle)", category: "TTS")
-        
-        // 构建 TTS 音频 URL
-        guard let audioURL = APIService.shared.buildTTSAudioURL(
-            ttsId: ttsId,
-            text: chapterTitle,
-            speechRate: speechRate
-        ) else {
-            logger.log("构建下一章章节名音频 URL 失败", category: "TTS错误")
-            return
-        }
+
+        guard let audioURL = buildAudioURL(for: chapterTitle, isChapterTitle: true) else { return }
         
         Task {
             do {
@@ -1144,15 +1157,7 @@ class TTSManager: NSObject, ObservableObject {
         guard cachedNextChapterAudio(for: index) == nil else { return }
         
         let sentence = nextChapterSentences[index]
-        let speechRate = UserPreferences.shared.speechRate
-        let ttsId = UserPreferences.shared.selectedTTSId
-        
-        guard !ttsId.isEmpty else { return }
-        guard let encodedText = sentence.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
-        
-        let urlString = "\(UserPreferences.shared.serverURL)/api/\(APIService.apiVersion)/tts?accessToken=\(UserPreferences.shared.accessToken)&id=\(ttsId)&speakText=\(encodedText)&speechRate=\(speechRate)"
-        
-        guard let url = URL(string: urlString) else { return }
+        guard let url = buildAudioURL(for: sentence) else { return }
         
         logger.log("预载下一章音频 - 索引: \(index)", category: "TTS")
         

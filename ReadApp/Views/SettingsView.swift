@@ -4,9 +4,9 @@ struct SettingsView: View {
     @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
     @Environment(\.dismiss) var dismiss
-    
+
     @State private var showTTSSelection = false
-    @State private var selectedTTSName = ""
+    @State private var ttsSummary = ""
     @State private var showLogoutAlert = false
     @State private var showShareSheet = false
     @State private var logFileURL: URL?
@@ -79,11 +79,11 @@ struct SettingsView: View {
                             Text("TTS 引擎")
                                 .foregroundColor(.primary)
                             Spacer()
-                            if preferences.selectedTTSId.isEmpty {
+                            if preferences.selectedTTSId.isEmpty && preferences.narrationTTSId.isEmpty {
                                 Text("未选择")
                                     .foregroundColor(.orange)
                             } else {
-                                Text(selectedTTSName.isEmpty ? "已选择" : selectedTTSName)
+                                Text(ttsSummary.isEmpty ? "已选择" : ttsSummary)
                                     .foregroundColor(.secondary)
                             }
                             Image(systemName: "chevron.right")
@@ -225,6 +225,21 @@ struct SettingsView: View {
                     await loadTTSName()
                 }
             }
+            .onChange(of: preferences.narrationTTSId) { _ in
+                Task {
+                    await loadTTSName()
+                }
+            }
+            .onChange(of: preferences.dialogueTTSId) { _ in
+                Task {
+                    await loadTTSName()
+                }
+            }
+            .onChange(of: preferences.speakerTTSMapping) { _ in
+                Task {
+                    await loadTTSName()
+                }
+            }
         }
     }
     
@@ -242,16 +257,37 @@ struct SettingsView: View {
     }
     
     private func loadTTSName() async {
-        guard !preferences.selectedTTSId.isEmpty else {
-            selectedTTSName = ""
+        // 如果没有任何 TTS 选择，直接清空摘要
+        let narratorId = preferences.narrationTTSId.isEmpty ? preferences.selectedTTSId : preferences.narrationTTSId
+        let dialogueId = preferences.dialogueTTSId.isEmpty ? narratorId : preferences.dialogueTTSId
+
+        guard !narratorId.isEmpty else {
+            ttsSummary = ""
             return
         }
-        
+
         do {
             let ttsList = try await apiService.fetchTTSList()
-            if let tts = ttsList.first(where: { $0.id == preferences.selectedTTSId }) {
-                selectedTTSName = tts.name
+
+            func name(for id: String) -> String? {
+                ttsList.first(where: { $0.id == id })?.name
             }
+
+            var parts: [String] = []
+            let narratorName = name(for: narratorId)
+            if let narratorName {
+                parts.append("旁白: \(narratorName)")
+            }
+
+            if let dialogueName = name(for: dialogueId), dialogueName != narratorName {
+                parts.append("对话: \(dialogueName)")
+            }
+
+            if !preferences.speakerTTSMapping.isEmpty {
+                parts.append("发言人: \(preferences.speakerTTSMapping.count) 个")
+            }
+
+            ttsSummary = parts.joined(separator: " / ")
         } catch {
             print("加载 TTS 名称失败: \(error)")
         }
