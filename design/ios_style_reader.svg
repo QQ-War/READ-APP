@@ -1,0 +1,47 @@
+<svg width="1080" height="2340" viewBox="0 0 1080 2340" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1080" height="2340" fill="#0B0C0F"/>
+  <rect x="40" y="60" width="1000" height="180" rx="28" fill="#0F1116" stroke="#1E2A3A" stroke-width="4"/>
+  <text x="90" y="150" fill="#5DA8FF" font-size="32" font-family="PingFang SC">书架</text>
+  <text x="90" y="210" fill="#FFFFFF" font-size="42" font-family="PingFang SC" font-weight="700">重生我的新手礼包居然是</text>
+  <text x="90" y="260" fill="#A6B4C8" font-size="30" font-family="PingFang SC">第168章 赢了再说。</text>
+
+  <rect x="60" y="320" width="960" height="880" rx="30" fill="#10141C" stroke="#1F2A38"/>
+  <text x="120" y="400" fill="#FFFFFF" font-size="38" font-family="PingFang SC" font-weight="700">章节内容</text>
+  <rect x="120" y="440" width="840" height="110" rx="16" fill="#17365C"/>
+  <text x="150" y="510" fill="#FFFFFF" font-size="32" font-family="PingFang SC">怎么，你会开，敢不敢赌？</text>
+  <rect x="120" y="570" width="840" height="110" rx="16" fill="#1B4C28"/>
+  <text x="150" y="640" fill="#F5FFF5" font-size="32" font-family="PingFang SC">嗯……我输，不会吧，兄弟这么大方？</text>
+  <rect x="120" y="700" width="840" height="110" rx="16" fill="#17365C"/>
+  <text x="150" y="770" fill="#FFFFFF" font-size="32" font-family="PingFang SC">你昨天晚上选的路也有大问题啊！</text>
+  <rect x="120" y="830" width="840" height="110" rx="16" fill="#1B4C28"/>
+  <text x="150" y="900" fill="#F5FFF5" font-size="32" font-family="PingFang SC">棋规则不懂，结果输的全靠运气。</text>
+
+  <rect x="60" y="1240" width="960" height="160" rx="28" fill="#10141C" stroke="#1F2A38"/>
+  <text x="120" y="1320" fill="#FFFFFF" font-size="34" font-family="PingFang SC">段落进度</text>
+  <rect x="120" y="1340" width="780" height="12" rx="6" fill="#1F2A38"/>
+  <rect x="120" y="1340" width="320" height="12" rx="6" fill="#2F7DF7"/>
+  <text x="920" y="1348" fill="#A6B4C8" font-size="28" font-family="PingFang SC">1 / 49</text>
+
+  <g transform="translate(60 1430)">
+    <rect width="960" height="130" rx="28" fill="#10141C" stroke="#1F2A38"/>
+    <rect x="30" y="30" width="120" height="70" rx="20" fill="#1B2B3D"/>
+    <text x="50" y="78" fill="#FFFFFF" font-size="30" font-family="PingFang SC">章节</text>
+    <rect x="190" y="30" width="200" height="70" rx="20" fill="#2F4361"/>
+    <text x="230" y="78" fill="#FFFFFF" font-size="30" font-family="PingFang SC">开始朗读</text>
+    <rect x="430" y="30" width="200" height="70" rx="20" fill="#1B2B3D"/>
+    <text x="486" y="78" fill="#FFFFFF" font-size="30" font-family="PingFang SC">设置</text>
+  </g>
+
+  <rect x="60" y="1600" width="960" height="360" rx="30" fill="#10141C" stroke="#1F2A38"/>
+  <text x="120" y="1670" fill="#FFFFFF" font-size="36" font-family="PingFang SC" font-weight="700">章节列表</text>
+  <rect x="120" y="1700" width="840" height="80" rx="18" fill="#162030"/>
+  <text x="150" y="1750" fill="#FFFFFF" font-size="30" font-family="PingFang SC">第168章 赢了再说。</text>
+  <rect x="120" y="1800" width="840" height="80" rx="18" fill="#152626"/>
+  <text x="150" y="1850" fill="#FFFFFF" font-size="30" font-family="PingFang SC">第169章 下一章预载</text>
+
+  <rect x="60" y="2000" width="960" height="160" rx="30" fill="#0F1116" stroke="#1E2A3A" stroke-width="4"/>
+  <text x="150" y="2070" fill="#FFFFFF" font-size="36" font-family="PingFang SC">上一章</text>
+  <text x="480" y="2070" fill="#FFFFFF" font-size="36" font-family="PingFang SC">播放 / 暂停</text>
+  <text x="840" y="2070" fill="#FFFFFF" font-size="36" font-family="PingFang SC">下一章</text>
+  <text x="940" y="2130" fill="#A6B4C8" font-size="28" font-family="PingFang SC">1 / 49</text>
+</svg>

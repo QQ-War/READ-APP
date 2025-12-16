@@ -106,7 +106,6 @@ fun ReadApp(
             LoginScreen(
                 isLoading = uiState.isLoading,
                 serverUrl = uiState.serverUrl,
-                publicServerUrl = uiState.publicServerUrl,
                 onLogin = onLogin,
                 onServerSave = onServerChange
             )
