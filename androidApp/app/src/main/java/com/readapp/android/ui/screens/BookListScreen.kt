@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -308,16 +309,36 @@ private fun HeroStatsRow(books: List<Book>) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        StatCard(title = "在读", value = "$readingBooks", subtitle = "继续上次章节")
-        StatCard(title = "书目", value = "$totalBooks", subtitle = "书架总览")
-        StatCard(title = "来源", value = "$sources", subtitle = "分发渠道")
+        StatCard(
+            title = "在读",
+            value = "$readingBooks",
+            subtitle = "继续上次章节",
+            modifier = Modifier.weight(1f)
+        )
+        StatCard(
+            title = "书目",
+            value = "$totalBooks",
+            subtitle = "书架总览",
+            modifier = Modifier.weight(1f)
+        )
+        StatCard(
+            title = "来源",
+            value = "$sources",
+            subtitle = "分发渠道",
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
 @Composable
-private fun StatCard(title: String, value: String, subtitle: String) {
+private fun StatCard(
+    title: String,
+    value: String,
+    subtitle: String,
+    modifier: Modifier = Modifier
+) {
     ElevatedCard(
-        modifier = Modifier.weight(1f),
+        modifier = modifier,
         shape = RoundedCornerShape(18.dp),
         colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
