@@ -1,4 +1,4 @@
-name: Build unsigned IPA
+name: Build IOS IPA
 
 on:
   workflow_dispatch:
