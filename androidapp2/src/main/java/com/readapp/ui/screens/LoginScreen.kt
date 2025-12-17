@@ -26,15 +26,19 @@ import com.readapp.ui.theme.customColors
 
 @Composable
 fun LoginScreen(
+    viewModel: com.readapp.viewmodel.BookViewModel,
     onLoginSuccess: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var serverAddress by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
+    var serverAddress by remember { mutableStateOf(viewModel.serverAddress) }
+    var username by remember { mutableStateOf(viewModel.username) }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val isLoading by remember { derivedStateOf { viewModel.isLoading } }
+    val errorMessage by remember { derivedStateOf { viewModel.errorMessage } }
+
+    LaunchedEffect(viewModel.serverAddress) { serverAddress = viewModel.serverAddress }
+    LaunchedEffect(viewModel.username) { username = viewModel.username }
     
     Box(
         modifier = modifier
@@ -183,14 +187,7 @@ fun LoginScreen(
                         keyboardActions = KeyboardActions(
                             onDone = {
                                 // 执行登录
-                                performLogin(
-                                    serverAddress,
-                                    username,
-                                    password,
-                                    onLoading = { isLoading = it },
-                                    onError = { errorMessage = it },
-                                    onSuccess = onLoginSuccess
-                                )
+                                viewModel.login(serverAddress, username, password, onLoginSuccess)
                             }
                         ),
                         singleLine = true,
@@ -216,14 +213,7 @@ fun LoginScreen(
                     // 登录按钮
                     Button(
                         onClick = {
-                            performLogin(
-                                serverAddress,
-                                username,
-                                password,
-                                onLoading = { isLoading = it },
-                                onError = { errorMessage = it },
-                                onSuccess = onLoginSuccess
-                            )
+                            viewModel.login(serverAddress, username, password, onLoginSuccess)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -305,51 +295,4 @@ private fun LoginHeader() {
             color = MaterialTheme.customColors.textSecondary
         )
     }
-}
-
-// 登录逻辑（需要实际实现）
-private fun performLogin(
-    serverAddress: String,
-    username: String,
-    password: String,
-    onLoading: (Boolean) -> Unit,
-    onError: (String) -> Unit,
-    onSuccess: () -> Unit
-) {
-    onLoading(true)
-    
-    // 这里应该调用实际的登录 API
-    // 示例代码：
-    /*
-    viewModelScope.launch {
-        try {
-            val response = apiService.login(serverAddress, username, password)
-            if (response.isSuccessful) {
-                // 保存登录信息
-                sharedPreferences.edit()
-                    .putString("server_address", serverAddress)
-                    .putString("token", response.data.token)
-                    .apply()
-                
-                onSuccess()
-            } else {
-                onError(response.message ?: "登录失败")
-            }
-        } catch (e: Exception) {
-            onError(e.message ?: "网络错误")
-        } finally {
-            onLoading(false)
-        }
-    }
-    */
-    
-    // 临时实现：延迟模拟登录
-    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-        onLoading(false)
-        if (username.isNotBlank() && password.isNotBlank()) {
-            onSuccess()
-        } else {
-            onError("用户名或密码不能为空")
-        }
-    }, 1500)
 }

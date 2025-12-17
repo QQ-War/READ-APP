@@ -37,7 +37,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ReadAppMain() {
     val navController = rememberNavController()
-    val bookViewModel: BookViewModel = viewModel()
+    val bookViewModel: BookViewModel = viewModel(factory = BookViewModel.Factory)
+
+    val isLoggedIn = bookViewModel.accessToken.isNotBlank()
     
     // 判断是否需要显示底部导航栏
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -57,9 +59,20 @@ fun ReadAppMain() {
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Bookshelf.route,
+            startDestination = if (isLoggedIn) Screen.Bookshelf.route else Screen.Login.route,
             modifier = Modifier.padding(paddingValues)
         ) {
+            composable(Screen.Login.route) {
+                LoginScreen(
+                    viewModel = bookViewModel,
+                    onLoginSuccess = {
+                        navController.navigate(Screen.Bookshelf.route) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
             composable(Screen.Bookshelf.route) {
                 BookshelfScreen(
                     books = bookViewModel.books,
@@ -189,6 +202,7 @@ fun BottomNavigationBar(navController: NavController) {
 
 // 导航路由
 sealed class Screen(val route: String) {
+    object Login : Screen("login")
     object Bookshelf : Screen("bookshelf")
     object Reading : Screen("reading")
     object Player : Screen("player")

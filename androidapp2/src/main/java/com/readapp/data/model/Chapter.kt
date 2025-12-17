@@ -1,8 +1,11 @@
 package com.readapp.data.model
 
 data class Chapter(
-    val id: String,
     val title: String,
-    val duration: String,
-    val content: String = ""
+    val url: String,
+    val index: Int,
+    val duration: String = "",
+    val isVolume: Boolean? = null,
+    val isPay: Boolean? = null,
+    val content: String = "",
 )
