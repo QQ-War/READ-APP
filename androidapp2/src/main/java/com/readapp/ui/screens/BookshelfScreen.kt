@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.readapp.data.model.Book
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
@@ -224,13 +225,3 @@ private fun ReadingProgress(
     }
 }
 
-// 数据模型（如果还没有定义）
-data class Book(
-    val id: String,
-    val title: String,
-    val author: String,
-    val coverEmoji: String,
-    val progress: Float,
-    val currentChapter: Int,
-    val totalChapters: Int
-)

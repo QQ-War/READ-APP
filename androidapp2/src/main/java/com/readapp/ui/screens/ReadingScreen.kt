@@ -318,10 +318,4 @@ private fun ChapterItem(
     }
 }
 
-// 数据模型
-data class Chapter(
-    val id: String,
-    val title: String,
-    val duration: String,
-    val content: String = ""
-)
+// 数据模型定义移动到 data/model 包
