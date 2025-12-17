@@ -26,20 +26,18 @@ data class Book(
         get() = name
 
     fun toUiModel(): Book {
-        val safeTotal = totalChapterNum ?: totalChapters
+        val safeTotal = totalChapterNum ?: totalChapters.takeIf { it > 0 }
         val safeIndex = durChapterIndex ?: (currentChapter - 1)
-        val computedProgress = if (safeTotal != null && safeTotal > 0) {
-            (safeIndex + 1).toFloat() / safeTotal
-        } else {
-            progress
-        }
+        val computedProgress = safeTotal?.takeIf { it > 0 }?.let {
+            (safeIndex + 1).toFloat() / it
+        } ?: progress
 
         val emoji = coverEmoji.ifBlank { deriveEmojiFromTitle(name) }
 
         return copy(
             coverEmoji = emoji,
             currentChapter = (safeIndex + 1).coerceAtLeast(0),
-            totalChapters = safeTotal ?: 0,
+            totalChapters = safeTotal ?: totalChapters,
             progress = computedProgress.coerceIn(0f, 1f)
         )
     }

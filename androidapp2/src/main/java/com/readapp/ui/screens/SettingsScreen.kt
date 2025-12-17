@@ -30,6 +30,8 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var serverInput by remember(serverAddress) { mutableStateOf(serverAddress) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -47,11 +49,18 @@ fun SettingsScreen(
         
         // 服务器设置
         SettingsSection(title = "服务器配置") {
-            SettingsItem(
-                icon = Icons.Default.Settings,
-                title = "服务器地址",
-                subtitle = serverAddress,
-                onClick = { /* 打开服务器地址编辑对话框 */ }
+            OutlinedTextField(
+                value = serverInput,
+                onValueChange = {
+                    serverInput = it
+                    onServerAddressChange(it)
+                },
+                label = { Text("服务器地址") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(AppDimens.PaddingMedium),
+                leadingIcon = { Icon(imageVector = Icons.Default.Settings, contentDescription = null) },
+                singleLine = true
             )
         }
         

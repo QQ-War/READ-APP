@@ -33,7 +33,7 @@ fun ReadingScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showChapterList by remember { mutableStateOf(false) }
+    var showChapterList by remember { mutableStateOf(true) }
     
     Column(
         modifier = modifier
@@ -64,12 +64,32 @@ fun ReadingScreen(
         Spacer(modifier = Modifier.height(AppDimens.PaddingMedium))
         
         // 章节列表
-        ChapterListCard(
-            chapters = chapters,
-            currentChapterIndex = currentChapterIndex,
-            onChapterClick = onChapterClick,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "章节列表",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            IconButton(onClick = { showChapterList = !showChapterList }) {
+                Icon(
+                    imageVector = if (showChapterList) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (showChapterList) "折叠章节列表" else "展开章节列表"
+                )
+            }
+        }
+
+        if (showChapterList) {
+            ChapterListCard(
+                chapters = chapters,
+                currentChapterIndex = currentChapterIndex,
+                onChapterClick = onChapterClick,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 

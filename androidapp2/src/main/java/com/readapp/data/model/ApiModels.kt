@@ -1,34 +1,34 @@
 package com.readapp.data.model
 
-import com.squareup.moshi.Json
+import com.google.gson.annotations.SerializedName
 
 data class ApiResponse<T>(
-    @Json(name = "isSuccess") val isSuccess: Boolean,
-    @Json(name = "errorMsg") val errorMsg: String?,
-    @Json(name = "data") val data: T?,
+    @SerializedName("isSuccess") val isSuccess: Boolean,
+    @SerializedName("errorMsg") val errorMsg: String?,
+    @SerializedName("data") val data: T?,
 )
 
 data class HttpTTS(
-    val id: String,
-    val userid: String? = null,
-    val name: String,
-    val url: String,
-    val contentType: String? = null,
-    val concurrentRate: String? = null,
-    val loginUrl: String? = null,
-    val loginUi: String? = null,
-    val header: String? = null,
-    val enabledCookieJar: Boolean? = null,
-    val loginCheckJs: String? = null,
-    val lastUpdateTime: Long? = null,
+    @SerializedName("id") val id: String,
+    @SerializedName("userid") val userid: String? = null,
+    @SerializedName("name") val name: String,
+    @SerializedName("url") val url: String,
+    @SerializedName("contentType") val contentType: String? = null,
+    @SerializedName("concurrentRate") val concurrentRate: String? = null,
+    @SerializedName("loginUrl") val loginUrl: String? = null,
+    @SerializedName("loginUi") val loginUi: String? = null,
+    @SerializedName("header") val header: String? = null,
+    @SerializedName("enabledCookieJar") val enabledCookieJar: Boolean? = null,
+    @SerializedName("loginCheckJs") val loginCheckJs: String? = null,
+    @SerializedName("lastUpdateTime") val lastUpdateTime: Long? = null,
 )
 
 data class LoginResponse(
-    @Json(name = "accessToken") val accessToken: String,
+    @SerializedName("accessToken") val accessToken: String,
 )
 
 data class UserInfo(
-    val username: String? = null,
-    val phone: String? = null,
-    val email: String? = null,
+    @SerializedName("username") val username: String? = null,
+    @SerializedName("phone") val phone: String? = null,
+    @SerializedName("email") val email: String? = null,
 )
