@@ -52,11 +52,7 @@ class MainActivity : ComponentActivity() {
                             onReverseChaptersChange = { viewModel.setReverseChapterList(it) },
                             onClearCaches = { viewModel.clearLocalCaches() },
                             onParagraphJump = {},
-                            onToggleImmersive = {},
-                            onNarrationTtsSelect = {},
-                            onDialogueTtsSelect = {},
-                            onSpeakerMappingChange = { _, _ -> },
-                            onSpeakerMappingRemove = {}
+                            onToggleImmersive = {}
                         )
                     }
                     composable("books") {
@@ -81,11 +77,7 @@ class MainActivity : ComponentActivity() {
                             onReverseChaptersChange = { viewModel.setReverseChapterList(it) },
                             onClearCaches = { viewModel.clearLocalCaches() },
                             onParagraphJump = { viewModel.jumpToParagraph(it) },
-                            onToggleImmersive = { viewModel.toggleImmersiveMode() },
-                            onNarrationTtsSelect = { viewModel.updateNarrationTts(it) },
-                            onDialogueTtsSelect = { viewModel.updateDialogueTts(it) },
-                            onSpeakerMappingChange = { speaker, tts -> viewModel.updateSpeakerMapping(speaker, tts) },
-                            onSpeakerMappingRemove = { viewModel.removeSpeakerMapping(it) }
+                            onToggleImmersive = { viewModel.toggleImmersiveMode() }
                         )
                     }
                 }
