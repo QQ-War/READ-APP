@@ -1,7 +1,6 @@
 package com.readapp.android.data
 
 import android.content.Context
-import org.json.JSONObject
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
@@ -28,9 +27,6 @@ class UserPreferences(private val context: Context) {
         val SortAscending = booleanPreferencesKey("sortAscending")
         val ReverseChapterList = booleanPreferencesKey("reverseChapterList")
         val SelectedTtsId = stringPreferencesKey("selectedTtsId")
-        val NarrationTtsId = stringPreferencesKey("narrationTtsId")
-        val DialogueTtsId = stringPreferencesKey("dialogueTtsId")
-        val SpeakerMapping = stringPreferencesKey("speakerMapping")
         val SpeechRate = doublePreferencesKey("speechRate")
         val PreloadSegments = intPreferencesKey("preloadSegments")
     }
@@ -73,18 +69,6 @@ class UserPreferences(private val context: Context) {
 
     val selectedTtsId: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[Keys.SelectedTtsId] ?: ""
-    }
-
-    val narrationTtsId: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[Keys.NarrationTtsId] ?: ""
-    }
-
-    val dialogueTtsId: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[Keys.DialogueTtsId] ?: ""
-    }
-
-    val speakerMapping: Flow<Map<String, String>> = context.dataStore.data.map { preferences ->
-        preferences[Keys.SpeakerMapping]?.let { decodeMapping(it) } ?: emptyMap()
     }
 
     val speechRate: Flow<Double> = context.dataStore.data.map { preferences ->
@@ -155,24 +139,6 @@ class UserPreferences(private val context: Context) {
         }
     }
 
-    suspend fun saveNarrationTtsId(value: String) {
-        context.dataStore.edit { prefs: MutablePreferences ->
-            prefs[Keys.NarrationTtsId] = value
-        }
-    }
-
-    suspend fun saveDialogueTtsId(value: String) {
-        context.dataStore.edit { prefs: MutablePreferences ->
-            prefs[Keys.DialogueTtsId] = value
-        }
-    }
-
-    suspend fun saveSpeakerMapping(value: Map<String, String>) {
-        context.dataStore.edit { prefs: MutablePreferences ->
-            prefs[Keys.SpeakerMapping] = encodeMapping(value)
-        }
-    }
-
     suspend fun saveSpeechRate(value: Double) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.SpeechRate] = value
@@ -182,23 +148,6 @@ class UserPreferences(private val context: Context) {
     suspend fun savePreloadSegments(value: Int) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.PreloadSegments] = value
-        }
-    }
-
-    private fun encodeMapping(map: Map<String, String>): String {
-        return try {
-            JSONObject(map as Map<*, *>).toString()
-        } catch (e: Exception) {
-            "{}"
-        }
-    }
-
-    private fun decodeMapping(raw: String): Map<String, String> {
-        return try {
-            val json = JSONObject(raw)
-            json.keys().asSequence().associateWith { key -> json.optString(key) }.filterValues { it.isNotBlank() }
-        } catch (e: Exception) {
-            emptyMap()
         }
     }
 }

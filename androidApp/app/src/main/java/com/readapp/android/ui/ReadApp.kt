@@ -37,11 +37,7 @@ fun ReadApp(
     onReverseChaptersChange: (Boolean) -> Unit,
     onClearCaches: () -> Unit,
     onParagraphJump: (Int) -> Unit,
-    onToggleImmersive: () -> Unit,
-    onNarrationTtsSelect: (String) -> Unit,
-    onDialogueTtsSelect: (String) -> Unit,
-    onSpeakerMappingChange: (String, String) -> Unit,
-    onSpeakerMappingRemove: (String) -> Unit
+    onToggleImmersive: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -67,9 +63,6 @@ fun ReadApp(
                     isChapterReversed = uiState.reverseChapterList,
                     ttsEngines = uiState.ttsEngines,
                     selectedTtsId = uiState.selectedTtsId,
-                    narrationTtsId = uiState.narrationTtsId,
-                    dialogueTtsId = uiState.dialogueTtsId,
-                    speakerMappings = uiState.speakerTtsMapping,
                     speechRate = uiState.speechRate,
                     preloadSegments = uiState.preloadSegments,
                     preloadedChapters = uiState.preloadedChapters,
@@ -83,10 +76,6 @@ fun ReadApp(
                     onSelectChapter = onChapterSelect,
                     onToggleTts = onToggleTts,
                     onTtsEngineSelect = onTtsEngineSelect,
-                    onNarrationTtsSelect = onNarrationTtsSelect,
-                    onDialogueTtsSelect = onDialogueTtsSelect,
-                    onSpeakerMappingChange = onSpeakerMappingChange,
-                    onSpeakerMappingRemove = onSpeakerMappingRemove,
                     onSpeechRateChange = onSpeechRateChange,
                     onPreloadSegmentsChange = onPreloadSegmentsChange,
                     onFontScaleChange = onFontScaleChange,

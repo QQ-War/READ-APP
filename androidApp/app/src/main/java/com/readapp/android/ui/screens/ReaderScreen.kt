@@ -28,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.ArrowDropUp
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.rounded.Pause
@@ -45,7 +44,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -80,9 +78,6 @@ fun ReaderScreen(
     isChapterReversed: Boolean,
     ttsEngines: List<HttpTTS>,
     selectedTtsId: String?,
-    narrationTtsId: String?,
-    dialogueTtsId: String?,
-    speakerMappings: Map<String, String>,
     speechRate: Double,
     preloadSegments: Int,
     preloadedChapters: List<Int>,
@@ -96,10 +91,6 @@ fun ReaderScreen(
     onSelectChapter: (Int) -> Unit,
     onToggleTts: () -> Unit,
     onTtsEngineSelect: (String) -> Unit,
-    onNarrationTtsSelect: (String) -> Unit,
-    onDialogueTtsSelect: (String) -> Unit,
-    onSpeakerMappingChange: (String, String) -> Unit,
-    onSpeakerMappingRemove: (String) -> Unit,
     onSpeechRateChange: (Double) -> Unit,
     onPreloadSegmentsChange: (Int) -> Unit,
     onFontScaleChange: (Float) -> Unit,
@@ -120,9 +111,8 @@ fun ReaderScreen(
             bodyStyle.fontSize * lineSpacing
         }
     )
+    var ttsMenuExpanded by remember { mutableStateOf(false) }
     val selectedTtsName = ttsEngines.firstOrNull { it.id == selectedTtsId }?.name
-    val narrationName = ttsEngines.firstOrNull { it.id == narrationTtsId }?.name
-    val dialogueName = ttsEngines.firstOrNull { it.id == dialogueTtsId }?.name
     val highlightColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f)
     val preloadColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f)
     var paragraphSlider by remember(currentParagraphIndex, paragraphs.size) { mutableStateOf(currentParagraphIndex.toFloat()) }
@@ -251,28 +241,23 @@ fun ReaderScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text(text = "听书与阅读", style = MaterialTheme.typography.titleMedium)
-                            TtsPickerRow(
-                                label = "通用 TTS",
-                                description = "默认用于旁白和未指定发言",
-                                selectedName = selectedTtsName,
-                                engines = ttsEngines,
-                                onSelect = onTtsEngineSelect
-                            )
-                            TtsPickerRow(
-                                label = "旁白 / 章节标题",
-                                description = "用于章节标题和非对话文本",
-                                selectedName = narrationName ?: selectedTtsName,
-                                engines = ttsEngines,
-                                onSelect = onNarrationTtsSelect
-                            )
-                            TtsPickerRow(
-                                label = "对话默认",
-                                description = "对话场景的统一发声",
-                                selectedName = dialogueName ?: selectedTtsName,
-                                engines = ttsEngines,
-                                onSelect = onDialogueTtsSelect
-                            )
-                            Text(text = "语速 ${"%.1f".format(speechRate)}x", style = MaterialTheme.typography.labelMedium)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                Button(onClick = { ttsMenuExpanded = true }, enabled = ttsEngines.isNotEmpty()) {
+                                    Text(selectedTtsName ?: "选择 TTS 引擎")
+                                }
+                                DropdownMenu(expanded = ttsMenuExpanded, onDismissRequest = { ttsMenuExpanded = false }) {
+                                    ttsEngines.forEach { tts ->
+                                        DropdownMenuItem(
+                                            text = { Text(tts.name) },
+                                            onClick = {
+                                                onTtsEngineSelect(tts.id)
+                                                ttsMenuExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                                Text(text = "语速 ${"%.1f".format(speechRate)}x", style = MaterialTheme.typography.labelMedium)
+                            }
                             Slider(
                                 value = speechRate.toFloat(),
                                 onValueChange = { onSpeechRateChange(it.toDouble()) },
@@ -285,13 +270,6 @@ fun ReaderScreen(
                                 onValueChange = { onPreloadSegmentsChange(it.toInt()) },
                                 valueRange = 0f..3f,
                                 steps = 3
-                            )
-                            SpeakerMappingEditor(
-                                engines = ttsEngines,
-                                mappings = speakerMappings,
-                                fallbackId = dialogueTtsId ?: narrationTtsId ?: selectedTtsId,
-                                onSave = onSpeakerMappingChange,
-                                onRemove = onSpeakerMappingRemove
                             )
 
                             Divider()
@@ -443,130 +421,6 @@ fun ReaderScreen(
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TtsPickerRow(
-    label: String,
-    description: String,
-    selectedName: String?,
-    engines: List<HttpTTS>,
-    onSelect: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, style = MaterialTheme.typography.titleSmall)
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-        }
-        Button(onClick = { expanded = true }, enabled = engines.isNotEmpty()) {
-            Text(selectedName ?: "选择")
-            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            engines.forEach { tts ->
-                DropdownMenuItem(
-                    text = { Text(tts.name) },
-                    onClick = {
-                        onSelect(tts.id)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SpeakerMappingEditor(
-    engines: List<HttpTTS>,
-    mappings: Map<String, String>,
-    fallbackId: String?,
-    onSave: (String, String) -> Unit,
-    onRemove: (String) -> Unit
-) {
-    var speakerName by rememberSaveable { mutableStateOf("") }
-    var selectorExpanded by remember { mutableStateOf(false) }
-    var selectedId by rememberSaveable(fallbackId) { mutableStateOf(fallbackId.orEmpty()) }
-    val selectedName = engines.firstOrNull { it.id == selectedId }?.name ?: "选择 TTS 引擎"
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(text = "发言人定制", style = MaterialTheme.typography.titleSmall)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedTextField(
-                value = speakerName,
-                onValueChange = { speakerName = it },
-                label = { Text("发言人名称") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-            Button(onClick = { selectorExpanded = true }, enabled = engines.isNotEmpty()) {
-                Text(selectedName)
-                Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
-            }
-            DropdownMenu(expanded = selectorExpanded, onDismissRequest = { selectorExpanded = false }) {
-                engines.forEach { tts ->
-                    DropdownMenuItem(
-                        text = { Text(tts.name) },
-                        onClick = {
-                            selectedId = tts.id
-                            selectorExpanded = false
-                        }
-                    )
-                }
-            }
-        }
-        Button(
-            onClick = {
-                onSave(speakerName, selectedId)
-                speakerName = ""
-            },
-            enabled = speakerName.isNotBlank() && selectedId.isNotBlank()
-        ) {
-            Text("保存发言人朗读")
-        }
-
-        if (mappings.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                mappings.toList().sortedBy { it.first }.forEach { (speaker, ttsId) ->
-                    val ttsName = engines.firstOrNull { it.id == ttsId }?.name ?: ttsId
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = speaker, style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                text = "朗读: $ttsName",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-                            )
-                        }
-                        IconButton(onClick = { onRemove(speaker) }) {
-                            Icon(Icons.Outlined.Delete, contentDescription = "删除发言人绑定")
                         }
                     }
                 }

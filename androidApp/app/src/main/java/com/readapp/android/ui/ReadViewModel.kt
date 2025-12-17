@@ -48,9 +48,6 @@ class ReadViewModel(private val context: Context) : ViewModel() {
             val sortAscending = preferences.sortAscending.first()
             val reverseChapters = preferences.reverseChapterList.first()
             val selectedTtsId = preferences.selectedTtsId.first()
-            val narrationTtsId = preferences.narrationTtsId.first()
-            val dialogueTtsId = preferences.dialogueTtsId.first()
-            val speakerMapping = preferences.speakerMapping.first()
             val speechRate = preferences.speechRate.first()
             val preloadSegments = preferences.preloadSegments.first()
             _uiState.update {
@@ -65,9 +62,6 @@ class ReadViewModel(private val context: Context) : ViewModel() {
                     sortAscending = sortAscending,
                     reverseChapterList = reverseChapters,
                     selectedTtsId = selectedTtsId.ifBlank { null },
-                    narrationTtsId = narrationTtsId.ifBlank { null },
-                    dialogueTtsId = dialogueTtsId.ifBlank { null },
-                    speakerTtsMapping = speakerMapping,
                     speechRate = speechRate,
                     preloadSegments = preloadSegments,
                     isLoggedIn = token.isNotBlank()
@@ -282,6 +276,10 @@ class ReadViewModel(private val context: Context) : ViewModel() {
             val token = _uiState.value.accessToken
             val book = _uiState.value.selectedBook ?: return@launch
             val baseUrl = _uiState.value.serverUrl.ifBlank { "http://127.0.0.1:8080/api/5" }
+            val ttsId = _uiState.value.selectedTtsId
+                ?: _uiState.value.defaultTtsId
+                ?: _uiState.value.ttsEngines.firstOrNull()?.id
+                ?: return@launch
             val index = _uiState.value.currentChapterIndex ?: return@launch
             val currentContent = chapterContentCache[index] ?: _uiState.value.currentChapterContent
             val currentParagraphs = _uiState.value.currentParagraphs.ifEmpty { parseParagraphs(currentContent) }
@@ -292,7 +290,6 @@ class ReadViewModel(private val context: Context) : ViewModel() {
 
             currentParagraphs.drop(paragraphIndex).forEachIndexed { offset, paragraph ->
                 val segmentIndex = paragraphIndex + offset
-                val ttsId = resolveTtsIdForParagraph(paragraph)
                 val item = buildMediaItem(baseUrl, token, ttsId, paragraph, book, index, segmentIndex)
                 if (item != null) {
                     mediaItems.add(item)
@@ -311,7 +308,7 @@ class ReadViewModel(private val context: Context) : ViewModel() {
                     if (content.isNullOrBlank()) continue
                     val paragraphs = parseParagraphs(content)
                     paragraphs.forEachIndexed { pIndex, paragraph ->
-                        val item = buildMediaItem(baseUrl, token, resolveTtsIdForParagraph(paragraph), paragraph, book, nextIndex, pIndex)
+                        val item = buildMediaItem(baseUrl, token, ttsId, paragraph, book, nextIndex, pIndex)
                         if (item != null) {
                             mediaItems.add(item)
                             speechSegments.add(SpeechSegment(nextIndex, pIndex))
@@ -432,40 +429,6 @@ class ReadViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             preferences.saveSelectedTtsId(ttsId)
             _uiState.update { it.copy(selectedTtsId = ttsId) }
-        }
-    }
-
-    fun updateNarrationTts(ttsId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            preferences.saveNarrationTtsId(ttsId)
-            _uiState.update { it.copy(narrationTtsId = ttsId) }
-        }
-    }
-
-    fun updateDialogueTts(ttsId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            preferences.saveDialogueTtsId(ttsId)
-            _uiState.update { it.copy(dialogueTtsId = ttsId) }
-        }
-    }
-
-    fun updateSpeakerMapping(name: String, ttsId: String) {
-        val trimmed = name.trim()
-        if (trimmed.isBlank()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val updated = _uiState.value.speakerTtsMapping.toMutableMap()
-            updated[trimmed] = ttsId
-            preferences.saveSpeakerMapping(updated)
-            _uiState.update { it.copy(speakerTtsMapping = updated) }
-        }
-    }
-
-    fun removeSpeakerMapping(name: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val updated = _uiState.value.speakerTtsMapping.toMutableMap()
-            updated.remove(name)
-            preferences.saveSpeakerMapping(updated)
-            _uiState.update { it.copy(speakerTtsMapping = updated) }
         }
     }
 
@@ -598,14 +561,14 @@ class ReadViewModel(private val context: Context) : ViewModel() {
         }
         val paragraphs = parseParagraphs(content)
         val token = _uiState.value.accessToken
+        val ttsId = resolveTtsId()
         val baseUrl = _uiState.value.serverUrl.ifBlank { "http://127.0.0.1:8080/api/5" }
 
-        if (_uiState.value.isSpeaking && token.isNotBlank() && paragraphs.isNotEmpty()) {
+        if (_uiState.value.isSpeaking && token.isNotBlank() && ttsId != null && paragraphs.isNotEmpty()) {
             val existing = _uiState.value.speechSegments.any { it.chapterIndex == nextIndex }
             if (!existing) {
                 val items = paragraphs.mapIndexedNotNull { pIndex, text ->
-                    val resolvedTts = resolveTtsIdForParagraph(text)
-                    buildMediaItem(baseUrl, token, resolvedTts, text, book, nextIndex, pIndex)
+                    buildMediaItem(baseUrl, token, ttsId, text, book, nextIndex, pIndex)
                 }
                 if (items.isNotEmpty()) {
                     player.addMediaItems(items)
@@ -637,43 +600,15 @@ class ReadViewModel(private val context: Context) : ViewModel() {
             ?: _uiState.value.ttsEngines.firstOrNull()?.id
     }
 
-    private fun resolveTtsIdForParagraph(text: String, isChapterTitle: Boolean = false): String? {
-        if (isChapterTitle) {
-            return _uiState.value.narrationTtsId ?: resolveTtsId()
-        }
-
-        var target = _uiState.value.narrationTtsId ?: resolveTtsId()
-        if (isDialogueParagraph(text)) {
-            val speaker = extractSpeakerName(text)
-            val mapped = speaker?.let { name ->
-                _uiState.value.speakerTtsMapping[name]
-                    ?: _uiState.value.speakerTtsMapping[name.replace(" ", "")]
-            }
-            target = mapped ?: _uiState.value.dialogueTtsId ?: target
-        }
-        return target
-    }
-
-    private fun isDialogueParagraph(text: String): Boolean {
-        return text.contains("\"") || text.contains("“")
-    }
-
-    private fun extractSpeakerName(text: String): String? {
-        val regex = Regex("^\\s*([\\p{L}\\p{N}_·]{1,12})[\\s　]*[：:,，]?\\s*[\"“]")
-        val match = regex.find(text) ?: return null
-        return match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }
-    }
-
     private fun buildMediaItem(
         baseUrl: String,
         token: String,
-        ttsId: String?,
+        ttsId: String,
         text: String,
         book: Book,
         chapterIndex: Int,
         paragraphIndex: Int
     ): MediaItem? {
-        if (ttsId.isNullOrBlank()) return null
         val chapters = _uiState.value.chapters
         val chapterTitle = chapters.getOrNull(chapterIndex)?.title ?: book.durChapterTitle.orEmpty()
         val url = repository.buildTtsAudioUrl(baseUrl, token, ttsId, text, _uiState.value.speechRate) ?: return null
@@ -747,9 +682,6 @@ data class ReadUiState(
     val ttsEngines: List<HttpTTS> = emptyList(),
     val defaultTtsId: String? = null,
     val selectedTtsId: String? = null,
-    val narrationTtsId: String? = null,
-    val dialogueTtsId: String? = null,
-    val speakerTtsMapping: Map<String, String> = emptyMap(),
     val isSpeaking: Boolean = false,
     val speechRate: Double = 1.0,
     val fontScale: Float = 1.0f,
