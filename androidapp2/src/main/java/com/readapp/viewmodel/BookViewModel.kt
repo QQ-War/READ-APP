@@ -221,6 +221,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             isLoading = true
             errorMessage = null
             val normalized = if (server.contains("/api/")) server else "$server/api/5"
+            serverAddress = normalized
             val result = repository.login(normalized, publicServerAddress.ifBlank { null }, username, password)
             result.onFailure { error ->
                 errorMessage = error.message
