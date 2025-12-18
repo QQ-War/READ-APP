@@ -47,8 +47,14 @@ jobs:
           build-root-directory: androidapp2
           arguments: assembleRelease
 
-      - name: Upload APK artifact
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ReadApp-androidapp2-apk
-          path: androidapp2/build/outputs/apk/release/*.apk
+          name: ReadApp-androidapp2-apk-signed
+          path: androidapp2/build/outputs/apk/release/*-release.apk
+
+      - name: Upload unsigned APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReadApp-androidapp2-apk-unsigned
+          path: androidapp2/build/outputs/apk/release/*-release-unsigned.apk
