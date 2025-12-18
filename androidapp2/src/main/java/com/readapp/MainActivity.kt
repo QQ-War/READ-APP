@@ -29,12 +29,39 @@ class MainActivity : ComponentActivity() {
 fun ReadAppMain() {
     val navController = rememberNavController()
     val bookViewModel: BookViewModel = viewModel()
+    val accessToken by bookViewModel.accessToken.collectAsState()
+
+    LaunchedEffect(accessToken) {
+        if (accessToken.isBlank()) {
+            navController.navigate(Screen.Login.route) {
+                popUpTo(0)
+                launchSingleTop = true
+            }
+        } else {
+            navController.navigate(Screen.Bookshelf.route) {
+                popUpTo(0)
+                launchSingleTop = true
+            }
+        }
+    }
     
     // 只有三个页面：书架、阅读（含听书）、设置
     NavHost(
         navController = navController,
-        startDestination = Screen.Bookshelf.route
+        startDestination = Screen.Login.route
     ) {
+        composable(Screen.Login.route) {
+            LoginScreen(
+                viewModel = bookViewModel,
+                onLoginSuccess = {
+                    navController.navigate(Screen.Bookshelf.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
         // 书架页面（主页）
         composable(Screen.Bookshelf.route) {
             val books by bookViewModel.books.collectAsState()
@@ -125,7 +152,13 @@ fun ReadAppMain() {
                 onSpeechSpeedChange = { bookViewModel.updateSpeechSpeed(it) },
                 onPreloadCountChange = { bookViewModel.updatePreloadCount(it) },
                 onClearCache = { bookViewModel.clearCache() },
-                onLogout = { bookViewModel.logout() },
+                onLogout = {
+                    bookViewModel.logout()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0)
+                        launchSingleTop = true
+                    }
+                },
                 onNavigateBack = {
                     navController.popBackStack()
                 }
@@ -136,6 +169,7 @@ fun ReadAppMain() {
 
 // 导航路由定义（去掉 Player 页面）
 sealed class Screen(val route: String) {
+    object Login : Screen("login")
     object Bookshelf : Screen("bookshelf")
     object Reading : Screen("reading")
     object Settings : Screen("settings")
