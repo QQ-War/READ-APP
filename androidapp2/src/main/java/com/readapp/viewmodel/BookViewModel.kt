@@ -376,27 +376,37 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _isContentLoading.value = true
         Log.d(TAG, "开始加载章节内容: 第${index + 1}章")
 
-        val contentResult = repository.fetchChapterContent(
-            currentServerEndpoint(),
-            _publicServerAddress.value.ifBlank { null },
-            _accessToken.value,
-            bookUrl,
-            book.origin,
-            index
-        )
+        return try {
+            val contentResult = repository.fetchChapterContent(
+                currentServerEndpoint(),
+                _publicServerAddress.value.ifBlank { null },
+                _accessToken.value,
+                bookUrl,
+                book.origin,
+                index
+            )
 
-        val content = contentResult.getOrElse {
-            _errorMessage.value = it.message
-            Log.e(TAG, "加载章节内容失败", it)
-            ""
+            val rawContent = contentResult.getOrElse {
+                _errorMessage.value = it.message
+                Log.e(TAG, "加载章节内容失败", it)
+                ""
+            }
+
+            val cleanedContent = cleanChapterContent(rawContent)
+            val resolvedContent = when {
+                cleanedContent.isNotBlank() -> cleanedContent
+                rawContent.isNotBlank() -> rawContent.trim()
+                else -> "章节内容为空，可能是书源暂不可用或需要登录权限，请稍后重试或更换书源"
+            }
+
+            if (resolvedContent.isNotBlank()) {
+                updateChapterContent(index, resolvedContent)
+            }
+
+            resolvedContent.ifBlank { null }
+        } finally {
+            _isContentLoading.value = false
         }
-
-        if (content.isNotBlank()) {
-            updateChapterContent(index, content)
-        }
-
-        _isContentLoading.value = false
-        return content.ifBlank { null }
     }
 
     private fun updateChapterContent(index: Int, content: String) {
@@ -417,6 +427,25 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
 
         Log.d(TAG, "章节内容加载成功: ${currentParagraphs.size} 个段落")
+    }
+
+    private fun cleanChapterContent(raw: String): String {
+        if (raw.isBlank()) return ""
+
+        val withoutSvg = raw.replace("(?is)<svg.*?</svg>".toRegex(), "")
+        val withoutScripts = withoutSvg
+            .replace("(?is)<script.*?</script>".toRegex(), "")
+            .replace("(?is)<style.*?</style>".toRegex(), "")
+
+        val withoutTags = withoutScripts.replace("(?is)<[^>]+>".toRegex(), "\n")
+
+        return withoutTags
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
     }
 
     // ==================== TTS 控制方法 ====================

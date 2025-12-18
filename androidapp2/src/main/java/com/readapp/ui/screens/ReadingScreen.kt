@@ -33,6 +33,7 @@ fun ReadingScreen(
     chapters: List<Chapter>,
     currentChapterIndex: Int,
     currentChapterContent: String,
+    isContentLoading: Boolean,
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
     onNavigateBack: () -> Unit,
@@ -108,51 +109,51 @@ fun ReadingScreen(
                 }
         ) {
             // 内容区域
-            if (currentChapterContent.isEmpty()) {
-                // 加载中状态
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        CircularProgressIndicator()
-                        Text(
-                            text = "加载中...",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.customColors.textSecondary
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    state = scrollState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
-                    contentPadding = PaddingValues(
-                        start = AppDimens.PaddingLarge,
-                        end = AppDimens.PaddingLarge,
-                        top = if (showControls) 80.dp else AppDimens.PaddingLarge,
-                        bottom = if (showControls) 120.dp else AppDimens.PaddingLarge
+            LazyColumn(
+                state = scrollState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                contentPadding = PaddingValues(
+                    start = AppDimens.PaddingLarge,
+                    end = AppDimens.PaddingLarge,
+                    top = if (showControls) 80.dp else AppDimens.PaddingLarge,
+                    bottom = if (showControls) 120.dp else AppDimens.PaddingLarge
+                )
+            ) {
+                // 章节标题
+                item {
+                    Text(
+                        text = if (currentChapterIndex < chapters.size) {
+                            chapters[currentChapterIndex].title
+                        } else {
+                            "章节"
+                        },
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = AppDimens.PaddingLarge)
                     )
-                ) {
-                    // 章节标题
+                }
+
+                if (paragraphs.isEmpty()) {
                     item {
-                        Text(
-                            text = if (currentChapterIndex < chapters.size) {
-                                chapters[currentChapterIndex].title
-                            } else {
-                                "章节"
-                            },
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(bottom = AppDimens.PaddingLarge)
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = AppDimens.PaddingLarge),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text(
+                                text = if (isContentLoading) "正在加载章节内容..." else "暂无可显示的内容",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.customColors.textSecondary,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
-                    
+                } else {
                     // 章节内容（分段显示，带高亮）
                     itemsIndexed(paragraphs) { index, paragraph ->
                         ParagraphItem(
@@ -229,7 +230,19 @@ fun ReadingScreen(
                 showTtsControls = currentPlayingParagraph >= 0  // 开始播放后显示TTS控制
             )
         }
-        
+
+        if (isContentLoading && paragraphs.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .size(40.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(modifier = Modifier.fillMaxSize(), strokeWidth = 3.dp)
+            }
+        }
+
         // 章节列表弹窗
         if (showChapterList) {
             ChapterListDialog(

@@ -96,6 +96,7 @@ fun ReadAppMain() {
                 val chapters by bookViewModel.chapters.collectAsState()
                 val currentChapterIndex by bookViewModel.currentChapterIndex.collectAsState()
                 val currentChapterContent by bookViewModel.currentChapterContent.collectAsState()
+                val isContentLoading by bookViewModel.isContentLoading.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
@@ -108,6 +109,7 @@ fun ReadAppMain() {
                         chapters = chapters,
                         currentChapterIndex = currentChapterIndex,
                         currentChapterContent = currentChapterContent,
+                        isContentLoading = isContentLoading,
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
                         },
