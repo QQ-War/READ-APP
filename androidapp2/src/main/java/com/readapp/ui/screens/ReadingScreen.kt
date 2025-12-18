@@ -1,21 +1,25 @@
 // ReadingScreen.kt - 阅读页面
 package com.readapp.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.readapp.data.model.Book
@@ -23,255 +27,231 @@ import com.readapp.data.model.Chapter
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReadingScreen(
     book: Book,
     chapters: List<Chapter>,
     currentChapterIndex: Int,
+    content: String,
+    isContentLoading: Boolean,
+    onLoadContent: () -> Unit,
     onChapterClick: (Int) -> Unit,
     onStartListening: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showChapterList by remember { mutableStateOf(true) }
-    
-    Column(
+    val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title ?: book.title
+    var showControls by remember { mutableStateOf(false) }
+    var showChapterSheet by remember { mutableStateOf(false) }
+
+    val paragraphs = remember(content) {
+        content.split("\n\n", "\n")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
+    LaunchedEffect(book.id, currentChapterIndex) {
+        onLoadContent()
+    }
+
+    if (showChapterSheet) {
+        ChapterBottomSheet(
+            chapters = chapters,
+            currentChapterIndex = currentChapterIndex,
+            onChapterSelected = { index ->
+                onChapterClick(index)
+                showChapterSheet = false
+            },
+            onDismiss = { showChapterSheet = false }
+        )
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(AppDimens.PaddingMedium)
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { showControls = !showControls })
+            }
+            .background(MaterialTheme.colorScheme.surface)
     ) {
-        // 返回按钮
-        IconButton(
-            onClick = onNavigateBack,
-            modifier = Modifier.size(40.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = "返回",
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(AppDimens.PaddingMedium))
-        
-        // 书籍信息卡片
-        BookInfoCard(
-            book = book,
-            onContinueReading = { /* 继续阅读 */ },
-            onStartListening = onStartListening
-        )
-        
-        Spacer(modifier = Modifier.height(AppDimens.PaddingMedium))
-        
-        // 章节列表
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "章节列表",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            IconButton(onClick = { showChapterList = !showChapterList }) {
-                Icon(
-                    imageVector = if (showChapterList) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (showChapterList) "折叠章节列表" else "展开章节列表"
+        when {
+            isContentLoading && content.isBlank() -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            content.isNotBlank() -> {
+                ReadingContent(
+                    chapterTitle = chapterTitle,
+                    author = book.author,
+                    paragraphs = paragraphs
                 )
             }
-        }
 
-        if (showChapterList) {
-            ChapterListCard(
-                chapters = chapters,
-                currentChapterIndex = currentChapterIndex,
-                onChapterClick = onChapterClick,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun BookInfoCard(
-    book: Book,
-    onContinueReading: () -> Unit,
-    onStartListening: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(AppDimens.CornerRadiusLarge),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.customColors.cardBackground
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = AppDimens.ElevationSmall
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(AppDimens.PaddingMedium),
-            horizontalArrangement = Arrangement.spacedBy(AppDimens.PaddingMedium)
-        ) {
-            // 封面
-            Box(
-                modifier = Modifier
-                    .width(80.dp)
-                    .height(110.dp)
-                    .clip(RoundedCornerShape(AppDimens.CornerRadiusMedium))
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.customColors.gradientStart,
-                                MaterialTheme.customColors.gradientEnd
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = book.coverEmoji,
-                    style = MaterialTheme.typography.displayMedium
-                )
-            }
-            
-            // 书籍信息
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = book.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                
-                Text(
-                    text = book.author,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.customColors.textSecondary
-                )
-                
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                // 操作按钮
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            else -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Button(
-                        onClick = onContinueReading,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.customColors.gradientStart
-                        ),
-                        shape = RoundedCornerShape(AppDimens.CornerRadiusMedium),
-                        contentPadding = PaddingValues(
-                            horizontal = 16.dp,
-                            vertical = 8.dp
-                        )
-                    ) {
-                        Text(
-                            text = "继续阅读",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                    
-                    OutlinedButton(
-                        onClick = onStartListening,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.customColors.success
-                        ),
-                        shape = RoundedCornerShape(AppDimens.CornerRadiusMedium),
-                        contentPadding = PaddingValues(
-                            horizontal = 16.dp,
-                            vertical = 8.dp
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "听书",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
+                    Text(
+                        text = "暂无章节内容",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.customColors.textSecondary
+                    )
                 }
             }
         }
+
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            ReadingControlsOverlay(
+                chapterTitle = chapterTitle,
+                author = book.author,
+                chapterPosition = "${currentChapterIndex + 1}/${chapters.size.coerceAtLeast(1)}",
+                onNavigateBack = onNavigateBack,
+                onShowChapters = { showChapterSheet = true },
+                onStartListening = onStartListening
+            )
+        }
     }
 }
 
 @Composable
-private fun ChapterListCard(
-    chapters: List<Chapter>,
-    currentChapterIndex: Int,
-    onChapterClick: (Int) -> Unit,
-    modifier: Modifier = Modifier
+private fun ReadingContent(
+    chapterTitle: String,
+    author: String,
+    paragraphs: List<String>
 ) {
-    val listState = rememberLazyListState()
-    
-    LaunchedEffect(currentChapterIndex) {
-        listState.animateScrollToItem(currentChapterIndex)
-    }
-    
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(AppDimens.CornerRadiusLarge),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.customColors.cardBackground
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = AppDimens.ElevationSmall
-        )
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = AppDimens.PaddingMedium),
+        contentPadding = PaddingValues(vertical = AppDimens.PaddingLarge),
+        verticalArrangement = Arrangement.spacedBy(AppDimens.PaddingMedium)
     ) {
-        Column {
-            // 标题栏
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(AppDimens.PaddingMedium),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "章节列表",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = chapterTitle,
+                    style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                
+                if (author.isNotBlank()) {
+                    Text(
+                        text = author,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.customColors.textSecondary
+                    )
+                }
+            }
+        }
+
+        itemsIndexed(paragraphs) { _, paragraph ->
+            Text(
+                text = paragraph,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReadingControlsOverlay(
+    chapterTitle: String,
+    author: String,
+    chapterPosition: String,
+    onNavigateBack: () -> Unit,
+    onShowChapters: () -> Unit,
+    onStartListening: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+            .padding(AppDimens.PaddingMedium)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(AppDimens.PaddingSmall),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "返回"
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = chapterTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (author.isNotBlank()) {
+                        Text(
+                            text = author,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.customColors.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
                 Text(
-                    text = "${currentChapterIndex + 1}/${chapters.size}",
+                    text = chapterPosition,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.customColors.textSecondary
                 )
             }
-            
-            Divider(color = MaterialTheme.customColors.border)
-            
-            // 章节列表
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxWidth()
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(AppDimens.PaddingMedium),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                itemsIndexed(chapters) { index, chapter ->
-                    ChapterItem(
-                        chapter = chapter,
-                        isCurrentChapter = index == currentChapterIndex,
-                        onClick = { onChapterClick(index) }
+                OutlinedButton(
+                    onClick = onShowChapters,
+                    shape = RoundedCornerShape(AppDimens.CornerRadiusMedium),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FormatListBulleted,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
                     )
-                    
-                    if (index < chapters.size - 1) {
-                        Divider(
-                            color = MaterialTheme.customColors.border,
-                            modifier = Modifier.padding(horizontal = AppDimens.PaddingMedium)
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "章节")
+                }
+
+                Button(
+                    onClick = onStartListening,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(AppDimens.CornerRadiusMedium),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Headphones,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "听书")
                 }
             }
         }
@@ -279,23 +259,67 @@ private fun ChapterListCard(
 }
 
 @Composable
-private fun ChapterItem(
+private fun ChapterBottomSheet(
+    chapters: List<Chapter>,
+    currentChapterIndex: Int,
+    onChapterSelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = { ModalBottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(AppDimens.PaddingMedium),
+            verticalArrangement = Arrangement.spacedBy(AppDimens.PaddingMedium)
+        ) {
+            Text(
+                text = "选择章节",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(AppDimens.PaddingSmall)
+            ) {
+                itemsIndexed(chapters) { index, chapter ->
+                    ChapterRow(
+                        chapter = chapter,
+                        isCurrent = index == currentChapterIndex,
+                        onClick = {
+                            onChapterSelected(index)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChapterRow(
     chapter: Chapter,
-    isCurrentChapter: Boolean,
+    isCurrent: Boolean,
     onClick: () -> Unit
 ) {
-    val backgroundColor = if (isCurrentChapter) {
-        MaterialTheme.customColors.gradientStart.copy(alpha = 0.2f)
+    val backgroundColor = if (isCurrent) {
+        MaterialTheme.customColors.gradientStart.copy(alpha = 0.1f)
     } else {
         MaterialTheme.colorScheme.surface
     }
-    
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(backgroundColor)
+            .background(backgroundColor, RoundedCornerShape(AppDimens.CornerRadiusMedium))
             .clickable(onClick = onClick)
-            .padding(AppDimens.PaddingMedium),
+            .padding(horizontal = AppDimens.PaddingMedium, vertical = AppDimens.PaddingSmall),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -303,33 +327,27 @@ private fun ChapterItem(
             Text(
                 text = chapter.title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (isCurrentChapter) {
-                    MaterialTheme.customColors.gradientStart
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }
+                color = if (isCurrent) MaterialTheme.customColors.gradientStart else MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            Text(
-                text = "时长: ${chapter.duration}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.customColors.textSecondary
-            )
+            if (chapter.duration.isNotBlank()) {
+                Text(
+                    text = chapter.duration,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.customColors.textSecondary
+                )
+            }
         }
-        
-        if (isCurrentChapter) {
+
+        if (isCurrent) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.customColors.gradientStart
             ) {
                 Text(
                     text = "当前",
-                    modifier = Modifier.padding(
-                        horizontal = 8.dp,
-                        vertical = 4.dp
-                    ),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimary
                 )
@@ -337,5 +355,3 @@ private fun ChapterItem(
         }
     }
 }
-
-// 数据模型定义移动到 data/model 包

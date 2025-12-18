@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +29,7 @@ fun BookshelfScreen(
     books: List<Book>,
     onBookClick: (Book) -> Unit,
     onSearchQueryChange: (String) -> Unit,
+    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -37,6 +39,26 @@ fun BookshelfScreen(
             .fillMaxSize()
             .padding(AppDimens.PaddingMedium)
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "书架",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            IconButton(onClick = onSettingsClick) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "设置"
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(AppDimens.PaddingMedium))
         // 搜索栏
         SearchBar(
             query = searchQuery,
@@ -224,4 +246,3 @@ private fun ReadingProgress(
         )
     }
 }
-

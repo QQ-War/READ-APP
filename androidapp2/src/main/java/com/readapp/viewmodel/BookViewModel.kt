@@ -56,6 +56,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     var currentChapterIndex by mutableStateOf(0)
         private set
 
+    var currentChapterContent by mutableStateOf("")
+        private set
+
     var currentParagraph by mutableStateOf(1)
         private set
 
@@ -104,6 +107,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     var isLoading by mutableStateOf(false)
         private set
 
+    var isContentLoading by mutableStateOf(false)
+        private set
+
     val currentChapterTitle: String
         get() = chapters.getOrNull(currentChapterIndex)?.title ?: ""
 
@@ -137,6 +143,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun selectBook(book: Book) {
         selectedBook = book
         currentChapterIndex = book.durChapterIndex ?: 0
+        currentChapterContent = ""
         resetPlayback()
         viewModelScope.launch { loadChapters(book) }
     }
@@ -144,7 +151,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun setCurrentChapter(index: Int) {
         if (index in chapters.indices) {
             currentChapterIndex = index
+            currentChapterContent = ""
             resetPlayback()
+            viewModelScope.launch {
+                loadChapterContent(index)
+            }
         }
     }
 
@@ -211,7 +222,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         books = emptyList()
         selectedBook = null
         chapters = emptyList()
+        currentChapterIndex = 0
+        currentChapterContent = ""
         isPlaying = false
+        isContentLoading = false
     }
 
     fun currentServerEndpoint(): String = if (serverAddress.endsWith("/api/5")) serverAddress else "$serverAddress/api/5"
@@ -253,6 +267,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 errorMessage = error.message
             }
             isLoading = false
+        }
+    }
+
+    fun loadCurrentChapterContent() {
+        viewModelScope.launch {
+            if (currentChapterContent.isBlank()) {
+                currentChapterContent = ""
+            }
+            loadChapterContent(currentChapterIndex)
         }
     }
 
@@ -315,22 +338,61 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         chaptersResult.onSuccess {
             chapters = it
             totalParagraphs = chapters.size.coerceAtLeast(1)
+            if (chapters.isNotEmpty()) {
+                currentChapterIndex = currentChapterIndex.coerceIn(0, chapters.lastIndex)
+                loadChapterContent(currentChapterIndex)
+            }
         }.onFailure { error ->
             errorMessage = error.message
         }
     }
 
     private suspend fun ensureCurrentChapterContent(): String? {
+        if (currentChapterContent.isNotBlank()) return currentChapterContent
+        return loadChapterContent(currentChapterIndex)
+    }
+
+    private suspend fun loadChapterContent(index: Int): String? {
         val book = selectedBook ?: return null
         val bookUrl = book.bookUrl ?: return null
-        val index = currentChapterIndex
+        if (index !in chapters.indices) return null
+
         val cached = chapters.getOrNull(index)?.content
-        if (!cached.isNullOrBlank()) return cached
-        val contentResult = repository.fetchChapterContent(currentServerEndpoint(), publicServerAddress.ifBlank { null }, accessToken, bookUrl, book.origin, index)
-        return contentResult.getOrElse {
-            errorMessage = it.message
-            null
+        val content = if (!cached.isNullOrBlank()) {
+            currentChapterContent = cached
+            totalParagraphs = cached.split("\n\n", "\n").count { it.isNotBlank() }.coerceAtLeast(1)
+            cached
+        } else {
+            if (isContentLoading && currentChapterContent.isNotBlank()) {
+                return currentChapterContent
+            }
+
+            isContentLoading = true
+            val contentResult = repository.fetchChapterContent(
+                currentServerEndpoint(),
+                publicServerAddress.ifBlank { null },
+                accessToken,
+                bookUrl,
+                book.origin,
+                index
+            )
+
+            contentResult.getOrElse {
+                errorMessage = it.message
+                ""
+            }
         }
+
+        if (content.isNotBlank()) {
+            val updatedChapters = chapters.toMutableList()
+            updatedChapters[index] = updatedChapters[index].copy(content = content)
+            chapters = updatedChapters
+            currentChapterContent = content
+            totalParagraphs = content.split("\n\n", "\n").count { it.isNotBlank() }.coerceAtLeast(1)
+        }
+
+        isContentLoading = false
+        return content.ifBlank { null }
     }
 
     private fun resetPlayback() {
