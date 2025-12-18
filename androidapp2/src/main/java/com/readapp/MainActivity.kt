@@ -4,8 +4,13 @@ package com.readapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -29,12 +34,46 @@ class MainActivity : ComponentActivity() {
 fun ReadAppMain() {
     val navController = rememberNavController()
     val bookViewModel: BookViewModel = viewModel()
+    val accessToken by bookViewModel.accessToken.collectAsState()
+    val isInitialized by bookViewModel.isInitialized.collectAsState()
+
+    LaunchedEffect(isInitialized, accessToken) {
+        if (!isInitialized) return@LaunchedEffect
+
+        val target = if (accessToken.isBlank()) Screen.Login.route else Screen.Bookshelf.route
+        navController.navigate(target) {
+            popUpTo(0)
+            launchSingleTop = true
+        }
+    }
+
+    if (!isInitialized) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
     
     // 只有三个页面：书架、阅读（含听书）、设置
     NavHost(
         navController = navController,
-        startDestination = Screen.Bookshelf.route
+        startDestination = if (accessToken.isBlank()) Screen.Login.route else Screen.Bookshelf.route
     ) {
+        composable(Screen.Login.route) {
+            LoginScreen(
+                viewModel = bookViewModel,
+                onLoginSuccess = {
+                    navController.navigate(Screen.Bookshelf.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
         // 书架页面（主页）
         composable(Screen.Bookshelf.route) {
             val books by bookViewModel.books.collectAsState()
@@ -125,7 +164,13 @@ fun ReadAppMain() {
                 onSpeechSpeedChange = { bookViewModel.updateSpeechSpeed(it) },
                 onPreloadCountChange = { bookViewModel.updatePreloadCount(it) },
                 onClearCache = { bookViewModel.clearCache() },
-                onLogout = { bookViewModel.logout() },
+                onLogout = {
+                    bookViewModel.logout()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0)
+                        launchSingleTop = true
+                    }
+                },
                 onNavigateBack = {
                     navController.popBackStack()
                 }
@@ -136,6 +181,7 @@ fun ReadAppMain() {
 
 // 导航路由定义（去掉 Player 页面）
 sealed class Screen(val route: String) {
+    object Login : Screen("login")
     object Bookshelf : Screen("bookshelf")
     object Reading : Screen("reading")
     object Settings : Screen("settings")

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -30,15 +31,14 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var serverAddress by remember { mutableStateOf(viewModel.serverAddress) }
-    var username by remember { mutableStateOf(viewModel.username) }
+    val serverAddressState by viewModel.serverAddress.collectAsState()
+    val usernameState by viewModel.username.collectAsState()
+    var serverAddress by rememberSaveable(serverAddressState) { mutableStateOf(serverAddressState) }
+    var username by rememberSaveable(usernameState) { mutableStateOf(usernameState) }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    val isLoading by remember { derivedStateOf { viewModel.isLoading } }
-    val errorMessage by remember { derivedStateOf { viewModel.errorMessage } }
-
-    LaunchedEffect(viewModel.serverAddress) { serverAddress = viewModel.serverAddress }
-    LaunchedEffect(viewModel.username) { username = viewModel.username }
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
     
     Box(
         modifier = modifier
