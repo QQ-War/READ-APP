@@ -165,7 +165,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _isLoading.value = true
                 try {
                     loadTtsEnginesInternal()
-                    refreshBooksInternal(showLoading = false)
+                    refreshBooksInternal(showLoading = true)
                 } finally {
                     _isLoading.value = false
                 }
@@ -184,10 +184,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
             val normalized = if (server.contains("/api/")) server else "$server/api/5"
             val result = repository.login(
-            normalized,
-            _publicServerAddress.value.ifBlank { null },
-            username,
-            password
+                normalized,
+                _publicServerAddress.value.ifBlank { null },
+                username,
+                password
             )
 
             result.onFailure { error ->
@@ -198,11 +198,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             if (loginData != null) {
                 _accessToken.value = loginData.accessToken
                 _username.value = username
+                _serverAddress.value = normalized
                 preferences.saveAccessToken(loginData.accessToken)
                 preferences.saveUsername(username)
                 preferences.saveServerUrl(normalized)
                 loadTtsEnginesInternal()
-                refreshBooksInternal(showLoading = false)
+                refreshBooksInternal(showLoading = true)
                 onSuccess()
             }
 
