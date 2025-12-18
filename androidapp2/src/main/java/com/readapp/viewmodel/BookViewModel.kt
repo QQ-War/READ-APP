@@ -416,26 +416,4 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
-
-    private val _currentChapterContent = MutableStateFlow("")
-    val currentChapterContent: StateFlow<String> = _currentChapterContent.asStateFlow()
-    
-    // 在 setCurrentChapter 方法中加载内容
-    fun setCurrentChapter(index: Int) {
-        _currentChapterIndex.value = index
-        
-        // 加载章节内容
-        viewModelScope.launch {
-            try {
-                val content = bookRepository.getChapterContent(
-                    bookId = selectedBook.value?.id ?: return@launch,
-                    chapterIndex = index
-                )
-                _currentChapterContent.value = content
-            } catch (e: Exception) {
-                Log.e(TAG, "加载章节内容失败", e)
-                _currentChapterContent.value = "加载失败：${e.message}"
-            }
-        }
-    }
 }
