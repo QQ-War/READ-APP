@@ -38,6 +38,12 @@ android {
                 "proguard-rules.pro"
             )
         }
+        create("unsigned") {
+            initWith(getByName("release"))
+            signingConfig = null
+            isDebuggable = false
+            matchingFallbacks += listOf("release")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

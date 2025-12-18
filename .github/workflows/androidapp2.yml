@@ -45,16 +45,16 @@ jobs:
         with:
           gradle-version: 8.2.1
           build-root-directory: androidapp2
-          arguments: assembleRelease
-
-      - name: Upload signed APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ReadApp-androidapp2-apk-signed
-          path: androidapp2/build/outputs/apk/release/*-release.apk
+          arguments: assembleUnsigned assembleDebug
 
       - name: Upload unsigned APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ReadApp-androidapp2-apk-unsigned
-          path: androidapp2/build/outputs/apk/release/*-unsigned.apk
+          path: androidapp2/build/outputs/apk/unsigned/*-unsigned.apk
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReadApp-androidapp2-apk-debug
+          path: androidapp2/build/outputs/apk/debug/*-debug.apk

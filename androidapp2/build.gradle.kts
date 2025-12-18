@@ -30,6 +30,12 @@ android {
             )
             signingConfig = signingConfigs.getByName("debug")
         }
+        create("unsigned") {
+            initWith(getByName("release"))
+            signingConfig = null
+            isDebuggable = false
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
