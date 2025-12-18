@@ -1,11 +1,15 @@
 package com.readapp.data.model
 
+import com.google.gson.annotations.SerializedName
+
 data class Book(
     val name: String = "",
     val author: String = "",
+    @SerializedName("bookUrl", alternate = ["url"])
     val bookUrl: String? = null,
     val origin: String? = null,
     val originName: String? = null,
+    @SerializedName("coverUrl", alternate = ["imgUrl", "cover"])
     val coverUrl: String? = null,
     val intro: String? = null,
     val durChapterTitle: String? = null,
