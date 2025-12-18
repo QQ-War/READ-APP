@@ -151,16 +151,19 @@ fun ReadAppMain() {
         composable(Screen.Settings.route) {
             val serverAddress by bookViewModel.serverAddress.collectAsState()
             val selectedTtsEngine by bookViewModel.selectedTtsEngine.collectAsState()
+            val availableTtsEngines by bookViewModel.availableTtsEngines.collectAsState()
             val speechSpeed by bookViewModel.speechSpeed.collectAsState()
             val preloadCount by bookViewModel.preloadCount.collectAsState()
             
             SettingsScreen(
                 serverAddress = serverAddress,
                 selectedTtsEngine = selectedTtsEngine,
+                availableTtsEngines = availableTtsEngines,
                 speechSpeed = speechSpeed,
                 preloadCount = preloadCount,
                 onServerAddressChange = { bookViewModel.updateServerAddress(it) },
-                onTtsEngineClick = { /* 显示引擎选择对话框 */ },
+                onSelectTtsEngine = { bookViewModel.selectTtsEngine(it) },
+                onReloadTtsEngines = { bookViewModel.loadTtsEngines() },
                 onSpeechSpeedChange = { bookViewModel.updateSpeechSpeed(it) },
                 onPreloadCountChange = { bookViewModel.updatePreloadCount(it) },
                 onClearCache = { bookViewModel.clearCache() },

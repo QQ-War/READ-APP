@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.ColumnScope
+import com.readapp.data.model.HttpTTS
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
 
@@ -22,10 +23,12 @@ import com.readapp.ui.theme.customColors
 fun SettingsScreen(
     serverAddress: String,
     selectedTtsEngine: String,
+    availableTtsEngines: List<HttpTTS>,
     speechSpeed: Int,
     preloadCount: Int,
     onServerAddressChange: (String) -> Unit,
-    onTtsEngineClick: () -> Unit,
+    onSelectTtsEngine: (String) -> Unit,
+    onReloadTtsEngines: () -> Unit,
     onSpeechSpeedChange: (Int) -> Unit,
     onPreloadCountChange: (Int) -> Unit,
     onClearCache: () -> Unit,
@@ -33,6 +36,16 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showTtsDialog by remember { mutableStateOf(false) }
+    val selectedTtsName = remember(selectedTtsEngine, availableTtsEngines) {
+        availableTtsEngines.firstOrNull { it.id == selectedTtsEngine }?.name
+            ?: selectedTtsEngine.ifBlank { "未选择" }
+    }
+
+    LaunchedEffect(Unit) {
+        onReloadTtsEngines()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -79,8 +92,10 @@ fun SettingsScreen(
                 SettingsItem(
                     icon = Icons.Default.VolumeUp,
                     title = "TTS引擎",
-                    subtitle = selectedTtsEngine,
-                    onClick = onTtsEngineClick
+                    subtitle = selectedTtsName,
+                    onClick = {
+                        showTtsDialog = true
+                    }
                 )
                 
                 Divider(color = MaterialTheme.customColors.border)
@@ -173,6 +188,19 @@ fun SettingsScreen(
             
             Spacer(modifier = Modifier.height(32.dp))
         }
+
+        if (showTtsDialog) {
+            TtsEngineDialog(
+                availableTtsEngines = availableTtsEngines,
+                selectedTtsEngine = selectedTtsEngine,
+                onSelect = {
+                    onSelectTtsEngine(it)
+                    showTtsDialog = false
+                },
+                onReload = onReloadTtsEngines,
+                onDismiss = { showTtsDialog = false }
+            )
+        }
     }
 }
 
@@ -259,6 +287,78 @@ private fun SettingsItem(
             modifier = Modifier.size(20.dp)
         )
     }
+}
+
+@Composable
+private fun TtsEngineDialog(
+    availableTtsEngines: List<HttpTTS>,
+    selectedTtsEngine: String,
+    onSelect: (String) -> Unit,
+    onReload: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "选择 TTS 引擎") },
+        text = {
+            if (availableTtsEngines.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "暂无可用的 TTS 引擎，请先在后端配置。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.customColors.textSecondary
+                    )
+                    TextButton(onClick = onReload) {
+                        Text("刷新列表")
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    availableTtsEngines.forEach { tts ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSelect(tts.id)
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = tts.id == selectedTtsEngine,
+                                onClick = { onSelect(tts.id) }
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = tts.name,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                if (tts.contentType != null) {
+                                    Text(
+                                        text = tts.contentType,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.customColors.textSecondary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭")
+            }
+        }
+    )
 }
 
 @Composable

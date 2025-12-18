@@ -162,8 +162,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _preloadCount.value = preferences.preloadCount.first().toInt()
 
             if (_accessToken.value.isNotBlank()) {
-                loadTtsEngines()
-                refreshBooks()
+                _isLoading.value = true
+                try {
+                    loadTtsEnginesInternal()
+                    refreshBooksInternal(showLoading = false)
+                } finally {
+                    _isLoading.value = false
+                }
             }
 
             _isInitialized.value = true
@@ -196,8 +201,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 preferences.saveAccessToken(loginData.accessToken)
                 preferences.saveUsername(username)
                 preferences.saveServerUrl(normalized)
-                loadTtsEngines()
-                refreshBooks()
+                loadTtsEnginesInternal()
+                refreshBooksInternal(showLoading = false)
                 onSuccess()
             }
 
@@ -219,6 +224,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _currentParagraphIndex.value = -1
             currentParagraphs = emptyList()
             stopPlayback()
+            _availableTtsEngines.value = emptyList()
+            _selectedTtsEngine.value = ""
         }
     }
 
@@ -228,20 +235,31 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         if (_accessToken.value.isBlank()) return
 
         viewModelScope.launch {
+            refreshBooksInternal()
+        }
+    }
+
+    private suspend fun refreshBooksInternal(showLoading: Boolean = true) {
+        if (_accessToken.value.isBlank()) return
+
+        if (showLoading) {
             _isLoading.value = true
-            val booksResult = repository.fetchBooks(
+        }
+
+        val booksResult = repository.fetchBooks(
             currentServerEndpoint(),
             _publicServerAddress.value.ifBlank { null },
             _accessToken.value
-            )
+        )
 
-            booksResult.onSuccess { list ->
-                allBooks = list
-                _books.value = list
-            }.onFailure { error ->
-                _errorMessage.value = error.message
-            }
+        booksResult.onSuccess { list ->
+            allBooks = list
+            _books.value = list
+        }.onFailure { error ->
+            _errorMessage.value = error.message
+        }
 
+        if (showLoading) {
             _isLoading.value = false
         }
     }
@@ -565,32 +583,55 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     // ==================== TTS 引擎管理 ====================
 
-    private fun loadTtsEngines() {
+    fun loadTtsEngines() {
         if (_accessToken.value.isBlank()) return
 
         viewModelScope.launch {
-            val enginesResult = repository.fetchTtsEngines(
-                currentServerEndpoint(),
-                _publicServerAddress.value.ifBlank { null },
-                _accessToken.value
-            )
+            loadTtsEnginesInternal()
+        }
+    }
 
-            enginesResult.onSuccess { engines ->
-                _availableTtsEngines.value = engines
-                Log.d(TAG, "加载TTS引擎成功: ${engines.size} 个")
-            }
+    private suspend fun loadTtsEnginesInternal() {
+        if (_accessToken.value.isBlank()) return
 
-            val defaultResult = repository.fetchDefaultTts(
-                currentServerEndpoint(),
-                _publicServerAddress.value.ifBlank { null },
-                _accessToken.value
-            )
+        var engines: List<HttpTTS> = emptyList()
+        val enginesResult = repository.fetchTtsEngines(
+            currentServerEndpoint(),
+            _publicServerAddress.value.ifBlank { null },
+            _accessToken.value
+        )
 
-            val defaultId = defaultResult.getOrNull()
-            if (defaultId != null) {
-                _selectedTtsEngine.value = defaultId
-                preferences.saveSelectedTtsId(defaultId)
-            }
+        enginesResult.onSuccess { list ->
+            engines = list
+            _availableTtsEngines.value = list
+            Log.d(TAG, "加载TTS引擎成功: ${list.size} 个")
+        }.onFailure { error ->
+            _errorMessage.value = error.message
+        }
+
+        val defaultResult = repository.fetchDefaultTts(
+            currentServerEndpoint(),
+            _publicServerAddress.value.ifBlank { null },
+            _accessToken.value
+        )
+
+        val defaultId = defaultResult.getOrNull()
+        val resolved = listOf(
+            _selectedTtsEngine.value,
+            defaultId,
+            engines.firstOrNull()?.id
+        ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
+
+        if (resolved.isNotBlank() && resolved != _selectedTtsEngine.value) {
+            _selectedTtsEngine.value = resolved
+            preferences.saveSelectedTtsId(resolved)
+        }
+    }
+
+    fun selectTtsEngine(engineId: String) {
+        _selectedTtsEngine.value = engineId
+        viewModelScope.launch {
+            preferences.saveSelectedTtsId(engineId)
         }
     }
 
