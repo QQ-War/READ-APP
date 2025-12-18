@@ -4,8 +4,13 @@ package com.readapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -30,25 +35,32 @@ fun ReadAppMain() {
     val navController = rememberNavController()
     val bookViewModel: BookViewModel = viewModel()
     val accessToken by bookViewModel.accessToken.collectAsState()
+    val isInitialized by bookViewModel.isInitialized.collectAsState()
 
-    LaunchedEffect(accessToken) {
-        if (accessToken.isBlank()) {
-            navController.navigate(Screen.Login.route) {
-                popUpTo(0)
-                launchSingleTop = true
-            }
-        } else {
-            navController.navigate(Screen.Bookshelf.route) {
-                popUpTo(0)
-                launchSingleTop = true
-            }
+    LaunchedEffect(isInitialized, accessToken) {
+        if (!isInitialized) return@LaunchedEffect
+
+        val target = if (accessToken.isBlank()) Screen.Login.route else Screen.Bookshelf.route
+        navController.navigate(target) {
+            popUpTo(0)
+            launchSingleTop = true
         }
+    }
+
+    if (!isInitialized) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
     }
     
     // 只有三个页面：书架、阅读（含听书）、设置
     NavHost(
         navController = navController,
-        startDestination = Screen.Login.route
+        startDestination = if (accessToken.isBlank()) Screen.Login.route else Screen.Bookshelf.route
     ) {
         composable(Screen.Login.route) {
             LoginScreen(

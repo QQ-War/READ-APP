@@ -146,6 +146,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isContentLoading = MutableStateFlow(false)
     val isContentLoading: StateFlow<Boolean> = _isContentLoading.asStateFlow()
+    private val _isInitialized = MutableStateFlow(false)
+    val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
     // ==================== 初始化 ====================
 
@@ -163,6 +165,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 loadTtsEngines()
                 refreshBooks()
             }
+
+            _isInitialized.value = true
         }
     }
 
@@ -621,11 +625,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     // ==================== 辅助方法 ====================
 
     private fun currentServerEndpoint(): String {
-        return if (_serverAddress.value.endsWith("/api/5")) {
-            _serverAddress.value
-        } else {
-            "${_serverAddress.value}/api/5"
-        }
+        val normalized = _serverAddress.value
+            .trim()
+            .trimEnd('/')
+        return if (normalized.contains("/api/")) normalized else "$normalized/api/5"
     }
 
     private fun resetPlayback() {
