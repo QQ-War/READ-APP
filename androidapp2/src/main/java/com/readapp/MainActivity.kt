@@ -1,17 +1,11 @@
-// MainActivity.kt - 简化的导航结构（只有书架主页）
+// MainActivity.kt - 去掉独立播放器页面，集成到阅读页面
 package com.readapp
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -36,16 +30,17 @@ fun ReadAppMain() {
     val navController = rememberNavController()
     val bookViewModel: BookViewModel = viewModel()
     
-    // 简化的导航：只有书架、阅读、播放器、设置四个页面
-    // 不使用底部导航栏
+    // 只有三个页面：书架、阅读（含听书）、设置
     NavHost(
         navController = navController,
         startDestination = Screen.Bookshelf.route
     ) {
         // 书架页面（主页）
         composable(Screen.Bookshelf.route) {
+            val books by bookViewModel.books.collectAsState()
+            
             BookshelfScreen(
-                books = bookViewModel.books,
+                books = books,
                 onBookClick = { book ->
                     bookViewModel.selectBook(book)
                     navController.navigate(Screen.Reading.route)
@@ -59,61 +54,72 @@ fun ReadAppMain() {
             )
         }
         
-        // 阅读页面（点击书籍后进入）
+        // 阅读页面（集成听书功能）
         composable(Screen.Reading.route) {
-            bookViewModel.selectedBook?.let { book ->
+            val selectedBook by bookViewModel.selectedBook.collectAsState()
+            val chapters by bookViewModel.chapters.collectAsState()
+            val currentChapterIndex by bookViewModel.currentChapterIndex.collectAsState()
+            val currentChapterContent by bookViewModel.currentChapterContent.collectAsState()
+            
+            // TTS 状态
+            val isPlaying by bookViewModel.isPlaying.collectAsState()
+            val currentPlayingParagraph by bookViewModel.currentParagraphIndex.collectAsState()
+            val preloadedParagraphs by bookViewModel.preloadedParagraphs.collectAsState()
+            
+            selectedBook?.let { book ->
                 ReadingScreen(
                     book = book,
-                    chapters = bookViewModel.chapters,
-                    currentChapterIndex = bookViewModel.currentChapterIndex,
-                    currentChapterContent = bookViewModel.currentChapterContent,
+                    chapters = chapters,
+                    currentChapterIndex = currentChapterIndex,
+                    currentChapterContent = currentChapterContent,
                     onChapterClick = { index ->
                         bookViewModel.setCurrentChapter(index)
                     },
-                    onStartListening = {
-                        navController.navigate(Screen.Player.route)
+                    onLoadChapterContent = { index ->
+                        bookViewModel.loadChapterContent(index)
                     },
                     onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-        }
-        
-        // 播放器页面（听书模式）
-        composable(Screen.Player.route) {
-            bookViewModel.selectedBook?.let { book ->
-                PlayerScreen(
-                    book = book,
-                    chapterTitle = bookViewModel.currentChapterTitle,
-                    currentParagraph = bookViewModel.currentParagraph,
-                    totalParagraphs = bookViewModel.totalParagraphs,
-                    currentTime = bookViewModel.currentTime,
-                    totalTime = bookViewModel.totalTime,
-                    progress = bookViewModel.playbackProgress,
-                    isPlaying = bookViewModel.isPlaying,
-                    onPlayPauseClick = { bookViewModel.togglePlayPause() },
-                    onPreviousParagraph = { bookViewModel.previousParagraph() },
-                    onNextParagraph = { bookViewModel.nextParagraph() },
-                    onPreviousChapter = { bookViewModel.previousChapter() },
-                    onNextChapter = { bookViewModel.nextChapter() },
-                    onShowChapterList = {
+                        // 如果正在播放，先停止
+                        if (isPlaying) {
+                            bookViewModel.stopTts()
+                        }
                         navController.popBackStack()
                     },
-                    onExit = {
-                        navController.popBackStack()
+                    // TTS 相关
+                    isPlaying = isPlaying,
+                    currentPlayingParagraph = currentPlayingParagraph,
+                    preloadedParagraphs = preloadedParagraphs,
+                    onPlayPauseClick = {
+                        bookViewModel.togglePlayPause()
+                    },
+                    onStartListening = {
+                        bookViewModel.startTts()
+                    },
+                    onStopListening = {
+                        bookViewModel.stopTts()
+                    },
+                    onPreviousParagraph = {
+                        bookViewModel.previousParagraph()
+                    },
+                    onNextParagraph = {
+                        bookViewModel.nextParagraph()
                     }
                 )
             }
         }
         
-        // 设置页面（从书架右上角进入）
+        // 设置页面
         composable(Screen.Settings.route) {
+            val serverAddress by bookViewModel.serverAddress.collectAsState()
+            val selectedTtsEngine by bookViewModel.selectedTtsEngine.collectAsState()
+            val speechSpeed by bookViewModel.speechSpeed.collectAsState()
+            val preloadCount by bookViewModel.preloadCount.collectAsState()
+            
             SettingsScreen(
-                serverAddress = bookViewModel.serverAddress,
-                selectedTtsEngine = bookViewModel.selectedTtsEngine,
-                speechSpeed = bookViewModel.speechSpeed,
-                preloadCount = bookViewModel.preloadCount,
+                serverAddress = serverAddress,
+                selectedTtsEngine = selectedTtsEngine,
+                speechSpeed = speechSpeed,
+                preloadCount = preloadCount,
                 onServerAddressChange = { bookViewModel.updateServerAddress(it) },
                 onTtsEngineClick = { /* 显示引擎选择对话框 */ },
                 onSpeechSpeedChange = { bookViewModel.updateSpeechSpeed(it) },
@@ -128,10 +134,9 @@ fun ReadAppMain() {
     }
 }
 
-// 导航路由定义
+// 导航路由定义（去掉 Player 页面）
 sealed class Screen(val route: String) {
     object Bookshelf : Screen("bookshelf")
     object Reading : Screen("reading")
-    object Player : Screen("player")
     object Settings : Screen("settings")
 }
