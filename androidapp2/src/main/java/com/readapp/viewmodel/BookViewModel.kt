@@ -22,6 +22,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import android.util.Log
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.readapp.data.model.Book
+import com.readapp.data.model.Chapter
+import com.readapp.data.repository.BookRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = UserPreferences(application)
@@ -415,5 +425,348 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 BookViewModel(application)
             }
         }
+    }
+    companion object {
+        private const val TAG = "BookViewModel"
+    }
+    
+    // ==================== 书籍相关状态 ====================
+    
+    private val _books = MutableStateFlow<List<Book>>(emptyList())
+    val books: StateFlow<List<Book>> = _books.asStateFlow()
+    
+    private val _selectedBook = MutableStateFlow<Book?>(null)
+    val selectedBook: StateFlow<Book?> = _selectedBook.asStateFlow()
+    
+    private val _chapters = MutableStateFlow<List<Chapter>>(emptyList())
+    val chapters: StateFlow<List<Chapter>> = _chapters.asStateFlow()
+    
+    private val _currentChapterIndex = MutableStateFlow(0)
+    val currentChapterIndex: StateFlow<Int> = _currentChapterIndex.asStateFlow()
+    
+    private val _currentChapterContent = MutableStateFlow("")
+    val currentChapterContent: StateFlow<String> = _currentChapterContent.asStateFlow()
+    
+    // ==================== TTS 相关状态 ====================
+    
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+    
+    private val _currentParagraphIndex = MutableStateFlow(-1)  // -1 表示未开始播放
+    val currentParagraphIndex: StateFlow<Int> = _currentParagraphIndex.asStateFlow()
+    
+    private val _preloadedParagraphs = MutableStateFlow<Set<Int>>(emptySet())
+    val preloadedParagraphs: StateFlow<Set<Int>> = _preloadedParagraphs.asStateFlow()
+    
+    // TTS 设置
+    private val _selectedTtsEngine = MutableStateFlow("")
+    val selectedTtsEngine: StateFlow<String> = _selectedTtsEngine.asStateFlow()
+    
+    private val _speechSpeed = MutableStateFlow(15)
+    val speechSpeed: StateFlow<Int> = _speechSpeed.asStateFlow()
+    
+    private val _preloadCount = MutableStateFlow(3)
+    val preloadCount: StateFlow<Int> = _preloadCount.asStateFlow()
+    
+    // 服务器设置
+    private val _serverAddress = MutableStateFlow("")
+    val serverAddress: StateFlow<String> = _serverAddress.asStateFlow()
+    
+    // ==================== 当前段落列表 ====================
+    
+    private var currentParagraphs: List<String> = emptyList()
+    
+    // ==================== 书籍操作方法 ====================
+    
+    /**
+     * 选择书籍
+     */
+    fun selectBook(book: Book) {
+        _selectedBook.value = book
+        loadChapters(book.id)
+        // 加载第一章内容
+        loadChapterContent(0)
+    }
+    
+    /**
+     * 加载章节列表
+     */
+    private fun loadChapters(bookId: String) {
+        viewModelScope.launch {
+            try {
+                val chapterList = bookRepository.getChapterList(bookId)
+                _chapters.value = chapterList
+                Log.d(TAG, "加载章节列表成功: ${chapterList.size} 章")
+            } catch (e: Exception) {
+                Log.e(TAG, "加载章节列表失败", e)
+                _chapters.value = emptyList()
+            }
+        }
+    }
+    
+    /**
+     * 设置当前章节
+     */
+    fun setCurrentChapter(index: Int) {
+        if (index < 0 || index >= _chapters.value.size) {
+            return
+        }
+        
+        _currentChapterIndex.value = index
+        loadChapterContent(index)
+        
+        // 如果正在播放，停止当前播放
+        if (_isPlaying.value) {
+            stopTts()
+        }
+    }
+    
+    /**
+     * 加载章节内容
+     */
+    fun loadChapterContent(index: Int) {
+        viewModelScope.launch {
+            try {
+                val book = _selectedBook.value ?: return@launch
+                
+                Log.d(TAG, "开始加载章节内容: 第${index + 1}章")
+                
+                val content = bookRepository.getChapterContent(
+                    bookId = book.id,
+                    chapterIndex = index
+                )
+                
+                _currentChapterContent.value = content
+                
+                // 分割段落
+                currentParagraphs = content
+                    .split("\n")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                
+                Log.d(TAG, "章节内容加载成功: ${currentParagraphs.size} 个段落")
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "加载章节内容失败", e)
+                _currentChapterContent.value = "加载失败：${e.message}"
+            }
+        }
+    }
+    
+    /**
+     * 搜索书籍
+     */
+    fun searchBooks(query: String) {
+        viewModelScope.launch {
+            try {
+                val allBooks = bookRepository.getAllBooks()
+                _books.value = if (query.isEmpty()) {
+                    allBooks
+                } else {
+                    allBooks.filter { 
+                        it.title.contains(query, ignoreCase = true) ||
+                        it.author.contains(query, ignoreCase = true)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "搜索书籍失败", e)
+            }
+        }
+    }
+    
+    // ==================== TTS 控制方法 ====================
+    
+    /**
+     * 开始听书
+     */
+    fun startTts() {
+        if (currentParagraphs.isEmpty()) {
+            Log.w(TAG, "没有可播放的内容")
+            return
+        }
+        
+        Log.d(TAG, "开始听书")
+        
+        // 从第一段开始播放
+        _currentParagraphIndex.value = 0
+        _isPlaying.value = true
+        
+        // 开始播放当前段落
+        playCurrentParagraph()
+        
+        // 预加载后续段落
+        preloadNextParagraphs()
+    }
+    
+    /**
+     * 停止听书
+     */
+    fun stopTts() {
+        Log.d(TAG, "停止听书")
+        
+        _isPlaying.value = false
+        _currentParagraphIndex.value = -1
+        _preloadedParagraphs.value = emptySet()
+        
+        // TODO: 停止音频播放
+        // ttsManager.stop()
+    }
+    
+    /**
+     * 播放/暂停切换
+     */
+    fun togglePlayPause() {
+        if (_isPlaying.value) {
+            // 暂停
+            _isPlaying.value = false
+            // TODO: 暂停音频
+            // ttsManager.pause()
+        } else {
+            // 继续播放
+            _isPlaying.value = true
+            // TODO: 继续播放
+            // ttsManager.resume()
+        }
+    }
+    
+    /**
+     * 上一段
+     */
+    fun previousParagraph() {
+        val currentIndex = _currentParagraphIndex.value
+        if (currentIndex > 0) {
+            _currentParagraphIndex.value = currentIndex - 1
+            playCurrentParagraph()
+        }
+    }
+    
+    /**
+     * 下一段
+     */
+    fun nextParagraph() {
+        val currentIndex = _currentParagraphIndex.value
+        if (currentIndex < currentParagraphs.size - 1) {
+            _currentParagraphIndex.value = currentIndex + 1
+            playCurrentParagraph()
+            
+            // 预加载后续段落
+            preloadNextParagraphs()
+        } else {
+            // 已经是最后一段，切换到下一章
+            if (_currentChapterIndex.value < _chapters.value.size - 1) {
+                setCurrentChapter(_currentChapterIndex.value + 1)
+                startTts()
+            } else {
+                // 已经是最后一章，停止播放
+                stopTts()
+            }
+        }
+    }
+    
+    /**
+     * 播放当前段落
+     */
+    private fun playCurrentParagraph() {
+        val index = _currentParagraphIndex.value
+        if (index < 0 || index >= currentParagraphs.size) {
+            return
+        }
+        
+        val paragraph = currentParagraphs[index]
+        
+        Log.d(TAG, "播放段落 $index: ${paragraph.take(20)}...")
+        
+        // TODO: 调用 TTS API 播放
+        viewModelScope.launch {
+            try {
+                // val audioUrl = bookRepository.getTtsAudio(
+                //     ttsId = _selectedTtsEngine.value,
+                //     text = paragraph,
+                //     speed = _speechSpeed.value
+                // )
+                // ttsManager.play(audioUrl)
+                
+                // 播放完成后自动播放下一段
+                // nextParagraph()
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "播放段落失败", e)
+                // 失败时跳到下一段
+                nextParagraph()
+            }
+        }
+    }
+    
+    /**
+     * 预加载后续段落
+     */
+    private fun preloadNextParagraphs() {
+        val currentIndex = _currentParagraphIndex.value
+        val count = _preloadCount.value
+        
+        viewModelScope.launch {
+            val preloaded = mutableSetOf<Int>()
+            
+            for (i in 1..count) {
+                val nextIndex = currentIndex + i
+                if (nextIndex < currentParagraphs.size) {
+                    try {
+                        val paragraph = currentParagraphs[nextIndex]
+                        
+                        // TODO: 预加载音频
+                        // val audioUrl = bookRepository.getTtsAudio(
+                        //     ttsId = _selectedTtsEngine.value,
+                        //     text = paragraph,
+                        //     speed = _speechSpeed.value
+                        // )
+                        // ttsManager.preload(audioUrl)
+                        
+                        preloaded.add(nextIndex)
+                        Log.d(TAG, "预加载段落 $nextIndex 成功")
+                        
+                    } catch (e: Exception) {
+                        Log.e(TAG, "预加载段落 $nextIndex 失败", e)
+                    }
+                }
+            }
+            
+            _preloadedParagraphs.value = preloaded
+        }
+    }
+    
+    // ==================== 设置方法 ====================
+    
+    fun updateServerAddress(address: String) {
+        _serverAddress.value = address
+        // TODO: 保存到 SharedPreferences
+    }
+    
+    fun updateSpeechSpeed(speed: Int) {
+        _speechSpeed.value = speed
+        // TODO: 保存到 SharedPreferences
+    }
+    
+    fun updatePreloadCount(count: Int) {
+        _preloadCount.value = count
+        // TODO: 保存到 SharedPreferences
+    }
+    
+    fun clearCache() {
+        viewModelScope.launch {
+            try {
+                bookRepository.clearCache()
+                Log.d(TAG, "清除缓存成功")
+            } catch (e: Exception) {
+                Log.e(TAG, "清除缓存失败", e)
+            }
+        }
+    }
+    
+    fun logout() {
+        // TODO: 清除登录信息
+        _books.value = emptyList()
+        _selectedBook.value = null
+        _chapters.value = emptyList()
+        stopTts()
     }
 }
