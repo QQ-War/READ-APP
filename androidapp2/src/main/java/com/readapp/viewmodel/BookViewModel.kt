@@ -351,7 +351,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             if (chapterList.isNotEmpty()) {
                 val index = _currentChapterIndex.value.coerceIn(0, chapterList.lastIndex)
                 _currentChapterIndex.value = index
-                loadChapterContent(index)
+                val inlineContent = chapterList.getOrNull(index)?.content.orEmpty()
+                if (inlineContent.isNotBlank()) {
+                    updateChapterContent(index, cleanChapterContent(inlineContent))
+                } else {
+                    loadChapterContent(index)
+                }
             }
         }.onFailure { error ->
             _errorMessage.value = error.message
