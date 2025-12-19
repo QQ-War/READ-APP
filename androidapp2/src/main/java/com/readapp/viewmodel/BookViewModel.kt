@@ -356,9 +356,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _chapters.value = chapterList
             Log.d(TAG, "加载章节列表成功: ${chapterList.size} 章")
 
-            // 章节列表加载完成，允许加载正文内容
-            _isContentLoading.value = false
-
             if (chapterList.isNotEmpty()) {
                 val index = _currentChapterIndex.value.coerceIn(0, chapterList.lastIndex)
                 _currentChapterIndex.value = index
