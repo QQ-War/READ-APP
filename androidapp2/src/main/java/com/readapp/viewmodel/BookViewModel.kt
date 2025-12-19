@@ -336,7 +336,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadChapters(book: Book) {
         val bookUrl = book.bookUrl ?: return
 
-        _isContentLoading.value = true
         val chaptersResult = runCatching {
             repository.fetchChapterList(
                 currentServerEndpoint(),
