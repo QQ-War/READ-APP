@@ -41,6 +41,13 @@ interface ReadApiService {
         @Query("bookSourceUrl") bookSourceUrl: String? = null,
     ): Response<ApiResponse<List<Chapter>>>
 
+    @GET("getChapterContent")
+    suspend fun getChapterContent(
+        @Query("accessToken") accessToken: String,
+        @Query("bookUrl") bookUrl: String,
+        @Query("chapterUrl") chapterUrl: String,
+    ): Response<ApiResponse<String>>
+
     @GET("getBookContent")
     suspend fun getBookContent(
         @Query("accessToken") accessToken: String,

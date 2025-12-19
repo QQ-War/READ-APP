@@ -33,10 +33,9 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
         publicUrl: String?,
         accessToken: String,
         bookUrl: String,
-        bookSourceUrl: String?,
-        index: Int,
+        chapterUrl: String,
     ): Result<String> = executeWithFailover {
-        it.getBookContent(accessToken, bookUrl, index, 0, bookSourceUrl)
+        it.getChapterContent(accessToken, bookUrl, chapterUrl)
     }(buildEndpoints(baseUrl, publicUrl))
 
     suspend fun fetchDefaultTts(baseUrl: String, publicUrl: String?, accessToken: String): Result<String> =
@@ -57,9 +56,11 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
     }
 
     private fun buildEndpoints(primary: String, secondary: String?): List<String> {
-        val normalizedPrimary = ensureTrailingSlash(primary)
-        val endpoints = mutableListOf(normalizedPrimary)
-        if (!secondary.isNullOrBlank()) {
+        val endpoints = mutableListOf<String>()
+        if (primary.isNotBlank()) {
+            endpoints.add(ensureTrailingSlash(primary))
+        }
+        if (!secondary.isNullOrBlank() && secondary != primary) {
             endpoints.add(ensureTrailingSlash(secondary))
         }
         return endpoints

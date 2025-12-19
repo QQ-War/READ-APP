@@ -73,21 +73,11 @@ fun ReadingScreen(
         }
     }
 
-    // 当章节列表加载完成但正文为空时，主动触发内容加载（避免首次进入空白）
-    LaunchedEffect(book.id, currentChapterIndex, chapters.size) {
-        if (chapters.isNotEmpty() &&
-            currentChapterIndex >= 0 &&
-            currentChapterIndex < chapters.size &&
-            currentChapterContent.isBlank()
-        ) {
+    // 当章节索引变化或章节列表加载完成时，自动加载章节内容并回到顶部
+    LaunchedEffect(currentChapterIndex, chapters.size) {
+        if (chapters.isNotEmpty() && currentChapterIndex in chapters.indices) {
             onLoadChapterContent(currentChapterIndex)
-        }
-    }
-    
-    // 当章节索引变化时，加载章节内容
-    LaunchedEffect(currentChapterIndex) {
-        if (currentChapterIndex >= 0 && currentChapterIndex < chapters.size) {
-            onLoadChapterContent(currentChapterIndex)
+            scrollState.scrollToItem(0)
         }
     }
     

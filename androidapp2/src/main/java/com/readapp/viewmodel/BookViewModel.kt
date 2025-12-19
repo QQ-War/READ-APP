@@ -378,13 +378,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun onChapterChange(index: Int) {
+        setCurrentChapter(index)
+    }
+
     private suspend fun loadChapterContentInternal(index: Int): String? {
         val book = _selectedBook.value ?: return null
+        val chapter = _chapters.value.getOrNull(index) ?: return null
         val bookUrl = book.bookUrl ?: return null
-        if (index !in _chapters.value.indices) return null
 
-        // 检查缓存
-        val cached = _chapters.value.getOrNull(index)?.content
+        if (_isContentLoading.value) return _currentChapterContent.value.ifBlank { null }
+
+        // 优先使用缓存内容
+        val cached = chapter.content
         val cachedInMemory = chapterContentCache[index]
         if (!cached.isNullOrBlank()) {
             updateChapterContent(index, cached)
@@ -395,48 +401,37 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             return cachedInMemory
         }
 
-        // 从服务器加载
-        if (_isContentLoading.value) {
-            return _currentChapterContent.value.ifBlank { null }
-        }
-
         _isContentLoading.value = true
+        _currentChapterContent.value = ""
         Log.d(TAG, "开始加载章节内容: 第${index + 1}章")
 
         return try {
-            val contentResult = runCatching {
-                repository.fetchChapterContent(
-                    currentServerEndpoint(),
-                    _publicServerAddress.value.ifBlank { null },
-                    _accessToken.value,
-                    bookUrl,
-                    book.origin,
-                    index
-                )
-            }.getOrElse { throwable ->
-                _errorMessage.value = throwable.message
-                Log.e(TAG, "加载章节内容失败", throwable)
-                return cachedInMemory
+            val result = repository.fetchChapterContent(
+                currentServerEndpoint(),
+                _publicServerAddress.value.ifBlank { null },
+                _accessToken.value,
+                bookUrl,
+                chapter.url
+            )
+
+            result.onSuccess { content ->
+                val cleaned = cleanChapterContent(content.orEmpty())
+                val resolved = when {
+                    cleaned.isNotBlank() -> cleaned
+                    content.orEmpty().isNotBlank() -> content.orEmpty().trim()
+                    else -> "章节内容为空"
+                }
+                updateChapterContent(index, resolved)
+            }.onFailure { error ->
+                _currentChapterContent.value = "加载失败: ${error.message}".trim()
+                Log.e(TAG, "加载章节内容失败", error)
             }
 
-            val rawContent = contentResult.getOrElse {
-                _errorMessage.value = it.message
-                Log.e(TAG, "加载章节内容失败", it)
-                ""
-            }
-
-            val cleanedContent = cleanChapterContent(rawContent)
-            val resolvedContent = when {
-                cleanedContent.isNotBlank() -> cleanedContent
-                rawContent.isNotBlank() -> rawContent.trim()
-                else -> "章节内容为空，可能是书源暂不可用或需要登录权限，请稍后重试或更换书源"
-            }
-
-            if (resolvedContent.isNotBlank()) {
-                updateChapterContent(index, resolvedContent)
-            }
-
-            resolvedContent.ifBlank { cachedInMemory }
+            _currentChapterContent.value.ifBlank { cachedInMemory }
+        } catch (e: Exception) {
+            _currentChapterContent.value = "系统异常: ${e.localizedMessage}".trim()
+            Log.e(TAG, "加载章节内容异常", e)
+            cachedInMemory
         } finally {
             _isContentLoading.value = false
             if (_currentChapterContent.value.isBlank() && !cachedInMemory.isNullOrBlank()) {
