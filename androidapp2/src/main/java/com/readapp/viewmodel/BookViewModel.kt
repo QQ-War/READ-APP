@@ -336,13 +336,21 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadChapters(book: Book) {
         val bookUrl = book.bookUrl ?: return
 
-        val chaptersResult = repository.fetchChapterList(
-            currentServerEndpoint(),
-            _publicServerAddress.value.ifBlank { null },
-            _accessToken.value,
-            bookUrl,
-            book.origin
-        )
+        _isContentLoading.value = true
+        val chaptersResult = runCatching {
+            repository.fetchChapterList(
+                currentServerEndpoint(),
+                _publicServerAddress.value.ifBlank { null },
+                _accessToken.value,
+                bookUrl,
+                book.origin
+            )
+        }.getOrElse { throwable ->
+            _errorMessage.value = throwable.message
+            Log.e(TAG, "加载章节列表失败", throwable)
+            _isContentLoading.value = false
+            return
+        }
 
         chaptersResult.onSuccess { chapterList ->
             _chapters.value = chapterList
@@ -351,11 +359,16 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             if (chapterList.isNotEmpty()) {
                 val index = _currentChapterIndex.value.coerceIn(0, chapterList.lastIndex)
                 _currentChapterIndex.value = index
+                val inlineContent = chapterList.getOrNull(index)?.content.orEmpty()
+                if (inlineContent.isNotBlank()) {
+                    updateChapterContent(index, cleanChapterContent(inlineContent))
+                }
                 loadChapterContent(index)
             }
         }.onFailure { error ->
             _errorMessage.value = error.message
             Log.e(TAG, "加载章节列表失败", error)
+            _isContentLoading.value = false
         }
     }
 
@@ -391,14 +404,20 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         Log.d(TAG, "开始加载章节内容: 第${index + 1}章")
 
         return try {
-            val contentResult = repository.fetchChapterContent(
-                currentServerEndpoint(),
-                _publicServerAddress.value.ifBlank { null },
-                _accessToken.value,
-                bookUrl,
-                book.origin,
-                index
-            )
+            val contentResult = runCatching {
+                repository.fetchChapterContent(
+                    currentServerEndpoint(),
+                    _publicServerAddress.value.ifBlank { null },
+                    _accessToken.value,
+                    bookUrl,
+                    book.origin,
+                    index
+                )
+            }.getOrElse { throwable ->
+                _errorMessage.value = throwable.message
+                Log.e(TAG, "加载章节内容失败", throwable)
+                return cachedInMemory
+            }
 
             val rawContent = contentResult.getOrElse {
                 _errorMessage.value = it.message
@@ -417,7 +436,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 updateChapterContent(index, resolvedContent)
             }
 
-            resolvedContent.ifBlank { null }
+            resolvedContent.ifBlank { cachedInMemory }
         } finally {
             _isContentLoading.value = false
             if (_currentChapterContent.value.isBlank() && !cachedInMemory.isNullOrBlank()) {
@@ -429,8 +448,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private fun updateChapterContent(index: Int, content: String) {
         // 更新章节列表中的内容
         val updatedChapters = _chapters.value.toMutableList()
-        updatedChapters[index] = updatedChapters[index].copy(content = content)
-        _chapters.value = updatedChapters
+        if (index in updatedChapters.indices) {
+            updatedChapters[index] = updatedChapters[index].copy(content = content)
+            _chapters.value = updatedChapters
+        }
 
         // 更新当前章节内容
         _currentChapterContent.value = content

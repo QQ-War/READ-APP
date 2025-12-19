@@ -54,9 +54,17 @@ fun ReadingScreen(
     val coroutineScope = rememberCoroutineScope()
     
     // 分割段落
-    val paragraphs = remember(currentChapterContent) {
-        if (currentChapterContent.isNotEmpty()) {
+    val displayContent = remember(currentChapterContent, currentChapterIndex, chapters) {
+        if (currentChapterContent.isNotBlank()) {
             currentChapterContent
+        } else {
+            chapters.getOrNull(currentChapterIndex)?.content.orEmpty()
+        }
+    }
+
+    val paragraphs = remember(displayContent) {
+        if (displayContent.isNotEmpty()) {
+            displayContent
                 .split("\n")
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
