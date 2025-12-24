@@ -785,6 +785,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun appendDebugLog(message: String) {
+        appendLog(message)
+    }
+
     // ==================== 清理 ====================
 
     override fun onCleared() {

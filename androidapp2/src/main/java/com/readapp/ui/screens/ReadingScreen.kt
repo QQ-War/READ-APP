@@ -38,6 +38,7 @@ fun ReadingScreen(
     isContentLoading: Boolean,
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
+    onLogEvent: (String) -> Unit = {},
     onNavigateBack: () -> Unit,
     // TTS 相关状态
     isPlaying: Boolean = false,
@@ -78,6 +79,7 @@ fun ReadingScreen(
     // 当章节索引变化或章节列表加载完成时，自动加载章节内容并回到顶部
     LaunchedEffect(currentChapterIndex, chapters.size) {
         if (chapters.isNotEmpty() && currentChapterIndex in chapters.indices) {
+            onLogEvent("ReadingScreen: load chapter index=$currentChapterIndex from LaunchedEffect")
             onLoadChapterContent(currentChapterIndex)
             scrollState.scrollToItem(0)
         }
@@ -215,9 +217,10 @@ fun ReadingScreen(
                         onChapterClick(currentChapterIndex + 1)
                     }
                 },
-                onShowChapterList = {
-                    showChapterList = true
-                },
+                    onShowChapterList = {
+                        onLogEvent("ReadingScreen: show chapter list")
+                        showChapterList = true
+                    },
                 onPlayPause = {
                     if (isPlaying) {
                         onPlayPauseClick()
@@ -258,6 +261,7 @@ fun ReadingScreen(
                 chapters = chapters,
                 currentChapterIndex = currentChapterIndex,
                 onChapterClick = { index ->
+                    onLogEvent("ReadingScreen: select chapter index=$index")
                     onChapterClick(index)
                     showChapterList = false
                 },
