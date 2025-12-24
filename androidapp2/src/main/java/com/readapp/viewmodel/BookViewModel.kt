@@ -411,7 +411,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _publicServerAddress.value.ifBlank { null },
                 _accessToken.value,
                 bookUrl,
-                chapter.url
+                book.origin,
+                chapter.index
             )
 
             result.onSuccess { content ->
@@ -471,7 +472,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             .replace("(?is)<script.*?</script>".toRegex(), "")
             .replace("(?is)<style.*?</style>".toRegex(), "")
 
-        val withoutTags = withoutScripts.replace("(?is)<[^>]+>".toRegex(), "\n")
+        val withoutTags = withoutScripts.replace("(?is)<(?!img\\b)[^>]+>".toRegex(), "\n")
 
         return withoutTags
             .replace("&nbsp;", " ")

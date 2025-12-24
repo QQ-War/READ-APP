@@ -142,13 +142,22 @@ fun ReadingScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            CircularProgressIndicator()
-                            Text(
-                                text = if (isContentLoading) "正在加载章节内容..." else "暂无可显示的内容",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.customColors.textSecondary,
-                                textAlign = TextAlign.Center
-                            )
+                            if (isContentLoading) {
+                                CircularProgressIndicator()
+                                Text(
+                                    text = "正在加载章节内容...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.customColors.textSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                Text(
+                                    text = displayContent.ifBlank { "暂无可显示的内容" },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.customColors.textSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 } else {
