@@ -129,6 +129,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _preloadCount = MutableStateFlow(3)
     val preloadCount: StateFlow<Int> = _preloadCount.asStateFlow()
+    private val _loggingEnabled = MutableStateFlow(false)
+    val loggingEnabled: StateFlow<Boolean> = _loggingEnabled.asStateFlow()
 
     // ==================== 服务器设置 ====================
 
@@ -168,6 +170,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _selectedTtsEngine.value = preferences.selectedTtsId.firstOrNull().orEmpty()
             _speechSpeed.value = (preferences.speechRate.first() * 20).toInt()
             _preloadCount.value = preferences.preloadCount.first().toInt()
+            _loggingEnabled.value = preferences.loggingEnabled.first()
 
             if (_accessToken.value.isNotBlank()) {
                 _isLoading.value = true
@@ -426,12 +429,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             result.onSuccess { content ->
+                appendLog("章节内容原文: index=$index content=${content.orEmpty()}")
                 val cleaned = cleanChapterContent(content.orEmpty())
                 val resolved = when {
                     cleaned.isNotBlank() -> cleaned
                     content.orEmpty().isNotBlank() -> content.orEmpty().trim()
                     else -> "章节内容为空"
                 }
+                appendLog("章节内容清洗后: index=$index content=$resolved")
                 appendLog("章节内容加载成功: index=$index length=${resolved.length}")
                 updateChapterContent(index, resolved)
             }.onFailure { error ->
@@ -737,6 +742,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateLoggingEnabled(enabled: Boolean) {
+        _loggingEnabled.value = enabled
+        viewModelScope.launch {
+            preferences.saveLoggingEnabled(enabled)
+        }
+    }
+
     fun clearCache() {
         // TODO: 实现缓存清理逻辑
         Log.d(TAG, "清除缓存")
@@ -778,6 +790,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun appendLog(message: String) {
+        if (!_loggingEnabled.value) return
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
         val line = "[$timestamp] $message\n"
         runCatching {

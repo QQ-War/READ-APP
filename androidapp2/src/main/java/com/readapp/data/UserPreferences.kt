@@ -22,6 +22,7 @@ class UserPreferences(private val context: Context) {
         val SelectedTtsId = stringPreferencesKey("selectedTtsId")
         val SpeechRate = doublePreferencesKey("speechRate")
         val PreloadCount = floatPreferencesKey("preloadCount")
+        val LoggingEnabled = stringPreferencesKey("loggingEnabled")
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080/api/5" }
@@ -31,6 +32,9 @@ class UserPreferences(private val context: Context) {
     val selectedTtsId: Flow<String> = context.dataStore.data.map { it[Keys.SelectedTtsId] ?: "" }
     val speechRate: Flow<Double> = context.dataStore.data.map { it[Keys.SpeechRate] ?: 1.0 }
     val preloadCount: Flow<Float> = context.dataStore.data.map { it[Keys.PreloadCount] ?: 3f }
+    val loggingEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.LoggingEnabled]?.toBooleanStrictOrNull() ?: false
+    }
 
     suspend fun saveServerUrl(value: String) {
         context.dataStore.edit { prefs: MutablePreferences ->
@@ -71,6 +75,12 @@ class UserPreferences(private val context: Context) {
     suspend fun savePreloadCount(value: Float) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.PreloadCount] = value
+        }
+    }
+
+    suspend fun saveLoggingEnabled(value: Boolean) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.LoggingEnabled] = value.toString()
         }
     }
 }

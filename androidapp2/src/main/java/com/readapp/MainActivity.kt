@@ -163,6 +163,7 @@ fun ReadAppMain() {
                 val availableTtsEngines by bookViewModel.availableTtsEngines.collectAsState()
                 val speechSpeed by bookViewModel.speechSpeed.collectAsState()
                 val preloadCount by bookViewModel.preloadCount.collectAsState()
+                val loggingEnabled by bookViewModel.loggingEnabled.collectAsState()
 
                 SettingsScreen(
                     serverAddress = serverAddress,
@@ -170,6 +171,7 @@ fun ReadAppMain() {
                     availableTtsEngines = availableTtsEngines,
                     speechSpeed = speechSpeed,
                     preloadCount = preloadCount,
+                    loggingEnabled = loggingEnabled,
                     onServerAddressChange = { bookViewModel.updateServerAddress(it) },
                     onSelectTtsEngine = { bookViewModel.selectTtsEngine(it) },
                     onReloadTtsEngines = { bookViewModel.loadTtsEngines() },
@@ -189,6 +191,9 @@ fun ReadAppMain() {
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "导出日志"))
                         }
+                    },
+                    onLoggingEnabledChange = { enabled ->
+                        bookViewModel.updateLoggingEnabled(enabled)
                     },
                     onLogout = {
                         bookViewModel.logout()

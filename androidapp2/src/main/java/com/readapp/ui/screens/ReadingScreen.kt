@@ -84,6 +84,12 @@ fun ReadingScreen(
             scrollState.scrollToItem(0)
         }
     }
+
+    LaunchedEffect(showChapterList, chapters.size, currentChapterIndex) {
+        if (showChapterList) {
+            onLogEvent("ReadingScreen: chapter list visible size=${chapters.size} currentIndex=$currentChapterIndex")
+        }
+    }
     
     // 当前播放段落变化时，自动滚动到该段落
     LaunchedEffect(currentPlayingParagraph) {
