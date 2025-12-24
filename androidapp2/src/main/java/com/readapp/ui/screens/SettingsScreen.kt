@@ -34,6 +34,7 @@ fun SettingsScreen(
     onSpeechSpeedChange: (Int) -> Unit,
     onPreloadCountChange: (Int) -> Unit,
     onClearCache: () -> Unit,
+    onExportLogs: () -> Unit,
     onLogout: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -130,6 +131,16 @@ fun SettingsScreen(
                     title = "清除本地缓存",
                     subtitle = "清除已缓存的书籍内容",
                     onClick = onClearCache,
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+
+                Divider(color = MaterialTheme.customColors.border)
+
+                SettingsItem(
+                    icon = Icons.Default.Description,
+                    title = "导出日志",
+                    subtitle = "保存并导出日志用于排查问题",
+                    onClick = onExportLogs,
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }

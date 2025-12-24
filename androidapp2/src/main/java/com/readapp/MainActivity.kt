@@ -1,7 +1,10 @@
 // MainActivity.kt - 去掉独立播放器页面，集成到阅读页面
 package com.readapp
 
+import android.content.ClipData
+import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -13,6 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -44,6 +48,7 @@ fun ReadAppMain() {
     val accessToken by bookViewModel.accessToken.collectAsState()
     val isInitialized by bookViewModel.isInitialized.collectAsState()
     val isLoading by bookViewModel.isLoading.collectAsState()
+    val context = LocalContext.current
 
     if (!isInitialized) {
         Box(
@@ -168,6 +173,20 @@ fun ReadAppMain() {
                     onSpeechSpeedChange = { bookViewModel.updateSpeechSpeed(it) },
                     onPreloadCountChange = { bookViewModel.updatePreloadCount(it) },
                     onClearCache = { bookViewModel.clearCache() },
+                    onExportLogs = {
+                        val uri = bookViewModel.exportLogs(context)
+                        if (uri == null) {
+                            Toast.makeText(context, "暂无日志可导出", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                clipData = ClipData.newRawUri("logs", uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "导出日志"))
+                        }
+                    },
                     onLogout = {
                         bookViewModel.logout()
                         navController.navigate(Screen.Login.route) {
