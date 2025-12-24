@@ -33,9 +33,10 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
         publicUrl: String?,
         accessToken: String,
         bookUrl: String,
-        chapterUrl: String,
+        bookSourceUrl: String?,
+        index: Int,
     ): Result<String> = executeWithFailover {
-        it.getChapterContent(accessToken, bookUrl, chapterUrl)
+        it.getBookContent(accessToken, bookUrl, index, 0, bookSourceUrl)
     }(buildEndpoints(baseUrl, publicUrl))
 
     suspend fun fetchDefaultTts(baseUrl: String, publicUrl: String?, accessToken: String): Result<String> =

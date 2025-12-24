@@ -23,11 +23,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val TAG = "BookViewModel"
+        private const val LOG_FILE_NAME = "reader_logs.txt"
+        private const val LOG_EXPORT_NAME = "reader_logs_export.txt"
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
@@ -63,6 +69,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private var allBooks: List<Book> = emptyList()
     private val chapterContentCache = mutableMapOf<Int, String>()
+    private val logFile = File(application.filesDir, LOG_FILE_NAME)
 
     private val _books = MutableStateFlow<List<Book>>(emptyList())
     val books: StateFlow<List<Book>> = _books.asStateFlow()
@@ -281,6 +288,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectBook(book: Book) {
         _selectedBook.value = book
+        appendLog("选择书籍: ${book.name.orEmpty()} (${book.bookUrl.orEmpty()})")
         _currentChapterIndex.value = book.durChapterIndex ?: 0
         _currentChapterContent.value = ""
         _currentParagraphIndex.value = -1
@@ -301,11 +309,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _currentChapterIndex.value = index
         val cachedContent = chapterContentCache[index]
         _currentChapterContent.value = cachedContent.orEmpty()
-        currentParagraphs = cachedContent
-            ?.split("\n")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?: emptyList()
+        currentParagraphs = cachedContent?.let { parseParagraphs(it) } ?: emptyList()
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
         _currentParagraphIndex.value = -1
         resetPlayback()
@@ -337,6 +341,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val bookUrl = book.bookUrl ?: return
 
         _isContentLoading.value = true
+        appendLog("加载章节列表: bookUrl=$bookUrl")
         val chaptersResult = runCatching {
             repository.fetchChapterList(
                 currentServerEndpoint(),
@@ -354,6 +359,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         chaptersResult.onSuccess { chapterList ->
             _chapters.value = chapterList
+            appendLog("章节列表加载成功: ${chapterList.size} 章")
             Log.d(TAG, "加载章节列表成功: ${chapterList.size} 章")
 
             if (chapterList.isNotEmpty()) {
@@ -367,6 +373,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             }
         }.onFailure { error ->
             _errorMessage.value = error.message
+            appendLog("章节列表加载失败: ${error.message.orEmpty()}")
             Log.e(TAG, "加载章节列表失败", error)
             _isContentLoading.value = false
         }
@@ -393,16 +400,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val cached = chapter.content
         val cachedInMemory = chapterContentCache[index]
         if (!cached.isNullOrBlank()) {
+            appendLog("章节内容命中缓存: index=$index")
             updateChapterContent(index, cached)
             return cached
         }
         if (!cachedInMemory.isNullOrBlank()) {
+            appendLog("章节内容命中内存缓存: index=$index")
             updateChapterContent(index, cachedInMemory)
             return cachedInMemory
         }
 
         _isContentLoading.value = true
         _currentChapterContent.value = ""
+        appendLog("开始加载章节内容: index=$index url=${chapter.url}")
         Log.d(TAG, "开始加载章节内容: 第${index + 1}章")
 
         return try {
@@ -411,7 +421,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _publicServerAddress.value.ifBlank { null },
                 _accessToken.value,
                 bookUrl,
-                chapter.url
+                book.origin,
+                chapter.index
             )
 
             result.onSuccess { content ->
@@ -421,15 +432,18 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     content.orEmpty().isNotBlank() -> content.orEmpty().trim()
                     else -> "章节内容为空"
                 }
+                appendLog("章节内容加载成功: index=$index length=${resolved.length}")
                 updateChapterContent(index, resolved)
             }.onFailure { error ->
                 _currentChapterContent.value = "加载失败: ${error.message}".trim()
+                appendLog("章节内容加载失败: index=$index error=${error.message.orEmpty()}")
                 Log.e(TAG, "加载章节内容失败", error)
             }
 
             _currentChapterContent.value.ifBlank { cachedInMemory }
         } catch (e: Exception) {
             _currentChapterContent.value = "系统异常: ${e.localizedMessage}".trim()
+            appendLog("章节内容加载异常: index=$index error=${e.localizedMessage.orEmpty()}")
             Log.e(TAG, "加载章节内容异常", e)
             cachedInMemory
         } finally {
@@ -453,14 +467,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         chapterContentCache[index] = content
 
         // 分割段落
-        currentParagraphs = content
-            .split("\n")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
+        currentParagraphs = parseParagraphs(content)
 
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
 
         Log.d(TAG, "章节内容加载成功: ${currentParagraphs.size} 个段落")
+    }
+
+    private fun parseParagraphs(content: String): List<String> {
+        return content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
     }
 
     private fun cleanChapterContent(raw: String): String {
@@ -471,7 +486,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             .replace("(?is)<script.*?</script>".toRegex(), "")
             .replace("(?is)<style.*?</style>".toRegex(), "")
 
-        val withoutTags = withoutScripts.replace("(?is)<[^>]+>".toRegex(), "\n")
+        val withoutTags = withoutScripts.replace("(?is)<(?!img\\b)[^>]+>".toRegex(), "\n")
 
         return withoutTags
             .replace("&nbsp;", " ")
@@ -747,6 +762,31 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
         return String.format("%02d:%02d", minutes, seconds)
+    }
+
+    fun exportLogs(context: android.content.Context): android.net.Uri? {
+        if (!logFile.exists()) return null
+        return runCatching {
+            val exportFile = File(context.cacheDir, LOG_EXPORT_NAME)
+            logFile.copyTo(exportFile, overwrite = true)
+            androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                exportFile
+            )
+        }.getOrNull()
+    }
+
+    private fun appendLog(message: String) {
+        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+        val line = "[$timestamp] $message\n"
+        runCatching {
+            logFile.appendText(line)
+        }
+    }
+
+    fun appendDebugLog(message: String) {
+        appendLog(message)
     }
 
     // ==================== 清理 ====================
