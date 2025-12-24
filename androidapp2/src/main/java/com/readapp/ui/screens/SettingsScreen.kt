@@ -28,12 +28,15 @@ fun SettingsScreen(
     availableTtsEngines: List<HttpTTS>,
     speechSpeed: Int,
     preloadCount: Int,
+    loggingEnabled: Boolean,
     onServerAddressChange: (String) -> Unit,
     onSelectTtsEngine: (String) -> Unit,
     onReloadTtsEngines: () -> Unit,
     onSpeechSpeedChange: (Int) -> Unit,
     onPreloadCountChange: (Int) -> Unit,
     onClearCache: () -> Unit,
+    onExportLogs: () -> Unit,
+    onLoggingEnabledChange: (Boolean) -> Unit,
     onLogout: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -131,6 +134,26 @@ fun SettingsScreen(
                     subtitle = "清除已缓存的书籍内容",
                     onClick = onClearCache,
                     tint = MaterialTheme.colorScheme.onSurface
+                )
+
+                Divider(color = MaterialTheme.customColors.border)
+
+                SettingsItem(
+                    icon = Icons.Default.Description,
+                    title = "导出日志",
+                    subtitle = "保存并导出日志用于排查问题",
+                    onClick = onExportLogs,
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+
+                Divider(color = MaterialTheme.customColors.border)
+
+                SettingsToggleItem(
+                    icon = Icons.Default.BugReport,
+                    title = "记录日志",
+                    subtitle = if (loggingEnabled) "已开启" else "已关闭",
+                    checked = loggingEnabled,
+                    onCheckedChange = onLoggingEnabledChange
                 )
             }
             
@@ -288,6 +311,55 @@ private fun SettingsItem(
             tint = MaterialTheme.customColors.textSecondary,
             modifier = Modifier.size(20.dp)
         )
+    }
+}
+
+@Composable
+private fun SettingsToggleItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(AppDimens.PaddingMedium),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = tint,
+                modifier = Modifier.size(24.dp)
+            )
+
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = tint
+                )
+
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.customColors.textSecondary
+                    )
+                }
+            }
+        }
+
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

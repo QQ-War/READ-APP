@@ -19,8 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.readapp.data.model.Book
 import com.readapp.data.model.Chapter
 import com.readapp.ui.theme.AppDimens
@@ -36,6 +38,7 @@ fun ReadingScreen(
     isContentLoading: Boolean,
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
+    onLogEvent: (String) -> Unit = {},
     onNavigateBack: () -> Unit,
     // TTS 相关状态
     isPlaying: Boolean = false,
@@ -76,8 +79,15 @@ fun ReadingScreen(
     // 当章节索引变化或章节列表加载完成时，自动加载章节内容并回到顶部
     LaunchedEffect(currentChapterIndex, chapters.size) {
         if (chapters.isNotEmpty() && currentChapterIndex in chapters.indices) {
+            onLogEvent("ReadingScreen: load chapter index=$currentChapterIndex from LaunchedEffect")
             onLoadChapterContent(currentChapterIndex)
             scrollState.scrollToItem(0)
+        }
+    }
+
+    LaunchedEffect(showChapterList, chapters.size, currentChapterIndex) {
+        if (showChapterList) {
+            onLogEvent("ReadingScreen: chapter list visible size=${chapters.size} currentIndex=$currentChapterIndex")
         }
     }
     
@@ -142,13 +152,22 @@ fun ReadingScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            CircularProgressIndicator()
-                            Text(
-                                text = if (isContentLoading) "正在加载章节内容..." else "暂无可显示的内容",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.customColors.textSecondary,
-                                textAlign = TextAlign.Center
-                            )
+                            if (isContentLoading) {
+                                CircularProgressIndicator()
+                                Text(
+                                    text = "正在加载章节内容...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.customColors.textSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                Text(
+                                    text = displayContent.ifBlank { "暂无可显示的内容" },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.customColors.textSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 } else {
@@ -204,9 +223,10 @@ fun ReadingScreen(
                         onChapterClick(currentChapterIndex + 1)
                     }
                 },
-                onShowChapterList = {
-                    showChapterList = true
-                },
+                    onShowChapterList = {
+                        onLogEvent("ReadingScreen: show chapter list")
+                        showChapterList = true
+                    },
                 onPlayPause = {
                     if (isPlaying) {
                         onPlayPauseClick()
@@ -247,6 +267,7 @@ fun ReadingScreen(
                 chapters = chapters,
                 currentChapterIndex = currentChapterIndex,
                 onChapterClick = { index ->
+                    onLogEvent("ReadingScreen: select chapter index=$index")
                     onChapterClick(index)
                     showChapterList = false
                 },
@@ -271,23 +292,78 @@ private fun ParagraphItem(
         isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)  // 已预载：浅绿色标记
         else -> Color.Transparent
     }
+    val contentParts = remember(text) { parseParagraphContent(text) }
     
     Surface(
         modifier = modifier,
         color = backgroundColor,
         shape = RoundedCornerShape(8.dp)
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.8f,
+        Column(
             modifier = Modifier.padding(
                 horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp,
                 vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp
-            )
-        )
+            ),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            contentParts.forEach { part ->
+                when (part) {
+                    is ParagraphContent.Image -> {
+                        AsyncImage(
+                            model = part.url,
+                            contentDescription = "章节插图",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                        )
+                    }
+                    is ParagraphContent.Text -> {
+                        Text(
+                            text = part.value,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.8f
+                        )
+                    }
+                }
+            }
+        }
     }
+}
+
+private sealed interface ParagraphContent {
+    data class Text(val value: String) : ParagraphContent
+    data class Image(val url: String) : ParagraphContent
+}
+
+private fun parseParagraphContent(text: String): List<ParagraphContent> {
+    val imgRegex = "(?i)<img[^>]*src=[\"']([^\"']+)[\"'][^>]*>".toRegex()
+    val parts = mutableListOf<ParagraphContent>()
+    var cursor = 0
+    val tagRegex = "(?is)<[^>]+>".toRegex()
+
+    imgRegex.findAll(text).forEach { match ->
+        val start = match.range.first
+        val before = text.substring(cursor, start)
+        val cleanedBefore = before.replace(tagRegex, "").trim()
+        if (cleanedBefore.isNotBlank()) {
+            parts.add(ParagraphContent.Text(cleanedBefore))
+        }
+        val url = match.groups[1]?.value
+        if (!url.isNullOrBlank()) {
+            parts.add(ParagraphContent.Image(url))
+        }
+        cursor = match.range.last + 1
+    }
+
+    val tail = text.substring(cursor)
+    val cleanedTail = tail.replace(tagRegex, "").trim()
+    if (cleanedTail.isNotBlank()) {
+        parts.add(ParagraphContent.Text(cleanedTail))
+    }
+
+    return parts.ifEmpty { listOf(ParagraphContent.Text(text.trim())) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
