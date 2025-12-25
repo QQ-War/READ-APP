@@ -2,6 +2,7 @@ package com.readapp.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -27,6 +28,7 @@ class UserPreferences(private val context: Context) {
         val SpeechRate = doublePreferencesKey("speechRate")
         val PreloadCount = floatPreferencesKey("preloadCount")
         val LoggingEnabled = stringPreferencesKey("loggingEnabled")
+        val BookshelfSortByRecent = booleanPreferencesKey("bookshelfSortByRecent")
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080/api/5" }
@@ -42,6 +44,9 @@ class UserPreferences(private val context: Context) {
     val preloadCount: Flow<Float> = context.dataStore.data.map { it[Keys.PreloadCount] ?: 3f }
     val loggingEnabled: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.LoggingEnabled]?.toBooleanStrictOrNull() ?: false
+    }
+    val bookshelfSortByRecent: Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.BookshelfSortByRecent] ?: false
     }
 
     suspend fun saveServerUrl(value: String) {
@@ -113,6 +118,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveLoggingEnabled(value: Boolean) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.LoggingEnabled] = value.toString()
+        }
+    }
+
+    suspend fun saveBookshelfSortByRecent(value: Boolean) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.BookshelfSortByRecent] = value
         }
     }
 }

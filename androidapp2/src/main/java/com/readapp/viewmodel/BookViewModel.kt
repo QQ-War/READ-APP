@@ -23,6 +23,7 @@ import com.readapp.media.PlayerHolder
 import com.readapp.media.ReadAudioService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -80,11 +83,16 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     private val httpClient = OkHttpClient()
     private val audioCacheLock = Mutex()
+    private val preloadQueueLock = Mutex()
     private var currentSentences: List<String> = emptyList()
     private var isReadingChapterTitle = false
     private val audioCache = mutableMapOf<String, ByteArray>()
     private var nextChapterSentences: List<String> = emptyList()
     private var preloadingJobActive = false
+    private val preloadQueue = ArrayDeque<Int>()
+    private val maxConcurrentPreloads = 3
+    private val maxPreloadRetries = 2
+    private var currentSearchQuery = ""
 
     // ==================== 书籍相关状态 ====================
 
@@ -170,6 +178,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val readingFontSize: StateFlow<Float> = _readingFontSize.asStateFlow()
     private val _loggingEnabled = MutableStateFlow(false)
     val loggingEnabled: StateFlow<Boolean> = _loggingEnabled.asStateFlow()
+    private val _bookshelfSortByRecent = MutableStateFlow(false)
+    val bookshelfSortByRecent: StateFlow<Boolean> = _bookshelfSortByRecent.asStateFlow()
 
     // ==================== 服务器设置 ====================
 
@@ -214,6 +224,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _preloadCount.value = preferences.preloadCount.first().toInt()
             _readingFontSize.value = preferences.readingFontSize.first()
             _loggingEnabled.value = preferences.loggingEnabled.first()
+            _bookshelfSortByRecent.value = preferences.bookshelfSortByRecent.first()
 
             if (_accessToken.value.isNotBlank()) {
                 _isLoading.value = true
@@ -316,7 +327,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         booksResult.onSuccess { list ->
             allBooks = list
-            _books.value = list
+            applyBooksFilterAndSort()
         }.onFailure { error ->
             _errorMessage.value = error.message
         }
@@ -327,15 +338,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun searchBooks(query: String) {
-        _books.value = if (query.isBlank()) {
-            allBooks
-        } else {
-            val lower = query.lowercase()
-            allBooks.filter {
-                it.name.orEmpty().lowercase().contains(lower) ||
-                it.author.orEmpty().lowercase().contains(lower)
-            }
-        }
+        currentSearchQuery = query
+        applyBooksFilterAndSort()
     }
 
     fun selectBook(book: Book) {
@@ -418,7 +422,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         chaptersResult.onSuccess { chapterList ->
             _chapters.value = chapterList
             appendLog("章节列表加载成功: ${chapterList.size} 章")
-            Log.d(TAG, "加载章节列表成功: ${chapterList.size} 章")
 
             if (chapterList.isNotEmpty()) {
                 val index = _currentChapterIndex.value.coerceIn(0, chapterList.lastIndex)
@@ -481,7 +484,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         appendLog(
             "请求章节内容: bookUrl=$bookUrl source=${book.origin.orEmpty()} index=$index chapterUrl=${chapter.url}"
         )
-        Log.d(TAG, "开始加载章节内容: 第${index + 1}章")
 
         return try {
             val result = repository.fetchChapterContent(
@@ -544,7 +546,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
 
-        Log.d(TAG, "章节内容加载成功: ${currentParagraphs.size} 个段落")
 
         if (_keepPlaying.value && !_isPlaying.value) {
             _currentParagraphIndex.value = 0
@@ -677,7 +678,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        Log.d(TAG, "播放段落 $index: ${sentence.take(20)}...")
 
         val cached = getCachedAudio(currentChapterIndex = _currentChapterIndex.value, sentenceIndex = index)
         if (cached != null) {
@@ -760,7 +760,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         enginesResult.onSuccess { list ->
             engines = list
             _availableTtsEngines.value = list
-            Log.d(TAG, "加载TTS引擎成功: ${list.size} 个")
         }.onFailure { error ->
             _errorMessage.value = error.message
         }
@@ -862,9 +861,16 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateBookshelfSortByRecent(enabled: Boolean) {
+        _bookshelfSortByRecent.value = enabled
+        viewModelScope.launch {
+            preferences.saveBookshelfSortByRecent(enabled)
+            applyBooksFilterAndSort()
+        }
+    }
+
     fun clearCache() {
         // TODO: 实现缓存清理逻辑
-        Log.d(TAG, "清除缓存")
     }
 
     // ==================== 辅助方法 ====================
@@ -999,32 +1005,112 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun startPreloading(currentIndex: Int, count: Int) {
+        val endIndex = min(currentIndex + count, currentParagraphs.size - 1)
+        val candidateIndices = if (currentIndex < endIndex) (currentIndex + 1..endIndex).toList() else emptyList()
+        appendLog("TTS预加载: currentIndex=$currentIndex count=$count candidates=${candidateIndices.size}")
+        if (candidateIndices.isEmpty()) {
+            appendLog("TTS预加载: 无候选段落，尝试预载下一章")
+            maybePreloadNextChapter()
+            return
+        }
+
+        val neededIndices = mutableListOf<Int>()
+        for (index in candidateIndices) {
+            val sentence = currentParagraphs.getOrNull(index) ?: continue
+            if (isPunctuationOnly(sentence)) {
+                appendLog("TTS预加载: 跳过纯标点 index=$index")
+                markPreloaded(index)
+                continue
+            }
+            if (getCachedAudio(_currentChapterIndex.value, index) != null) {
+                appendLog("TTS预加载: 已缓存 index=$index")
+                markPreloaded(index)
+                continue
+            }
+            neededIndices.add(index)
+        }
+
+        if (neededIndices.isEmpty()) {
+            appendLog("TTS预加载: 无需新增预载，尝试预载下一章")
+            maybePreloadNextChapter()
+            return
+        }
+
+        appendLog("TTS预加载: 更新队列 -> ${neededIndices.joinToString(",")}")
+        updatePreloadQueue(neededIndices)
+        processPreloadQueue()
+    }
+
+    private fun processPreloadQueue() {
         if (preloadingJobActive) return
         preloadingJobActive = true
-        try {
-            val endIndex = min(currentIndex + count, currentParagraphs.size - 1)
-            val indices = if (currentIndex < endIndex) (currentIndex + 1..endIndex).toList() else emptyList()
-            if (indices.isEmpty()) {
+        viewModelScope.launch {
+            try {
+                appendLog("TTS预加载: 开始处理队列")
+                val semaphore = Semaphore(maxConcurrentPreloads)
+                val jobs = mutableListOf<kotlinx.coroutines.Job>()
+
+                while (true) {
+                    val index = dequeuePreloadIndex() ?: break
+                    if (getCachedAudio(_currentChapterIndex.value, index) != null) {
+                        appendLog("TTS预加载: 队列跳过已缓存 index=$index")
+                        markPreloaded(index)
+                        continue
+                    }
+
+                    jobs += launch {
+                        semaphore.acquire()
+                        try {
+                            downloadAudioWithRetry(index)
+                        } finally {
+                            semaphore.release()
+                        }
+                    }
+                }
+
+                jobs.joinAll()
+            } finally {
+                preloadingJobActive = false
+                if (hasPendingPreloadQueue()) {
+                    appendLog("TTS预加载: 队列仍有剩余，继续处理")
+                    processPreloadQueue()
+                } else {
+                    appendLog("TTS预加载: 队列处理完成")
+                    maybePreloadNextChapter()
+                }
+            }
+        }
+    }
+
+    private suspend fun downloadAudioWithRetry(index: Int) {
+        val sentence = currentParagraphs.getOrNull(index) ?: return
+        if (isPunctuationOnly(sentence)) {
+            appendLog("TTS预加载: 跳过纯标点 index=$index")
+            markPreloaded(index)
+            return
+        }
+
+        repeat(maxPreloadRetries + 1) { attempt ->
+            if (getCachedAudio(_currentChapterIndex.value, index) != null) {
+                appendLog("TTS预加载: 已缓存 index=$index")
+                markPreloaded(index)
                 return
             }
 
-            val preloaded = _preloadedParagraphs.value.toMutableSet()
-            for (index in indices) {
-                val sentence = currentParagraphs.getOrNull(index) ?: continue
-                if (isPunctuationOnly(sentence)) continue
-                if (getCachedAudio(_currentChapterIndex.value, index) != null) {
-                    preloaded.add(index)
-                    continue
-                }
-                val success = downloadAndCacheAudio(_currentChapterIndex.value, index, sentence)
-                if (success) {
-                    preloaded.add(index)
-                }
+            appendLog("TTS预加载: 下载 index=$index attempt=${attempt + 1}")
+            val success = downloadAndCacheAudio(_currentChapterIndex.value, index, sentence)
+            if (success) {
+                appendLog("TTS预加载: 成功 index=$index")
+                markPreloaded(index)
+                return
             }
-            _preloadedParagraphs.value = preloaded
-        } finally {
-            preloadingJobActive = false
+
+            if (attempt < maxPreloadRetries) {
+                appendLog("TTS预加载: 失败重试 index=$index")
+                delay(1000)
+            }
         }
+        appendLog("TTS预加载: 最终失败 index=$index")
     }
 
     private suspend fun downloadAndCacheAudio(
@@ -1033,18 +1119,32 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         sentence: String,
         isChapterTitle: Boolean = false
     ): Boolean {
-        val audioUrl = buildTtsAudioUrl(sentence, isChapterTitle) ?: return false
+        val audioUrl = buildTtsAudioUrl(sentence, isChapterTitle) ?: run {
+            appendLog("TTS预加载: 无法构建音频URL index=$sentenceIndex")
+            return false
+        }
+        appendLog("TTS预加载: 请求URL index=$sentenceIndex url=$audioUrl")
         val request = Request.Builder().url(audioUrl).build()
         return runCatching {
             httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return false
+                if (!response.isSuccessful) {
+                    appendLog("TTS预加载: 请求失败 index=$sentenceIndex code=${response.code} url=$audioUrl")
+                    return false
+                }
                 val contentType = response.header("Content-Type").orEmpty()
                 val bytes = response.body?.bytes() ?: return false
-                if (!contentType.contains("audio") && bytes.size < 2000) return false
+                if (!contentType.contains("audio") && bytes.size < 2000) {
+                    appendLog("TTS预加载: 音频无效 index=$sentenceIndex contentType=$contentType size=${bytes.size} url=$audioUrl")
+                    return false
+                }
+                appendLog("TTS预加载: 收到音频 index=$sentenceIndex contentType=$contentType size=${bytes.size}")
                 cacheAudio(chapterIndex, sentenceIndex, bytes)
                 true
             }
-        }.getOrDefault(false)
+        }.getOrElse { error ->
+            appendLog("TTS预加载: 请求异常 index=$sentenceIndex error=${error.localizedMessage}")
+            false
+        }
     }
 
     private suspend fun maybePreloadNextChapter() {
@@ -1054,6 +1154,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val nextIndex = _currentChapterIndex.value + 1
         if (nextIndex > _chapters.value.lastIndex) return
         if (nextChapterSentences.isNotEmpty()) return
+        appendLog("TTS预加载: 触发下一章预载 nextIndex=$nextIndex")
 
         val book = _selectedBook.value ?: return
         val bookUrl = book.bookUrl ?: return
@@ -1072,6 +1173,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 nextChapterSentences = splitTextIntoSentences(content.orEmpty())
                 _preloadedChapters.value = _preloadedChapters.value + nextIndex
+                appendLog("TTS预加载: 下一章分段完成 size=${nextChapterSentences.size}")
                 preloadNextChapterAudio(nextIndex)
             }
         }
@@ -1080,6 +1182,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun preloadNextChapterAudio(chapterIndex: Int) {
         if (nextChapterSentences.isEmpty()) return
         val limit = min(nextChapterSentences.size, _preloadCount.value)
+        appendLog("TTS预加载: 下一章音频预载 chapterIndex=$chapterIndex limit=$limit")
         for (i in 0 until limit) {
             val sentence = nextChapterSentences[i]
             if (isPunctuationOnly(sentence)) continue
@@ -1113,6 +1216,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 audioCache.clear()
                 _preloadedParagraphs.value = emptySet()
             }
+            clearPreloadQueue()
         }
     }
 
@@ -1123,6 +1227,67 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _preloadedChapters.value = emptySet()
             }
         }
+    }
+
+    private suspend fun updatePreloadQueue(indices: List<Int>) {
+        preloadQueueLock.withLock {
+            preloadQueue.clear()
+            preloadQueue.addAll(indices)
+        }
+    }
+
+    private suspend fun dequeuePreloadIndex(): Int? {
+        return preloadQueueLock.withLock {
+            if (preloadQueue.isEmpty()) null else preloadQueue.removeFirst()
+        }
+    }
+
+    private suspend fun hasPendingPreloadQueue(): Boolean {
+        return preloadQueueLock.withLock {
+            preloadQueue.isNotEmpty()
+        }
+    }
+
+    private suspend fun clearPreloadQueue() {
+        preloadQueueLock.withLock {
+            preloadQueue.clear()
+        }
+    }
+
+    private fun markPreloaded(index: Int) {
+        _preloadedParagraphs.update { it + index }
+    }
+
+    private fun applyBooksFilterAndSort() {
+        val filtered = if (currentSearchQuery.isBlank()) {
+            allBooks
+        } else {
+            val lower = currentSearchQuery.lowercase()
+            allBooks.filter {
+                it.name.orEmpty().lowercase().contains(lower) ||
+                it.author.orEmpty().lowercase().contains(lower)
+            }
+        }
+
+        val sorted = if (_bookshelfSortByRecent.value) {
+            filtered.mapIndexed { index, book -> index to book }
+                .sortedWith { first, second ->
+                    val time1 = first.second.durChapterTime ?: 0L
+                    val time2 = second.second.durChapterTime ?: 0L
+                    when {
+                        time1 == 0L && time2 == 0L -> first.first.compareTo(second.first)
+                        time1 == 0L -> 1
+                        time2 == 0L -> -1
+                        time1 == time2 -> first.first.compareTo(second.first)
+                        else -> if (time1 > time2) -1 else 1
+                    }
+                }
+                .map { it.second }
+        } else {
+            filtered
+        }
+
+        _books.value = sorted
     }
 
     private fun isPunctuationOnly(sentence: String): Boolean {
@@ -1165,16 +1330,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun appendDebugLog(message: String) {
-        appendLog(message)
-    }
 
     // ==================== 清理 ====================
 
     override fun onCleared() {
         super.onCleared()
         player.release()
-        Log.d(TAG, "ViewModel cleared")
     }
 
 }
