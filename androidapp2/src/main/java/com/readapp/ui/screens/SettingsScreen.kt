@@ -33,6 +33,7 @@ fun SettingsScreen(
     speechSpeed: Int,
     preloadCount: Int,
     loggingEnabled: Boolean,
+    bookshelfSortByRecent: Boolean,
     onServerAddressChange: (String) -> Unit,
     onSelectTtsEngine: (String) -> Unit,
     onSelectNarrationTtsEngine: (String) -> Unit,
@@ -45,6 +46,7 @@ fun SettingsScreen(
     onClearCache: () -> Unit,
     onExportLogs: () -> Unit,
     onLoggingEnabledChange: (Boolean) -> Unit,
+    onBookshelfSortByRecentChange: (Boolean) -> Unit,
     onLogout: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -111,6 +113,16 @@ fun SettingsScreen(
                     title = "服务器地址",
                     subtitle = serverAddress,
                     onClick = { showAccountDialog = true }
+                )
+            }
+
+            SettingsSection(title = "书架设置") {
+                SettingsToggleItem(
+                    icon = Icons.Default.Schedule,
+                    title = "最近阅读排序",
+                    subtitle = if (bookshelfSortByRecent) "按最近阅读时间" else "按加入书架顺序",
+                    checked = bookshelfSortByRecent,
+                    onCheckedChange = onBookshelfSortByRecentChange
                 )
             }
             
