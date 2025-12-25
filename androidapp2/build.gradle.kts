@@ -116,10 +116,11 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.5.0")
 
     // ExoPlayer for audio playback
-    implementation("androidx.media3:media3-exoplayer:1.2.0")
-    implementation("androidx.media3:media3-datasource:1.2.0")
-    implementation("androidx.media3:media3-session:1.2.0")
-    implementation("androidx.media3:media3-ui:1.2.0")
+    val media3Version = "1.3.1"
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-datasource:$media3Version")
+    implementation("androidx.media3:media3-session:$media3Version")
+    implementation("androidx.media3:media3-ui:$media3Version")
 
     // Accompanist for system UI controller
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.32.0")
