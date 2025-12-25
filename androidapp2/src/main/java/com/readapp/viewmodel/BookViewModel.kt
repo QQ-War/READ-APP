@@ -1156,7 +1156,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     return false
                 }
                 val contentType = response.header("Content-Type").orEmpty()
-                val bytes = response.body?.bytes() ?: return false
+                val bytes = response.body?.bytes() ?: run {
+                    appendLog("TTS预加载: 响应无内容 index=$sentenceIndex url=$audioUrl")
+                    return false
+                }
                 if (!contentType.contains("audio") && bytes.size < 2000) {
                     appendLog("TTS预加载: 音频无效 index=$sentenceIndex contentType=$contentType size=${bytes.size} url=$audioUrl")
                     return false
@@ -1166,7 +1169,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 true
             }
         }.getOrElse { error ->
-            appendLog("TTS预加载: 请求异常 index=$sentenceIndex error=${error.localizedMessage}")
+            appendLog("TTS预加载: 请求异常 index=$sentenceIndex error=${error}")
             false
         }
     }
@@ -1343,6 +1346,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 exportFile
             )
         }.getOrNull()
+    }
+
+    fun clearLogs() {
+        runCatching {
+            if (logFile.exists()) {
+                logFile.writeText("")
+            }
+        }
     }
 
     private fun appendLog(message: String) {

@@ -218,6 +218,10 @@ fun ReadAppMain() {
                             context.startActivity(Intent.createChooser(shareIntent, "导出日志"))
                         }
                     },
+                    onClearLogs = {
+                        bookViewModel.clearLogs()
+                        Toast.makeText(context, "历史日志已清除", Toast.LENGTH_SHORT).show()
+                    },
                     onLoggingEnabledChange = { enabled ->
                         bookViewModel.updateLoggingEnabled(enabled)
                     },

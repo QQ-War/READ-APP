@@ -45,6 +45,7 @@ fun SettingsScreen(
     onPreloadCountChange: (Int) -> Unit,
     onClearCache: () -> Unit,
     onExportLogs: () -> Unit,
+    onClearLogs: () -> Unit,
     onLoggingEnabledChange: (Boolean) -> Unit,
     onBookshelfSortByRecentChange: (Boolean) -> Unit,
     onLogout: () -> Unit,
@@ -279,6 +280,16 @@ fun SettingsScreen(
                     title = "导出日志",
                     subtitle = "保存并导出日志用于排查问题",
                     onClick = onExportLogs,
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+
+                Divider(color = MaterialTheme.customColors.border)
+
+                SettingsItem(
+                    icon = Icons.Default.DeleteSweep,
+                    title = "清除历史日志",
+                    subtitle = "清空已记录的日志内容",
+                    onClick = onClearLogs,
                     tint = MaterialTheme.colorScheme.onSurface
                 )
 
