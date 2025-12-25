@@ -950,21 +950,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         playbackSegments = queue.segments
-        playbackChapterData = queue.chapterData
-        _preloadedParagraphs.value = emptySet()
-        _preloadedChapters.value = queue.preloadedChapters.toSet()
-
-    private fun playAudioData(data: ByteArray) {
-        val mediaItem = MediaItem.Builder().setUri("bytearray://tts").build()
-        val mediaSourceFactory = ProgressiveMediaSource.Factory(
-            object : DataSource.Factory {
-                override fun createDataSource(): DataSource {
-                    return ByteArrayDataSource(data)
-                }
-            }
-        )
-        val mediaSource = mediaSourceFactory.createMediaSource(mediaItem)
-        player.setMediaSource(mediaSource)
+        player.setMediaItems(queue.mediaItems, queue.segments.indexOfFirst { it.chapterIndex == chapterIndex && it.paragraphIndex == paragraphIndex }.coerceAtLeast(0), 0L)
         player.prepare()
         player.play()
         updatePlaybackSegment(queue.segments.firstOrNull())
@@ -995,23 +981,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 fetchChapterContentForPlayback(chapterIndex, book)
             }
+            if (content.isNullOrBlank()) continue
 
-    private fun processPreloadQueue() {
-        if (preloadingJobActive) return
-        preloadingJobActive = true
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                appendLog("TTS预加载: 开始处理队列")
-                val semaphore = Semaphore(maxConcurrentPreloads)
-                val jobs = mutableListOf<kotlinx.coroutines.Job>()
+            val paragraphs = parseParagraphs(content)
+            chapterData[chapterIndex] = ChapterPlaybackData(content, paragraphs)
+            if (chapterIndex != startChapterIndex) {
+                preloadedChapters.add(chapterIndex)
+            }
 
-                while (true) {
-                    val index = dequeuePreloadIndex() ?: break
-                    if (getCachedAudio(_currentChapterIndex.value, index) != null) {
-                        appendLog("TTS预加载: 队列跳过已缓存 index=$index")
-                        markPreloaded(index)
-                        continue
-                    }
 
             val chapterTitle = chapters.getOrNull(chapterIndex)?.title.orEmpty()
             if (chapterTitle.isNotBlank()) {
@@ -1040,40 +1017,16 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         paragraphIndex: Int,
         sentence: String,
         isChapterTitle: Boolean = false
-    ): Boolean {
+    ): MediaItem? {
         val audioUrl = buildTtsAudioUrl(sentence, isChapterTitle) ?: run {
-            appendLog("TTS预加载: 无法构建音频URL index=$sentenceIndex")
-            return false
+            appendLog("TTS: 无法构建音频URL c_idx=$chapterIndex p_idx=$paragraphIndex")
+            return null
         }
-        appendLog("TTS预加载: 请求URL index=$sentenceIndex url=$audioUrl")
-        val request = Request.Builder().url(audioUrl).build()
-        return withContext(Dispatchers.IO) {
-            val response = try {
-                httpClient.newCall(request).execute()
-            } catch (error: Exception) {
-                appendLog("TTS预加载: 请求异常 index=$sentenceIndex error=$error")
-                return@withContext false
-            }
-
-            response.use { httpResponse ->
-                if (!httpResponse.isSuccessful) {
-                    appendLog("TTS预加载: 请求失败 index=$sentenceIndex code=${httpResponse.code} url=$audioUrl")
-                    return@withContext false
-                }
-                val contentType = httpResponse.header("Content-Type").orEmpty()
-                val bytes = httpResponse.body?.bytes() ?: run {
-                    appendLog("TTS预加载: 响应无内容 index=$sentenceIndex url=$audioUrl")
-                    return@withContext false
-                }
-                if (!contentType.contains("audio") && bytes.size < 2000) {
-                    appendLog("TTS预加载: 音频无效 index=$sentenceIndex contentType=$contentType size=${bytes.size} url=$audioUrl")
-                    return@withContext false
-                }
-            } catch (error: Exception) {
-                appendLog("TTS预加载: 请求异常 index=$sentenceIndex error=$error")
-                false
-            }
-        }
+        appendLog("TTS: 构建URL c_idx=$chapterIndex p_idx=$paragraphIndex url=$audioUrl")
+        return MediaItem.Builder()
+            .setUri(audioUrl)
+            .setMediaId("${chapterIndex}_${paragraphIndex}")
+            .build()
     }
 
     private suspend fun fetchChapterContentForPlayback(index: Int, book: Book): String? {
