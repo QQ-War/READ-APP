@@ -78,7 +78,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _isPlaying.value = isPlaying
-                appendLog("TTS player isPlaying=$isPlaying")
+                appendLog(
+                    "TTS player isPlaying=$isPlaying state=${this@apply.playbackState} " +
+                        "playWhenReady=${this@apply.playWhenReady} keepPlaying=${_keepPlaying.value}"
+                )
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -88,14 +91,20 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                appendLog("TTS playWhenReady=$playWhenReady reason=$reason state=${this@apply.playbackState}")
+                appendLog(
+                    "TTS playWhenReady=$playWhenReady reason=$reason state=${this@apply.playbackState} " +
+                        "isPlaying=${this@apply.isPlaying} keepPlaying=${_keepPlaying.value}"
+                )
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                appendLog("TTS playback state=$playbackState playWhenReady=${this@apply.playWhenReady}")
+                appendLog(
+                    "TTS playback state=$playbackState playWhenReady=${this@apply.playWhenReady} " +
+                        "isPlaying=${this@apply.isPlaying}"
+                )
                 if (playbackState == Player.STATE_ENDED) {
                     _playbackProgress.value = 1f
-                    stopPlayback()
+                    stopPlayback("ended")
                 }
             }
 
@@ -308,7 +317,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             currentSentences = emptyList()
             chapterContentCache.clear()
             clearPlaybackQueue()
-            stopPlayback()
+            stopPlayback("logout")
             _availableTtsEngines.value = emptyList()
             _selectedTtsEngine.value = ""
             _narrationTtsEngine.value = ""
@@ -624,7 +633,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         if (!_isPlaying.value) {
             startPlayback()
         } else {
-            pausePlayback()
+            pausePlayback("toggle")
         }
     }
 
@@ -666,14 +675,20 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun pausePlayback() {
-        appendLog("TTS pause: playWhenReady=${player.playWhenReady} state=${player.playbackState}")
+    private fun pausePlayback(reason: String = "unspecified") {
+        appendLog(
+            "TTS pause: reason=$reason playWhenReady=${player.playWhenReady} " +
+                "state=${player.playbackState} isPlaying=${player.isPlaying}"
+        )
         player.playWhenReady = false
         _keepPlaying.value = false
     }
 
-    private fun stopPlayback() {
-        appendLog("TTS stop")
+    private fun stopPlayback(reason: String = "unspecified") {
+        appendLog(
+            "TTS stop: reason=$reason state=${player.playbackState} " +
+                "playWhenReady=${player.playWhenReady} isPlaying=${player.isPlaying}"
+        )
         player.stop()
         _isPlaying.value = false
         _keepPlaying.value = false
@@ -714,7 +729,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } else {
                 // 已经是最后一章，停止播放
-                stopPlayback()
+                stopPlayback("end_of_book")
             }
         }
     }
@@ -746,7 +761,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopTts() {
-        stopPlayback()
+        stopPlayback("user")
     }
 
     // ==================== TTS 引擎管理 ====================
@@ -1005,8 +1020,16 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         playbackSegments = queue.segments
         appendLog("TTS queue built: items=${queue.mediaItems.size} segments=${queue.segments.size} chapters=${queue.preloadedChapters.size}")
-        player.setMediaItems(queue.mediaItems, queue.segments.indexOfFirst { it.chapterIndex == chapterIndex && it.paragraphIndex == paragraphIndex }.coerceAtLeast(0), 0L)
+        val startItemIndex = queue.segments.indexOfFirst {
+            it.chapterIndex == chapterIndex && it.paragraphIndex == paragraphIndex
+        }.coerceAtLeast(0)
+        appendLog("TTS setMediaItems: count=${queue.mediaItems.size} startIndex=$startItemIndex")
+        player.setMediaItems(queue.mediaItems, startItemIndex, 0L)
         player.prepare()
+        appendLog(
+            "TTS play request: state=${player.playbackState} playWhenReady=${player.playWhenReady} " +
+                "isPlaying=${player.isPlaying} keepPlaying=${_keepPlaying.value}"
+        )
         player.play()
         appendLog("TTS play called: state=${player.playbackState} playWhenReady=${player.playWhenReady}")
         viewModelScope.launch {
