@@ -10,9 +10,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.datasource.ByteArrayDataSource
-import androidx.media3.datasource.DataSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.readapp.data.ReadApiService
 import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
@@ -22,9 +19,6 @@ import com.readapp.data.model.HttpTTS
 import com.readapp.media.PlayerHolder
 import com.readapp.media.ReadAudioService
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,17 +29,24 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.joinAll
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.min
 
 class BookViewModel(application: Application) : AndroidViewModel(application) {
+
+    private data class PlaybackSegment(
+        val chapterIndex: Int,
+        val paragraphIndex: Int,
+        val isChapterTitle: Boolean
+    )
+
+    private data class ChapterPlaybackData(
+        val content: String,
+        val paragraphs: List<String>
+    )
 
     companion object {
         private const val TAG = "BookViewModel"
@@ -73,26 +74,24 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _isPlaying.value = isPlaying
             }
 
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val segment = playbackSegments.getOrNull(currentMediaItemIndex)
+                updatePlaybackSegment(segment)
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
                     _playbackProgress.value = 1f
-                    handlePlaybackEnded()
+                    stopPlayback()
                 }
             }
         })
     }
-    private val httpClient = OkHttpClient()
-    private val audioCacheLock = Mutex()
-    private val preloadQueueLock = Mutex()
     private var currentSentences: List<String> = emptyList()
     private var isReadingChapterTitle = false
-    private val audioCache = mutableMapOf<String, ByteArray>()
-    private var nextChapterSentences: List<String> = emptyList()
-    private var preloadingJobActive = false
-    private val preloadQueue = ArrayDeque<Int>()
-    private val maxConcurrentPreloads = 3
-    private val maxPreloadRetries = 2
     private var currentSearchQuery = ""
+    private var playbackSegments: List<PlaybackSegment> = emptyList()
+    private var playbackChapterData: Map<Int, ChapterPlaybackData> = emptyMap()
 
     // ==================== 书籍相关状态 ====================
 
@@ -291,8 +290,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             currentParagraphs = emptyList()
             currentSentences = emptyList()
             chapterContentCache.clear()
-            clearAudioCache()
-            clearNextChapterCache()
+            clearPlaybackQueue()
             stopPlayback()
             _availableTtsEngines.value = emptyList()
             _selectedTtsEngine.value = ""
@@ -372,8 +370,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
         _currentParagraphIndex.value = -1
         currentSentences = currentParagraphs
-        clearAudioCache()
-        clearNextChapterCache()
+        clearPlaybackQueue()
         resetPlayback()
 
         viewModelScope.launch {
@@ -606,11 +603,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
             ReadAudioService.startService(appContext)
 
-            // 先朗读章节标题，再朗读正文
-            playChapterTitle()
-
-            // 预加载后续段落
-            preloadNextParagraphs()
+            startPlaybackFrom(_currentChapterIndex.value, _currentParagraphIndex.value)
 
             // 开始观察播放进度
             observeProgress()
@@ -627,16 +620,17 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _isPlaying.value = false
         _keepPlaying.value = false
         _currentParagraphIndex.value = -1
-        _preloadedParagraphs.value = emptySet()
         isReadingChapterTitle = false
+        clearPlaybackQueue()
         resetPlayback()
     }
 
     fun previousParagraph() {
-        val currentIndex = _currentParagraphIndex.value
-        if (currentIndex > 0) {
-            _currentParagraphIndex.value = currentIndex - 1
-            playCurrentParagraph()
+        if (player.hasPreviousMediaItem()) {
+            player.seekToPreviousMediaItem()
+            if (_keepPlaying.value) {
+                player.play()
+            }
         } else if (_currentChapterIndex.value > 0) {
             // 跳到上一章的最后一段
             previousChapter()
@@ -644,11 +638,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun nextParagraph() {
-        val currentIndex = _currentParagraphIndex.value
-        if (currentIndex < currentParagraphs.size - 1) {
-            _currentParagraphIndex.value = currentIndex + 1
-            playCurrentParagraph()
-            preloadNextParagraphs()
+        if (player.hasNextMediaItem()) {
+            player.seekToNextMediaItem()
+            if (_keepPlaying.value) {
+                player.play()
+            }
         } else {
             // 切换到下一章
             if (_currentChapterIndex.value < _chapters.value.lastIndex) {
@@ -657,52 +651,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     delay(500) // 等待章节加载
                     if (currentParagraphs.isNotEmpty()) {
                         _currentParagraphIndex.value = 0
-                        playCurrentParagraph()
-                        preloadNextParagraphs()
+                        startPlaybackFrom(_currentChapterIndex.value, _currentParagraphIndex.value)
                     }
                 }
             } else {
                 // 已经是最后一章，停止播放
                 stopPlayback()
             }
-        }
-    }
-
-    private fun playCurrentParagraph() {
-        val index = _currentParagraphIndex.value
-        if (index < 0 || index >= currentParagraphs.size) return
-
-        val sentence = currentParagraphs[index]
-        if (sentence.isBlank() || isPunctuationOnly(sentence)) {
-            nextParagraph()
-            return
-        }
-
-
-        val cached = getCachedAudio(currentChapterIndex = _currentChapterIndex.value, sentenceIndex = index)
-        if (cached != null) {
-            playAudioData(cached)
-            return
-        }
-
-        val audioUrl = buildTtsAudioUrl(sentence, isChapterTitle = false)
-        if (audioUrl.isNullOrBlank()) {
-            _errorMessage.value = "无法获取TTS音频地址"
-            nextParagraph() // 尝试下一段
-            return
-        }
-
-        player.setMediaItem(MediaItem.fromUri(audioUrl))
-        player.prepare()
-        player.play()
-    }
-
-    private fun preloadNextParagraphs() {
-        val currentIndex = _currentParagraphIndex.value
-        val count = _preloadCount.value
-
-        viewModelScope.launch {
-            startPreloading(currentIndex, count)
         }
     }
 
@@ -721,7 +676,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _playbackProgress.value = (position.toFloat() / duration).coerceIn(0f, 1f)
                 _totalTime.value = formatTime(duration)
                 _currentTime.value = formatTime(position)
-                maybePreloadNextChapter()
                 delay(500)
             }
         }
@@ -919,15 +873,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         return String.format("%02d:%02d", minutes, seconds)
     }
 
-    private fun handlePlaybackEnded() {
-        if (isReadingChapterTitle) {
-            isReadingChapterTitle = false
-            playCurrentParagraph()
-        } else {
-            nextParagraph()
-        }
-    }
-
     private fun splitTextIntoSentences(text: String): List<String> {
         val filtered = cleanChapterContent(text)
         return filtered.split("\n").map { it.trim() }.filter { it.isNotBlank() }
@@ -987,302 +932,168 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun playChapterTitle() {
-        val chapterTitle = currentChapterTitle
-        if (chapterTitle.isBlank()) {
-            playCurrentParagraph()
-            return
-        }
-
-        isReadingChapterTitle = true
-        val cached = getCachedAudio(_currentChapterIndex.value, -1)
-        if (cached != null) {
-            playAudioData(cached)
-            viewModelScope.launch {
-                startPreloading(_currentParagraphIndex.value, _preloadCount.value)
-            }
-            return
-        }
-
-        val audioUrl = buildTtsAudioUrl(chapterTitle, isChapterTitle = true)
-        if (audioUrl.isNullOrBlank()) {
-            isReadingChapterTitle = false
-            playCurrentParagraph()
-            return
-        }
-
-        player.setMediaItem(MediaItem.fromUri(audioUrl))
-        player.prepare()
-        player.play()
-        viewModelScope.launch {
-            startPreloading(_currentParagraphIndex.value, _preloadCount.value)
-        }
-    }
-
-    private fun playAudioData(data: ByteArray) {
-        val mediaItem = MediaItem.Builder().setUri("bytearray://tts").build()
-        val mediaSource = ProgressiveMediaSource.Factory(DataSource.Factory { ByteArrayDataSource(data) })
-            .createMediaSource(mediaItem)
-        player.setMediaSource(mediaSource)
-        player.prepare()
-        player.play()
-    }
-
-    private suspend fun startPreloading(currentIndex: Int, count: Int) {
-        val endIndex = min(currentIndex + count, currentParagraphs.size - 1)
-        val candidateIndices = if (currentIndex < endIndex) (currentIndex + 1..endIndex).toList() else emptyList()
-        appendLog("TTS预加载: currentIndex=$currentIndex count=$count candidates=${candidateIndices.size}")
-        if (candidateIndices.isEmpty()) {
-            appendLog("TTS预加载: 无候选段落，尝试预载下一章")
-            maybePreloadNextChapter()
-            return
-        }
-
-        val neededIndices = mutableListOf<Int>()
-        for (index in candidateIndices) {
-            val sentence = currentParagraphs.getOrNull(index) ?: continue
-            if (isPunctuationOnly(sentence)) {
-                appendLog("TTS预加载: 跳过纯标点 index=$index")
-                markPreloaded(index)
-                continue
-            }
-            if (getCachedAudio(_currentChapterIndex.value, index) != null) {
-                appendLog("TTS预加载: 已缓存 index=$index")
-                markPreloaded(index)
-                continue
-            }
-            neededIndices.add(index)
-        }
-
-        if (neededIndices.isEmpty()) {
-            appendLog("TTS预加载: 无需新增预载，尝试预载下一章")
-            maybePreloadNextChapter()
-            return
-        }
-
-        appendLog("TTS预加载: 更新队列 -> ${neededIndices.joinToString(",")}")
-        updatePreloadQueue(neededIndices)
-        processPreloadQueue()
-    }
-
-    private fun processPreloadQueue() {
-        if (preloadingJobActive) return
-        preloadingJobActive = true
-        viewModelScope.launch {
-            try {
-                appendLog("TTS预加载: 开始处理队列")
-                val semaphore = Semaphore(maxConcurrentPreloads)
-                val jobs = mutableListOf<kotlinx.coroutines.Job>()
-
-                while (true) {
-                    val index = dequeuePreloadIndex() ?: break
-                    if (getCachedAudio(_currentChapterIndex.value, index) != null) {
-                        appendLog("TTS预加载: 队列跳过已缓存 index=$index")
-                        markPreloaded(index)
-                        continue
-                    }
-
-                    jobs += launch {
-                        semaphore.acquire()
-                        try {
-                            downloadAudioWithRetry(index)
-                        } finally {
-                            semaphore.release()
-                        }
-                    }
-                }
-
-                jobs.joinAll()
-            } finally {
-                preloadingJobActive = false
-                if (hasPendingPreloadQueue()) {
-                    appendLog("TTS预加载: 队列仍有剩余，继续处理")
-                    processPreloadQueue()
-                } else {
-                    appendLog("TTS预加载: 队列处理完成")
-                    maybePreloadNextChapter()
-                }
-            }
-        }
-    }
-
-    private suspend fun downloadAudioWithRetry(index: Int) {
-        val sentence = currentParagraphs.getOrNull(index) ?: return
-        if (isPunctuationOnly(sentence)) {
-            appendLog("TTS预加载: 跳过纯标点 index=$index")
-            markPreloaded(index)
-            return
-        }
-
-        repeat(maxPreloadRetries + 1) { attempt ->
-            if (getCachedAudio(_currentChapterIndex.value, index) != null) {
-                appendLog("TTS预加载: 已缓存 index=$index")
-                markPreloaded(index)
-                return
-            }
-
-            appendLog("TTS预加载: 下载 index=$index attempt=${attempt + 1}")
-            val success = downloadAndCacheAudio(_currentChapterIndex.value, index, sentence)
-            if (success) {
-                appendLog("TTS预加载: 成功 index=$index")
-                markPreloaded(index)
-                return
-            }
-
-            if (attempt < maxPreloadRetries) {
-                appendLog("TTS预加载: 失败重试 index=$index")
-                delay(1000)
-            }
-        }
-        appendLog("TTS预加载: 最终失败 index=$index")
-    }
-
-    private suspend fun downloadAndCacheAudio(
-        chapterIndex: Int,
-        sentenceIndex: Int,
-        sentence: String,
-        isChapterTitle: Boolean = false
-    ): Boolean {
-        val audioUrl = buildTtsAudioUrl(sentence, isChapterTitle) ?: run {
-            appendLog("TTS预加载: 无法构建音频URL index=$sentenceIndex")
-            return false
-        }
-        appendLog("TTS预加载: 请求URL index=$sentenceIndex url=$audioUrl")
-        val request = Request.Builder().url(audioUrl).build()
-        return runCatching {
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    appendLog("TTS预加载: 请求失败 index=$sentenceIndex code=${response.code} url=$audioUrl")
-                    return false
-                }
-                val contentType = response.header("Content-Type").orEmpty()
-                val bytes = response.body?.bytes() ?: run {
-                    appendLog("TTS预加载: 响应无内容 index=$sentenceIndex url=$audioUrl")
-                    return false
-                }
-                if (!contentType.contains("audio") && bytes.size < 2000) {
-                    appendLog("TTS预加载: 音频无效 index=$sentenceIndex contentType=$contentType size=${bytes.size} url=$audioUrl")
-                    return false
-                }
-                appendLog("TTS预加载: 收到音频 index=$sentenceIndex contentType=$contentType size=${bytes.size}")
-                cacheAudio(chapterIndex, sentenceIndex, bytes)
-                true
-            }
-        }.getOrElse { error ->
-            appendLog("TTS预加载: 请求异常 index=$sentenceIndex error=${error}")
-            false
-        }
-    }
-
-    private suspend fun maybePreloadNextChapter() {
-        if (_chapters.value.isEmpty()) return
-        val remaining = currentParagraphs.size - _currentParagraphIndex.value
-        if (remaining > _preloadCount.value) return
-        val nextIndex = _currentChapterIndex.value + 1
-        if (nextIndex > _chapters.value.lastIndex) return
-        if (nextChapterSentences.isNotEmpty()) return
-        appendLog("TTS预加载: 触发下一章预载 nextIndex=$nextIndex")
-
+    private suspend fun startPlaybackFrom(chapterIndex: Int, paragraphIndex: Int) {
         val book = _selectedBook.value ?: return
-        val bookUrl = book.bookUrl ?: return
+        val chapters = _chapters.value
+        if (chapters.isEmpty()) return
 
-        val chapter = _chapters.value.getOrNull(nextIndex) ?: return
+        val startIndex = paragraphIndex.coerceAtLeast(0)
+        val queue = buildPlaybackQueue(book, chapterIndex, startIndex)
+        if (queue.mediaItems.isEmpty()) {
+            _errorMessage.value = "无法获取TTS音频地址"
+            return
+        }
+
+        playbackSegments = queue.segments
+        playbackChapterData = queue.chapterData
+        _preloadedParagraphs.value = emptySet()
+        _preloadedChapters.value = queue.preloadedChapters.toSet()
+
+        player.setMediaItems(queue.mediaItems)
+        player.prepare()
+        player.play()
+        updatePlaybackSegment(queue.segments.firstOrNull())
+    }
+
+    private data class PlaybackQueue(
+        val mediaItems: List<MediaItem>,
+        val segments: List<PlaybackSegment>,
+        val chapterData: Map<Int, ChapterPlaybackData>,
+        val preloadedChapters: List<Int>
+    )
+
+    private suspend fun buildPlaybackQueue(
+        book: Book,
+        startChapterIndex: Int,
+        startParagraphIndex: Int
+    ): PlaybackQueue {
+        val chapters = _chapters.value
+        val endChapterIndex = (startChapterIndex + _preloadCount.value).coerceAtMost(chapters.lastIndex)
+        val mediaItems = mutableListOf<MediaItem>()
+        val segments = mutableListOf<PlaybackSegment>()
+        val chapterData = mutableMapOf<Int, ChapterPlaybackData>()
+        val preloadedChapters = mutableListOf<Int>()
+
+        for (chapterIndex in startChapterIndex..endChapterIndex) {
+            val content = if (chapterIndex == _currentChapterIndex.value) {
+                ensureCurrentChapterContent()
+            } else {
+                fetchChapterContentForPlayback(chapterIndex, book)
+            }
+
+            val chapterContent = content?.takeIf { it.isNotBlank() } ?: continue
+            val paragraphs = splitTextIntoSentences(chapterContent)
+            chapterData[chapterIndex] = ChapterPlaybackData(chapterContent, paragraphs)
+            if (chapterIndex != startChapterIndex) {
+                preloadedChapters.add(chapterIndex)
+            }
+
+            val chapterTitle = chapters.getOrNull(chapterIndex)?.title.orEmpty()
+            if (chapterTitle.isNotBlank()) {
+                buildMediaItem(chapterIndex, -1, chapterTitle, isChapterTitle = true)?.let { item ->
+                    mediaItems.add(item)
+                    segments.add(PlaybackSegment(chapterIndex, -1, true))
+                }
+            }
+
+            val startIndex = if (chapterIndex == startChapterIndex) startParagraphIndex else 0
+            for (index in startIndex until paragraphs.size) {
+                val sentence = paragraphs[index]
+                if (sentence.isBlank() || isPunctuationOnly(sentence)) continue
+                buildMediaItem(chapterIndex, index, sentence, isChapterTitle = false)?.let { item ->
+                    mediaItems.add(item)
+                    segments.add(PlaybackSegment(chapterIndex, index, false))
+                }
+            }
+        }
+
+        return PlaybackQueue(mediaItems, segments, chapterData, preloadedChapters)
+    }
+
+    private fun buildMediaItem(
+        chapterIndex: Int,
+        paragraphIndex: Int,
+        sentence: String,
+        isChapterTitle: Boolean
+    ): MediaItem? {
+        val audioUrl = buildTtsAudioUrl(sentence, isChapterTitle) ?: return null
+        val chapterTitle = _chapters.value.getOrNull(chapterIndex)?.title.orEmpty()
+        val subtitle = if (isChapterTitle) {
+            chapterTitle.ifBlank { "第 ${chapterIndex + 1} 章" }
+        } else {
+            listOf(
+                chapterTitle.ifBlank { "第 ${chapterIndex + 1} 章" },
+                "第 ${paragraphIndex + 1} 段"
+            ).joinToString(" · ")
+        }
+
+        return MediaItem.Builder()
+            .setMediaId("${chapterIndex}:${paragraphIndex}")
+            .setUri(audioUrl)
+            .setMediaMetadata(
+                androidx.media3.common.MediaMetadata.Builder()
+                    .setTitle(_selectedBook.value?.name ?: "听书")
+                    .setSubtitle(subtitle)
+                    .build()
+            )
+            .build()
+    }
+
+    private suspend fun fetchChapterContentForPlayback(index: Int, book: Book): String? {
+        val chapter = _chapters.value.getOrNull(index) ?: return null
+        val cached = chapter.content ?: chapterContentCache[index]
+        if (!cached.isNullOrBlank()) {
+            val cleaned = cleanChapterContent(cached)
+            cacheChapterContent(index, cleaned)
+            return cleaned
+        }
+
         val result = repository.fetchChapterContent(
             currentServerEndpoint(),
             _publicServerAddress.value.ifBlank { null },
             _accessToken.value,
-            bookUrl,
+            book.bookUrl ?: return null,
             book.origin,
             chapter.index
         )
 
         result.onSuccess { content ->
-            viewModelScope.launch {
-                nextChapterSentences = splitTextIntoSentences(content.orEmpty())
-                _preloadedChapters.value = _preloadedChapters.value + nextIndex
-                appendLog("TTS预加载: 下一章分段完成 size=${nextChapterSentences.size}")
-                preloadNextChapterAudio(nextIndex)
-            }
+            val cleaned = cleanChapterContent(content.orEmpty())
+            cacheChapterContent(index, cleaned)
         }
+
+        return chapterContentCache[index]
     }
 
-    private suspend fun preloadNextChapterAudio(chapterIndex: Int) {
-        if (nextChapterSentences.isEmpty()) return
-        val limit = min(nextChapterSentences.size, _preloadCount.value)
-        appendLog("TTS预加载: 下一章音频预载 chapterIndex=$chapterIndex limit=$limit")
-        for (i in 0 until limit) {
-            val sentence = nextChapterSentences[i]
-            if (isPunctuationOnly(sentence)) continue
-            downloadAndCacheAudio(
-                chapterIndex,
-                i,
-                sentence,
-                isChapterTitle = false
-            )
+    private fun cacheChapterContent(index: Int, content: String) {
+        if (content.isBlank()) return
+        val updated = _chapters.value.toMutableList()
+        if (index in updated.indices) {
+            updated[index] = updated[index].copy(content = content)
+            _chapters.value = updated
         }
+        chapterContentCache[index] = content
     }
 
-    private fun cacheKey(chapterIndex: Int, sentenceIndex: Int): String {
-        return "${chapterIndex}:${sentenceIndex}"
-    }
-
-    private suspend fun cacheAudio(chapterIndex: Int, sentenceIndex: Int, data: ByteArray) {
-        audioCacheLock.withLock {
-            audioCache[cacheKey(chapterIndex, sentenceIndex)] = data
+    private fun updatePlaybackSegment(segment: PlaybackSegment?) {
+        if (segment == null) return
+        val data = playbackChapterData[segment.chapterIndex]
+        if (data != null) {
+            _currentChapterContent.value = data.content
+            currentParagraphs = data.paragraphs
+            currentSentences = data.paragraphs
+            _totalParagraphs.value = data.paragraphs.size.coerceAtLeast(1)
         }
+        _currentChapterIndex.value = segment.chapterIndex
+        _currentParagraphIndex.value = segment.paragraphIndex
+        isReadingChapterTitle = segment.isChapterTitle
     }
 
-    private fun getCachedAudio(currentChapterIndex: Int, sentenceIndex: Int): ByteArray? {
-        val key = cacheKey(currentChapterIndex, sentenceIndex)
-        return audioCache[key]
-    }
-
-    private fun clearAudioCache() {
-        viewModelScope.launch {
-            audioCacheLock.withLock {
-                audioCache.clear()
-                _preloadedParagraphs.value = emptySet()
-            }
-            clearPreloadQueue()
-        }
-    }
-
-    private fun clearNextChapterCache() {
-        viewModelScope.launch {
-            audioCacheLock.withLock {
-                nextChapterSentences = emptyList()
-                _preloadedChapters.value = emptySet()
-            }
-        }
-    }
-
-    private suspend fun updatePreloadQueue(indices: List<Int>) {
-        preloadQueueLock.withLock {
-            preloadQueue.clear()
-            preloadQueue.addAll(indices)
-        }
-    }
-
-    private suspend fun dequeuePreloadIndex(): Int? {
-        return preloadQueueLock.withLock {
-            if (preloadQueue.isEmpty()) null else preloadQueue.removeFirst()
-        }
-    }
-
-    private suspend fun hasPendingPreloadQueue(): Boolean {
-        return preloadQueueLock.withLock {
-            preloadQueue.isNotEmpty()
-        }
-    }
-
-    private suspend fun clearPreloadQueue() {
-        preloadQueueLock.withLock {
-            preloadQueue.clear()
-        }
-    }
-
-    private fun markPreloaded(index: Int) {
-        _preloadedParagraphs.update { it + index }
+    private fun clearPlaybackQueue() {
+        playbackSegments = emptyList()
+        playbackChapterData = emptyMap()
+        _preloadedParagraphs.value = emptySet()
+        _preloadedChapters.value = emptySet()
     }
 
     private fun applyBooksFilterAndSort() {
