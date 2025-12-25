@@ -176,6 +176,7 @@ fun ReadAppMain() {
                 val speechSpeed by bookViewModel.speechSpeed.collectAsState()
                 val preloadCount by bookViewModel.preloadCount.collectAsState()
                 val loggingEnabled by bookViewModel.loggingEnabled.collectAsState()
+                val bookshelfSortByRecent by bookViewModel.bookshelfSortByRecent.collectAsState()
 
                 SettingsScreen(
                     serverAddress = serverAddress,
@@ -188,6 +189,7 @@ fun ReadAppMain() {
                     speechSpeed = speechSpeed,
                     preloadCount = preloadCount,
                     loggingEnabled = loggingEnabled,
+                    bookshelfSortByRecent = bookshelfSortByRecent,
                     onServerAddressChange = { bookViewModel.updateServerAddress(it) },
                     onSelectTtsEngine = { bookViewModel.selectTtsEngine(it) },
                     onSelectNarrationTtsEngine = { bookViewModel.selectNarrationTtsEngine(it) },
@@ -214,6 +216,9 @@ fun ReadAppMain() {
                     },
                     onLoggingEnabledChange = { enabled ->
                         bookViewModel.updateLoggingEnabled(enabled)
+                    },
+                    onBookshelfSortByRecentChange = { enabled ->
+                        bookViewModel.updateBookshelfSortByRecent(enabled)
                     },
                     onLogout = {
                         bookViewModel.logout()

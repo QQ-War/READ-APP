@@ -23,6 +23,7 @@ import com.readapp.media.PlayerHolder
 import com.readapp.media.ReadAudioService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -80,11 +83,16 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     private val httpClient = OkHttpClient()
     private val audioCacheLock = Mutex()
+    private val preloadQueueLock = Mutex()
     private var currentSentences: List<String> = emptyList()
     private var isReadingChapterTitle = false
     private val audioCache = mutableMapOf<String, ByteArray>()
     private var nextChapterSentences: List<String> = emptyList()
     private var preloadingJobActive = false
+    private val preloadQueue = ArrayDeque<Int>()
+    private val maxConcurrentPreloads = 3
+    private val maxPreloadRetries = 2
+    private var currentSearchQuery = ""
 
     // ==================== 书籍相关状态 ====================
 
@@ -170,6 +178,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val readingFontSize: StateFlow<Float> = _readingFontSize.asStateFlow()
     private val _loggingEnabled = MutableStateFlow(false)
     val loggingEnabled: StateFlow<Boolean> = _loggingEnabled.asStateFlow()
+    private val _bookshelfSortByRecent = MutableStateFlow(false)
+    val bookshelfSortByRecent: StateFlow<Boolean> = _bookshelfSortByRecent.asStateFlow()
 
     // ==================== 服务器设置 ====================
 
@@ -214,6 +224,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _preloadCount.value = preferences.preloadCount.first().toInt()
             _readingFontSize.value = preferences.readingFontSize.first()
             _loggingEnabled.value = preferences.loggingEnabled.first()
+            _bookshelfSortByRecent.value = preferences.bookshelfSortByRecent.first()
 
             if (_accessToken.value.isNotBlank()) {
                 _isLoading.value = true
@@ -316,7 +327,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         booksResult.onSuccess { list ->
             allBooks = list
-            _books.value = list
+            applyBooksFilterAndSort()
         }.onFailure { error ->
             _errorMessage.value = error.message
         }
@@ -327,15 +338,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun searchBooks(query: String) {
-        _books.value = if (query.isBlank()) {
-            allBooks
-        } else {
-            val lower = query.lowercase()
-            allBooks.filter {
-                it.name.orEmpty().lowercase().contains(lower) ||
-                it.author.orEmpty().lowercase().contains(lower)
-            }
-        }
+        currentSearchQuery = query
+        applyBooksFilterAndSort()
     }
 
     fun selectBook(book: Book) {
@@ -862,6 +866,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateBookshelfSortByRecent(enabled: Boolean) {
+        _bookshelfSortByRecent.value = enabled
+        viewModelScope.launch {
+            preferences.saveBookshelfSortByRecent(enabled)
+            applyBooksFilterAndSort()
+        }
+    }
+
     fun clearCache() {
         // TODO: 实现缓存清理逻辑
         Log.d(TAG, "清除缓存")
@@ -999,31 +1011,95 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun startPreloading(currentIndex: Int, count: Int) {
+        val endIndex = min(currentIndex + count, currentParagraphs.size - 1)
+        val candidateIndices = if (currentIndex < endIndex) (currentIndex + 1..endIndex).toList() else emptyList()
+        if (candidateIndices.isEmpty()) {
+            maybePreloadNextChapter()
+            return
+        }
+
+        val neededIndices = mutableListOf<Int>()
+        for (index in candidateIndices) {
+            val sentence = currentParagraphs.getOrNull(index) ?: continue
+            if (isPunctuationOnly(sentence)) {
+                markPreloaded(index)
+                continue
+            }
+            if (getCachedAudio(_currentChapterIndex.value, index) != null) {
+                markPreloaded(index)
+                continue
+            }
+            neededIndices.add(index)
+        }
+
+        if (neededIndices.isEmpty()) {
+            maybePreloadNextChapter()
+            return
+        }
+
+        updatePreloadQueue(neededIndices)
+        processPreloadQueue()
+    }
+
+    private fun processPreloadQueue() {
         if (preloadingJobActive) return
         preloadingJobActive = true
-        try {
-            val endIndex = min(currentIndex + count, currentParagraphs.size - 1)
-            val indices = if (currentIndex < endIndex) (currentIndex + 1..endIndex).toList() else emptyList()
-            if (indices.isEmpty()) {
+        viewModelScope.launch {
+            try {
+                val semaphore = Semaphore(maxConcurrentPreloads)
+                val jobs = mutableListOf<kotlinx.coroutines.Job>()
+
+                while (true) {
+                    val index = dequeuePreloadIndex() ?: break
+                    if (getCachedAudio(_currentChapterIndex.value, index) != null) {
+                        markPreloaded(index)
+                        continue
+                    }
+
+                    jobs += launch {
+                        semaphore.acquire()
+                        try {
+                            downloadAudioWithRetry(index)
+                        } finally {
+                            semaphore.release()
+                        }
+                    }
+                }
+
+                jobs.joinAll()
+            } finally {
+                preloadingJobActive = false
+                if (hasPendingPreloadQueue()) {
+                    processPreloadQueue()
+                } else {
+                    maybePreloadNextChapter()
+                }
+            }
+        }
+    }
+
+    private suspend fun downloadAudioWithRetry(index: Int) {
+        val sentence = currentParagraphs.getOrNull(index) ?: return
+        if (isPunctuationOnly(sentence)) {
+            markPreloaded(index)
+            return
+        }
+
+        repeat(maxPreloadRetries + 1) { attempt ->
+            if (getCachedAudio(_currentChapterIndex.value, index) != null) {
+                markPreloaded(index)
                 return
             }
 
-            val preloaded = _preloadedParagraphs.value.toMutableSet()
-            for (index in indices) {
-                val sentence = currentParagraphs.getOrNull(index) ?: continue
-                if (isPunctuationOnly(sentence)) continue
-                if (getCachedAudio(_currentChapterIndex.value, index) != null) {
-                    preloaded.add(index)
-                    continue
-                }
-                val success = downloadAndCacheAudio(_currentChapterIndex.value, index, sentence)
-                if (success) {
-                    preloaded.add(index)
-                }
+            val success = downloadAndCacheAudio(_currentChapterIndex.value, index, sentence)
+            if (success) {
+                markPreloaded(index)
+                return
             }
-            _preloadedParagraphs.value = preloaded
-        } finally {
-            preloadingJobActive = false
+
+            if (attempt < maxPreloadRetries) {
+                delay(1000)
+            }
         }
     }
 
@@ -1113,6 +1189,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 audioCache.clear()
                 _preloadedParagraphs.value = emptySet()
             }
+            clearPreloadQueue()
         }
     }
 
@@ -1123,6 +1200,67 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _preloadedChapters.value = emptySet()
             }
         }
+    }
+
+    private suspend fun updatePreloadQueue(indices: List<Int>) {
+        preloadQueueLock.withLock {
+            preloadQueue.clear()
+            preloadQueue.addAll(indices)
+        }
+    }
+
+    private suspend fun dequeuePreloadIndex(): Int? {
+        return preloadQueueLock.withLock {
+            if (preloadQueue.isEmpty()) null else preloadQueue.removeFirst()
+        }
+    }
+
+    private suspend fun hasPendingPreloadQueue(): Boolean {
+        return preloadQueueLock.withLock {
+            preloadQueue.isNotEmpty()
+        }
+    }
+
+    private suspend fun clearPreloadQueue() {
+        preloadQueueLock.withLock {
+            preloadQueue.clear()
+        }
+    }
+
+    private fun markPreloaded(index: Int) {
+        _preloadedParagraphs.update { it + index }
+    }
+
+    private fun applyBooksFilterAndSort() {
+        val filtered = if (currentSearchQuery.isBlank()) {
+            allBooks
+        } else {
+            val lower = currentSearchQuery.lowercase()
+            allBooks.filter {
+                it.name.orEmpty().lowercase().contains(lower) ||
+                it.author.orEmpty().lowercase().contains(lower)
+            }
+        }
+
+        val sorted = if (_bookshelfSortByRecent.value) {
+            filtered.mapIndexed { index, book -> index to book }
+                .sortedWith { first, second ->
+                    val time1 = first.second.durChapterTime ?: 0L
+                    val time2 = second.second.durChapterTime ?: 0L
+                    when {
+                        time1 == 0L && time2 == 0L -> first.first.compareTo(second.first)
+                        time1 == 0L -> 1
+                        time2 == 0L -> -1
+                        time1 == time2 -> first.first.compareTo(second.first)
+                        else -> if (time1 > time2) -1 else 1
+                    }
+                }
+                .map { it.second }
+        } else {
+            filtered
+        }
+
+        _books.value = sorted
     }
 
     private fun isPunctuationOnly(sentence: String): Boolean {
