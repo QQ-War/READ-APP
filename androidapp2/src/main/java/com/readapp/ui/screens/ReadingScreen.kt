@@ -639,13 +639,6 @@ private fun ChapterListDialog(
                                     }
                                 )
                                 
-                                if (chapter.duration.isNotEmpty()) {
-                                    Text(
-                                        text = "时长: ${chapter.duration}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.customColors.textSecondary
-                                    )
-                                }
                             }
                             
                             if (isCurrentChapter) {
