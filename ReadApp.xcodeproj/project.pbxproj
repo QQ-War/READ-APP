@@ -20,6 +20,7 @@
 		1A000021000000000000002 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000022000000000000002 /* LoginView.swift */; };
 		1A000023000000000000002 /* LogManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000024000000000000002 /* LogManager.swift */; };
 		1A000025000000000000002 /* HTMLContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000026000000000000002 /* HTMLContentView.swift */; };
+		1A000028000000000000003 /* DocumentPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000027000000000000003 /* DocumentPicker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		1A000022000000000000002 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		1A000024000000000000002 /* LogManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogManager.swift; sourceTree = "<group>"; };
 		1A000026000000000000002 /* HTMLContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLContentView.swift; sourceTree = "<group>"; };
+		1A000027000000000000003 /* DocumentPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPicker.swift; sourceTree = "<group>"; };
 		1A000020000000000000001 /* ReadApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000021000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -90,6 +92,7 @@
 				1A000020000000000000002 /* TTSSelectionView.swift */,
 				1A000022000000000000002 /* LoginView.swift */,
 				1A000026000000000000002 /* HTMLContentView.swift */,
+				1A000027000000000000003 /* DocumentPicker.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -193,6 +196,7 @@
 				1A000021000000000000002 /* LoginView.swift in Sources */,
 				1A000023000000000000002 /* LogManager.swift in Sources */,
 				1A000025000000000000002 /* HTMLContentView.swift in Sources */,
+				1A000028000000000000003 /* DocumentPicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
