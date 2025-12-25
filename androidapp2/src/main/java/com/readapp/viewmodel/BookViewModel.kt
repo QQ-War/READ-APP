@@ -376,6 +376,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 loadChapterContent(index)
             }
+            _isContentLoading.value = false
         }.onFailure { error ->
             _errorMessage.value = error.message
             appendLog("章节列表加载失败: ${error.message.orEmpty()}")
