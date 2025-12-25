@@ -14,55 +14,12 @@ import java.util.Locale
 
 class ReadAudioService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
-    private var audioManager: AudioManager? = null
-    private val focusListener = OnAudioFocusChangeListener { change ->
-        val player = mediaSession?.player ?: return@OnAudioFocusChangeListener
-        appendLog(
-            "Audio focus change=$change playWhenReady=${player.playWhenReady} " +
-                "state=${player.playbackState} isPlaying=${player.isPlaying} " +
-                "volume=${player.volume} items=${player.mediaItemCount} index=${player.currentMediaItemIndex}"
-        )
-        when (change) {
-            AudioManager.AUDIOFOCUS_LOSS -> {
-                appendLog("Audio focus loss -> pause")
-                player.pause()
-                appendLog("Audio focus loss applied: playWhenReady=${player.playWhenReady} state=${player.playbackState}")
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                appendLog("Audio focus transient loss -> pause")
-                player.pause()
-                appendLog("Audio focus transient loss applied: playWhenReady=${player.playWhenReady} state=${player.playbackState}")
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                appendLog("Audio focus duck -> volume 0.2")
-                player.volume = 0.2f
-                appendLog("Audio focus duck applied: volume=${player.volume}")
-            }
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                appendLog("Audio focus gain -> volume 1.0")
-                player.volume = 1f
-                appendLog("Audio focus gain applied: volume=${player.volume}")
-            }
-        }
-    }
 
     override fun onCreate() {
         super.onCreate()
         appendLog("ReadAudioService onCreate")
         val player = PlayerHolder.get(this)
         mediaSession = MediaSession.Builder(this, player).build()
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        appendLog(
-            "Audio focus request: stream=${AudioManager.STREAM_MUSIC} gain=${AudioManager.AUDIOFOCUS_GAIN} " +
-                "isMusicActive=${audioManager?.isMusicActive} mode=${audioManager?.mode} " +
-                "speakerOn=${audioManager?.isSpeakerphoneOn} btA2dpOn=${audioManager?.isBluetoothA2dpOn}"
-        )
-        val focusResult = audioManager?.requestAudioFocus(
-            focusListener,
-            AudioManager.STREAM_MUSIC,
-            AudioManager.AUDIOFOCUS_GAIN
-        )
-        appendLog("Audio focus request result=$focusResult")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -77,8 +34,6 @@ class ReadAudioService : MediaSessionService() {
     override fun onDestroy() {
         appendLog("ReadAudioService onDestroy")
         mediaSession?.release()
-        appendLog("ReadAudioService abandonAudioFocus")
-        audioManager?.abandonAudioFocus(focusListener)
         mediaSession = null
         super.onDestroy()
     }
