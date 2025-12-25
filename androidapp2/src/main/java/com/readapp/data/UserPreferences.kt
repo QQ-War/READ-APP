@@ -20,6 +20,10 @@ class UserPreferences(private val context: Context) {
         val AccessToken = stringPreferencesKey("accessToken")
         val Username = stringPreferencesKey("username")
         val SelectedTtsId = stringPreferencesKey("selectedTtsId")
+        val NarrationTtsId = stringPreferencesKey("narrationTtsId")
+        val DialogueTtsId = stringPreferencesKey("dialogueTtsId")
+        val SpeakerTtsMapping = stringPreferencesKey("speakerTtsMapping")
+        val ReadingFontSize = floatPreferencesKey("readingFontSize")
         val SpeechRate = doublePreferencesKey("speechRate")
         val PreloadCount = floatPreferencesKey("preloadCount")
         val LoggingEnabled = stringPreferencesKey("loggingEnabled")
@@ -30,6 +34,10 @@ class UserPreferences(private val context: Context) {
     val accessToken: Flow<String> = context.dataStore.data.map { it[Keys.AccessToken] ?: "" }
     val username: Flow<String> = context.dataStore.data.map { it[Keys.Username] ?: "" }
     val selectedTtsId: Flow<String> = context.dataStore.data.map { it[Keys.SelectedTtsId] ?: "" }
+    val narrationTtsId: Flow<String> = context.dataStore.data.map { it[Keys.NarrationTtsId] ?: "" }
+    val dialogueTtsId: Flow<String> = context.dataStore.data.map { it[Keys.DialogueTtsId] ?: "" }
+    val speakerTtsMapping: Flow<String> = context.dataStore.data.map { it[Keys.SpeakerTtsMapping] ?: "" }
+    val readingFontSize: Flow<Float> = context.dataStore.data.map { it[Keys.ReadingFontSize] ?: 16f }
     val speechRate: Flow<Double> = context.dataStore.data.map { it[Keys.SpeechRate] ?: 1.0 }
     val preloadCount: Flow<Float> = context.dataStore.data.map { it[Keys.PreloadCount] ?: 3f }
     val loggingEnabled: Flow<Boolean> = context.dataStore.data.map {
@@ -63,6 +71,30 @@ class UserPreferences(private val context: Context) {
     suspend fun saveSelectedTtsId(value: String) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.SelectedTtsId] = value
+        }
+    }
+
+    suspend fun saveNarrationTtsId(value: String) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.NarrationTtsId] = value
+        }
+    }
+
+    suspend fun saveDialogueTtsId(value: String) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.DialogueTtsId] = value
+        }
+    }
+
+    suspend fun saveSpeakerTtsMapping(value: String) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.SpeakerTtsMapping] = value
+        }
+    }
+
+    suspend fun saveReadingFontSize(value: Float) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.ReadingFontSize] = value
         }
     }
 

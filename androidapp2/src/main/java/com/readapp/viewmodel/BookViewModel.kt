@@ -10,23 +10,34 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.datasource.ByteArrayDataSource
+import androidx.media3.datasource.DataSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.readapp.data.ReadApiService
 import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
 import com.readapp.data.model.Book
 import com.readapp.data.model.Chapter
 import com.readapp.data.model.HttpTTS
+import com.readapp.media.PlayerHolder
+import com.readapp.media.ReadAudioService
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.min
 
 class BookViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -49,7 +60,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = ReadRepository { endpoint ->
         ReadApiService.create(endpoint) { accessToken.value }
     }
-    private val player: ExoPlayer = ExoPlayer.Builder(application).build().apply {
+    private val player: ExoPlayer = PlayerHolder.get(application).apply {
         addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _isPlaying.value = isPlaying
@@ -58,12 +69,18 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
                     _playbackProgress.value = 1f
-                    // 播放完成后自动播放下一段
-                    nextParagraph()
+                    handlePlaybackEnded()
                 }
             }
         })
     }
+    private val httpClient = OkHttpClient()
+    private val audioCacheLock = Mutex()
+    private var currentSentences: List<String> = emptyList()
+    private var isReadingChapterTitle = false
+    private val audioCache = mutableMapOf<String, ByteArray>()
+    private var nextChapterSentences: List<String> = emptyList()
+    private var preloadingJobActive = false
 
     // ==================== 书籍相关状态 ====================
 
@@ -121,6 +138,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedTtsEngine = MutableStateFlow("")
     val selectedTtsEngine: StateFlow<String> = _selectedTtsEngine.asStateFlow()
 
+    private val _narrationTtsEngine = MutableStateFlow("")
+    val narrationTtsEngine: StateFlow<String> = _narrationTtsEngine.asStateFlow()
+
+    private val _dialogueTtsEngine = MutableStateFlow("")
+    val dialogueTtsEngine: StateFlow<String> = _dialogueTtsEngine.asStateFlow()
+
+    private val _speakerTtsMapping = MutableStateFlow<Map<String, String>>(emptyMap())
+    val speakerTtsMapping: StateFlow<Map<String, String>> = _speakerTtsMapping.asStateFlow()
+
     private val _availableTtsEngines = MutableStateFlow<List<HttpTTS>>(emptyList())
     val availableTtsEngines: StateFlow<List<HttpTTS>> = _availableTtsEngines.asStateFlow()
 
@@ -129,6 +155,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _preloadCount = MutableStateFlow(3)
     val preloadCount: StateFlow<Int> = _preloadCount.asStateFlow()
+
+    private val _readingFontSize = MutableStateFlow(16f)
+    val readingFontSize: StateFlow<Float> = _readingFontSize.asStateFlow()
     private val _loggingEnabled = MutableStateFlow(false)
     val loggingEnabled: StateFlow<Boolean> = _loggingEnabled.asStateFlow()
 
@@ -168,8 +197,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _accessToken.value = preferences.accessToken.first()
             _username.value = preferences.username.first()
             _selectedTtsEngine.value = preferences.selectedTtsId.firstOrNull().orEmpty()
+            _narrationTtsEngine.value = preferences.narrationTtsId.firstOrNull().orEmpty()
+            _dialogueTtsEngine.value = preferences.dialogueTtsId.firstOrNull().orEmpty()
+            _speakerTtsMapping.value = parseSpeakerMapping(preferences.speakerTtsMapping.firstOrNull().orEmpty())
             _speechSpeed.value = (preferences.speechRate.first() * 20).toInt()
             _preloadCount.value = preferences.preloadCount.first().toInt()
+            _readingFontSize.value = preferences.readingFontSize.first()
             _loggingEnabled.value = preferences.loggingEnabled.first()
 
             if (_accessToken.value.isNotBlank()) {
@@ -235,10 +268,16 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _currentChapterContent.value = ""
             _currentParagraphIndex.value = -1
             currentParagraphs = emptyList()
+            currentSentences = emptyList()
             chapterContentCache.clear()
+            clearAudioCache()
+            clearNextChapterCache()
             stopPlayback()
             _availableTtsEngines.value = emptyList()
             _selectedTtsEngine.value = ""
+            _narrationTtsEngine.value = ""
+            _dialogueTtsEngine.value = ""
+            _speakerTtsMapping.value = emptyMap()
         }
     }
 
@@ -317,6 +356,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         currentParagraphs = cachedContent?.let { parseParagraphs(it) } ?: emptyList()
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
         _currentParagraphIndex.value = -1
+        currentSentences = currentParagraphs
+        clearAudioCache()
+        clearNextChapterCache()
         resetPlayback()
 
         viewModelScope.launch {
@@ -487,6 +529,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         // 分割段落
         currentParagraphs = parseParagraphs(content)
+        currentSentences = currentParagraphs
 
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
 
@@ -538,8 +581,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _currentParagraphIndex.value = 0
             }
 
-            // 播放当前段落
-            playCurrentParagraph()
+            // 更新句子列表
+            currentSentences = splitTextIntoSentences(content)
+            currentParagraphs = currentSentences
+            _totalParagraphs.value = currentSentences.size.coerceAtLeast(1)
+
+            ReadAudioService.startService(application)
+
+            // 先朗读章节标题，再朗读正文
+            playChapterTitle()
 
             // 预加载后续段落
             preloadNextParagraphs()
@@ -558,6 +608,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _isPlaying.value = false
         _currentParagraphIndex.value = -1
         _preloadedParagraphs.value = emptySet()
+        isReadingChapterTitle = false
         resetPlayback()
     }
 
@@ -601,23 +652,21 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val index = _currentParagraphIndex.value
         if (index < 0 || index >= currentParagraphs.size) return
 
-        val paragraph = currentParagraphs[index]
-        Log.d(TAG, "播放段落 $index: ${paragraph.take(20)}...")
-
-        val ttsId = _selectedTtsEngine.value.ifBlank {
-            _availableTtsEngines.value.firstOrNull()?.id
+        val sentence = currentParagraphs[index]
+        if (sentence.isBlank() || isPunctuationOnly(sentence)) {
+            nextParagraph()
+            return
         }
 
-        val audioUrl = ttsId?.let {
-            repository.buildTtsAudioUrl(
-            currentServerEndpoint(),
-            _accessToken.value,
-            it,
-            paragraph,
-            _speechSpeed.value / 20.0
-            )
+        Log.d(TAG, "播放段落 $index: ${sentence.take(20)}...")
+
+        val cached = getCachedAudio(currentChapterIndex = _currentChapterIndex.value, sentenceIndex = index)
+        if (cached != null) {
+            playAudioData(cached)
+            return
         }
 
+        val audioUrl = buildTtsAudioUrl(sentence, isChapterTitle = false)
         if (audioUrl.isNullOrBlank()) {
             _errorMessage.value = "无法获取TTS音频地址"
             nextParagraph() // 尝试下一段
@@ -634,18 +683,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val count = _preloadCount.value
 
         viewModelScope.launch {
-            val preloaded = mutableSetOf<Int>()
-
-            for (i in 1..count) {
-                val nextIndex = currentIndex + i
-                if (nextIndex < currentParagraphs.size) {
-                    // TODO: 实现音频预加载逻辑
-                    preloaded.add(nextIndex)
-                    Log.d(TAG, "预加载段落 $nextIndex")
-                }
-            }
-
-            _preloadedParagraphs.value = preloaded
+            startPreloading(currentIndex, count)
         }
     }
 
@@ -664,6 +702,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _playbackProgress.value = (position.toFloat() / duration).coerceIn(0f, 1f)
                 _totalTime.value = formatTime(duration)
                 _currentTime.value = formatTime(position)
+                maybePreloadNextChapter()
                 delay(500)
             }
         }
@@ -733,6 +772,40 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun selectNarrationTtsEngine(engineId: String) {
+        _narrationTtsEngine.value = engineId
+        viewModelScope.launch {
+            preferences.saveNarrationTtsId(engineId)
+        }
+    }
+
+    fun selectDialogueTtsEngine(engineId: String) {
+        _dialogueTtsEngine.value = engineId
+        viewModelScope.launch {
+            preferences.saveDialogueTtsId(engineId)
+        }
+    }
+
+    fun updateSpeakerMapping(name: String, engineId: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        val updated = _speakerTtsMapping.value.toMutableMap()
+        updated[trimmed] = engineId
+        _speakerTtsMapping.value = updated
+        viewModelScope.launch {
+            preferences.saveSpeakerTtsMapping(serializeSpeakerMapping(updated))
+        }
+    }
+
+    fun removeSpeakerMapping(name: String) {
+        val updated = _speakerTtsMapping.value.toMutableMap()
+        updated.remove(name)
+        _speakerTtsMapping.value = updated
+        viewModelScope.launch {
+            preferences.saveSpeakerTtsMapping(serializeSpeakerMapping(updated))
+        }
+    }
+
     // ==================== 设置方法 ====================
 
     fun updateServerAddress(address: String) {
@@ -753,6 +826,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _preloadCount.value = count.coerceIn(1, 10)
         viewModelScope.launch {
             preferences.savePreloadCount(_preloadCount.value.toFloat())
+        }
+    }
+
+    fun updateReadingFontSize(size: Float) {
+        _readingFontSize.value = size.coerceIn(12f, 28f)
+        viewModelScope.launch {
+            preferences.saveReadingFontSize(_readingFontSize.value)
         }
     }
 
@@ -788,6 +868,252 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
         return String.format("%02d:%02d", minutes, seconds)
+    }
+
+    private fun handlePlaybackEnded() {
+        if (isReadingChapterTitle) {
+            isReadingChapterTitle = false
+            playCurrentParagraph()
+        } else {
+            nextParagraph()
+        }
+    }
+
+    private fun splitTextIntoSentences(text: String): List<String> {
+        val filtered = cleanChapterContent(text)
+        return filtered.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+    }
+
+    private fun resolvedNarrationTtsId(): String {
+        return _narrationTtsEngine.value.ifBlank { _selectedTtsEngine.value }
+    }
+
+    private fun resolvedDialogueTtsId(): String {
+        return _dialogueTtsEngine.value.ifBlank { resolvedNarrationTtsId() }
+    }
+
+    private fun isDialogueSentence(sentence: String): Boolean {
+        return sentence.contains("“") || sentence.contains("\"")
+    }
+
+    private fun extractSpeaker(sentence: String): String? {
+        val regex = "^\\s*([\\p{Han}A-Za-z0-9_·]{1,12})[\\s　]*[：:，,]?\\s*[\"“]".toRegex()
+        val match = regex.find(sentence) ?: return null
+        return match.groups[1]?.value?.trim()
+    }
+
+    private fun resolveTtsIdForSentence(sentence: String, isChapterTitle: Boolean): String? {
+        if (isChapterTitle) {
+            return resolvedNarrationTtsId().ifBlank { _selectedTtsEngine.value }.ifBlank { null }
+        }
+
+        var targetId = resolvedNarrationTtsId()
+        if (isDialogueSentence(sentence)) {
+            val speaker = extractSpeaker(sentence)
+            if (speaker != null) {
+                val normalized = speaker.replace(" ", "")
+                val mapped = _speakerTtsMapping.value[speaker] ?: _speakerTtsMapping.value[normalized]
+                if (!mapped.isNullOrBlank()) {
+                    targetId = mapped
+                } else {
+                    targetId = resolvedDialogueTtsId()
+                }
+            } else {
+                targetId = resolvedDialogueTtsId()
+            }
+        }
+
+        if (targetId.isBlank()) targetId = _selectedTtsEngine.value
+        return targetId.ifBlank { null }
+    }
+
+    private fun buildTtsAudioUrl(sentence: String, isChapterTitle: Boolean): String? {
+        val ttsId = resolveTtsIdForSentence(sentence, isChapterTitle) ?: return null
+        return repository.buildTtsAudioUrl(
+            currentServerEndpoint(),
+            _accessToken.value,
+            ttsId,
+            sentence,
+            _speechSpeed.value / 20.0
+        )
+    }
+
+    private fun playChapterTitle() {
+        val chapterTitle = currentChapterTitle
+        if (chapterTitle.isBlank()) {
+            playCurrentParagraph()
+            return
+        }
+
+        isReadingChapterTitle = true
+        val cached = getCachedAudio(_currentChapterIndex.value, -1)
+        if (cached != null) {
+            playAudioData(cached)
+            startPreloading(_currentParagraphIndex.value, _preloadCount.value)
+            return
+        }
+
+        val audioUrl = buildTtsAudioUrl(chapterTitle, isChapterTitle = true)
+        if (audioUrl.isNullOrBlank()) {
+            isReadingChapterTitle = false
+            playCurrentParagraph()
+            return
+        }
+
+        player.setMediaItem(MediaItem.fromUri(audioUrl))
+        player.prepare()
+        player.play()
+        startPreloading(_currentParagraphIndex.value, _preloadCount.value)
+    }
+
+    private fun playAudioData(data: ByteArray) {
+        val mediaItem = MediaItem.Builder().setUri("bytearray://tts").build()
+        val mediaSource = ProgressiveMediaSource.Factory(DataSource.Factory { ByteArrayDataSource(data) })
+            .createMediaSource(mediaItem)
+        player.setMediaSource(mediaSource)
+        player.prepare()
+        player.play()
+    }
+
+    private suspend fun startPreloading(currentIndex: Int, count: Int) {
+        if (preloadingJobActive) return
+        preloadingJobActive = true
+        val endIndex = min(currentIndex + count, currentParagraphs.size - 1)
+        val indices = if (currentIndex < endIndex) (currentIndex + 1..endIndex).toList() else emptyList()
+        if (indices.isEmpty()) {
+            preloadingJobActive = false
+            return
+        }
+
+        val preloaded = _preloadedParagraphs.value.toMutableSet()
+        for (index in indices) {
+            val sentence = currentParagraphs.getOrNull(index) ?: continue
+            if (isPunctuationOnly(sentence)) continue
+            if (getCachedAudio(_currentChapterIndex.value, index) != null) {
+                preloaded.add(index)
+                continue
+            }
+            val success = downloadAndCacheAudio(_currentChapterIndex.value, index, sentence)
+            if (success) {
+                preloaded.add(index)
+            }
+        }
+        _preloadedParagraphs.value = preloaded
+        preloadingJobActive = false
+    }
+
+    private suspend fun downloadAndCacheAudio(
+        chapterIndex: Int,
+        sentenceIndex: Int,
+        sentence: String,
+        isChapterTitle: Boolean = false
+    ): Boolean {
+        val audioUrl = buildTtsAudioUrl(sentence, isChapterTitle) ?: return false
+        val request = Request.Builder().url(audioUrl).build()
+        return runCatching {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return false
+                val contentType = response.header("Content-Type").orEmpty()
+                val bytes = response.body?.bytes() ?: return false
+                if (!contentType.contains("audio") && bytes.size < 2000) return false
+                cacheAudio(chapterIndex, sentenceIndex, bytes)
+                true
+            }
+        }.getOrDefault(false)
+    }
+
+    private suspend fun maybePreloadNextChapter() {
+        if (_chapters.value.isEmpty()) return
+        val remaining = currentParagraphs.size - _currentParagraphIndex.value
+        if (remaining > _preloadCount.value) return
+        val nextIndex = _currentChapterIndex.value + 1
+        if (nextIndex > _chapters.value.lastIndex) return
+        if (nextChapterSentences.isNotEmpty()) return
+
+        val book = _selectedBook.value ?: return
+        val bookUrl = book.bookUrl ?: return
+
+        val chapter = _chapters.value.getOrNull(nextIndex) ?: return
+        val result = repository.fetchChapterContent(
+            currentServerEndpoint(),
+            _publicServerAddress.value.ifBlank { null },
+            _accessToken.value,
+            bookUrl,
+            book.origin,
+            chapter.index
+        )
+
+        result.onSuccess { content ->
+            viewModelScope.launch {
+                nextChapterSentences = splitTextIntoSentences(content.orEmpty())
+                preloadNextChapterAudio(nextIndex)
+            }
+        }
+    }
+
+    private suspend fun preloadNextChapterAudio(chapterIndex: Int) {
+        if (nextChapterSentences.isEmpty()) return
+        val limit = min(nextChapterSentences.size, _preloadCount.value)
+        for (i in 0 until limit) {
+            val sentence = nextChapterSentences[i]
+            if (isPunctuationOnly(sentence)) continue
+            downloadAndCacheAudio(
+                chapterIndex,
+                i,
+                sentence,
+                isChapterTitle = false
+            )
+        }
+    }
+
+    private fun cacheKey(chapterIndex: Int, sentenceIndex: Int): String {
+        return "${chapterIndex}:${sentenceIndex}"
+    }
+
+    private suspend fun cacheAudio(chapterIndex: Int, sentenceIndex: Int, data: ByteArray) {
+        audioCacheLock.withLock {
+            audioCache[cacheKey(chapterIndex, sentenceIndex)] = data
+        }
+    }
+
+    private fun getCachedAudio(currentChapterIndex: Int, sentenceIndex: Int): ByteArray? {
+        val key = cacheKey(currentChapterIndex, sentenceIndex)
+        return audioCache[key]
+    }
+
+    private fun clearAudioCache() {
+        viewModelScope.launch {
+            audioCacheLock.withLock {
+                audioCache.clear()
+                _preloadedParagraphs.value = emptySet()
+            }
+        }
+    }
+
+    private fun clearNextChapterCache() {
+        viewModelScope.launch {
+            audioCacheLock.withLock {
+                nextChapterSentences = emptyList()
+            }
+        }
+    }
+
+    private fun isPunctuationOnly(sentence: String): Boolean {
+        return sentence.trim().all { it in "，。！？；、“”\"'…—-· " }
+    }
+
+    private fun parseSpeakerMapping(raw: String): Map<String, String> {
+        if (raw.isBlank()) return emptyMap()
+        return runCatching {
+            val obj = JSONObject(raw)
+            obj.keys().asSequence().associateWith { key -> obj.optString(key) }
+        }.getOrDefault(emptyMap())
+    }
+
+    private fun serializeSpeakerMapping(mapping: Map<String, String>): String {
+        val obj = JSONObject()
+        mapping.forEach { (key, value) -> obj.put(key, value) }
+        return obj.toString()
     }
 
     fun exportLogs(context: android.content.Context): android.net.Uri? {

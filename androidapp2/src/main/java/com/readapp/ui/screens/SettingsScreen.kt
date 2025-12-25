@@ -25,12 +25,19 @@ import com.readapp.ui.theme.customColors
 fun SettingsScreen(
     serverAddress: String,
     selectedTtsEngine: String,
+    narrationTtsEngine: String,
+    dialogueTtsEngine: String,
+    speakerTtsMapping: Map<String, String>,
     availableTtsEngines: List<HttpTTS>,
     speechSpeed: Int,
     preloadCount: Int,
     loggingEnabled: Boolean,
     onServerAddressChange: (String) -> Unit,
     onSelectTtsEngine: (String) -> Unit,
+    onSelectNarrationTtsEngine: (String) -> Unit,
+    onSelectDialogueTtsEngine: (String) -> Unit,
+    onAddSpeakerMapping: (String, String) -> Unit,
+    onRemoveSpeakerMapping: (String) -> Unit,
     onReloadTtsEngines: () -> Unit,
     onSpeechSpeedChange: (Int) -> Unit,
     onPreloadCountChange: (Int) -> Unit,
@@ -42,9 +49,22 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     var showTtsDialog by remember { mutableStateOf(false) }
+    var showNarrationDialog by remember { mutableStateOf(false) }
+    var showDialogueDialog by remember { mutableStateOf(false) }
+    var showSpeakerDialog by remember { mutableStateOf(false) }
+    var newSpeakerName by remember { mutableStateOf("") }
+    var selectedSpeakerEngine by remember { mutableStateOf("") }
     val selectedTtsName = remember(selectedTtsEngine, availableTtsEngines) {
         availableTtsEngines.firstOrNull { it.id == selectedTtsEngine }?.name
             ?: selectedTtsEngine.ifBlank { "未选择" }
+    }
+    val narrationTtsName = remember(narrationTtsEngine, availableTtsEngines) {
+        availableTtsEngines.firstOrNull { it.id == narrationTtsEngine }?.name
+            ?: narrationTtsEngine.ifBlank { "未选择" }
+    }
+    val dialogueTtsName = remember(dialogueTtsEngine, availableTtsEngines) {
+        availableTtsEngines.firstOrNull { it.id == dialogueTtsEngine }?.name
+            ?: dialogueTtsEngine.ifBlank { "未选择" }
     }
 
     LaunchedEffect(Unit) {
@@ -96,10 +116,32 @@ fun SettingsScreen(
             SettingsSection(title = "听书设置") {
                 SettingsItem(
                     icon = Icons.Default.VolumeUp,
-                    title = "TTS引擎",
+                    title = "默认 TTS 引擎",
                     subtitle = selectedTtsName,
                     onClick = {
                         showTtsDialog = true
+                    }
+                )
+
+                Divider(color = MaterialTheme.customColors.border)
+
+                SettingsItem(
+                    icon = Icons.Default.RecordVoiceOver,
+                    title = "旁白 TTS",
+                    subtitle = narrationTtsName,
+                    onClick = {
+                        showNarrationDialog = true
+                    }
+                )
+
+                Divider(color = MaterialTheme.customColors.border)
+
+                SettingsItem(
+                    icon = Icons.Default.Chat,
+                    title = "对话 TTS",
+                    subtitle = dialogueTtsName,
+                    onClick = {
+                        showDialogueDialog = true
                     }
                 )
                 
@@ -124,6 +166,86 @@ fun SettingsScreen(
                     onValueChange = { onPreloadCountChange(it.toInt()) },
                     valueLabel = preloadCount.toString()
                 )
+
+                Divider(color = MaterialTheme.customColors.border)
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(AppDimens.PaddingMedium),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "发言人 TTS 映射",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.customColors.textSecondary
+                    )
+
+                    if (speakerTtsMapping.isEmpty()) {
+                        Text(
+                            text = "暂无发言人绑定",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.customColors.textSecondary
+                        )
+                    } else {
+                        speakerTtsMapping.toList().sortedBy { it.first }.forEach { (speaker, ttsId) ->
+                            val ttsName = availableTtsEngines.firstOrNull { it.id == ttsId }?.name ?: ttsId
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = speaker, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        text = "朗读: $ttsName",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.customColors.textSecondary
+                                    )
+                                }
+                                TextButton(onClick = { onRemoveSpeakerMapping(speaker) }) {
+                                    Text("移除")
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = newSpeakerName,
+                        onValueChange = { newSpeakerName = it },
+                        label = { Text("新增发言人") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = availableTtsEngines.firstOrNull { it.id == selectedSpeakerEngine }?.name
+                                ?: "请选择 TTS 引擎",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        TextButton(onClick = { showSpeakerDialog = true }) {
+                            Text("选择引擎")
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            if (newSpeakerName.isNotBlank() && selectedSpeakerEngine.isNotBlank()) {
+                                onAddSpeakerMapping(newSpeakerName, selectedSpeakerEngine)
+                                newSpeakerName = ""
+                                selectedSpeakerEngine = ""
+                            }
+                        },
+                        enabled = newSpeakerName.isNotBlank() && selectedSpeakerEngine.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("添加映射")
+                    }
+                }
             }
             
             // 数据管理
@@ -218,12 +340,55 @@ fun SettingsScreen(
             TtsEngineDialog(
                 availableTtsEngines = availableTtsEngines,
                 selectedTtsEngine = selectedTtsEngine,
+                title = "选择默认 TTS 引擎",
                 onSelect = {
                     onSelectTtsEngine(it)
                     showTtsDialog = false
                 },
                 onReload = onReloadTtsEngines,
                 onDismiss = { showTtsDialog = false }
+            )
+        }
+
+        if (showNarrationDialog) {
+            TtsEngineDialog(
+                availableTtsEngines = availableTtsEngines,
+                selectedTtsEngine = narrationTtsEngine,
+                title = "选择旁白 TTS 引擎",
+                onSelect = {
+                    onSelectNarrationTtsEngine(it)
+                    showNarrationDialog = false
+                },
+                onReload = onReloadTtsEngines,
+                onDismiss = { showNarrationDialog = false }
+            )
+        }
+
+        if (showDialogueDialog) {
+            TtsEngineDialog(
+                availableTtsEngines = availableTtsEngines,
+                selectedTtsEngine = dialogueTtsEngine,
+                title = "选择对话 TTS 引擎",
+                onSelect = {
+                    onSelectDialogueTtsEngine(it)
+                    showDialogueDialog = false
+                },
+                onReload = onReloadTtsEngines,
+                onDismiss = { showDialogueDialog = false }
+            )
+        }
+
+        if (showSpeakerDialog) {
+            TtsEngineDialog(
+                availableTtsEngines = availableTtsEngines,
+                selectedTtsEngine = selectedSpeakerEngine,
+                title = "选择发言人 TTS 引擎",
+                onSelect = {
+                    selectedSpeakerEngine = it
+                    showSpeakerDialog = false
+                },
+                onReload = onReloadTtsEngines,
+                onDismiss = { showSpeakerDialog = false }
             )
         }
     }
@@ -367,13 +532,14 @@ private fun SettingsToggleItem(
 private fun TtsEngineDialog(
     availableTtsEngines: List<HttpTTS>,
     selectedTtsEngine: String,
+    title: String,
     onSelect: (String) -> Unit,
     onReload: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "选择 TTS 引擎") },
+        title = { Text(text = title) },
         text = {
             if (availableTtsEngines.isEmpty()) {
                 Column(

@@ -104,6 +104,7 @@ fun ReadAppMain() {
                 val currentChapterIndex by bookViewModel.currentChapterIndex.collectAsState()
                 val currentChapterContent by bookViewModel.currentChapterContent.collectAsState()
                 val isContentLoading by bookViewModel.isContentLoading.collectAsState()
+                val readingFontSize by bookViewModel.readingFontSize.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
@@ -117,6 +118,7 @@ fun ReadAppMain() {
                         currentChapterIndex = currentChapterIndex,
                         currentChapterContent = currentChapterContent,
                         isContentLoading = isContentLoading,
+                        readingFontSize = readingFontSize,
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
                         },
@@ -151,6 +153,9 @@ fun ReadAppMain() {
                         },
                         onNextParagraph = {
                             bookViewModel.nextParagraph()
+                        },
+                        onReadingFontSizeChange = { size ->
+                            bookViewModel.updateReadingFontSize(size)
                         }
                     )
                 }
@@ -160,6 +165,9 @@ fun ReadAppMain() {
             composable(Screen.Settings.route) {
                 val serverAddress by bookViewModel.serverAddress.collectAsState()
                 val selectedTtsEngine by bookViewModel.selectedTtsEngine.collectAsState()
+                val narrationTtsEngine by bookViewModel.narrationTtsEngine.collectAsState()
+                val dialogueTtsEngine by bookViewModel.dialogueTtsEngine.collectAsState()
+                val speakerTtsMapping by bookViewModel.speakerTtsMapping.collectAsState()
                 val availableTtsEngines by bookViewModel.availableTtsEngines.collectAsState()
                 val speechSpeed by bookViewModel.speechSpeed.collectAsState()
                 val preloadCount by bookViewModel.preloadCount.collectAsState()
@@ -168,12 +176,19 @@ fun ReadAppMain() {
                 SettingsScreen(
                     serverAddress = serverAddress,
                     selectedTtsEngine = selectedTtsEngine,
+                    narrationTtsEngine = narrationTtsEngine,
+                    dialogueTtsEngine = dialogueTtsEngine,
+                    speakerTtsMapping = speakerTtsMapping,
                     availableTtsEngines = availableTtsEngines,
                     speechSpeed = speechSpeed,
                     preloadCount = preloadCount,
                     loggingEnabled = loggingEnabled,
                     onServerAddressChange = { bookViewModel.updateServerAddress(it) },
                     onSelectTtsEngine = { bookViewModel.selectTtsEngine(it) },
+                    onSelectNarrationTtsEngine = { bookViewModel.selectNarrationTtsEngine(it) },
+                    onSelectDialogueTtsEngine = { bookViewModel.selectDialogueTtsEngine(it) },
+                    onAddSpeakerMapping = { name, ttsId -> bookViewModel.updateSpeakerMapping(name, ttsId) },
+                    onRemoveSpeakerMapping = { name -> bookViewModel.removeSpeakerMapping(name) },
                     onReloadTtsEngines = { bookViewModel.loadTtsEngines() },
                     onSpeechSpeedChange = { bookViewModel.updateSpeechSpeed(it) },
                     onPreloadCountChange = { bookViewModel.updatePreloadCount(it) },
