@@ -12,7 +12,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.DataSpec
-import androidx.media3.datasource.cache.CacheUtil
 import androidx.media3.exoplayer.ExoPlayer
 import com.readapp.data.ReadApiService
 import com.readapp.data.ReadRepository
@@ -666,18 +665,27 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     val dataSpec = DataSpec(Uri.parse(audioUrlToPreload))
                     val cacheDataSourceFactory = PlayerHolder.getCacheDataSourceFactory(appContext)
+                    val dataSource = cacheDataSourceFactory.createDataSource()
+                    val buffer = ByteArray(8 * 1024)
 
-                    CacheUtil.cache(
-                        dataSpec,
-                        cacheDataSourceFactory.cache!!,
-                        cacheDataSourceFactory,
-                        CacheUtil.ProgressListener { _, bytesCached, _ ->
-                            if (bytesCached > 0) {
-                                _preloadedParagraphs.update { it + i }
-                            }
+                    var totalRead = 0
+                    try {
+                        dataSource.open(dataSpec)
+                        while (true) {
+                            val read = dataSource.read(buffer, 0, buffer.size)
+                            if (read <= 0) break
+                            totalRead += read
+                            // avoid downloading excessively large clips during preload
+                            if (totalRead >= 512 * 1024) break
                         }
-                    )
-                    appendLog("Preloaded paragraph $i successfully.")
+                    } finally {
+                        runCatching { dataSource.close() }
+                    }
+
+                    if (totalRead > 0) {
+                        _preloadedParagraphs.update { it + i }
+                    }
+                    appendLog("Preloaded paragraph $i (~$totalRead bytes) successfully.")
                 } catch (e: Exception) {
                     appendLog("Failed to preload paragraph $i: ${e.message}")
                 }
