@@ -38,6 +38,8 @@ fun ReadingScreen(
     currentChapterContent: String,
     isContentLoading: Boolean,
     readingFontSize: Float,
+    errorMessage: String?,
+    onClearError: () -> Unit,
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
     onNavigateBack: () -> Unit,
@@ -61,6 +63,19 @@ fun ReadingScreen(
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val latestOnExit by rememberUpdatedState(onExit)
+    
+    if (errorMessage != null) {
+        AlertDialog(
+            onDismissRequest = onClearError,
+            title = { Text("错误") },
+            text = { Text(errorMessage) },
+            confirmButton = {
+                TextButton(onClick = onClearError) {
+                    Text("好的")
+                }
+            }
+        )
+    }
     
     // 分割段落
     val displayContent = remember(currentChapterContent, currentChapterIndex, chapters) {

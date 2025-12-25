@@ -233,6 +233,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
+    fun clearError() {
+        _errorMessage.value = null
+    }
+
     // ==================== 初始化 ====================
 
     init {
@@ -526,7 +530,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         _isContentLoading.value = true
         appendLog("开始请求章节内容: index=$index")
-        _currentChapterContent.value = ""
         appendLog("开始加载章节内容: index=$index url=${chapter.url}")
         appendLog(
             "请求章节内容: bookUrl=$bookUrl source=${book.origin.orEmpty()} index=$index chapterUrl=${chapter.url}"
@@ -556,14 +559,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 appendLog("章节内容加载成功: index=$index length=${resolved.length}")
                 updateChapterContent(index, resolved)
             }.onFailure { error ->
-                _currentChapterContent.value = "加载失败: ${error.message}".trim()
+                _errorMessage.value = "加载失败: ${error.message}".trim()
                 appendLog("章节内容加载失败: index=$index error=${error.message.orEmpty()}")
                 Log.e(TAG, "加载章节内容失败", error)
             }
 
             _currentChapterContent.value.ifBlank { cachedInMemory }
         } catch (e: Exception) {
-            _currentChapterContent.value = "系统异常: ${e.localizedMessage}".trim()
+            _errorMessage.value = "系统异常: ${e.localizedMessage}".trim()
             appendLog("章节内容加载异常: index=$index error=${e.localizedMessage.orEmpty()}")
             Log.e(TAG, "加载章节内容异常", e)
             cachedInMemory

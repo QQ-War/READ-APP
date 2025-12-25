@@ -124,6 +124,7 @@ fun ReadAppMain() {
                 val currentChapterContent by bookViewModel.currentChapterContent.collectAsState()
                 val isContentLoading by bookViewModel.isContentLoading.collectAsState()
                 val readingFontSize by bookViewModel.readingFontSize.collectAsState()
+                val errorMessage by bookViewModel.errorMessage.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
@@ -140,6 +141,8 @@ fun ReadAppMain() {
                         currentChapterContent = currentChapterContent,
                         isContentLoading = isContentLoading,
                         readingFontSize = readingFontSize,
+                        errorMessage = errorMessage,
+                        onClearError = { bookViewModel.clearError() },
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
                         },
