@@ -56,11 +56,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     // ==================== Dependencies ====================
 
-    private val preferences = UserPreferences(application)
+    private val appContext = getApplication<Application>()
+    private val preferences = UserPreferences(appContext)
     private val repository = ReadRepository { endpoint ->
         ReadApiService.create(endpoint) { accessToken.value }
     }
-    private val player: ExoPlayer = PlayerHolder.get(application).apply {
+    private val player: ExoPlayer = PlayerHolder.get(appContext).apply {
         addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _isPlaying.value = isPlaying
@@ -86,7 +87,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private var allBooks: List<Book> = emptyList()
     private val chapterContentCache = mutableMapOf<Int, String>()
-    private val logFile = File(application.filesDir, LOG_FILE_NAME)
+    private val logFile = File(appContext.filesDir, LOG_FILE_NAME)
 
     private val _books = MutableStateFlow<List<Book>>(emptyList())
     val books: StateFlow<List<Book>> = _books.asStateFlow()
@@ -586,7 +587,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             currentParagraphs = currentSentences
             _totalParagraphs.value = currentSentences.size.coerceAtLeast(1)
 
-            ReadAudioService.startService(application)
+            ReadAudioService.startService(appContext)
 
             // 先朗读章节标题，再朗读正文
             playChapterTitle()
@@ -949,7 +950,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val cached = getCachedAudio(_currentChapterIndex.value, -1)
         if (cached != null) {
             playAudioData(cached)
-            startPreloading(_currentParagraphIndex.value, _preloadCount.value)
+            viewModelScope.launch {
+                startPreloading(_currentParagraphIndex.value, _preloadCount.value)
+            }
             return
         }
 
@@ -963,7 +966,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         player.setMediaItem(MediaItem.fromUri(audioUrl))
         player.prepare()
         player.play()
-        startPreloading(_currentParagraphIndex.value, _preloadCount.value)
+        viewModelScope.launch {
+            startPreloading(_currentParagraphIndex.value, _preloadCount.value)
+        }
     }
 
     private fun playAudioData(data: ByteArray) {
