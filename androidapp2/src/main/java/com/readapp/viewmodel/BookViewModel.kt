@@ -1071,7 +1071,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             appendLog("TTS: 无法构建音频URL c_idx=$chapterIndex p_idx=$paragraphIndex")
             return null
         }
-        appendLog("TTS: 构建URL c_idx=$chapterIndex p_idx=$paragraphIndex url=$audioUrl")
         return MediaItem.Builder()
             .setUri(audioUrl)
             .setMediaId("${chapterIndex}_${paragraphIndex}")
