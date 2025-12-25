@@ -33,6 +33,7 @@ fun SettingsScreen(
     speechSpeed: Int,
     preloadCount: Int,
     loggingEnabled: Boolean,
+    bookshelfSortByRecent: Boolean,
     onServerAddressChange: (String) -> Unit,
     onSelectTtsEngine: (String) -> Unit,
     onSelectNarrationTtsEngine: (String) -> Unit,
@@ -44,7 +45,9 @@ fun SettingsScreen(
     onPreloadCountChange: (Int) -> Unit,
     onClearCache: () -> Unit,
     onExportLogs: () -> Unit,
+    onClearLogs: () -> Unit,
     onLoggingEnabledChange: (Boolean) -> Unit,
+    onBookshelfSortByRecentChange: (Boolean) -> Unit,
     onLogout: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -111,6 +114,16 @@ fun SettingsScreen(
                     title = "服务器地址",
                     subtitle = serverAddress,
                     onClick = { showAccountDialog = true }
+                )
+            }
+
+            SettingsSection(title = "书架设置") {
+                SettingsToggleItem(
+                    icon = Icons.Default.Schedule,
+                    title = "最近阅读排序",
+                    subtitle = if (bookshelfSortByRecent) "按最近阅读时间" else "按加入书架顺序",
+                    checked = bookshelfSortByRecent,
+                    onCheckedChange = onBookshelfSortByRecentChange
                 )
             }
             
@@ -267,6 +280,16 @@ fun SettingsScreen(
                     title = "导出日志",
                     subtitle = "保存并导出日志用于排查问题",
                     onClick = onExportLogs,
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+
+                Divider(color = MaterialTheme.customColors.border)
+
+                SettingsItem(
+                    icon = Icons.Default.DeleteSweep,
+                    title = "清除历史日志",
+                    subtitle = "清空已记录的日志内容",
+                    onClick = onClearLogs,
                     tint = MaterialTheme.colorScheme.onSurface
                 )
 
