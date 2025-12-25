@@ -4,9 +4,8 @@ package com.readapp.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book as BookIcon
@@ -19,9 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.readapp.data.model.Book
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
@@ -75,63 +76,58 @@ fun BookshelfScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = AppDimens.PaddingMedium)
+                .padding(horizontal = AppDimens.PaddingMedium),
+            verticalArrangement = Arrangement.spacedBy(AppDimens.PaddingMedium),
+            contentPadding = PaddingValues(bottom = AppDimens.PaddingLarge)
         ) {
-            Spacer(modifier = Modifier.height(AppDimens.PaddingMedium))
-            
-            // 搜索栏
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = { 
-                    searchQuery = it
-                    onSearchQueryChange(it)
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            Spacer(modifier = Modifier.height(AppDimens.PaddingMedium))
-            
-            // 书籍网格
+            item {
+                Spacer(modifier = Modifier.height(AppDimens.PaddingMedium))
+                SearchBar(
+                    query = searchQuery,
+                    onQueryChange = {
+                        searchQuery = it
+                        onSearchQueryChange(it)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             if (books.isEmpty()) {
-                // 空状态
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.BookIcon,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.customColors.textSecondary
-                        )
-                        Text(
-                            text = "暂无书籍",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.customColors.textSecondary
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BookIcon,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = MaterialTheme.customColors.textSecondary
+                            )
+                            Text(
+                                text = "暂无书籍",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.customColors.textSecondary
+                            )
+                        }
                     }
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    horizontalArrangement = Arrangement.spacedBy(AppDimens.PaddingMedium),
-                    verticalArrangement = Arrangement.spacedBy(AppDimens.PaddingMedium),
-                    contentPadding = PaddingValues(bottom = AppDimens.PaddingLarge)
-                ) {
-                    items(books) { book ->
-                        BookCard(
-                            book = book,
-                            onClick = { onBookClick(book) }
-                        )
-                    }
+                items(books) { book ->
+                    BookRow(
+                        book = book,
+                        onClick = { onBookClick(book) }
+                    )
                 }
             }
         }
@@ -172,7 +168,7 @@ private fun SearchBar(
 }
 
 @Composable
-private fun BookCard(
+private fun BookRow(
     book: Book,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -180,6 +176,7 @@ private fun BookCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .height(120.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(AppDimens.CornerRadiusLarge),
         colors = CardDefaults.cardColors(
@@ -189,47 +186,49 @@ private fun BookCard(
             defaultElevation = AppDimens.ElevationSmall
         )
     ) {
-        Column(
-            modifier = Modifier.padding(AppDimens.PaddingMedium)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(AppDimens.PaddingMedium),
+            horizontalArrangement = Arrangement.spacedBy(AppDimens.PaddingMedium)
         ) {
-            // 书籍封面
             BookCover(
                 emoji = book.coverEmoji,
+                coverUrl = book.coverUrl,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxHeight()
                     .aspectRatio(3f / 4f)
             )
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // 书名
-            Text(
-                text = book.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            // 作者
-            Text(
-                text = book.author,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.customColors.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // 进度信息
-            ReadingProgress(
-                progress = book.progress,
-                currentChapter = book.currentChapter,
-                totalChapters = book.totalChapters
-            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = book.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = book.author,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.customColors.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                ReadingProgress(
+                    progress = book.progress,
+                    currentChapter = book.currentChapter,
+                    totalChapters = book.totalChapters
+                )
+            }
         }
     }
 }
@@ -237,6 +236,7 @@ private fun BookCard(
 @Composable
 private fun BookCover(
     emoji: String,
+    coverUrl: String?,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -252,11 +252,20 @@ private fun BookCover(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = emoji,
-            style = MaterialTheme.typography.displayLarge,
-            fontSize = 64.sp
-        )
+        if (!coverUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = "书籍封面",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Text(
+                text = emoji,
+                style = MaterialTheme.typography.displayLarge,
+                fontSize = 64.sp
+            )
+        }
     }
 }
 

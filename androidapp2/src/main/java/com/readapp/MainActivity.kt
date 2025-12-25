@@ -104,11 +104,14 @@ fun ReadAppMain() {
                 val currentChapterIndex by bookViewModel.currentChapterIndex.collectAsState()
                 val currentChapterContent by bookViewModel.currentChapterContent.collectAsState()
                 val isContentLoading by bookViewModel.isContentLoading.collectAsState()
+                val readingFontSize by bookViewModel.readingFontSize.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
+                val isPlayingUi by bookViewModel.isPlayingUi.collectAsState()
                 val currentPlayingParagraph by bookViewModel.currentParagraphIndex.collectAsState()
                 val preloadedParagraphs by bookViewModel.preloadedParagraphs.collectAsState()
+                val preloadedChapters by bookViewModel.preloadedChapters.collectAsState()
 
                 selectedBook?.let { book ->
                     ReadingScreen(
@@ -117,6 +120,7 @@ fun ReadAppMain() {
                         currentChapterIndex = currentChapterIndex,
                         currentChapterContent = currentChapterContent,
                         isContentLoading = isContentLoading,
+                        readingFontSize = readingFontSize,
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
                         },
@@ -134,9 +138,10 @@ fun ReadAppMain() {
                             navController.popBackStack()
                         },
                         // TTS 相关
-                        isPlaying = isPlaying,
+                        isPlaying = isPlayingUi,
                         currentPlayingParagraph = currentPlayingParagraph,
                         preloadedParagraphs = preloadedParagraphs,
+                        preloadedChapters = preloadedChapters,
                         onPlayPauseClick = {
                             bookViewModel.togglePlayPause()
                         },
@@ -151,6 +156,9 @@ fun ReadAppMain() {
                         },
                         onNextParagraph = {
                             bookViewModel.nextParagraph()
+                        },
+                        onReadingFontSizeChange = { size ->
+                            bookViewModel.updateReadingFontSize(size)
                         }
                     )
                 }
@@ -159,7 +167,11 @@ fun ReadAppMain() {
             // 设置页面
             composable(Screen.Settings.route) {
                 val serverAddress by bookViewModel.serverAddress.collectAsState()
+                val username by bookViewModel.username.collectAsState()
                 val selectedTtsEngine by bookViewModel.selectedTtsEngine.collectAsState()
+                val narrationTtsEngine by bookViewModel.narrationTtsEngine.collectAsState()
+                val dialogueTtsEngine by bookViewModel.dialogueTtsEngine.collectAsState()
+                val speakerTtsMapping by bookViewModel.speakerTtsMapping.collectAsState()
                 val availableTtsEngines by bookViewModel.availableTtsEngines.collectAsState()
                 val speechSpeed by bookViewModel.speechSpeed.collectAsState()
                 val preloadCount by bookViewModel.preloadCount.collectAsState()
@@ -167,13 +179,21 @@ fun ReadAppMain() {
 
                 SettingsScreen(
                     serverAddress = serverAddress,
+                    username = username,
                     selectedTtsEngine = selectedTtsEngine,
+                    narrationTtsEngine = narrationTtsEngine,
+                    dialogueTtsEngine = dialogueTtsEngine,
+                    speakerTtsMapping = speakerTtsMapping,
                     availableTtsEngines = availableTtsEngines,
                     speechSpeed = speechSpeed,
                     preloadCount = preloadCount,
                     loggingEnabled = loggingEnabled,
                     onServerAddressChange = { bookViewModel.updateServerAddress(it) },
                     onSelectTtsEngine = { bookViewModel.selectTtsEngine(it) },
+                    onSelectNarrationTtsEngine = { bookViewModel.selectNarrationTtsEngine(it) },
+                    onSelectDialogueTtsEngine = { bookViewModel.selectDialogueTtsEngine(it) },
+                    onAddSpeakerMapping = { name, ttsId -> bookViewModel.updateSpeakerMapping(name, ttsId) },
+                    onRemoveSpeakerMapping = { name -> bookViewModel.removeSpeakerMapping(name) },
                     onReloadTtsEngines = { bookViewModel.loadTtsEngines() },
                     onSpeechSpeedChange = { bookViewModel.updateSpeechSpeed(it) },
                     onPreloadCountChange = { bookViewModel.updatePreloadCount(it) },

@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.readapp.data.model.Book
 import com.readapp.data.model.Chapter
@@ -36,6 +37,7 @@ fun ReadingScreen(
     currentChapterIndex: Int,
     currentChapterContent: String,
     isContentLoading: Boolean,
+    readingFontSize: Float,
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
     onLogEvent: (String) -> Unit = {},
@@ -44,15 +46,18 @@ fun ReadingScreen(
     isPlaying: Boolean = false,
     currentPlayingParagraph: Int = -1,  // 当前播放的段落索引
     preloadedParagraphs: Set<Int> = emptySet(),  // 已预载的段落索引
+    preloadedChapters: Set<Int> = emptySet(),
     onPlayPauseClick: () -> Unit = {},
     onStartListening: () -> Unit = {},
     onStopListening: () -> Unit = {},
     onPreviousParagraph: () -> Unit = {},
     onNextParagraph: () -> Unit = {},
+    onReadingFontSizeChange: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showControls by remember { mutableStateOf(false) }
     var showChapterList by remember { mutableStateOf(false) }
+    var showFontDialog by remember { mutableStateOf(false) }
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     
@@ -102,7 +107,9 @@ fun ReadingScreen(
     }
     
     Box(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // 主要内容区域：显示章节正文
         Column(
@@ -177,6 +184,7 @@ fun ReadingScreen(
                             text = paragraph,
                             isPlaying = index == currentPlayingParagraph,
                             isPreloaded = preloadedParagraphs.contains(index),
+                            fontSize = readingFontSize,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = AppDimens.PaddingMedium)
@@ -243,6 +251,7 @@ fun ReadingScreen(
                 onStopListening = onStopListening,
                 onPreviousParagraph = onPreviousParagraph,
                 onNextParagraph = onNextParagraph,
+                onFontSettings = { showFontDialog = true },
                 canGoPrevious = currentChapterIndex > 0,
                 canGoNext = currentChapterIndex < chapters.size - 1,
                 showTtsControls = currentPlayingParagraph >= 0  // 开始播放后显示TTS控制
@@ -266,12 +275,21 @@ fun ReadingScreen(
             ChapterListDialog(
                 chapters = chapters,
                 currentChapterIndex = currentChapterIndex,
+                preloadedChapters = preloadedChapters,
                 onChapterClick = { index ->
                     onLogEvent("ReadingScreen: select chapter index=$index")
                     onChapterClick(index)
                     showChapterList = false
                 },
                 onDismiss = { showChapterList = false }
+            )
+        }
+
+        if (showFontDialog) {
+            FontSizeDialog(
+                value = readingFontSize,
+                onValueChange = onReadingFontSizeChange,
+                onDismiss = { showFontDialog = false }
             )
         }
     }
@@ -285,6 +303,7 @@ private fun ParagraphItem(
     text: String,
     isPlaying: Boolean,
     isPreloaded: Boolean,
+    fontSize: Float,
     modifier: Modifier = Modifier
 ) {
     val backgroundColor = when {
@@ -321,9 +340,9 @@ private fun ParagraphItem(
                     is ParagraphContent.Text -> {
                         Text(
                             text = part.value,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
                             color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.8f
+                            lineHeight = (fontSize * 1.8f).sp
                         )
                     }
                 }
@@ -425,6 +444,7 @@ private fun BottomControlBar(
     onStopListening: () -> Unit,
     onPreviousParagraph: () -> Unit,
     onNextParagraph: () -> Unit,
+    onFontSettings: () -> Unit,
     canGoPrevious: Boolean,
     canGoNext: Boolean,
     showTtsControls: Boolean
@@ -544,11 +564,39 @@ private fun BottomControlBar(
                 ControlButton(
                     icon = Icons.Default.FormatSize,
                     label = "字体",
-                    onClick = { /* TODO */ }
+                    onClick = onFontSettings
                 )
             }
         }
     }
+}
+
+@Composable
+private fun FontSizeDialog(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "字体大小") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(text = "当前: ${value.toInt()}sp")
+                Slider(
+                    value = value,
+                    onValueChange = onValueChange,
+                    valueRange = 12f..28f,
+                    steps = 7
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("完成")
+            }
+        }
+    )
 }
 
 @Composable
@@ -594,6 +642,7 @@ private fun ControlButton(
 private fun ChapterListDialog(
     chapters: List<Chapter>,
     currentChapterIndex: Int,
+    preloadedChapters: Set<Int>,
     onChapterClick: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -615,7 +664,9 @@ private fun ChapterListDialog(
                     Surface(
                         onClick = { onChapterClick(index) },
                         color = if (isCurrentChapter) {
-                            MaterialTheme.customColors.gradientStart.copy(alpha = 0.1f)
+                            MaterialTheme.customColors.gradientStart.copy(alpha = 0.25f)
+                        } else if (preloadedChapters.contains(index)) {
+                            MaterialTheme.customColors.success.copy(alpha = 0.12f)
                         } else {
                             MaterialTheme.colorScheme.surface
                         },
@@ -639,13 +690,6 @@ private fun ChapterListDialog(
                                     }
                                 )
                                 
-                                if (chapter.duration.isNotEmpty()) {
-                                    Text(
-                                        text = "时长: ${chapter.duration}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.customColors.textSecondary
-                                    )
-                                }
                             }
                             
                             if (isCurrentChapter) {
