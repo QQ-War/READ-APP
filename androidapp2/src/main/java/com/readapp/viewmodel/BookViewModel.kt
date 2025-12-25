@@ -228,8 +228,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _isContentLoading = MutableStateFlow(false)
-    val isContentLoading: StateFlow<Boolean> = _isContentLoading.asStateFlow()
+    private val _isChapterListLoading = MutableStateFlow(false)
+    val isChapterListLoading: StateFlow<Boolean> = _isChapterListLoading.asStateFlow()
+
+    private val _isChapterContentLoading = MutableStateFlow(false)
+    val isChapterContentLoading: StateFlow<Boolean> = _isChapterContentLoading.asStateFlow()
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
@@ -454,7 +457,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadChapters(book: Book) {
         val bookUrl = book.bookUrl ?: return
 
-        _isContentLoading.value = true
+        _isChapterListLoading.value = true
         appendLog("加载章节列表: bookUrl=$bookUrl source=${book.origin.orEmpty()}")
         val chaptersResult = runCatching {
             repository.fetchChapterList(
@@ -467,7 +470,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }.getOrElse { throwable ->
             _errorMessage.value = throwable.message
             Log.e(TAG, "加载章节列表失败", throwable)
-            _isContentLoading.value = false
+            _isChapterListLoading.value = false
             return
         }
 
@@ -483,12 +486,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     updateChapterContent(index, cleanChapterContent(inlineContent))
                 }
             }
-            _isContentLoading.value = false
+            _isChapterListLoading.value = false
         }.onFailure { error ->
             _errorMessage.value = error.message
             appendLog("章节列表加载失败: ${error.message.orEmpty()}")
             Log.e(TAG, "加载章节列表失败", error)
-            _isContentLoading.value = false
+            _isChapterListLoading.value = false
         }
     }
 
@@ -523,12 +526,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             return cachedInMemory
         }
 
-        if (_isContentLoading.value) {
+        if (_isChapterContentLoading.value) {
             appendLog("章节内容加载中，跳过请求: index=$index")
             return _currentChapterContent.value.ifBlank { null }
         }
 
-        _isContentLoading.value = true
+        _isChapterContentLoading.value = true
         appendLog("开始请求章节内容: index=$index")
         appendLog("开始加载章节内容: index=$index url=${chapter.url}")
         appendLog(
@@ -571,7 +574,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             Log.e(TAG, "加载章节内容异常", e)
             cachedInMemory
         } finally {
-            _isContentLoading.value = false
+            _isChapterContentLoading.value = false
             if (_currentChapterContent.value.isBlank() && !cachedInMemory.isNullOrBlank()) {
                 updateChapterContent(index, cachedInMemory)
             }
@@ -642,39 +645,41 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun startPlayback() {
         viewModelScope.launch {
-            appendLog("TTS start: chapter=${_currentChapterIndex.value} paragraph=${_currentParagraphIndex.value} loading=${_isContentLoading.value}")
-            // If content is still loading, keep the intent to play and let updateChapterContent resume later.
-            _keepPlaying.value = true
+            withContext(Dispatchers.IO) {
+                appendLog("TTS start: chapter=${_currentChapterIndex.value} paragraph=${_currentParagraphIndex.value} loading=${_isChapterContentLoading.value}")
+                // If content is still loading, keep the intent to play and let updateChapterContent resume later.
+                _keepPlaying.value = true
 
-            // 确保有章节内容
-            val content = ensureCurrentChapterContent()
-            if (content.isNullOrBlank()) {
-                appendLog("TTS start blocked: content empty, loading=${_isContentLoading.value}")
-                if (!_isContentLoading.value) {
-                    _keepPlaying.value = false
+                // 确保有章节内容
+                val content = ensureCurrentChapterContent()
+                if (content.isNullOrBlank()) {
+                    appendLog("TTS start blocked: content empty, loading=${_isChapterContentLoading.value}")
+                    if (!_isChapterContentLoading.value) {
+                        _keepPlaying.value = false
+                    }
+                    return@withContext
                 }
-                return@launch
+
+                // 如果还没有段落索引，从第一段开始
+                if (_currentParagraphIndex.value < 0) {
+                    _currentParagraphIndex.value = 0
+                }
+
+                // 更新句子列表
+                currentSentences = splitTextIntoSentences(content)
+                currentParagraphs = currentSentences
+                _totalParagraphs.value = currentSentences.size.coerceAtLeast(1)
+                _keepPlaying.value = true
+
+                appendLog("TTS start service")
+                ReadAudioService.startService(appContext)
+
+                appendLog("TTS start play: chapter=${_currentChapterIndex.value} paragraph=${_currentParagraphIndex.value} segments=${currentSentences.size}")
+                startPlaybackFrom(_currentChapterIndex.value, _currentParagraphIndex.value)
+
+                // 开始观察播放进度
+                observeProgress()
             }
-
-            // 如果还没有段落索引，从第一段开始
-            if (_currentParagraphIndex.value < 0) {
-                _currentParagraphIndex.value = 0
-            }
-
-            // 更新句子列表
-            currentSentences = splitTextIntoSentences(content)
-            currentParagraphs = currentSentences
-            _totalParagraphs.value = currentSentences.size.coerceAtLeast(1)
-            _keepPlaying.value = true
-
-            appendLog("TTS start service")
-            ReadAudioService.startService(appContext)
-
-            appendLog("TTS start play: chapter=${_currentChapterIndex.value} paragraph=${_currentParagraphIndex.value} segments=${currentSentences.size}")
-            startPlaybackFrom(_currentChapterIndex.value, _currentParagraphIndex.value)
-
-            // 开始观察播放进度
-            observeProgress()
         }
     }
 

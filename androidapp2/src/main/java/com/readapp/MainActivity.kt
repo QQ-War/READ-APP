@@ -122,7 +122,7 @@ fun ReadAppMain() {
                 val chapters by bookViewModel.chapters.collectAsState()
                 val currentChapterIndex by bookViewModel.currentChapterIndex.collectAsState()
                 val currentChapterContent by bookViewModel.currentChapterContent.collectAsState()
-                val isContentLoading by bookViewModel.isContentLoading.collectAsState()
+                val isContentLoading by bookViewModel.isChapterContentLoading.collectAsState()
                 val readingFontSize by bookViewModel.readingFontSize.collectAsState()
                 val errorMessage by bookViewModel.errorMessage.collectAsState()
 
