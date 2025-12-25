@@ -12,8 +12,9 @@ data class Book(
     @SerializedName("coverUrl", alternate = ["imgUrl", "cover"])
     val coverUrl: String? = null,
     val intro: String? = null,
+    val durChapterIndex: Int? = 0,
+    val durChapterProgress: Int? = 0,
     val durChapterTitle: String? = null,
-    val durChapterIndex: Int? = null,
     val durChapterPos: Double? = null,
     val totalChapterNum: Int? = null,
     val latestChapterTitle: String? = null,

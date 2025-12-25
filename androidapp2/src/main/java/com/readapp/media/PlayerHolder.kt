@@ -10,18 +10,55 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import java.io.File
+import java.util.LinkedList
+import java.util.Queue
 
-object PlayerHolder {
-    @Volatile
-    private var player: ExoPlayer? = null
+object PlayerPool {
     @Volatile
     private var cache: SimpleCache? = null
-
     private const val MAX_CACHE_SIZE: Long = 100 * 1024 * 1024 // 100MB
+    private const val POOL_SIZE = 3 // One for playback, two for pre-buffering
 
-    fun get(context: Context): ExoPlayer {
-        return player ?: synchronized(this) {
-            player ?: buildPlayer(context.applicationContext).also { player = it }
+    private val pool: Queue<ExoPlayer> = LinkedList()
+    private val allPlayers: MutableList<ExoPlayer> = mutableListOf()
+
+    fun initialize(context: Context) {
+        if (allPlayers.isNotEmpty()) return
+        synchronized(this) {
+            if (allPlayers.isNotEmpty()) return
+            for (i in 1..POOL_SIZE) {
+                val player = buildPlayer(context.applicationContext)
+                pool.add(player)
+                allPlayers.add(player)
+            }
+        }
+    }
+
+    fun acquire(): ExoPlayer? {
+        synchronized(this) {
+            return pool.poll()
+        }
+    }
+
+    fun release(player: ExoPlayer) {
+        player.stop()
+        player.clearMediaItems()
+        synchronized(this) {
+            // Ensure we don't add a player back to the pool if it's already there
+            if (!pool.contains(player) && allPlayers.contains(player)) {
+                pool.add(player)
+            }
+        }
+    }
+
+    fun releaseAll() {
+        synchronized(this) {
+            allPlayers.forEach { 
+                it.stop()
+                it.release() 
+            }
+            pool.clear()
+            allPlayers.clear()
         }
     }
 
@@ -30,15 +67,12 @@ object PlayerHolder {
             cache ?: buildCache(context.applicationContext).also { cache = it }
         }
     }
-    
-    fun getUpstreamDataSourceFactory(context: Context): DataSource.Factory {
-        return DefaultHttpDataSource.Factory()
-    }
 
     fun getCacheDataSourceFactory(context: Context): CacheDataSource.Factory {
+        val upstreamFactory = DefaultHttpDataSource.Factory()
         return CacheDataSource.Factory()
             .setCache(getCache(context))
-            .setUpstreamDataSourceFactory(getUpstreamDataSourceFactory(context))
+            .setUpstreamDataSourceFactory(upstreamFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
 
