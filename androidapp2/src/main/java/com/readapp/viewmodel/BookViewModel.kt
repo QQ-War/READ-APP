@@ -21,7 +21,9 @@ import com.readapp.data.model.Chapter
 import com.readapp.data.model.HttpTTS
 import com.readapp.media.PlayerHolder
 import com.readapp.media.ReadAudioService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -1068,7 +1070,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private fun processPreloadQueue() {
         if (preloadingJobActive) return
         preloadingJobActive = true
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 appendLog("TTS预加载: 开始处理队列")
                 val semaphore = Semaphore(maxConcurrentPreloads)
@@ -1149,28 +1151,30 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
         appendLog("TTS预加载: 请求URL index=$sentenceIndex url=$audioUrl")
         val request = Request.Builder().url(audioUrl).build()
-        return runCatching {
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    appendLog("TTS预加载: 请求失败 index=$sentenceIndex code=${response.code} url=$audioUrl")
-                    return false
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        appendLog("TTS预加载: 请求失败 index=$sentenceIndex code=${response.code} url=$audioUrl")
+                        return@runCatching false
+                    }
+                    val contentType = response.header("Content-Type").orEmpty()
+                    val bytes = response.body?.bytes() ?: run {
+                        appendLog("TTS预加载: 响应无内容 index=$sentenceIndex url=$audioUrl")
+                        return@runCatching false
+                    }
+                    if (!contentType.contains("audio") && bytes.size < 2000) {
+                        appendLog("TTS预加载: 音频无效 index=$sentenceIndex contentType=$contentType size=${bytes.size} url=$audioUrl")
+                        return@runCatching false
+                    }
+                    appendLog("TTS预加载: 收到音频 index=$sentenceIndex contentType=$contentType size=${bytes.size}")
+                    cacheAudio(chapterIndex, sentenceIndex, bytes)
+                    true
                 }
-                val contentType = response.header("Content-Type").orEmpty()
-                val bytes = response.body?.bytes() ?: run {
-                    appendLog("TTS预加载: 响应无内容 index=$sentenceIndex url=$audioUrl")
-                    return false
-                }
-                if (!contentType.contains("audio") && bytes.size < 2000) {
-                    appendLog("TTS预加载: 音频无效 index=$sentenceIndex contentType=$contentType size=${bytes.size} url=$audioUrl")
-                    return false
-                }
-                appendLog("TTS预加载: 收到音频 index=$sentenceIndex contentType=$contentType size=${bytes.size}")
-                cacheAudio(chapterIndex, sentenceIndex, bytes)
-                true
+            }.getOrElse { error ->
+                appendLog("TTS预加载: 请求异常 index=$sentenceIndex error=${error}")
+                false
             }
-        }.getOrElse { error ->
-            appendLog("TTS预加载: 请求异常 index=$sentenceIndex error=${error}")
-            false
         }
     }
 
