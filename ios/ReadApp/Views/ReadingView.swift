@@ -76,31 +76,58 @@ struct ReadingView: View {
                     }
                     .overlay {
                         GeometryReader { geometry in
-                            let doubleTap = SpatialTapGesture(count: 2)
-                                .onEnded { value in
-                                    let tapX = value.location.x
-                                    let width = geometry.size.width
-                                    if tapX >= width / 3, tapX < width * 2 / 3 {
-                                        withAnimation(.easeInOut(duration: 0.3)) {
-                                            showUIControls.toggle()
+                            if #available(iOS 17.0, *) {
+                                let doubleTap = SpatialTapGesture(count: 2)
+                                    .onEnded { value in
+                                        let tapX = value.location.x
+                                        let width = geometry.size.width
+                                        if tapX >= width / 3, tapX < width * 2 / 3 {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                showUIControls.toggle()
+                                            }
                                         }
                                     }
-                                }
-                            let singleTap = SpatialTapGesture(count: 1)
-                                .onEnded { value in
-                                    let tapX = value.location.x
-                                    let width = geometry.size.width
-                                    if tapX < width / 3 {
-                                        goToPreviousPage()
-                                    } else if tapX < width * 2 / 3 {
-                                        goToNextPage()
-                                    } else {
-                                        goToNextPage()
+                                let singleTap = SpatialTapGesture(count: 1)
+                                    .onEnded { value in
+                                        let tapX = value.location.x
+                                        let width = geometry.size.width
+                                        if tapX < width / 3 {
+                                            goToPreviousPage()
+                                        } else if tapX < width * 2 / 3 {
+                                            goToNextPage()
+                                        } else {
+                                            goToNextPage()
+                                        }
                                     }
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .gesture(ExclusiveGesture(doubleTap, singleTap))
+                            } else {
+                                // Fallback for iOS < 17: use three tappable regions to mimic left/middle/right taps
+                                HStack(spacing: 0) {
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            goToPreviousPage()
+                                        }
+                                        .frame(width: geometry.size.width / 3)
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                showUIControls.toggle()
+                                            }
+                                        }
+                                        .frame(width: geometry.size.width / 3)
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            goToNextPage()
+                                        }
+                                        .frame(width: geometry.size.width / 3)
                                 }
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .gesture(ExclusiveGesture(doubleTap, singleTap))
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
                         }
                     }
                 } else {
