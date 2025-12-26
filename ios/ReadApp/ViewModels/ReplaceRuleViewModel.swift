@@ -15,7 +15,7 @@ class ReplaceRuleViewModel: ObservableObject {
         
         do {
             let fetchedRules = try await apiService.fetchReplaceRules()
-            self.rules = fetchedRules.sorted(by: { $0.ruleorder < $1.ruleorder })
+            self.rules = fetchedRules.sorted(by: { ($0.ruleorder ?? 0) < ($1.ruleorder ?? 0) })
         } catch {
             self.errorMessage = "加载规则失败: \(error.localizedDescription)"
             LogManager.shared.log("获取净化规则失败: \(error)", category: "错误")

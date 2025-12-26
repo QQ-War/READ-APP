@@ -172,7 +172,7 @@ struct ReadingView: View {
     // MARK: - 内容处理
     private func applyReplaceRules(to content: String) -> String {
         var processedContent = content
-        let enabledRules = replaceRuleViewModel.rules.filter { $0.isEnabled }
+        let enabledRules = replaceRuleViewModel.rules.filter { $0.isEnabled == true }
         
         for rule in enabledRules {
             do {
