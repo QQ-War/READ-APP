@@ -76,19 +76,31 @@ struct ReadingView: View {
                     }
                     .overlay {
                         GeometryReader { geometry in
-                            HStack(spacing: 0) {
-                                Color.clear
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        goToPreviousPage()
+                            let doubleTap = SpatialTapGesture(count: 2)
+                                .onEnded { value in
+                                    let tapX = value.location.x
+                                    let width = geometry.size.width
+                                    if tapX >= width / 3, tapX < width * 2 / 3 {
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            showUIControls.toggle()
+                                        }
                                     }
-                                Color.clear
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
+                                }
+                            let singleTap = SpatialTapGesture(count: 1)
+                                .onEnded { value in
+                                    let tapX = value.location.x
+                                    let width = geometry.size.width
+                                    if tapX < width / 3 {
+                                        goToPreviousPage()
+                                    } else if tapX < width * 2 / 3 {
+                                        goToNextPage()
+                                    } else {
                                         goToNextPage()
                                     }
-                                    .frame(width: geometry.size.width * 2 / 3)
-                            }
+                                }
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .gesture(ExclusiveGesture(doubleTap, singleTap))
                         }
                     }
                 } else {

@@ -38,7 +38,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -144,6 +145,7 @@ fun ReadingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(
+                    enabled = readingMode == ReadingMode.Vertical,
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
                 ) {
@@ -270,42 +272,52 @@ fun ReadingScreen(
                                 ?: 0
                         }
 
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .weight(1f)
-                                    .clickable(
-                                        indication = null,
-                                        interactionSource = remember { MutableInteractionSource() }
-                                    ) {
-                                        coroutineScope.launch {
-                                            if (pagerState.currentPage > 0) {
-                                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                            } else if (currentChapterIndex > 0) {
-                                                onChapterClick(currentChapterIndex - 1)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(pagerState.currentPage, paginatedPages, currentChapterIndex) {
+                                    detectTapGestures(
+                                        onTap = { offset ->
+                                            val width = size.width
+                                            when {
+                                                offset.x < width / 3f -> {
+                                                    coroutineScope.launch {
+                                                        if (pagerState.currentPage > 0) {
+                                                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                                        } else if (currentChapterIndex > 0) {
+                                                            onChapterClick(currentChapterIndex - 1)
+                                                        }
+                                                    }
+                                                }
+                                                offset.x < width * 2f / 3f -> {
+                                                    coroutineScope.launch {
+                                                        if (pagerState.currentPage < paginatedPages.lastIndex) {
+                                                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                                        } else if (currentChapterIndex < chapters.size - 1) {
+                                                            onChapterClick(currentChapterIndex + 1)
+                                                        }
+                                                    }
+                                                }
+                                                else -> {
+                                                    coroutineScope.launch {
+                                                        if (pagerState.currentPage < paginatedPages.lastIndex) {
+                                                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                                        } else if (currentChapterIndex < chapters.size - 1) {
+                                                            onChapterClick(currentChapterIndex + 1)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        onDoubleTap = { offset ->
+                                            val width = size.width
+                                            if (offset.x >= width / 3f && offset.x < width * 2f / 3f) {
+                                                showControls = !showControls
                                             }
                                         }
-                                    }
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .weight(2f)
-                                    .clickable(
-                                        indication = null,
-                                        interactionSource = remember { MutableInteractionSource() }
-                                    ) {
-                                        coroutineScope.launch {
-                                            if (pagerState.currentPage < paginatedPages.lastIndex) {
-                                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                            } else if (currentChapterIndex < chapters.size - 1) {
-                                                onChapterClick(currentChapterIndex + 1)
-                                            }
-                                        }
-                                    }
-                            )
-                        }
+                                    )
+                                }
+                        )
                     }
                 }
             }
