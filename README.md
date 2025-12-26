@@ -4,6 +4,10 @@
 > 
 > 这是 [autobcb/read](https://github.com/autobcb/read) 的第三方 iOS 听书应用，专注于提供优质的语音朗读体验。
 
+## Android
+
+Android 客户端位于 `android/`，旧的 `androidApp` 已移除。构建/运行说明见 `android/README.md`。
+
 ## 项目简介
 
 ReadApp 是一个专为 iOS 平台设计的轻阅读听书客户端，对接 [轻阅读后端](https://github.com/autobcb/read) API，提供流畅的在线听书体验。

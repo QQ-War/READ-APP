@@ -24,14 +24,16 @@
 - 调试与缓存管理：iOS 提供日志导出/清空、本地章节缓存清除等工具；安卓端暂无日志导出或缓存清理界面。
 
 ## 目录结构
-- `app/src/main/java/com/readapp/android/model`：数据模型，与 iOS 端字段保持一致
-- `app/src/main/java/com/readapp/android/data`：Retrofit API 定义、回退仓库、DataStore 封装
-- `app/src/main/java/com/readapp/android/ui`：主界面、导航、ViewModel
-- `app/src/main/java/com/readapp/android/ui/screens`：登录与书架界面
-- `app/src/main/java/com/readapp/android/ui/theme`：Compose 主题定义
+- `src/main/java/com/readapp/data/model`：数据模型，与 iOS 端字段保持一致
+- `src/main/java/com/readapp/data`：Retrofit API 定义、回退仓库、DataStore 封装
+- `src/main/java/com/readapp/media`：播放服务、播放器管理、TTS 预加载与缓存
+- `src/main/java/com/readapp/viewmodel`：书籍、阅读、设置等 ViewModel
+- `src/main/java/com/readapp/ui`：主界面、导航、界面状态
+- `src/main/java/com/readapp/ui/screens`：登录、书架与阅读界面
+- `src/main/java/com/readapp/ui/theme`：Compose 主题定义
 
 ## 运行
-1. 使用 Android Studio Hedgehog 或更高版本打开 `androidApp` 目录。
-2. 在 `app/build.gradle.kts` 中已启用 Compose 与所需依赖，首次同步会自动下载。
+1. 使用 Android Studio Hedgehog 或更高版本打开 `android` 目录。
+2. 在 `build.gradle.kts` 中已启用 Compose 与所需依赖，首次同步会自动下载。
 3. 运行前在登录页填写服务器地址（默认 `http://127.0.0.1:8080/api/5`），如有公网地址可同时填写，保存后登录即可刷新书架。
-4. CI 生成的 `app-release.apk` 使用 Android 默认 debug keystore 进行签名，可直接在设备上安装验证。
+4. CI 生成的 `apk` 位于 `android/build/outputs/apk/`，使用 Android 默认 debug keystore 进行签名，可直接在设备上安装验证。
