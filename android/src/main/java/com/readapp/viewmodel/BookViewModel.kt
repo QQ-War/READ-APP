@@ -905,7 +905,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }.map { it.second } else filtered
         _books.value = sorted
     }
-    private fun isPunctuationOnly(sentence: String): Boolean = sentence.trim().all { it in "锛屻€傦紒锛燂紱銆佲€溾€漒"'鈥︹€?路 " }
+    private fun isPunctuationOnly(sentence: String): Boolean {
+        val punctuation = "，。！？；、\"“”‘’…—·"
+        return sentence.trim().all { it in punctuation }
+    }
     private fun parseSpeakerMapping(raw: String): Map<String, String> { if (raw.isBlank()) return emptyMap(); return runCatching { val obj = JSONObject(raw); obj.keys().asSequence().associateWith { key -> obj.optString(key) } }.getOrDefault(emptyMap()) }
     private fun serializeSpeakerMapping(mapping: Map<String, String>): String { val obj = JSONObject(); mapping.forEach { (key, value) -> obj.put(key, value) }; return obj.toString() }
     fun exportLogs(context: android.content.Context): android.net.Uri? { if (!logFile.exists()) return null; return runCatching { val exportFile = File(context.cacheDir, LOG_EXPORT_NAME); logFile.copyTo(exportFile, overwrite = true); androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", exportFile) }.getOrNull() }
