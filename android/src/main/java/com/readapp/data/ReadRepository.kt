@@ -138,7 +138,7 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
         val normalized = ensureTrailingSlash(baseUrl)
         return "${normalized}tts".toHttpUrlOrNull()?.newBuilder()
             ?.addQueryParameter("accessToken", accessToken)
-            ?.addQueryPajrameter("id", ttsId)
+            ?.addQueryParameter("id", ttsId)
             ?.addQueryParameter("speakText", text)
             ?.addQueryParameter("speechRate", speechRate.toString())
             ?.build()

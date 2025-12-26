@@ -910,5 +910,30 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private fun serializeSpeakerMapping(mapping: Map<String, String>): String { val obj = JSONObject(); mapping.forEach { (key, value) -> obj.put(key, value) }; return obj.toString() }
     fun exportLogs(context: android.content.Context): android.net.Uri? { if (!logFile.exists()) return null; return runCatching { val exportFile = File(context.cacheDir, LOG_EXPORT_NAME); logFile.copyTo(exportFile, overwrite = true); androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", exportFile) }.getOrNull() }
     fun clearLogs() { runCatching { if (logFile.exists()) { logFile.writeText("") } } }
-    private fun appendLog(message: String) { if (!_loggingEnabled.value) return; val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date()); val line = "[$timestamp] $message\n"; runCatching { logFile.appendText(line) } }
+    private fun currentServerEndpoint(): String {
+        return _serverAddress.value
+    }
+
+    private fun formatTime(milliseconds: Long): String {
+        val totalSeconds = milliseconds / 1000
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return String.format("%02d:%02d", minutes, seconds)
+    }
+
+    private fun resolveTtsIdForSentence(sentence: String, isChapterTitle: Boolean): String? {
+        // Check speaker mapping first
+        _speakerTtsMapping.value.forEach { (speaker, ttsId) ->
+            if (sentence.contains(speaker, ignoreCase = true)) {
+                return ttsId
+            }
+        }
+
+        // Then consider narration/dialogue if available
+        if (isChapterTitle) {
+            return _narrationTtsEngine.value.ifBlank { _selectedTtsEngine.value.ifBlank { null } }
+        } else {
+            return _dialogueTtsEngine.value.ifBlank { _narrationTtsEngine.value.ifBlank { _selectedTtsEngine.value.ifBlank { null } } }
+        }
+    }
 }
