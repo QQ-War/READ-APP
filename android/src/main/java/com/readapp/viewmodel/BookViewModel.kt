@@ -266,7 +266,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    private fun startPlayback() {
+    private fun startPlayback(startParagraphIndex: Int = -1) {
         viewModelScope.launch {
             _isChapterContentLoading.value = true
             val content = withContext(Dispatchers.IO) { ensureCurrentChapterContent() }
@@ -281,9 +281,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             currentSentences = parseParagraphs(content)
             currentParagraphs = currentSentences
             _totalParagraphs.value = currentSentences.size.coerceAtLeast(1)
-            if (_currentParagraphIndex.value < 0) {
-                _currentParagraphIndex.value = 0
+            val normalizedStart = if (startParagraphIndex in currentSentences.indices) {
+                startParagraphIndex
+            } else if (_currentParagraphIndex.value >= 0) {
+                _currentParagraphIndex.value
+            } else {
+                0
             }
+            _currentParagraphIndex.value = normalizedStart
 
             ReadAudioService.startService(appContext) // Ensure service is running
             speakParagraph(_currentParagraphIndex.value)
@@ -536,7 +541,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startTts() { startPlayback() }
+    fun startTts(startParagraphIndex: Int = -1) { startPlayback(startParagraphIndex) }
     fun stopTts() { stopPlayback("user") }
     
     private fun observeProgress() {
@@ -937,5 +942,3 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
-
-

@@ -34,11 +34,11 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.readapp.data.ReadingMode
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -60,7 +60,7 @@ fun ReadingScreen(
     preloadedParagraphs: Set<Int> = emptySet(),  // 已预载的段落索引
     preloadedChapters: Set<Int> = emptySet(),
     onPlayPauseClick: () -> Unit = {},
-    onStartListening: () -> Unit = {},
+    onStartListening: (Int) -> Unit = {},
     onStopListening: () -> Unit = {},
     onPreviousParagraph: () -> Unit = {},
     onNextParagraph: () -> Unit = {},
@@ -72,6 +72,7 @@ fun ReadingScreen(
     var showControls by remember { mutableStateOf(false) }
     var showChapterList by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
+    var currentPageStartIndex by remember { mutableStateOf(0) }
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val latestOnExit by rememberUpdatedState(onExit)
@@ -231,32 +232,79 @@ fun ReadingScreen(
                         lineHeight = (readingFontSize * 1.8f).sp
                     )
                     
-                    val paginatedText = rememberPaginatedText(
-                        text = displayContent,
+                    val paginatedPages = rememberPaginatedText(
+                        paragraphs = paragraphs,
                         style = style,
                         constraints = constraints
                     )
+                    val pagerState = rememberPagerState { paginatedPages.size.coerceAtLeast(1) }
 
-                    HorizontalPager(
-                        state = rememberPagerState { paginatedText.size },
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        val pageText = paginatedText.getOrNull(page) ?: ""
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                start = AppDimens.PaddingLarge,
-                                end = AppDimens.PaddingLarge,
-                                top = if (showControls) 80.dp else AppDimens.PaddingLarge,
-                                bottom = if (showControls) 120.dp else AppDimens.PaddingLarge
-                            )
-                        ) {
-                            item {
-                                Text(
-                                    text = pageText,
-                                    style = style
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize()
+                        ) { page ->
+                            val pageText = paginatedPages.getOrNull(page)?.text.orEmpty()
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(
+                                    start = AppDimens.PaddingLarge,
+                                    end = AppDimens.PaddingLarge,
+                                    top = if (showControls) 80.dp else AppDimens.PaddingLarge,
+                                    bottom = if (showControls) 120.dp else AppDimens.PaddingLarge
                                 )
+                            ) {
+                                item {
+                                    Text(
+                                        text = pageText,
+                                        style = style
+                                    )
+                                }
                             }
+                        }
+
+                        LaunchedEffect(pagerState.currentPage, paginatedPages) {
+                            currentPageStartIndex = paginatedPages
+                                .getOrNull(pagerState.currentPage)
+                                ?.startParagraphIndex
+                                ?: 0
+                        }
+
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .weight(1f)
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) {
+                                        coroutineScope.launch {
+                                            if (pagerState.currentPage > 0) {
+                                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                            } else if (currentChapterIndex > 0) {
+                                                onChapterClick(currentChapterIndex - 1)
+                                            }
+                                        }
+                                    }
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .weight(2f)
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) {
+                                        coroutineScope.launch {
+                                            if (pagerState.currentPage < paginatedPages.lastIndex) {
+                                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                            } else if (currentChapterIndex < chapters.size - 1) {
+                                                onChapterClick(currentChapterIndex + 1)
+                                            }
+                                        }
+                                    }
+                            )
                         }
                     }
                 }
@@ -309,7 +357,12 @@ fun ReadingScreen(
                     } else {
                         if (currentPlayingParagraph < 0) {
                             // 第一次点击，开始听书
-                            onStartListening()
+                            val pageStart = if (readingMode == ReadingMode.Horizontal) {
+                                currentPageStartIndex
+                            } else {
+                                0
+                            }
+                            onStartListening(pageStart)
                         } else {
                             // 继续播放
                             onPlayPauseClick()
@@ -401,23 +454,25 @@ private fun ParagraphItem(
 
 @Composable
 private fun rememberPaginatedText(
-    text: String,
+    paragraphs: List<String>,
     style: TextStyle,
     constraints: Constraints
-): List<String> {
+): List<PaginatedPage> {
     val textMeasurer = rememberTextMeasurer()
 
-    return remember(text, style, constraints) {
-        if (text.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) {
+    return remember(paragraphs, style, constraints) {
+        if (paragraphs.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) {
             return@remember emptyList()
         }
 
-        val pages = mutableListOf<String>()
+        val paragraphStartIndices = paragraphStartIndices(paragraphs)
+        val fullText = fullContent(paragraphs)
+        val pages = mutableListOf<Pair<Int, String>>()
         var currentOffset = 0
 
-        while (currentOffset < text.length) {
+        while (currentOffset < fullText.length) {
             val result = textMeasurer.measure(
-                text = AnnotatedString(text.substring(currentOffset)),
+                text = AnnotatedString(fullText.substring(currentOffset)),
                 style = style,
                 constraints = Constraints(
                     maxWidth = constraints.maxWidth,
@@ -425,16 +480,53 @@ private fun rememberPaginatedText(
                 )
             )
 
-            val endOffset = currentOffset + result.lastVisibleOffset
+            val endOffset = currentOffset + lastVisibleOffset(result)
             if (endOffset <= currentOffset) {
                 break
             }
-            pages.add(text.substring(currentOffset, endOffset))
+            pages.add(currentOffset to fullText.substring(currentOffset, endOffset))
             currentOffset = endOffset
         }
-        pages
+        pages.map { (startOffset, pageText) ->
+            val startParagraphIndex = paragraphIndexForOffset(startOffset, paragraphStartIndices)
+            PaginatedPage(text = pageText, startParagraphIndex = startParagraphIndex)
+        }
     }
 }
+
+private data class PaginatedPage(
+    val text: String,
+    val startParagraphIndex: Int
+)
+
+private fun fullContent(paragraphs: List<String>): String {
+    return paragraphs.joinToString(separator = "\n\n") { it.trim() }
+}
+
+private fun paragraphStartIndices(paragraphs: List<String>): List<Int> {
+    val starts = mutableListOf<Int>()
+    var currentIndex = 0
+    paragraphs.forEachIndexed { index, paragraph ->
+        starts.add(currentIndex)
+        currentIndex += paragraph.trim().length
+        if (index < paragraphs.lastIndex) {
+            currentIndex += 2
+        }
+    }
+    return starts
+}
+
+private fun paragraphIndexForOffset(offset: Int, starts: List<Int>): Int {
+    return starts.indexOfLast { it <= offset }.coerceAtLeast(0)
+}
+
+private fun lastVisibleOffset(result: androidx.compose.ui.text.TextLayoutResult): Int {
+    if (result.lineCount == 0) {
+        return 0
+    }
+    return result.getLineEnd(result.lineCount - 1, visibleEnd = true)
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

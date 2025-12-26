@@ -164,8 +164,8 @@ fun ReadAppMain() {
                         onPlayPauseClick = {
                             bookViewModel.togglePlayPause()
                         },
-                        onStartListening = {
-                            bookViewModel.startTts()
+                        onStartListening = { startIndex ->
+                            bookViewModel.startTts(startIndex)
                         },
                         onStopListening = {
                             bookViewModel.stopTts()
