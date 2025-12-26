@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreText
 
 struct ReadingView: View {
     let book: Book
@@ -20,7 +21,7 @@ struct ReadingView: View {
     @State private var lastTTSSentenceIndex: Int?
     @State private var showFontSettings = false
     @State private var currentPageIndex: Int = 0
-    @State private var paginatedContent: [String] = []
+    @State private var paginatedPages: [PaginatedPage] = []
     
     init(book: Book) {
         self.book = book
@@ -38,7 +39,7 @@ struct ReadingView: View {
                 if preferences.readingMode == .horizontal && !ttsManager.isPlaying {
                     GeometryReader { geometry in
                         TabView(selection: $currentPageIndex) {
-                            ForEach(Array(paginatedContent.enumerated()), id: \.offset) { index, pageText in
+                            ForEach(Array(paginatedPages.enumerated()), id: \.offset) { index, page in
                                 ScrollView {
                                     VStack(alignment: .leading, spacing: 16) {
                                         if showUIControls {
@@ -49,7 +50,7 @@ struct ReadingView: View {
                                                     .padding(.bottom, 8)
                                             }
                                         }
-                                        Text(pageText)
+                                        Text(page.text)
                                             .font(.system(size: preferences.fontSize))
                                             .lineSpacing(preferences.lineSpacing)
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -61,46 +62,33 @@ struct ReadingView: View {
                         }
                         .tabViewStyle(PageTabViewStyle())
                         .onAppear {
-                            paginatedContent = TextPaginator.paginate(
-                                contentSentences,
-                                in: geometry.size,
-                                fontSize: preferences.fontSize,
-                                lineSpacing: preferences.lineSpacing
-                            )
-                            currentPageIndex = 0
+                            repaginateContent(in: geometry.size)
                         }
                         .onChange(of: contentSentences) { _ in
-                            paginatedContent = TextPaginator.paginate(
-                                contentSentences,
-                                in: geometry.size,
-                                fontSize: preferences.fontSize,
-                                lineSpacing: preferences.lineSpacing
-                            )
-                            currentPageIndex = 0
+                            repaginateContent(in: geometry.size)
                         }
                         .onChange(of: preferences.fontSize) { _ in
-                            paginatedContent = TextPaginator.paginate(
-                                contentSentences,
-                                in: geometry.size,
-                                fontSize: preferences.fontSize,
-                                lineSpacing: preferences.lineSpacing
-                            )
-                            currentPageIndex = 0
+                            repaginateContent(in: geometry.size)
                         }
                         .onChange(of: preferences.lineSpacing) { _ in
-                            paginatedContent = TextPaginator.paginate(
-                                contentSentences,
-                                in: geometry.size,
-                                fontSize: preferences.fontSize,
-                                lineSpacing: preferences.lineSpacing
-                            )
-                            currentPageIndex = 0
+                            repaginateContent(in: geometry.size)
                         }
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showUIControls.toggle()
+                    .overlay {
+                        GeometryReader { geometry in
+                            HStack(spacing: 0) {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        goToPreviousPage()
+                                    }
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        goToNextPage()
+                                    }
+                                    .frame(width: geometry.size.width * 2 / 3)
+                            }
                         }
                     }
                 } else {
@@ -367,7 +355,11 @@ struct ReadingView: View {
         showUIControls = true
         
         // 优先使用最后播放的索引，其次是服务器加载的索引
-        let startIndex = lastTTSSentenceIndex ?? Int(book.durChapterPos ?? 0)
+        let pageStartIndex = paginatedPages.indices.contains(currentPageIndex)
+            ? paginatedPages[currentPageIndex].startSentenceIndex
+            : nil
+        let fallbackIndex = lastTTSSentenceIndex ?? Int(book.durChapterPos ?? 0)
+        let startIndex = preferences.readingMode == .horizontal ? (pageStartIndex ?? fallbackIndex) : fallbackIndex
         
         ttsManager.startReading(
             text: currentContent,
@@ -417,16 +409,47 @@ struct ReadingView: View {
             }
         }
     }
+
+    private func repaginateContent(in size: CGSize) {
+        paginatedPages = TextPaginator.paginate(
+            contentSentences,
+            in: size,
+            fontSize: preferences.fontSize,
+            lineSpacing: preferences.lineSpacing
+        )
+        currentPageIndex = 0
+    }
+
+    private func goToPreviousPage() {
+        if currentPageIndex > 0 {
+            withAnimation { currentPageIndex -= 1 }
+        } else if currentChapterIndex > 0 {
+            previousChapter()
+        }
+    }
+
+    private func goToNextPage() {
+        if currentPageIndex < paginatedPages.count - 1 {
+            withAnimation { currentPageIndex += 1 }
+        } else if currentChapterIndex < chapters.count - 1 {
+            nextChapter()
+        }
+    }
 }
 
 // MARK: - Text Paginator
+struct PaginatedPage {
+    let text: String
+    let startSentenceIndex: Int
+}
+
 struct TextPaginator {
     static func paginate(
         _ sentences: [String],
         in size: CGSize,
         fontSize: CGFloat,
         lineSpacing: CGFloat
-    ) -> [String] {
+    ) -> [PaginatedPage] {
         guard !sentences.isEmpty, size.width > 0, size.height > 0 else { return [] }
 
         let font = UIFont.systemFont(ofSize: fontSize)
@@ -438,35 +461,56 @@ struct TextPaginator {
             .paragraphStyle: paragraphStyle
         ]
 
-        var pages: [String] = []
-        var currentPageText = ""
+        let paragraphStarts = paragraphStartIndices(sentences: sentences)
+        let fullText = fullContent(sentences: sentences)
+        let attributedText = NSAttributedString(string: fullText, attributes: attributes)
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedText)
+        let bounds = CGRect(origin: .zero, size: size)
 
-        for sentence in sentences {
-            let sentenceWithIndent = "    " + sentence.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n"
-            let prospectiveText = currentPageText + sentenceWithIndent
-
-            let prospectiveHeight = prospectiveText.boundingRect(
-                with: CGSize(width: size.width, height: .greatestFiniteMagnitude),
-                options: .usesLineFragmentOrigin,
-                attributes: attributes,
-                context: nil
-            ).height
-
-            if prospectiveHeight > size.height {
-                if !currentPageText.isEmpty {
-                    pages.append(currentPageText)
-                }
-                currentPageText = sentenceWithIndent
-            } else {
-                currentPageText = prospectiveText
-            }
-        }
-
-        if !currentPageText.isEmpty {
-            pages.append(currentPageText)
+        var pages: [PaginatedPage] = []
+        var location = 0
+        while location < attributedText.length {
+            let range = CFRange(location: location, length: attributedText.length - location)
+            let path = CGPath(rect: bounds, transform: nil)
+            let frame = CTFramesetterCreateFrame(framesetter, range, path, nil)
+            let visibleRange = CTFrameGetVisibleStringRange(frame)
+            let length = visibleRange.length
+            if length == 0 { break }
+            let pageRange = NSRange(location: location, length: length)
+            let pageText = (fullText as NSString).substring(with: pageRange)
+            let startSentenceIndex = sentenceIndex(for: location, in: paragraphStarts)
+            pages.append(PaginatedPage(text: pageText, startSentenceIndex: startSentenceIndex))
+            location += length
         }
 
         return pages
+    }
+
+    private static func fullContent(sentences: [String]) -> String {
+        sentences
+            .map { "    " + $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .joined(separator: "\n\n")
+    }
+
+    private static func paragraphStartIndices(sentences: [String]) -> [Int] {
+        var starts: [Int] = []
+        var currentIndex = 0
+        for (idx, sentence) in sentences.enumerated() {
+            starts.append(currentIndex)
+            let paragraphText = "    " + sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+            currentIndex += paragraphText.utf16.count
+            if idx < sentences.count - 1 {
+                currentIndex += 2
+            }
+        }
+        return starts
+    }
+
+    private static func sentenceIndex(for location: Int, in starts: [Int]) -> Int {
+        guard let index = starts.lastIndex(where: { $0 <= location }) else {
+            return 0
+        }
+        return index
     }
 }
 
