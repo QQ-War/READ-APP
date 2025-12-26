@@ -12,13 +12,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Make build script executable
-        run: chmod +x build_unsigned_ipa.sh
+        run: chmod +x ios/build_unsigned_ipa.sh
 
       - name: Build unsigned IPA
-        run: ./build_unsigned_ipa.sh
+        run: ios/build_unsigned_ipa.sh
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ReadApp-unsigned-ipa
-          path: build/ReadApp_unsigned.ipa
+          path: ios/build/ReadApp_unsigned.ipa

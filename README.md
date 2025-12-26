@@ -3,7 +3,7 @@
 ReadApp 是轻阅读后端（https://github.com/autobcb/read）的 iOS/Android 客户端实现，聚焦“听书 + 段落级阅读”的体验。
 
 ## 目录结构
-- `ReadApp/`：iOS 客户端（Xcode 项目源码）
+- `ios/`：iOS 客户端（Xcode 项目源码）
 - `android/`：Android 客户端（Jetpack Compose）
 - `design/`：设计稿与说明
 
@@ -15,7 +15,7 @@ ReadApp 是轻阅读后端（https://github.com/autobcb/read）的 iOS/Android �
 - 后台播放与系统媒体控制
 
 ## 入口说明
-- iOS：`ReadApp/`，使用 Xcode 打开 `ReadApp.xcodeproj`
+- iOS：`ios/`，使用 Xcode 打开 `ReadApp.xcodeproj`
 - Android：`android/`，使用 Android Studio 打开该目录
 
 更多细节见：
