@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import ReplaceRuleViewModel
 
 struct ReadingView: View {
     let book: Book
