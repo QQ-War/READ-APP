@@ -12,180 +12,23 @@ struct SettingsView: View {
     @State private var logFileURL: URL?
     @State private var showClearLogsAlert = false
     @State private var showClearCacheAlert = false
-    
+
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("用户信息")) {
-                    HStack {
-                        Text("用户名")
-                        Spacer()
-                        Text(preferences.username)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("局域网服务器")
-                            Spacer()
-                            Text(preferences.serverURL)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-                        
-                        if !preferences.publicServerURL.isEmpty {
-                            HStack {
-                                Text("公网服务器")
-                                    .font(.caption)
-                                Spacer()
-                                Text(preferences.publicServerURL)
-                                    .font(.caption2)
-                                    .foregroundColor(.green)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    
-                    Button(action: { showLogoutAlert = true }) {
-                        HStack {
-                            Spacer()
-                            Text("退出登录")
-                                .foregroundColor(.red)
-                            Spacer()
-                        }
-                    }
-                }
-                
-                Section(header: Text("阅读设置")) {
-                    HStack {
-                        Text("字体大小")
-                        Spacer()
-                        Text("\(Int(preferences.fontSize))")
-                    }
-                    Slider(value: $preferences.fontSize, in: 12...30, step: 1)
-                    
-                    HStack {
-                        Text("行间距")
-                        Spacer()
-                        Text("\(Int(preferences.lineSpacing))")
-                    }
-                    Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
-                }
-                
-                Section(header: Text("听书设置")) {
-                    Button(action: { showTTSSelection = true }) {
-                        HStack {
-                            Text("TTS 引擎")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            if preferences.selectedTTSId.isEmpty && preferences.narrationTTSId.isEmpty {
-                                Text("未选择")
-                                    .foregroundColor(.orange)
-                            } else {
-                                Text(ttsSummary.isEmpty ? "已选择" : ttsSummary)
-                                    .foregroundColor(.secondary)
-                            }
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    HStack {
-                        Text("语速")
-                        Spacer()
-                        Text(String(format: "%.0f", preferences.speechRate))
-                    }
-                    Slider(value: $preferences.speechRate, in: 5...50, step: 1)
-                    
-                    Text("语速范围: 5-50 (建议 10-20)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Stepper(value: $preferences.ttsPreloadCount, in: 0...50) {
-                        HStack {
-                            Text("预载段数")
-                            Spacer()
-                            Text("\(preferences.ttsPreloadCount) 段")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    Text("提前下载接下来的音频段，减少等待时间。设置越大，切换章节越流畅（建议 10-20 段）")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Section(header: Text("内容净化")) {
-                    NavigationLink(destination: ReplaceRuleListView()) {
-                        Text("净化规则管理")
-                    }
-                }
-                
-                Section(header: Text("书架设置")) {
-                    Toggle("最近阅读排序", isOn: $preferences.bookshelfSortByRecent)
-                    Text("开启后按最后阅读时间排序，关闭则按加入书架时间排序")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Section(header: Text("调试工具")) {
-                    HStack {
-                        Text("日志记录")
-                        Spacer()
-                        Text("\(LogManager.shared.getLogCount()) 条")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Button(action: exportLogs) {
-                        HStack {
-                            Image(systemName: "square.and.arrow.up")
-                            Text("导出日志")
-                            Spacer()
-                        }
-                        .foregroundColor(.blue)
-                    }
-                    
-                    Button(action: { showClearLogsAlert = true }) {
-                        HStack {
-                            Image(systemName: "trash")
-                            Text("清空日志")
-                            Spacer()
-                        }
-                        .foregroundColor(.red)
-                    }
-                    
-                    Button(action: { showClearCacheAlert = true }) {
-                        HStack {
-                            Image(systemName: "trash.circle")
-                            Text("清除本地缓存")
-                            Spacer()
-                        }
-                        .foregroundColor(.orange)
-                    }
-                }
-                
-                Section {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 4) {
-                            Text("服务器地址示例: http://192.168.1.100:8080")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text("使用后端 HttpTTS 引擎进行朗读")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
-                        Spacer()
-                    }
-                }
+                userSection
+                readingSection
+                ttsSection
+                replaceRuleSection
+                bookshelfSection
+                debugSection
+                footerSection
             }
-            .navigationTitle("设置")
+            .navigationTitle("??")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") {
+                    Button("??") {
                         dismiss()
                     }
                 }
@@ -194,29 +37,29 @@ struct SettingsView: View {
                 TTSSelectionView()
                     .environmentObject(apiService)
             }
-            .alert("退出登录", isPresented: $showLogoutAlert) {
-                Button("取消", role: .cancel) { }
-                Button("退出", role: .destructive) {
+            .alert("????", isPresented: $showLogoutAlert) {
+                Button("??", role: .cancel) { }
+                Button("??", role: .destructive) {
                     handleLogout()
                 }
             } message: {
-                Text("确定要退出登录吗？")
+                Text("?????????")
             }
-            .alert("清空日志", isPresented: $showClearLogsAlert) {
-                Button("取消", role: .cancel) { }
-                Button("清空", role: .destructive) {
+            .alert("????", isPresented: $showClearLogsAlert) {
+                Button("??", role: .cancel) { }
+                Button("??", role: .destructive) {
                     LogManager.shared.clearLogs()
                 }
             } message: {
-                Text("确定要清空所有日志吗？")
+                Text("???????????")
             }
-            .alert("清除本地缓存", isPresented: $showClearCacheAlert) {
-                Button("取消", role: .cancel) { }
-                Button("清除", role: .destructive) {
+            .alert("??????", isPresented: $showClearCacheAlert) {
+                Button("??", role: .cancel) { }
+                Button("??", role: .destructive) {
                     apiService.clearLocalCache()
                 }
             } message: {
-                Text("确定要清除所有本地章节内容缓存吗？")
+                Text("?????????????????")
             }
             .sheet(isPresented: $showShareSheet) {
                 if let url = logFileURL {
@@ -248,22 +91,207 @@ struct SettingsView: View {
             }
         }
     }
-    
+
+    @ViewBuilder
+    private var userSection: some View {
+        Section(header: Text("????")) {
+            HStack {
+                Text("???")
+                Spacer()
+                Text(preferences.username)
+                    .foregroundColor(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("??????")
+                    Spacer()
+                    Text(preferences.serverURL)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                if !preferences.publicServerURL.isEmpty {
+                    HStack {
+                        Text("?????")
+                            .font(.caption)
+                        Spacer()
+                        Text(preferences.publicServerURL)
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Button(action: { showLogoutAlert = true }) {
+                HStack {
+                    Spacer()
+                    Text("????")
+                        .foregroundColor(.red)
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var readingSection: some View {
+        Section(header: Text("????")) {
+            HStack {
+                Text("????")
+                Spacer()
+                Text("\(Int(preferences.fontSize))")
+            }
+            Slider(value: $preferences.fontSize, in: 12...30, step: 1)
+
+            HStack {
+                Text("???")
+                Spacer()
+                Text("\(Int(preferences.lineSpacing))")
+            }
+            Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
+        }
+    }
+
+    @ViewBuilder
+    private var ttsSection: some View {
+        Section(header: Text("????")) {
+            Button(action: { showTTSSelection = true }) {
+                HStack {
+                    Text("TTS ??")
+                        .foregroundColor(.primary)
+                    Spacer()
+                    if preferences.selectedTTSId.isEmpty && preferences.narrationTTSId.isEmpty {
+                        Text("???")
+                            .foregroundColor(.orange)
+                    } else {
+                        Text(ttsSummary.isEmpty ? "???" : ttsSummary)
+                            .foregroundColor(.secondary)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack {
+                Text("??")
+                Spacer()
+                Text(String(format: "%.0f", preferences.speechRate))
+            }
+            Slider(value: $preferences.speechRate, in: 5...50, step: 1)
+
+            Text("???? 5-50 (?? 10-20)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Stepper(value: $preferences.ttsPreloadCount, in: 0...50) {
+                HStack {
+                    Text("????")
+                    Spacer()
+                    Text("\(preferences.ttsPreloadCount) ?")
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Text("?????????????????????????????????? 10-20 ??")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var replaceRuleSection: some View {
+        Section(header: Text("????")) {
+            NavigationLink(destination: ReplaceRuleListView()) {
+                Text("??????")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var bookshelfSection: some View {
+        Section(header: Text("????")) {
+            Toggle("??????", isOn: $preferences.bookshelfSortByRecent)
+            Text("?????????????????????????")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var debugSection: some View {
+        Section(header: Text("????")) {
+            HStack {
+                Text("????")
+                Spacer()
+                Text("\(LogManager.shared.getLogCount()) ?")
+                    .foregroundColor(.secondary)
+            }
+
+            Button(action: exportLogs) {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("????")
+                    Spacer()
+                }
+                .foregroundColor(.blue)
+            }
+
+            Button(action: { showClearLogsAlert = true }) {
+                HStack {
+                    Image(systemName: "trash")
+                    Text("????")
+                    Spacer()
+                }
+                .foregroundColor(.red)
+            }
+
+            Button(action: { showClearCacheAlert = true }) {
+                HStack {
+                    Image(systemName: "trash.circle")
+                    Text("??????")
+                    Spacer()
+                }
+                .foregroundColor(.orange)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var footerSection: some View {
+        Section {
+            HStack {
+                Spacer()
+                VStack(spacing: 4) {
+                    Text("???????: http://192.168.1.100:8080")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("???? HttpTTS ??????")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+                Spacer()
+            }
+        }
+    }
+
     private func handleLogout() {
         preferences.logout()
         dismiss()
     }
-    
+
     private func exportLogs() {
         if let url = LogManager.shared.exportLogs() {
             logFileURL = url
             showShareSheet = true
-            LogManager.shared.log("导出日志文件: \(url.lastPathComponent)", category: "系统")
+            LogManager.shared.log("??????: \(url.lastPathComponent)", category: "??")
         }
     }
-    
+
     private func loadTTSName() async {
-        // 如果没有任何 TTS 选择，直接清空摘要
         let narratorId = preferences.narrationTTSId.isEmpty ? preferences.selectedTTSId : preferences.narrationTTSId
         let dialogueId = preferences.dialogueTTSId.isEmpty ? narratorId : preferences.dialogueTTSId
 
@@ -282,34 +310,32 @@ struct SettingsView: View {
             var parts: [String] = []
             let narratorName = name(for: narratorId)
             if let narratorName {
-                parts.append("旁白: \(narratorName)")
+                parts.append("??: \(narratorName)")
             }
 
             if let dialogueName = name(for: dialogueId), dialogueName != narratorName {
-                parts.append("对话: \(dialogueName)")
+                parts.append("??: \(dialogueName)")
             }
 
             if !preferences.speakerTTSMapping.isEmpty {
-                parts.append("发言人: \(preferences.speakerTTSMapping.count) 个")
+                parts.append("??? \(preferences.speakerTTSMapping.count) ?")
             }
 
             ttsSummary = parts.joined(separator: " / ")
         } catch {
-            print("加载 TTS 名称失败: \(error)")
+            print("?? TTS ????: \(error)")
         }
     }
 }
 
-// MARK: - 分享视图
+// MARK: - ????
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    
+
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        return controller
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
-    
+
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
     }
 }
-
