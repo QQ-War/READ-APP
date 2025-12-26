@@ -3,6 +3,9 @@ name: Build IOS IPA
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
@@ -17,8 +20,49 @@ jobs:
       - name: Build unsigned IPA
         run: ios/build_unsigned_ipa.sh
 
+      - name: Prepare IPA artifact
+        run: |
+          set -e
+          cp ios/build/ReadApp_unsigned.ipa ios/build/ReadApp-unsigned.ipa
+
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ReadApp-unsigned-ipa
-          path: ios/build/ReadApp_unsigned.ipa
+          path: ios/build/ReadApp-unsigned.ipa
+
+      - name: Delete existing release assets
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = 'ci-build';
+            const assetNames = [
+              'ReadApp-unsigned.ipa',
+            ];
+            try {
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              for (const asset of release.data.assets) {
+                if (assetNames.includes(asset.name)) {
+                  await github.rest.repos.deleteReleaseAsset({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    asset_id: asset.id,
+                  });
+                }
+              }
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+      - name: Upload IPA to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ci-build
+          name: CI Build
+          prerelease: true
+          files: |
+            ios/build/ReadApp-unsigned.ipa

@@ -7,6 +7,7 @@ import com.readapp.data.model.Chapter
 import com.readapp.data.model.HttpTTS
 import com.readapp.data.model.LoginResponse
 import com.readapp.data.model.ReplaceRule
+import com.readapp.data.model.ReplaceRulePageInfo
 import com.readapp.data.model.UserInfo
 import okhttp3.Interceptor
 import okhttp3.MultipartBody

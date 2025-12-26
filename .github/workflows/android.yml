@@ -3,6 +3,9 @@ name: Build Android APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -47,14 +50,61 @@ jobs:
           build-root-directory: android
           arguments: assembleUnsigned assembleDebug
 
+      - name: Prepare APK artifacts
+        run: |
+          set -e
+          mkdir -p android/build/outputs/ci
+          debug_apk=$(ls android/build/outputs/apk/debug/*-debug.apk | head -n 1)
+          unsigned_apk=$(ls android/build/outputs/apk/unsigned/*-unsigned.apk | head -n 1)
+          cp "$debug_apk" android/build/outputs/ci/ReadApp-android-debug.apk
+          cp "$unsigned_apk" android/build/outputs/ci/ReadApp-android-unsigned.apk
+
       - name: Upload unsigned APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ReadApp-android-apk-unsigned
-          path: android/build/outputs/apk/unsigned/*-unsigned.apk
+          path: android/build/outputs/ci/ReadApp-android-unsigned.apk
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ReadApp-android-apk-debug
-          path: android/build/outputs/apk/debug/*-debug.apk
+          path: android/build/outputs/ci/ReadApp-android-debug.apk
+
+      - name: Delete existing release assets
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = 'ci-build';
+            const assetNames = [
+              'ReadApp-android-debug.apk',
+              'ReadApp-android-unsigned.apk',
+            ];
+            try {
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              for (const asset of release.data.assets) {
+                if (assetNames.includes(asset.name)) {
+                  await github.rest.repos.deleteReleaseAsset({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    asset_id: asset.id,
+                  });
+                }
+              }
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+      - name: Upload APKs to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ci-build
+          name: CI Build
+          prerelease: true
+          files: |
+            android/build/outputs/ci/ReadApp-android-debug.apk
+            android/build/outputs/ci/ReadApp-android-unsigned.apk
