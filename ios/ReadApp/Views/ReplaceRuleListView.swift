@@ -14,7 +14,7 @@ struct ReplaceRuleListView: View {
                 Text(errorMessage)
                     .foregroundColor(.red)
             } else {
-                ForEach($viewModel.rules) { $rule in
+                ForEach(viewModel.rules, id: \.identifiableId) { rule in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(rule.name)
                             .font(.headline)
@@ -29,7 +29,7 @@ struct ReplaceRuleListView: View {
                             Spacer()
                             Image(systemName: "arrow.right")
                             Spacer()
-                            Text(rule.replaceWith)
+                            Text(rule.replacement)
                                 .font(.system(.caption, design: .monospaced))
                                 .lineLimit(1)
                         }

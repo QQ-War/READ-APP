@@ -178,7 +178,7 @@ struct ReadingView: View {
             do {
                 let regex = try NSRegularExpression(pattern: rule.pattern, options: .caseInsensitive)
                 let range = NSRange(location: 0, length: processedContent.utf16.count)
-                processedContent = regex.stringByReplacingMatches(in: processedContent, options: [], range: range, withTemplate: rule.replaceWith)
+                processedContent = regex.stringByReplacingMatches(in: processedContent, options: [], range: range, withTemplate: rule.replacement)
             } catch {
                 LogManager.shared.log("无效的净化规则: '\(rule.pattern)'. 错误: \(error)", category: "错误")
             }
