@@ -70,7 +70,7 @@ struct ReplaceRuleEditView: View {
             name: name,
             pattern: pattern,
             replacement: replaceWith,
-            scope: rule?.scope ?? "global", // Default scope
+            scope: rule?.scope ?? "", // Default scope
             ruleorder: order,
             isEnabled: isEnabled
         )
@@ -84,7 +84,7 @@ struct ReplaceRuleEditView_Previews: PreviewProvider {
     static var previews: some View {
         ReplaceRuleEditView(
             viewModel: ReplaceRuleViewModel(),
-            rule: ReplaceRule(id: "1", name: "示例规则", pattern: "广告", replacement: "", scope: "global", ruleorder: 1, isEnabled: true)
+            rule: ReplaceRule(id: "1", name: "示例规则", pattern: "广告", replacement: "", scope: "", ruleorder: 1, isEnabled: true)
         )
     }
 }

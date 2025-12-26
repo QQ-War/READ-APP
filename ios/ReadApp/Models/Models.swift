@@ -102,6 +102,12 @@ struct ReplaceRule: Codable, Identifiable {
     }
 }
 
+// MARK: - Replace Rule Page Info
+struct ReplaceRulePageInfo: Codable {
+    let page: Int
+    let md5: String
+}
+
 // MARK: - Book Import Response
 struct BookImportResponse: Codable {
     let books: Book

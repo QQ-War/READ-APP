@@ -83,10 +83,16 @@ interface ReadApiService {
     ): Response<ApiResponse<Any>>
 
     // region Replace Rules
+    @GET("getReplaceRulesPage")
+    suspend fun getReplaceRulesPage(
+        @Query("accessToken") accessToken: String
+    ): Response<ApiResponse<ReplaceRulePageInfo>>
+
     @GET("getReplaceRulesNew")
     suspend fun getReplaceRules(
         @Query("accessToken") accessToken: String,
-        @Query("page") page: Int = 0
+        @Query("md5") md5: String,
+        @Query("page") page: Int
     ): Response<ApiResponse<List<ReplaceRule>>>
 
     @POST("addReplaceRule")
@@ -98,13 +104,13 @@ interface ReadApiService {
     @POST("delReplaceRule")
     suspend fun deleteReplaceRule(
         @Query("accessToken") accessToken: String,
-        @Query("id") id: Long
+        @Query("id") id: String
     ): Response<ApiResponse<Any>>
 
     @POST("stopReplaceRules")
     suspend fun toggleReplaceRule(
         @Query("accessToken") accessToken: String,
-        @Query("id") id: Long,
+        @Query("id") id: String,
         @Query("st") status: Int
     ): Response<ApiResponse<Any>>
     // endregion

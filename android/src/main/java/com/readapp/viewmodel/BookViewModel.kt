@@ -494,7 +494,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun deleteReplaceRule(id: Long) {
+    fun deleteReplaceRule(id: String) {
         viewModelScope.launch {
             repository.deleteReplaceRule(
                 currentServerEndpoint(),
@@ -509,7 +509,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun toggleReplaceRule(id: Long, isEnabled: Boolean) {
+    fun toggleReplaceRule(id: String, isEnabled: Boolean) {
         viewModelScope.launch {
             repository.toggleReplaceRule(
                 currentServerEndpoint(),

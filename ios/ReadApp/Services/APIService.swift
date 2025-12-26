@@ -263,15 +263,47 @@ class APIService: ObservableObject {
     // MARK: - 替换净化规则
     
     func fetchReplaceRules() async throws -> [ReplaceRule] {
-        let (data, httpResponse) = try await requestWithFailback(endpoint: "getReplaceRulesNew", queryItems: [URLQueryItem(name: "accessToken", value: accessToken)])
-        guard httpResponse.statusCode == 200 else {
-            throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "获取净化规则失败"])
+        let pageInfo = try await fetchReplaceRulePageInfo()
+        if pageInfo.page <= 0 || pageInfo.md5.isEmpty {
+            return []
         }
-        let apiResponse = try JSONDecoder().decode(APIResponse<[ReplaceRule]>.self, from: data)
-        if apiResponse.isSuccess, let rules = apiResponse.data {
-            return rules
+
+        var allRules: [ReplaceRule] = []
+        for page in 1...pageInfo.page {
+            let (data, httpResponse) = try await requestWithFailback(
+                endpoint: "getReplaceRulesNew",
+                queryItems: [
+                    URLQueryItem(name: "accessToken", value: accessToken),
+                    URLQueryItem(name: "md5", value: pageInfo.md5),
+                    URLQueryItem(name: "page", value: "\(page)")
+                ]
+            )
+            guard httpResponse.statusCode == 200 else {
+                throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "获取净化规则失败"])
+            }
+            let apiResponse = try JSONDecoder().decode(APIResponse<[ReplaceRule]>.self, from: data)
+            if apiResponse.isSuccess, let rules = apiResponse.data {
+                allRules.append(contentsOf: rules)
+            } else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "解析净化规则失败"])
+            }
+        }
+        return allRules
+    }
+
+    private func fetchReplaceRulePageInfo() async throws -> ReplaceRulePageInfo {
+        let (data, httpResponse) = try await requestWithFailback(
+            endpoint: "getReplaceRulesPage",
+            queryItems: [URLQueryItem(name: "accessToken", value: accessToken)]
+        )
+        guard httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "获取净化规则页信息失败"])
+        }
+        let apiResponse = try JSONDecoder().decode(APIResponse<ReplaceRulePageInfo>.self, from: data)
+        if apiResponse.isSuccess, let info = apiResponse.data {
+            return info
         } else {
-            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "解析净化规则失败"])
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "解析净化规则页信息失败"])
         }
     }
     

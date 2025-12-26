@@ -80,16 +80,39 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
     }
     
     // region Replace Rules
-    suspend fun fetchReplaceRules(baseUrl: String, publicUrl: String?, accessToken: String): Result<List<ReplaceRule>> =
-        executeWithFailover { it.getReplaceRules(accessToken) }(buildEndpoints(baseUrl, publicUrl))
+    suspend fun fetchReplaceRules(baseUrl: String, publicUrl: String?, accessToken: String): Result<List<ReplaceRule>> {
+        val pageInfoResult = executeWithFailover {
+            it.getReplaceRulesPage(accessToken)
+        }(buildEndpoints(baseUrl, publicUrl))
+
+        val pageInfo = pageInfoResult.getOrElse { return Result.failure(it) }
+        val totalPages = pageInfo.page
+        if (totalPages <= 0 || pageInfo.md5.isBlank()) {
+            return Result.success(emptyList())
+        }
+
+        val allRules = mutableListOf<ReplaceRule>()
+        for (page in 1..totalPages) {
+            val result = executeWithFailover {
+                it.getReplaceRules(accessToken, pageInfo.md5, page)
+            }(buildEndpoints(baseUrl, publicUrl))
+
+            result.onSuccess { rules ->
+                allRules.addAll(rules)
+            }.onFailure {
+                return Result.failure(it)
+            }
+        }
+        return Result.success(allRules)
+    }
 
     suspend fun addReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, rule: ReplaceRule): Result<Any> =
         executeWithFailover { it.addReplaceRule(accessToken, rule) }(buildEndpoints(baseUrl, publicUrl))
 
-    suspend fun deleteReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, id: Long): Result<Any> =
+    suspend fun deleteReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, id: String): Result<Any> =
         executeWithFailover { it.deleteReplaceRule(accessToken, id) }(buildEndpoints(baseUrl, publicUrl))
 
-    suspend fun toggleReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, id: Long, isEnabled: Boolean): Result<Any> =
+    suspend fun toggleReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, id: String, isEnabled: Boolean): Result<Any> =
         executeWithFailover { it.toggleReplaceRule(accessToken, id, if (isEnabled) 1 else 0) }(buildEndpoints(baseUrl, publicUrl))
     // endregion
 

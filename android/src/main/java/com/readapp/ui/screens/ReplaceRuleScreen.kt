@@ -220,10 +220,10 @@ fun ReplaceRuleEditDialog(
             Button(
                 onClick = {
                     val newRule = ReplaceRule(
-                        id = rule?.id ?: 0, // Preserve ID for updates, 0 for new
+                        id = rule?.id ?: "", // Preserve ID for updates, empty for new
                         pattern = pattern,
                         replacement = replacement,
-                        scope = rule?.scope ?: "global", // Default or preserve scope
+                        scope = rule?.scope ?: "", // Default or preserve scope
                         name = name,
                         order = order,
                         isEnabled = isEnabled

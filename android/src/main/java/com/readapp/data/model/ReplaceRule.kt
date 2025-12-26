@@ -5,7 +5,7 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class ReplaceRule(
-    val id: Long = 0,
+    val id: String = "",
     val pattern: String,
     val replacement: String,
     val scope: String?,
