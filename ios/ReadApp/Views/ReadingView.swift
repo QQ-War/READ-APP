@@ -865,7 +865,7 @@ struct TTSControlBar: View {
                 Button(action: { ttsManager.previousSentence() }) {
                     VStack(spacing: 4) {
                         Image(systemName: "arrow.backward.circle.fill").font(.title)
-                        Text("上一段").font(.caption)
+                        Text("???").font(.caption)
                     }
                     .foregroundColor(ttsManager.currentSentenceIndex <= 0 ? .gray : .blue)
                 }
@@ -873,7 +873,7 @@ struct TTSControlBar: View {
                 
                 Spacer()
                 VStack(spacing: 4) {
-                    Text("段落进度").font(.caption).foregroundColor(.secondary)
+                    Text("????").font(.caption).foregroundColor(.secondary)
                     Text("\(ttsManager.currentSentenceIndex + 1) / \(ttsManager.totalSentences)")
                         .font(.title2).fontWeight(.semibold)
                 }
@@ -882,7 +882,7 @@ struct TTSControlBar: View {
                 Button(action: { ttsManager.nextSentence() }) {
                     VStack(spacing: 4) {
                         Image(systemName: "arrow.forward.circle.fill").font(.title)
-                        Text("下一段").font(.caption)
+                        Text("???").font(.caption)
                     }
                     .foregroundColor(ttsManager.currentSentenceIndex >= ttsManager.totalSentences - 1 ? .gray : .blue)
                 }
@@ -896,14 +896,14 @@ struct TTSControlBar: View {
                 Button(action: onPreviousChapter) {
                     VStack(spacing: 2) {
                         Image(systemName: "chevron.left").font(.title3)
-                        Text("上一章").font(.caption2)
+                        Text("???").font(.caption2)
                     }
                 }.disabled(currentChapterIndex <= 0)
                 
                 Button(action: onShowChapterList) {
                     VStack(spacing: 2) {
                         Image(systemName: "list.bullet").font(.title3)
-                        Text("目录").font(.caption2)
+                        Text("??").font(.caption2)
                     }
                 }
                 
@@ -914,7 +914,7 @@ struct TTSControlBar: View {
                     VStack(spacing: 2) {
                         Image(systemName: ttsManager.isPaused ? "play.circle.fill" : "pause.circle.fill")
                             .font(.system(size: 36)).foregroundColor(.blue)
-                        Text(ttsManager.isPaused ? "播放" : "暂停").font(.caption2)
+                        Text(ttsManager.isPaused ? "??" : "??").font(.caption2)
                     }
                 }
                 Spacer()
@@ -922,14 +922,14 @@ struct TTSControlBar: View {
                 Button(action: { ttsManager.stop() }) {
                     VStack(spacing: 2) {
                         Image(systemName: "xmark.circle.fill").font(.title3).foregroundColor(.red)
-                        Text("退出").font(.caption2).foregroundColor(.red)
+                        Text("??").font(.caption2).foregroundColor(.red)
                     }
                 }
                 
                 Button(action: onNextChapter) {
                     VStack(spacing: 2) {
                         Image(systemName: "chevron.right").font(.title3)
-                        Text("下一章").font(.caption2)
+                        Text("???").font(.caption2)
                     }
                 }.disabled(currentChapterIndex >= chaptersCount - 1)
             }
