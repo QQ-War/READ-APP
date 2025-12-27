@@ -102,7 +102,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _currentParagraphIndex = MutableStateFlow(-1)
     val currentParagraphIndex: StateFlow<Int> = _currentParagraphIndex.asStateFlow()
-    val hasActiveTtsSession: StateFlow<Boolean> = _currentParagraphIndex
         .map { it >= 0 }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
@@ -122,6 +121,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val isPlayingUi: StateFlow<Boolean> = combine(_isPlaying, _keepPlaying) { playing, keep ->
         playing || keep
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val _showTtsControls = MutableStateFlow(false)
+    val showTtsControls: StateFlow<Boolean> = _showTtsControls.asStateFlow()
 
     private val _currentTime = MutableStateFlow("00:00")
     val currentTime: StateFlow<String> = _currentTime.asStateFlow()
@@ -269,6 +270,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             pausePlayback("toggle")
         } else if (_currentParagraphIndex.value >= 0) {
             _keepPlaying.value = true
+            _showTtsControls.value = true
             currentMediaController.play()
         } else {
             startPlayback()
@@ -468,6 +470,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         _keepPlaying.value = false
+        _showTtsControls.value = false
         mediaController?.stop()
         mediaController?.clearMediaItems()
         _currentParagraphIndex.value = -1
@@ -718,6 +721,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         stopPlayback("book_change")
         _selectedBook.value = book
         appendLog("閫夋嫨涔︾睄: ${book.name.orEmpty()} (${book.bookUrl.orEmpty()})")
+        _showTtsControls.value = false
         _currentChapterIndex.value = book.durChapterIndex ?: 0
         _currentParagraphIndex.value = book.durChapterProgress ?: -1
         _currentChapterContent.value = ""

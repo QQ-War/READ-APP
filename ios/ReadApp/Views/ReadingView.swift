@@ -434,7 +434,7 @@ struct ReadingView: View {
     
     private func startTTS() {
         showUIControls = true
-        
+
         let pageStartIndex = paginatedPages.indices.contains(currentPageIndex)
             ? paginatedPages[currentPageIndex].startSentenceIndex
             : nil
@@ -442,10 +442,18 @@ struct ReadingView: View {
         let startIndex = preferences.readingMode == .horizontal
             ? (pageStartIndex ?? fallbackIndex)
             : (currentVisibleSentenceIndex ?? fallbackIndex)
-        lastTTSSentenceIndex = startIndex
-        
+
+        let textForTTS = contentSentences.isEmpty
+            ? currentContent
+            : contentSentences.joined(separator: "\n")
+        let trimmedText = textForTTS.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
+
+        let maxIndex = max(contentSentences.count - 1, 0)
+        let boundedStartIndex = max(0, min(startIndex, maxIndex))
+        lastTTSSentenceIndex = boundedStartIndex
         ttsManager.startReading(
-            text: currentContent,
+            text: textForTTS,
             chapters: chapters,
             currentIndex: currentChapterIndex,
             bookUrl: book.bookUrl ?? "",
@@ -457,7 +465,7 @@ struct ReadingView: View {
                 loadChapterContent()
                 saveProgress()
             },
-            startAtSentenceIndex: startIndex
+            startAtSentenceIndex: boundedStartIndex
         )
     }
     
@@ -901,7 +909,7 @@ struct TTSControlBar: View {
                 Button(action: { ttsManager.previousSentence() }) {
                     VStack(spacing: 4) {
                         Image(systemName: "arrow.backward.circle.fill").font(.title)
-                        Text("???").font(.caption)
+                        Text("\u{4E0A}\u{4E00}\u{6BB5}").font(.caption)
                     }
                     .foregroundColor(ttsManager.currentSentenceIndex <= 0 ? .gray : .blue)
                 }
@@ -909,7 +917,7 @@ struct TTSControlBar: View {
                 
                 Spacer()
                 VStack(spacing: 4) {
-                    Text("????").font(.caption).foregroundColor(.secondary)
+                    Text("\u{6BB5}\u{843D}\u{8FDB}\u{5EA6}").font(.caption).foregroundColor(.secondary)
                     Text("\(ttsManager.currentSentenceIndex + 1) / \(ttsManager.totalSentences)")
                         .font(.title2).fontWeight(.semibold)
                 }
@@ -918,7 +926,7 @@ struct TTSControlBar: View {
                 Button(action: { ttsManager.nextSentence() }) {
                     VStack(spacing: 4) {
                         Image(systemName: "arrow.forward.circle.fill").font(.title)
-                        Text("???").font(.caption)
+                        Text("\u{4E0B}\u{4E00}\u{6BB5}").font(.caption)
                     }
                     .foregroundColor(ttsManager.currentSentenceIndex >= ttsManager.totalSentences - 1 ? .gray : .blue)
                 }
@@ -932,14 +940,14 @@ struct TTSControlBar: View {
                 Button(action: onPreviousChapter) {
                     VStack(spacing: 2) {
                         Image(systemName: "chevron.left").font(.title3)
-                        Text("???").font(.caption2)
+                        Text("\u{4E0A}\u{4E00}\u{7AE0}").font(.caption2)
                     }
                 }.disabled(currentChapterIndex <= 0)
                 
                 Button(action: onShowChapterList) {
                     VStack(spacing: 2) {
                         Image(systemName: "list.bullet").font(.title3)
-                        Text("??").font(.caption2)
+                        Text("\u{76EE}\u{5F55}").font(.caption2)
                     }
                 }
                 
@@ -950,7 +958,7 @@ struct TTSControlBar: View {
                     VStack(spacing: 2) {
                         Image(systemName: ttsManager.isPaused ? "play.circle.fill" : "pause.circle.fill")
                             .font(.system(size: 36)).foregroundColor(.blue)
-                        Text(ttsManager.isPaused ? "??" : "??").font(.caption2)
+                        Text(ttsManager.isPaused ? "\u{64AD}\u{653E}" : "\u{6682}\u{505C}").font(.caption2)
                     }
                 }
                 Spacer()
@@ -958,14 +966,14 @@ struct TTSControlBar: View {
                 Button(action: { ttsManager.stop() }) {
                     VStack(spacing: 2) {
                         Image(systemName: "xmark.circle.fill").font(.title3).foregroundColor(.red)
-                        Text("??").font(.caption2).foregroundColor(.red)
+                        Text("\u{9000}\u{51FA}").font(.caption2).foregroundColor(.red)
                     }
                 }
                 
                 Button(action: onNextChapter) {
                     VStack(spacing: 2) {
                         Image(systemName: "chevron.right").font(.title3)
-                        Text("???").font(.caption2)
+                        Text("\u{4E0B}\u{4E00}\u{7AE0}").font(.caption2)
                     }
                 }.disabled(currentChapterIndex >= chaptersCount - 1)
             }
@@ -990,14 +998,14 @@ struct NormalControlBar: View {
             Button(action: onPreviousChapter) {
                 VStack(spacing: 4) {
                     Image(systemName: "chevron.left").font(.title2)
-                    Text("上一章").font(.caption2)
+                    Text("\u{4E0A}\u{4E00}\u{7AE0}").font(.caption2)
                 }
             }.disabled(currentChapterIndex <= 0)
             
             Button(action: onShowChapterList) {
                 VStack(spacing: 4) {
                     Image(systemName: "list.bullet").font(.title2)
-                    Text("目录").font(.caption2)
+                    Text("\u{76EE}\u{5F55}").font(.caption2)
                 }
             }
             
@@ -1006,7 +1014,7 @@ struct NormalControlBar: View {
                 VStack(spacing: 4) {
                     Image(systemName: "speaker.wave.2.circle.fill")
                         .font(.system(size: 32)).foregroundColor(.blue)
-                    Text("听书").font(.caption2).foregroundColor(.blue)
+                    Text("\u{542C}\u{4E66}").font(.caption2).foregroundColor(.blue)
                 }
             }
             Spacer()
@@ -1014,14 +1022,14 @@ struct NormalControlBar: View {
             Button(action: onShowFontSettings) {
                 VStack(spacing: 4) {
                     Image(systemName: "textformat.size").font(.title2)
-                    Text("字体").font(.caption2)
+                    Text("\u{5B57}\u{4F53}").font(.caption2)
                 }
             }
             
             Button(action: onNextChapter) {
                 VStack(spacing: 4) {
                     Image(systemName: "chevron.right").font(.title2)
-                    Text("下一章").font(.caption2)
+                    Text("\u{4E0B}\u{4E00}\u{7AE0}").font(.caption2)
                 }
             }.disabled(currentChapterIndex >= chaptersCount - 1)
         }
@@ -1038,7 +1046,7 @@ struct FontSizeSheet: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 16) {
-                Text("字体大小")
+                Text("\u{5B57}\u{4F53}\u{5927}\u{5C0F}")
                     .font(.headline)
                 Text(String(format: "%.0f", fontSize))
                     .font(.system(size: 28, weight: .semibold))
@@ -1049,7 +1057,7 @@ struct FontSizeSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") { 
+                    Button("\u{5B8C}\u{6210}") { 
                         dismiss() 
                     }
                 }

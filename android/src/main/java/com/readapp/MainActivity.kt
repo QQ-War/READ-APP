@@ -114,7 +114,7 @@ fun ReadAppMain() {
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
-                val hasActiveTtsSession by bookViewModel.hasActiveTtsSession.collectAsState()
+                val showTtsControls by bookViewModel.showTtsControls.collectAsState()
                 val currentPlayingParagraph by bookViewModel.currentParagraphIndex.collectAsState()
                 val preloadedParagraphs by bookViewModel.preloadedParagraphs.collectAsState()
 
@@ -144,7 +144,7 @@ fun ReadAppMain() {
                         },
                         // TTS 相关
                         isPlaying = isPlaying,
-                        showTtsControls = hasActiveTtsSession,
+                        showTtsControls = showTtsControls,
                         currentPlayingParagraph = currentPlayingParagraph,
                         preloadedParagraphs = preloadedParagraphs,
                         onPlayPauseClick = {
