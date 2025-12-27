@@ -314,7 +314,7 @@ struct ReadingView: View {
 
     private func removeHTMLAndSVG(_ text: String) -> String {
         var result = text
-        let svgPattern = "<svg[^>]*>.*?<\/svg>"
+        let svgPattern = "<svg[^>]*>.*?</svg>"
         if let svgRegex = try? NSRegularExpression(pattern: svgPattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
             result = svgRegex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
         }
@@ -666,7 +666,9 @@ struct TextKitPaginator {
             result.append(NSAttributedString(string: title + "\n", attributes: [.font: UIFont.boldSystemFont(ofSize: fontSize + 6), .paragraphStyle: titleStyle, .foregroundColor: UIColor.label]))
         }
         
-        let body = sentences.map { "　　" + s.trimmingCharacters(in: .whitespacesAndNewlines) }.joined(separator: "\n")
+        let body = sentences
+            .map { sentence in "　　" + sentence.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .joined(separator: "\n")
         result.append(NSAttributedString(string: body, attributes: [.font: font, .paragraphStyle: paragraphStyle, .foregroundColor: UIColor.label]))
         return result
     }
