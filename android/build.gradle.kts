@@ -23,7 +23,7 @@ android {
     }
 
     signingConfigs {
-        create("debug") {
+        getByName("debug") {
             keyAlias = "readappdebug"
             keyPassword = "readapp"
             storeFile = file("$rootDir/keystore/readapp-debug.p12")
