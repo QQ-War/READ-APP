@@ -167,28 +167,42 @@ struct ReadingView: View {
                 height: max(0, geometry.size.height - verticalPadding * 2)
             )
             
-            // ReadPageViewController is now placed directly within a frame matching contentSize
-            ReadPageViewController(
-                pages: paginatedPages,
-                attributedContent: attributedContent,
-                currentPageIndex: $currentPageIndex,
-                onTapMiddle: { showUIControls.toggle() },
-                onTapLeft: { goToPreviousPage() },
-                onTapRight: { goToNextPage() },
-                onSwipeToPreviousChapter: { 
-                    if currentChapterIndex > 0 {
-                        pendingJumpToLastPage = true
-                        previousChapter()
+            ZStack(alignment: .bottomTrailing) {
+                // ReadPageViewController is now placed directly within a frame matching contentSize
+                ReadPageViewController(
+                    pages: paginatedPages,
+                    attributedContent: attributedContent,
+                    currentPageIndex: $currentPageIndex,
+                    onTapMiddle: { showUIControls.toggle() },
+                    onTapLeft: { goToPreviousPage() },
+                    onTapRight: { goToNextPage() },
+                    onSwipeToPreviousChapter: { 
+                        if currentChapterIndex > 0 {
+                            pendingJumpToLastPage = true
+                            previousChapter()
+                        }
+                    },
+                    onSwipeToNextChapter: {
+                        if currentChapterIndex < chapters.count - 1 {
+                            nextChapter()
+                        }
                     }
-                },
-                onSwipeToNextChapter: {
-                    if currentChapterIndex < chapters.count - 1 {
-                        nextChapter()
-                    }
+                )
+                .frame(width: contentSize.width, height: contentSize.height)
+                .position(x: geometry.size.width / 2, y: geometry.size.height / 2) // Center the content area
+                
+                if !showUIControls && paginatedPages.count > 0 {
+                    let percentage = Int((Double(currentPageIndex + 1) / Double(paginatedPages.count)) * 100)
+                    Text("\(currentPageIndex + 1)/\(paginatedPages.count) (\(percentage)%)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(8)
+                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .padding(.bottom, verticalPadding)
+                        .padding(.trailing, horizontalPadding)
+                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                 }
-            )
-            .frame(width: contentSize.width, height: contentSize.height)
-            .position(x: geometry.size.width / 2, y: geometry.size.height / 2) // Center the content area
+            }
             .onAppear {
                 repaginateContent(in: contentSize)
             }
