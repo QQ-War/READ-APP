@@ -21,6 +21,7 @@ struct ReadingView: View {
     @State private var showUIControls = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var lastTTSSentenceIndex: Int?
+    @State private var currentVisibleSentenceIndex: Int?
     @State private var showFontSettings = false
     @State private var currentPageIndex: Int = 0
     @State private var paginatedPages: [PaginatedPage] = []
@@ -151,30 +152,36 @@ struct ReadingView: View {
     }
 
     private var verticalReader: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                RichTextView(
-                    sentences: contentSentences,
-                    fontSize: preferences.fontSize,
-                    lineSpacing: preferences.lineSpacing,
-                    highlightIndex: lastTTSSentenceIndex,
-                    scrollProxy: scrollProxy
-                )
-                .padding()
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                showUIControls.toggle()
-            }
-            .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
-                if ttsManager.isPlaying && !contentSentences.isEmpty {
-                    withAnimation {
-                        proxy.scrollTo(newIndex, anchor: .center)
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    RichTextView(
+                        sentences: contentSentences,
+                        fontSize: preferences.fontSize,
+                        lineSpacing: preferences.lineSpacing,
+                        highlightIndex: lastTTSSentenceIndex,
+                        scrollProxy: scrollProxy
+                    )
+                    .padding()
+                }
+                .coordinateSpace(name: "scroll")
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    showUIControls.toggle()
+                }
+                .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
+                    if ttsManager.isPlaying && !contentSentences.isEmpty {
+                        withAnimation {
+                            proxy.scrollTo(newIndex, anchor: .center)
+                        }
                     }
                 }
-            }
-            .onAppear {
-                scrollProxy = proxy
+                .onPreferenceChange(SentenceFramePreferenceKey.self) { frames in
+                    updateVisibleSentenceIndex(frames: frames, viewportHeight: geometry.size.height)
+                }
+                .onAppear {
+                    scrollProxy = proxy
+                }
             }
         }
     }
@@ -406,7 +413,9 @@ struct ReadingView: View {
             ? paginatedPages[currentPageIndex].startSentenceIndex
             : nil
         let fallbackIndex = lastTTSSentenceIndex ?? Int(book.durChapterPos ?? 0)
-        let startIndex = preferences.readingMode == .horizontal ? (pageStartIndex ?? fallbackIndex) : fallbackIndex
+        let startIndex = preferences.readingMode == .horizontal
+            ? (pageStartIndex ?? fallbackIndex)
+            : (currentVisibleSentenceIndex ?? fallbackIndex)
         lastTTSSentenceIndex = startIndex
         
         ttsManager.startReading(
@@ -484,6 +493,28 @@ struct ReadingView: View {
             withAnimation { currentPageIndex += 1 }
         } else if currentChapterIndex < chapters.count - 1 {
             nextChapter()
+        }
+    }
+
+    private func updateVisibleSentenceIndex(frames: [Int: CGRect], viewportHeight: CGFloat) {
+        guard !frames.isEmpty, viewportHeight > 0 else { return }
+        let visible = frames.filter { $0.value.maxY > 0 && $0.value.minY < viewportHeight }
+        guard !visible.isEmpty else { return }
+        var candidateIndex: Int?
+        var candidateMinY: CGFloat?
+        for (index, rect) in visible {
+            if rect.minY >= 0 {
+                if candidateMinY == nil || candidateMinY! < 0 || rect.minY < candidateMinY! {
+                    candidateIndex = index
+                    candidateMinY = rect.minY
+                }
+            } else if candidateMinY == nil || (candidateMinY! < 0 && rect.minY > candidateMinY!) {
+                candidateIndex = index
+                candidateMinY = rect.minY
+            }
+        }
+        if let candidateIndex = candidateIndex, candidateIndex != currentVisibleSentenceIndex {
+            currentVisibleSentenceIndex = candidateIndex
         }
     }
 }
@@ -651,6 +682,14 @@ struct RichTextView: View {
                     .padding(.vertical, 6)
                     .padding(.horizontal, 8)
                     .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: SentenceFramePreferenceKey.self,
+                                value: [index: proxy.frame(in: .named("scroll"))]
+                            )
+                        }
+                    )
+                    .background(
                         RoundedRectangle(cornerRadius: 4)
                             .fill(index == highlightIndex ? Color.orange.opacity(0.2) : Color.clear)
                             .animation(.easeInOut, value: highlightIndex)
@@ -666,6 +705,14 @@ struct RichTextView: View {
                 }
             }
         }
+    }
+}
+
+
+private struct SentenceFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }
 
