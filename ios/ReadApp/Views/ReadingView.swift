@@ -212,8 +212,27 @@ struct ReadingView: View {
             }
         }
         .navigationTitle(book.name ?? "阅读")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarHidden(true)
+        // .navigationBarTitleDisplayMode(.inline) // ???????
+        // .navigationBarHidden(!showUIControls) // ??
+        // .statusBar(hidden: !showUIControls) // ??
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                if showUIControls {
+                    if currentChapterIndex < chapters.count {
+                        Text(chapters[currentChapterIndex].title)
+                            .font(.headline)
+                            .lineLimit(1)
+                    } else {
+                        Text(book.name ?? "??")
+                            .font(.headline)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+        .toolbarBackground(.visible, for: .navigationBar) // ?????????
+        .toolbar(showUIControls ? .visible : .hidden, for: .navigationBar)
+        .toolbar(showUIControls ? .visible : .hidden, for: .bottomBar)
         .sheet(isPresented: $showChapterList) {
             ChapterListView(
                 chapters: chapters,

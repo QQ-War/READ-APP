@@ -325,3 +325,9 @@ class UserPreferences: ObservableObject {
         isLoggedIn = false
     }
 }
+
+// MARK: - BookSource Page Info
+struct BookSourcePageInfo: Codable {
+    let page: Int
+    let md5: String
+}

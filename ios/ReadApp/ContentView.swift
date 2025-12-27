@@ -8,10 +8,25 @@ struct ContentView: View {
         if !preferences.isLoggedIn {
             LoginView()
         } else {
-            NavigationView {
-                BookListView()
+            TabView {
+                NavigationView {
+                    BookListView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem {
+                    Image(systemName: "book.fill")
+                    Text("书架")
+                }
+                
+                NavigationView {
+                    SourceListView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem {
+                    Image(systemName: "list.bullet")
+                    Text("书源")
+                }
             }
-            .navigationViewStyle(StackNavigationViewStyle())
         }
     }
 }

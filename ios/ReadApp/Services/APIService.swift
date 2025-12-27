@@ -402,6 +402,52 @@ class APIService: ObservableObject {
             throw NSError(domain: "APIService", code: error.code, userInfo: [NSLocalizedDescriptionKey: "上传书籍失败: \(error.localizedDescription)"])
         }
     }
+
+    // MARK: - Book Sources
+    func fetchBookSources() async throws -> [BookSource] {
+        let pageInfo = try await fetchBookSourcePageInfo()
+        if pageInfo.page <= 0 || pageInfo.md5.isEmpty {
+            return []
+        }
+
+        var allSources: [BookSource] = []
+        for page in 1...pageInfo.page {
+            let (data, httpResponse) = try await requestWithFailback(
+                endpoint: "getBookSourcesNew",
+                queryItems: [
+                    URLQueryItem(name: "accessToken", value: accessToken),
+                    URLQueryItem(name: "md5", value: pageInfo.md5),
+                    URLQueryItem(name: "page", value: "\(page)")
+                ]
+            )
+            guard httpResponse.statusCode == 200 else {
+                throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "获取书源失败"])
+            }
+            let apiResponse = try JSONDecoder().decode(APIResponse<[BookSource]>.self, from: data)
+            if apiResponse.isSuccess, let sources = apiResponse.data {
+                allSources.append(contentsOf: sources)
+            } else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "解析书源失败"])
+            }
+        }
+        return allSources
+    }
+
+    private func fetchBookSourcePageInfo() async throws -> BookSourcePageInfo {
+        let (data, httpResponse) = try await requestWithFailback(
+            endpoint: "getBookSourcesPage",
+            queryItems: [URLQueryItem(name: "accessToken", value: accessToken)]
+        )
+        guard httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "获取书源页信息失败"])
+        }
+        let apiResponse = try JSONDecoder().decode(APIResponse<BookSourcePageInfo>.self, from: data)
+        if apiResponse.isSuccess, let info = apiResponse.data {
+            return info
+        } else {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "解析书源页信息失败"])
+        }
+    }
     
     // MARK: - Cache Management
     func clearAllRemoteCache() async throws {
