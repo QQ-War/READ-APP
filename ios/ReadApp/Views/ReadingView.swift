@@ -25,6 +25,7 @@ struct ReadingView: View {
     @State private var showFontSettings = false
     @State private var currentPageIndex: Int = 0
     @State private var paginatedPages: [PaginatedPage] = []
+    @State private var pendingJumpToLastPage = false
 
     init(book: Book) {
         self.book = book
@@ -90,6 +91,11 @@ struct ReadingView: View {
                 }
             }
         }
+        .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
+            if preferences.readingMode == .horizontal && ttsManager.isPlaying {
+                syncPageForSentenceIndex(newIndex)
+            }
+        }
     }
 
     private var backgroundView: some View {
@@ -98,7 +104,7 @@ struct ReadingView: View {
 
     @ViewBuilder
     private func mainContent(safeArea: EdgeInsets) -> some View {
-        if preferences.readingMode == .horizontal && !ttsManager.isPlaying {
+        if preferences.readingMode == .horizontal {
             horizontalReader
         } else {
             verticalReader
@@ -155,11 +161,15 @@ struct ReadingView: View {
         GeometryReader { geometry in
             ScrollViewReader { proxy in
                 ScrollView {
+                    let primaryHighlight = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : lastTTSSentenceIndex
+                    let secondaryHighlights = ttsManager.isPlaying ? ttsManager.preloadedIndices : Set<Int>()
                     RichTextView(
                         sentences: contentSentences,
                         fontSize: preferences.fontSize,
                         lineSpacing: preferences.lineSpacing,
-                        highlightIndex: lastTTSSentenceIndex,
+                        highlightIndex: primaryHighlight,
+                        secondaryIndices: secondaryHighlights,
+                        isPlayingHighlight: ttsManager.isPlaying,
                         scrollProxy: scrollProxy
                     )
                     .padding()
@@ -190,6 +200,11 @@ struct ReadingView: View {
         GeometryReader { geometry in
             let contentInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
             let width = geometry.size.width
+            let attributedText = TextPaginator.attributedText(
+                contentSentences,
+                fontSize: preferences.fontSize,
+                lineSpacing: preferences.lineSpacing
+            )
             let tapHandler: (CGFloat) -> Void = { tapX in
                 if showUIControls {
                     showUIControls = false
@@ -201,18 +216,25 @@ struct ReadingView: View {
                     goToNextPage()
                 }
             }
+            let backSwipeGesture = DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    guard currentPageIndex == 0 else { return }
+                    guard value.translation.width > 60, abs(value.translation.height) < 40 else { return }
+                    guard currentChapterIndex > 0 else { return }
+                    pendingJumpToLastPage = true
+                    previousChapter()
+                }
 
             let tabView = TabView(selection: $currentPageIndex) {
                 ForEach(Array(paginatedPages.enumerated()), id: \.offset) { index, page in
-                    Text(page.text)
-                        .font(.system(size: preferences.fontSize))
-                        .lineSpacing(preferences.lineSpacing)
+                    CTPageView(attributedText: attributedText, range: page.range)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .padding(contentInsets)
                         .tag(index)
                 }
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+            .simultaneousGesture(backSwipeGesture)
             .onAppear {
                 repaginateContent(in: geometry.size, contentInsets: contentInsets)
             }
@@ -477,13 +499,19 @@ struct ReadingView: View {
             fontSize: preferences.fontSize,
             lineSpacing: preferences.lineSpacing
         )
-        currentPageIndex = 0
+        if pendingJumpToLastPage {
+            currentPageIndex = max(paginatedPages.count - 1, 0)
+            pendingJumpToLastPage = false
+        } else {
+            currentPageIndex = 0
+        }
     }
 
     private func goToPreviousPage() {
         if currentPageIndex > 0 {
             withAnimation { currentPageIndex -= 1 }
         } else if currentChapterIndex > 0 {
+            pendingJumpToLastPage = true
             previousChapter()
         }
     }
@@ -494,6 +522,30 @@ struct ReadingView: View {
         } else if currentChapterIndex < chapters.count - 1 {
             nextChapter()
         }
+    }
+
+    private func syncPageForSentenceIndex(_ index: Int) {
+        guard index >= 0, preferences.readingMode == .horizontal else { return }
+        guard let pageIndex = pageIndexForSentence(index) else { return }
+        if pageIndex != currentPageIndex {
+            withAnimation {
+                currentPageIndex = pageIndex
+            }
+        }
+    }
+
+    private func pageIndexForSentence(_ index: Int) -> Int? {
+        guard !paginatedPages.isEmpty else { return nil }
+        for i in 0..<paginatedPages.count {
+            let startIndex = paginatedPages[i].startSentenceIndex
+            let nextStart = (i + 1 < paginatedPages.count)
+                ? paginatedPages[i + 1].startSentenceIndex
+                : Int.max
+            if index >= startIndex && index < nextStart {
+                return i
+            }
+        }
+        return paginatedPages.indices.last
     }
 
     private func updateVisibleSentenceIndex(frames: [Int: CGRect], viewportHeight: CGFloat) {
@@ -522,7 +574,7 @@ struct ReadingView: View {
 
 // MARK: - Text Paginator
 struct PaginatedPage {
-    let text: String
+    let range: NSRange
     let startSentenceIndex: Int
 }
 
@@ -534,19 +586,8 @@ struct TextPaginator {
         lineSpacing: CGFloat
     ) -> [PaginatedPage] {
         guard !sentences.isEmpty, size.width > 0, size.height > 0 else { return [] }
-
-        let font = UIFont.systemFont(ofSize: fontSize)
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = lineSpacing
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .paragraphStyle: paragraphStyle
-        ]
-
         let paragraphStarts = paragraphStartIndices(sentences: sentences)
-        let fullText = fullContent(sentences: sentences)
-        let attributedText = NSAttributedString(string: fullText, attributes: attributes)
+        let attributedText = attributedText(sentences, fontSize: fontSize, lineSpacing: lineSpacing)
         let framesetter = CTFramesetterCreateWithAttributedString(attributedText)
         let bounds = CGRect(origin: .zero, size: size)
 
@@ -560,13 +601,28 @@ struct TextPaginator {
             let length = visibleRange.length
             if length == 0 { break }
             let pageRange = NSRange(location: location, length: length)
-            let pageText = (fullText as NSString).substring(with: pageRange)
             let startSentenceIndex = sentenceIndex(for: location, in: paragraphStarts)
-            pages.append(PaginatedPage(text: pageText, startSentenceIndex: startSentenceIndex))
+            pages.append(PaginatedPage(range: pageRange, startSentenceIndex: startSentenceIndex))
             location += length
         }
 
         return pages
+    }
+
+    static func attributedText(
+        _ sentences: [String],
+        fontSize: CGFloat,
+        lineSpacing: CGFloat
+    ) -> NSAttributedString {
+        let font = UIFont.systemFont(ofSize: fontSize)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = lineSpacing
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .paragraphStyle: paragraphStyle
+        ]
+        let fullText = fullContent(sentences: sentences)
+        return NSAttributedString(string: fullText, attributes: attributes)
     }
 
     private static func fullContent(sentences: [String]) -> String {
@@ -594,6 +650,66 @@ struct TextPaginator {
             return 0
         }
         return index
+    }
+}
+
+struct CTPageView: UIViewRepresentable {
+    let attributedText: NSAttributedString
+    let range: NSRange
+
+    func makeUIView(context: Context) -> CoreTextPageUIView {
+        CoreTextPageUIView(attributedText: attributedText, range: range)
+    }
+
+    func updateUIView(_ uiView: CoreTextPageUIView, context: Context) {
+        uiView.attributedText = attributedText
+        uiView.range = range
+        uiView.setNeedsDisplay()
+    }
+}
+
+final class CoreTextPageUIView: UIView {
+    var attributedText: NSAttributedString
+    var range: NSRange
+
+    init(attributedText: NSAttributedString, range: NSRange) {
+        self.attributedText = attributedText
+        self.range = range
+        super.init(frame: .zero)
+        isOpaque = false
+        backgroundColor = .clear
+    }
+
+    required init?(coder: NSCoder) {
+        return nil
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard rect.width > 0, rect.height > 0 else { return }
+        guard attributedText.length > 0 else { return }
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+
+        let safeLocation = max(0, min(range.location, attributedText.length))
+        let safeLength = max(0, min(range.length, attributedText.length - safeLocation))
+        let safeRange = NSRange(location: safeLocation, length: safeLength)
+        guard safeRange.length > 0 else { return }
+
+        context.saveGState()
+        context.textMatrix = .identity
+        context.translateBy(x: 0, y: rect.height)
+        context.scaleBy(x: 1, y: -1)
+
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedText)
+        let path = CGPath(rect: rect, transform: nil)
+        let frame = CTFramesetterCreateFrame(
+            framesetter,
+            CFRange(location: safeRange.location, length: safeRange.length),
+            path,
+            nil
+        )
+        CTFrameDraw(frame, context)
+
+        context.restoreGState()
     }
 }
 
@@ -669,6 +785,8 @@ struct RichTextView: View {
     let fontSize: CGFloat
     let lineSpacing: CGFloat
     let highlightIndex: Int?
+    let secondaryIndices: Set<Int>
+    let isPlayingHighlight: Bool
     let scrollProxy: ScrollViewProxy?
     
     var body: some View {
@@ -691,7 +809,7 @@ struct RichTextView: View {
                     )
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(index == highlightIndex ? Color.orange.opacity(0.2) : Color.clear)
+                            .fill(highlightColor(for: index))
                             .animation(.easeInOut, value: highlightIndex)
                     )
                     .id(index)
@@ -705,6 +823,19 @@ struct RichTextView: View {
                 }
             }
         }
+    }
+
+    private func highlightColor(for index: Int) -> Color {
+        if isPlayingHighlight {
+            if index == highlightIndex {
+                return Color.blue.opacity(0.2)
+            }
+            if secondaryIndices.contains(index) {
+                return Color.green.opacity(0.18)
+            }
+            return .clear
+        }
+        return index == highlightIndex ? Color.orange.opacity(0.2) : .clear
     }
 }
 
