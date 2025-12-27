@@ -545,9 +545,9 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             let velocity = gesture.velocity(in: gesture.view)
             
             // Detect strong swipe at edges
-            if parent.currentPageIndex == 0 && (translation.width > 100 || velocity.x > 500) {
+            if parent.currentPageIndex == 0 && (translation.x > 100 || velocity.x > 500) {
                 parent.onSwipeToPreviousChapter()
-            } else if parent.currentPageIndex == parent.pages.count - 1 && (translation.width < -100 || velocity.x < -500) {
+            } else if parent.currentPageIndex == parent.pages.count - 1 && (translation.x < -100 || velocity.x < -500) {
                 parent.onSwipeToNextChapter()
             }
         }
@@ -660,3 +660,307 @@ struct TextKitPaginator {
 
 // Keep helper subviews... (ChapterListView, RichTextView, TTSControlBar, NormalControlBar, FontSizeSheet)
 // ... [Rest of the file remains as in the previous version but with the updated reader logic]
+
+struct ChapterListView: View {
+    let chapters: [BookChapter]
+    let currentIndex: Int
+    let onSelectChapter: (Int) -> Void
+    @Environment(\.dismiss) var dismiss
+    @State private var isReversed = false
+    
+    var displayedChapters: [(offset: Int, element: BookChapter)] {
+        let enumerated = Array(chapters.enumerated())
+        return isReversed ? Array(enumerated.reversed()) : enumerated
+    }
+    
+    var body: some View {
+        NavigationView {
+            ScrollViewReader { proxy in
+                List {
+                    ForEach(displayedChapters, id: \.element.id) { item in
+                        Button(action: {
+                            onSelectChapter(item.offset)
+                            dismiss()
+                        }) {
+                            HStack {
+                                Text(item.element.title)
+                                    .foregroundColor(item.offset == currentIndex ? .blue : .primary)
+                                    .fontWeight(item.offset == currentIndex ? .semibold : .regular)
+                                Spacer()
+                                if item.offset == currentIndex {
+                                    Image(systemName: "book.fill").foregroundColor(.blue).font(.caption)
+                                }
+                            }
+                        }
+                        .id(item.offset)
+                        .listRowBackground(item.offset == currentIndex ? Color.blue.opacity(0.1) : Color.clear)
+                    }
+                }
+                .navigationTitle("目录（共\(chapters.count)章）")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: {
+                            withAnimation { isReversed.toggle() }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                withAnimation { proxy.scrollTo(currentIndex, anchor: .center) }
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: isReversed ? "arrow.up" : "arrow.down")
+                                Text(isReversed ? "倒序" : "正序")
+                            }
+                            .font(.caption)
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("关闭") { dismiss() }
+                    }
+                }
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        withAnimation { proxy.scrollTo(currentIndex, anchor: .center) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct RichTextView: View {
+    let sentences: [String]
+    let fontSize: CGFloat
+    let lineSpacing: CGFloat
+    let highlightIndex: Int?
+    let secondaryIndices: Set<Int>
+    let isPlayingHighlight: Bool
+    let scrollProxy: ScrollViewProxy?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: fontSize * 0.8) {
+            ForEach(Array(sentences.enumerated()), id: \.offset) { index, sentence in
+                Text("　　" + sentence.trimmingCharacters(in: .whitespacesAndNewlines))
+                    .font(.system(size: fontSize))
+                    .lineSpacing(lineSpacing)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: SentenceFramePreferenceKey.self,
+                                value: [index: proxy.frame(in: .named("scroll"))]
+                            )
+                        }
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(highlightColor(for: index))
+                            .animation(.easeInOut, value: highlightIndex)
+                    )
+                    .id(index)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            if let highlightIndex = highlightIndex, let scrollProxy = scrollProxy {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation { scrollProxy.scrollTo(highlightIndex, anchor: .center) }
+                }
+            }
+        }
+    }
+
+    private func highlightColor(for index: Int) -> Color {
+        if isPlayingHighlight {
+            if index == highlightIndex {
+                return Color.blue.opacity(0.2)
+            }
+            if secondaryIndices.contains(index) {
+                return Color.green.opacity(0.18)
+            }
+            return .clear
+        }
+        return index == highlightIndex ? Color.orange.opacity(0.2) : .clear
+    }
+}
+
+
+private struct SentenceFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+struct TTSControlBar: View {
+    @ObservedObject var ttsManager: TTSManager
+    let currentChapterIndex: Int
+    let chaptersCount: Int
+    let onPreviousChapter: () -> Void
+    let onNextChapter: () -> Void
+    let onShowChapterList: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 20) {
+                Button(action: { ttsManager.previousSentence() }) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "arrow.backward.circle.fill").font(.title)
+                        Text("\u{4E0A}\u{4E00}\u{6BB5}").font(.caption)
+                    }
+                    .foregroundColor(ttsManager.currentSentenceIndex <= 0 ? .gray : .blue)
+                }
+                .disabled(ttsManager.currentSentenceIndex <= 0)
+                
+                Spacer()
+                VStack(spacing: 4) {
+                    Text("\u{6BB5}\u{843D}\u{8FDB}\u{5EA6}").font(.caption).foregroundColor(.secondary)
+                    Text("\(ttsManager.currentSentenceIndex + 1) / \(ttsManager.totalSentences)")
+                        .font(.title2).fontWeight(.semibold)
+                }
+                Spacer()
+                
+                Button(action: { ttsManager.nextSentence() }) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "arrow.forward.circle.fill").font(.title)
+                        Text("\u{4E0B}\u{4E00}\u{6BB5}").font(.caption)
+                    }
+                    .foregroundColor(ttsManager.currentSentenceIndex >= ttsManager.totalSentences - 1 ? .gray : .blue)
+                }
+                .disabled(ttsManager.currentSentenceIndex >= ttsManager.totalSentences - 1)
+            }
+            .padding(.horizontal, 20).padding(.top, 12)
+            
+            Divider().padding(.horizontal, 20)
+            
+            HStack(spacing: 25) {
+                Button(action: onPreviousChapter) {
+                    VStack(spacing: 2) {
+                        Image(systemName: "chevron.left").font(.title3)
+                        Text("\u{4E0A}\u{4E00}\u{7AE0}").font(.caption2)
+                    }
+                }.disabled(currentChapterIndex <= 0)
+                
+                Button(action: onShowChapterList) {
+                    VStack(spacing: 2) {
+                        Image(systemName: "list.bullet").font(.title3)
+                        Text("\u{76EE}\u{5F55}").font(.caption2)
+                    }
+                }
+                
+                Spacer()
+                Button(action: {
+                    if ttsManager.isPaused { ttsManager.resume() } else { ttsManager.pause() }
+                }) {
+                    VStack(spacing: 2) {
+                        Image(systemName: ttsManager.isPaused ? "play.circle.fill" : "pause.circle.fill")
+                            .font(.system(size: 36)).foregroundColor(.blue)
+                        Text(ttsManager.isPaused ? "\u{64AD}\u{653E}" : "\u{6682}\u{505C}").font(.caption2)
+                    }
+                }
+                Spacer()
+                
+                Button(action: { ttsManager.stop() }) {
+                    VStack(spacing: 2) {
+                        Image(systemName: "xmark.circle.fill").font(.title3).foregroundColor(.red)
+                        Text("\u{9000}\u{51FA}").font(.caption2).foregroundColor(.red)
+                    }
+                }
+                
+                Button(action: onNextChapter) {
+                    VStack(spacing: 2) {
+                        Image(systemName: "chevron.right").font(.title3)
+                        Text("\u{4E0B}\u{4E00}\u{7AE0}").font(.caption2)
+                    }
+                }.disabled(currentChapterIndex >= chaptersCount - 1)
+            }
+            .padding(.horizontal, 20).padding(.bottom, 12)
+        }
+        .background(Color(UIColor.systemBackground))
+        .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
+    }
+}
+
+struct NormalControlBar: View {
+    let currentChapterIndex: Int
+    let chaptersCount: Int
+    let onPreviousChapter: () -> Void
+    let onNextChapter: () -> Void
+    let onShowChapterList: () -> Void
+    let onToggleTTS: () -> Void
+    let onShowFontSettings: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 30) {
+            Button(action: onPreviousChapter) {
+                VStack(spacing: 4) {
+                    Image(systemName: "chevron.left").font(.title2)
+                    Text("\u{4E0A}\u{4E00}\u{7AE0}").font(.caption2)
+                }
+            }.disabled(currentChapterIndex <= 0)
+            
+            Button(action: onShowChapterList) {
+                VStack(spacing: 4) {
+                    Image(systemName: "list.bullet").font(.title2)
+                    Text("\u{76EE}\u{5F55}").font(.caption2)
+                }
+            }
+            
+            Spacer()
+            Button(action: onToggleTTS) {
+                VStack(spacing: 4) {
+                    Image(systemName: "speaker.wave.2.circle.fill")
+                        .font(.system(size: 32)).foregroundColor(.blue)
+                    Text("\u{542C}\u{4E66}").font(.caption2).foregroundColor(.blue)
+                }
+            }
+            Spacer()
+            
+            Button(action: onShowFontSettings) {
+                VStack(spacing: 4) {
+                    Image(systemName: "textformat.size").font(.title2)
+                    Text("\u{5B57}\u{4F53}").font(.caption2)
+                }
+            }
+            
+            Button(action: onNextChapter) {
+                VStack(spacing: 4) {
+                    Image(systemName: "chevron.right").font(.title2)
+                    Text("\u{4E0B}\u{4E00}\u{7AE0}").font(.caption2)
+                }
+            }.disabled(currentChapterIndex >= chaptersCount - 1)
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .background(Color(UIColor.systemBackground))
+        .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
+    }
+}
+
+struct FontSizeSheet: View {
+    @Binding var fontSize: CGFloat
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 16) {
+                Text("\u{5B57}\u{4F53}\u{5927}\u{5C0F}")
+                    .font(.headline)
+                Text(String(format: "%.0f", fontSize))
+                    .font(.system(size: 28, weight: .semibold))
+                Slider(value: $fontSize, in: 12...30, step: 1)
+                Spacer()
+            }
+            .padding(20)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("\u{5B8C}\u{6210}") { 
+                        dismiss() 
+                    }
+                }
+            }
+        }
+    }
+}
