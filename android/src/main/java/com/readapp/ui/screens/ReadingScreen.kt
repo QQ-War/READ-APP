@@ -268,7 +268,8 @@ fun ReadingScreen(
                         constraints = availableConstraints,
                         lineHeightPx = lineHeightPx
                     )
-                    val pagerState = rememberPagerState { paginatedPages.size.coerceAtLeast(1) }
+                    val pageTextCache = remember { mutableStateMapOf<Int, String>() }
+                    val pagerState = rememberPagerState { paginatedPages.pages.size.coerceAtLeast(1) }
                     val viewConfiguration = LocalViewConfiguration.current
                     val onPreviousChapterFromPager = {
                         if (currentChapterIndex > 0) {
@@ -299,7 +300,7 @@ fun ReadingScreen(
                                             size = size,
                                             showControls = showControls,
                                             pagerState = pagerState,
-                                            paginatedPages = paginatedPages,
+                                            paginatedPages = paginatedPages.pages,
                                             onPreviousChapter = onPreviousChapterFromPager,
                                             onNextChapter = onNextChapterFromPager,
                                             coroutineScope = coroutineScope,
@@ -308,7 +309,19 @@ fun ReadingScreen(
                                     }
                                 }
                         ) { page ->
-                            val pageText = paginatedPages.getOrNull(page)?.text.orEmpty()
+                            val pageText = paginatedPages.getOrNull(page)?.let { pageInfo ->
+                                pageTextCache[page] ?: run {
+                                    val safeStart = pageInfo.start.coerceAtLeast(0)
+                                    val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.length)
+                                    val text = if (safeEnd > safeStart) {
+                                        paginatedPages.fullText.substring(safeStart, safeEnd)
+                                    } else {
+                                        ""
+                                    }
+                                    pageTextCache[page] = text
+                                    text
+                                }
+                            }.orEmpty()
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -328,6 +341,34 @@ fun ReadingScreen(
                                 ?: 0
                         }
                         
+                        LaunchedEffect(pagerState.currentPage, paginatedPages.fullText) {
+                            if (paginatedPages.isEmpty()) {
+                                pageTextCache.clear()
+                                return@LaunchedEffect
+                            }
+                            val current = pagerState.currentPage
+                            val indices = listOf(current - 1, current, current + 1)
+                                .filter { it in paginatedPages.indices }
+                                .toSet()
+                            for (index in indices) {
+                                if (!pageTextCache.containsKey(index)) {
+                                    val pageInfo = paginatedPages[index]
+                                    val safeStart = pageInfo.start.coerceAtLeast(0)
+                                    val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.length)
+                                    val text = if (safeEnd > safeStart) {
+                                        paginatedPages.fullText.substring(safeStart, safeEnd)
+                                    } else {
+                                        ""
+                                    }
+                                    pageTextCache[index] = text
+                                }
+                            }
+                            val staleKeys = pageTextCache.keys.filter { it !in indices }
+                            for (key in staleKeys) {
+                                pageTextCache.remove(key)
+                            }
+                        }
+
                         LaunchedEffect(pendingJumpToLastPage, paginatedPages, currentChapterIndex) {
                             if (pendingJumpToLastPage && paginatedPages.isNotEmpty()) {
                                 pagerState.scrollToPage(paginatedPages.lastIndex)
@@ -490,51 +531,77 @@ private fun rememberPaginatedText(
     style: TextStyle,
     constraints: Constraints,
     lineHeightPx: Float
-): List<PaginatedPage> {
+): PaginationResult {
     val textMeasurer = rememberTextMeasurer()
 
-    return remember(paragraphs, style, constraints) {
+    return remember(paragraphs, style, constraints, lineHeightPx) {
         if (paragraphs.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) {
-            return@remember emptyList()
+            return@remember PaginationResult(emptyList(), "")
         }
 
         val paragraphStartIndices = paragraphStartIndices(paragraphs)
         val fullText = fullContent(paragraphs)
-        val pages = mutableListOf<Pair<Int, String>>()
-        var currentOffset = 0
-
-        while (currentOffset < fullText.length) {
-            val safeLineHeight = if (lineHeightPx > 0f) lineHeightPx else 1f
-            val maxLines = (constraints.maxHeight / safeLineHeight).toInt().coerceAtLeast(1)
-
-            val result = textMeasurer.measure(
-                text = AnnotatedString(fullText.substring(currentOffset)),
-                style = style,
-                constraints = Constraints(
-                    maxWidth = constraints.maxWidth,
-                    maxHeight = constraints.maxHeight
-                ),
-                maxLines = maxLines
+        val layout = textMeasurer.measure(
+            text = AnnotatedString(fullText),
+            style = style,
+            constraints = Constraints(
+                maxWidth = constraints.maxWidth,
+                maxHeight = Constraints.Infinity
             )
-
-            val endOffset = currentOffset + lastVisibleOffset(result)
-            if (endOffset <= currentOffset) {
+        )
+        if (layout.lineCount == 0) {
+            return@remember PaginationResult(emptyList(), fullText)
+        }
+        val minPageHeight = if (lineHeightPx > 0f) lineHeightPx else 1f
+        val pageHeight = constraints.maxHeight.toFloat().coerceAtLeast(minPageHeight)
+        val pages = mutableListOf<PaginatedPage>()
+        var startLine = 0
+        while (startLine < layout.lineCount) {
+            val pageTop = layout.getLineTop(startLine)
+            var endLine = startLine
+            while (endLine + 1 < layout.lineCount) {
+                val nextBottom = layout.getLineBottom(endLine + 1)
+                if (nextBottom - pageTop <= pageHeight) {
+                    endLine++
+                } else {
+                    break
+                }
+            }
+            val startOffset = layout.getLineStart(startLine)
+            val endOffset = layout.getLineEnd(endLine, visibleEnd = true)
+            if (endOffset <= startOffset) {
                 break
             }
-            pages.add(currentOffset to fullText.substring(currentOffset, endOffset))
-            currentOffset = endOffset
-        }
-        pages.map { (startOffset, pageText) ->
             val startParagraphIndex = paragraphIndexForOffset(startOffset, paragraphStartIndices)
-            PaginatedPage(text = pageText, startParagraphIndex = startParagraphIndex)
+            pages.add(PaginatedPage(start = startOffset, end = endOffset, startParagraphIndex = startParagraphIndex))
+            startLine = endLine + 1
         }
+        PaginationResult(pages, fullText)
     }
 }
 
 private data class PaginatedPage(
-    val text: String,
+    val start: Int,
+    val end: Int,
     val startParagraphIndex: Int
 )
+
+private data class PaginationResult(
+    val pages: List<PaginatedPage>,
+    val fullText: String
+) {
+    val indices: IntRange
+        get() = pages.indices
+
+    val lastIndex: Int
+        get() = pages.lastIndex
+
+    fun isEmpty(): Boolean = pages.isEmpty()
+
+    fun getOrNull(index: Int): PaginatedPage? = pages.getOrNull(index)
+
+    operator fun get(index: Int): PaginatedPage = pages[index]
+}
 
 private fun fullContent(paragraphs: List<String>): String {
     return paragraphs.joinToString(separator = "\n\n") { it.trim() }

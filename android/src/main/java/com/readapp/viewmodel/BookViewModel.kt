@@ -102,8 +102,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _currentParagraphIndex = MutableStateFlow(-1)
     val currentParagraphIndex: StateFlow<Int> = _currentParagraphIndex.asStateFlow()
-        .map { it >= 0 }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _totalParagraphs = MutableStateFlow(1)
     val totalParagraphs: StateFlow<Int> = _totalParagraphs.asStateFlow()
