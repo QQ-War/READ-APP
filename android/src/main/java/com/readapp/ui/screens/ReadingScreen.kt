@@ -90,8 +90,8 @@ fun ReadingScreen(
         PaddingValues(
             start = AppDimens.PaddingLarge,
             end = AppDimens.PaddingLarge,
-            top = 80.dp,
-            bottom = 120.dp
+            top = AppDimens.PaddingLarge,
+            bottom = AppDimens.PaddingLarge
         )
     }
     

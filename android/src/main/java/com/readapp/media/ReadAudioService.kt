@@ -50,7 +50,10 @@ class ReadAudioService : MediaSessionService() {
         val audioData = AudioCache.get(mediaItem.mediaId)
         if (audioData != null) {
             val safeItem = if (mediaItem.localConfiguration?.uri == null) {
-                mediaItem.buildUpon().setUri("https://localhost/").build()
+                MediaItem.Builder()
+                    .setMediaId(mediaItem.mediaId)
+                    .setUri("https://localhost/")
+                    .build()
             } else {
                 mediaItem
             }

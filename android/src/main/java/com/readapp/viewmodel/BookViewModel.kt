@@ -435,8 +435,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun playFromService(audioCacheKey: String) {
         val currentMediaController = mediaController ?: return
+        val placeholderUri = Uri.parse("https://localhost/${audioCacheKey.hashCode()}")
         val mediaItem = MediaItem.Builder()
             .setMediaId(audioCacheKey)
+            .setUri(placeholderUri)
             .build()
         currentMediaController.setMediaItem(mediaItem)
         currentMediaController.prepare()

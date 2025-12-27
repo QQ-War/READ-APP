@@ -35,6 +35,10 @@ struct ReadingView: View {
         ZStack {
             backgroundView
             mainContent
+            if showUIControls {
+                controlBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             if isLoading { loadingOverlay }
         }
         .toolbar(content: toolbarContent)
@@ -114,10 +118,6 @@ struct ReadingView: View {
                 verticalReader
             }
             
-            if showUIControls {
-                controlBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
         }
     }
     
