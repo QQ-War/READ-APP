@@ -161,12 +161,13 @@ struct ReadingView: View {
     
     private var horizontalReader: some View {
         GeometryReader { geometry in
-            // 计算内容区域大小，留出状态栏和底部操作区的安全空间
+            // Calculate content area size, leaving space for status bar and bottom operation area
             let contentSize = CGSize(
                 width: max(0, geometry.size.width - horizontalPadding * 2),
                 height: max(0, geometry.size.height - verticalPadding * 2)
             )
             
+            // ReadPageViewController is now placed directly within a frame matching contentSize
             ReadPageViewController(
                 pages: paginatedPages,
                 attributedContent: attributedContent,
@@ -186,6 +187,8 @@ struct ReadingView: View {
                     }
                 }
             )
+            .frame(width: contentSize.width, height: contentSize.height)
+            .position(x: geometry.size.width / 2, y: geometry.size.height / 2) // Center the content area
             .onAppear {
                 repaginateContent(in: contentSize)
             }
@@ -297,7 +300,7 @@ struct ReadingView: View {
 
     private func removeHTMLAndSVG(_ text: String) -> String {
         var result = text
-        let svgPattern = "<svg[^>]*>.*?</svg>"
+        let svgPattern = "<svg[^>]*>.*?<\/svg>"
         if let svgRegex = try? NSRegularExpression(pattern: svgPattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
             result = svgRegex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
         }
@@ -516,15 +519,21 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         }
 
         func pageViewController(_ pvc: UIPageViewController, viewControllerBefore viewController: UIViewController) -> UIViewController? {
-            guard let vc = viewController as? ReadContentViewController, vc.pageIndex > 0 else { return nil }
-            let index = vc.pageIndex - 1
-            return ReadContentViewController(pageIndex: index, range: parent.pages[index].range, attributedText: parent.attributedContent!)
+            guard let vc = viewController as? ReadContentViewController else { return nil }
+            let index = vc.pageIndex
+            guard index > 0 else { return nil } // No previous page in this chapter
+            
+            let prevIndex = index - 1
+            return ReadContentViewController(pageIndex: prevIndex, range: parent.pages[prevIndex].range, attributedText: parent.attributedContent!)
         }
 
         func pageViewController(_ pvc: UIPageViewController, viewControllerAfter viewController: UIViewController) -> UIViewController? {
-            guard let vc = viewController as? ReadContentViewController, vc.pageIndex < parent.pages.count - 1 else { return nil }
-            let index = vc.pageIndex + 1
-            return ReadContentViewController(pageIndex: index, range: parent.pages[index].range, attributedText: parent.attributedContent!)
+            guard let vc = viewController as? ReadContentViewController else { return nil }
+            let index = vc.pageIndex
+            guard index < parent.pages.count - 1 else { return nil } // No next page in this chapter
+            
+            let nextIndex = index + 1
+            return ReadContentViewController(pageIndex: nextIndex, range: parent.pages[nextIndex].range, attributedText: parent.attributedContent!)
         }
         
         func pageViewController(_ pvc: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
@@ -643,7 +652,7 @@ struct TextKitPaginator {
             result.append(NSAttributedString(string: title + "\n", attributes: [.font: UIFont.boldSystemFont(ofSize: fontSize + 6), .paragraphStyle: titleStyle, .foregroundColor: UIColor.label]))
         }
         
-        let body = sentences.map { "　　" + $0.trimmingCharacters(in: .whitespacesAndNewlines) }.joined(separator: "\n")
+        let body = sentences.map { "　　" + s.trimmingCharacters(in: .whitespacesAndNewlines) }.joined(separator: "\n")
         result.append(NSAttributedString(string: body, attributes: [.font: font, .paragraphStyle: paragraphStyle, .foregroundColor: UIColor.label]))
         return result
     }
@@ -657,9 +666,6 @@ struct TextKitPaginator {
         return starts
     }
 }
-
-// Keep helper subviews... (ChapterListView, RichTextView, TTSControlBar, NormalControlBar, FontSizeSheet)
-// ... [Rest of the file remains as in the previous version but with the updated reader logic]
 
 struct ChapterListView: View {
     let chapters: [BookChapter]
@@ -677,7 +683,8 @@ struct ChapterListView: View {
         NavigationView {
             ScrollViewReader { proxy in
                 List {
-                    ForEach(displayedChapters, id: \.element.id) { item in
+                    ForEach(displayedChapters, id: \.element.id) {
+                        item in
                         Button(action: {
                             onSelectChapter(item.offset)
                             dismiss()
@@ -738,7 +745,8 @@ struct RichTextView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: fontSize * 0.8) {
-            ForEach(Array(sentences.enumerated()), id: \.offset) { index, sentence in
+            ForEach(Array(sentences.enumerated()), id: \.offset) {
+                index, sentence in
                 Text("　　" + sentence.trimmingCharacters(in: .whitespacesAndNewlines))
                     .font(.system(size: fontSize))
                     .lineSpacing(lineSpacing)
@@ -922,13 +930,6 @@ struct NormalControlBar: View {
                 VStack(spacing: 4) {
                     Image(systemName: "textformat.size").font(.title2)
                     Text("\u{5B57}\u{4F53}").font(.caption2)
-                }
-            }
-            
-            Button(action: onNextChapter) {
-                VStack(spacing: 4) {
-                    Image(systemName: "chevron.right").font(.title2)
-                    Text("\u{4E0B}\u{4E00}\u{7AE0}").font(.caption2)
                 }
             }.disabled(currentChapterIndex >= chaptersCount - 1)
         }
