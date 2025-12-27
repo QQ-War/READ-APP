@@ -39,16 +39,19 @@ struct ReadingView: View {
                 GeometryReader { proxy in
                     VStack(spacing: 0) {
                         topControlBar
-                            .padding(.top, proxy.safeAreaInsets.top + 6)
+                            .padding(.top, proxy.safeAreaInsets.top)
                         Spacer()
                     }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
             if showUIControls {
-                VStack(spacing: 0) {
-                    Spacer()
-                    controlBar
+                GeometryReader { proxy in
+                    VStack(spacing: 0) {
+                        Spacer()
+                        controlBar
+                            .padding(.bottom, proxy.safeAreaInsets.bottom)
+                    }
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }

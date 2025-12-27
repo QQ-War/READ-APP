@@ -7,9 +7,8 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.MediaItem
-import androidx.media3.datasource.ByteArrayDataSource
 import androidx.media3.datasource.DataSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
@@ -29,8 +28,8 @@ class ReadAudioService : MediaSessionService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: List<MediaItem>
         ): ListenableFuture<List<MediaItem>> {
-            mediaItems.firstOrNull()?.let { prepareFromCache(it) }
-            return Futures.immediateFuture(mediaItems)
+            val filteredItems = filterCachedItems(mediaItems)
+            return Futures.immediateFuture(filteredItems)
         }
 
         override fun onSetMediaItems(
@@ -40,32 +39,23 @@ class ReadAudioService : MediaSessionService() {
             startIndex: Int,
             startPositionMs: Long
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            mediaItems.firstOrNull()?.let { prepareFromCache(it) }
-            val result = MediaSession.MediaItemsWithStartPosition(mediaItems, startIndex, startPositionMs)
+            val filteredItems = filterCachedItems(mediaItems)
+            val result = MediaSession.MediaItemsWithStartPosition(
+                filteredItems,
+                if (filteredItems.isEmpty()) 0 else 0,
+                if (filteredItems.isEmpty()) 0L else startPositionMs
+            )
             return Futures.immediateFuture(result)
         }
     }
 
-    private fun prepareFromCache(mediaItem: MediaItem) {
-        val audioData = AudioCache.get(mediaItem.mediaId)
-        if (audioData != null) {
-            val safeItem = if (mediaItem.localConfiguration?.uri == null) {
-                MediaItem.Builder()
-                    .setMediaId(mediaItem.mediaId)
-                    .setUri("https://localhost/")
-                    .build()
-            } else {
-                mediaItem
+    private fun filterCachedItems(mediaItems: List<MediaItem>): List<MediaItem> {
+        return mediaItems.filter { item ->
+            val cached = AudioCache.get(item.mediaId)
+            if (cached == null) {
+                appendLog("TTS cache miss: ${item.mediaId}")
             }
-            val dataSourceFactory = DataSource.Factory { ByteArrayDataSource(audioData) }
-            val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
-                .createMediaSource(safeItem)
-            player.setMediaSource(mediaSource)
-        } else {
-            // If data is not in cache, we can't play it.
-            // The ViewModel is responsible for putting it there first.
-            // We'll just prepare the player with an empty source to avoid errors.
-            player.clearMediaItems()
+            cached != null
         }
     }
 
@@ -78,9 +68,12 @@ class ReadAudioService : MediaSessionService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
             .build()
 
+        val dataSourceFactory = DataSource.Factory { TtsDataSource() }
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
         player = ExoPlayer.Builder(this)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            .setMediaSourceFactory(mediaSourceFactory)
             .build()
 
         mediaSession = MediaSession.Builder(this, player)

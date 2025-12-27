@@ -8,6 +8,7 @@ struct BookListView: View {
     @State private var isReversed = false
     @State private var showingActionSheet = false  // 显示操作菜单
     @State private var showingDocumentPicker = false
+    @State private var selectedBook: Book?
     
     // 过滤和排序后的书籍列表
     var filteredAndSortedBooks: [Book] {
@@ -55,9 +56,10 @@ struct BookListView: View {
     var body: some View {
         List {
             ForEach(filteredAndSortedBooks) { book in
-                NavigationLink(destination: ReadingView(book: book)) {
+                Button(action: { selectedBook = book }) {
                     BookRow(book: book)
                 }
+                .buttonStyle(PlainButtonStyle())
                 .contextMenu {
                     Button(role: .destructive) {
                         showingActionSheet = true
@@ -107,6 +109,9 @@ struct BookListView: View {
                     await importBook(from: url)
                 }
             }
+        }
+        .fullScreenCover(item: $selectedBook) { book in
+            ReadingView(book: book)
         }
         .task {
             if apiService.books.isEmpty {
