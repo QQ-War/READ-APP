@@ -162,6 +162,27 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
 
+    func nextSentence() {
+        guard totalSentences > 0 else { return }
+        guard currentSentenceIndex < totalSentences - 1 else { return }
+        audioPlayer?.stop()
+        audioPlayer = nil
+        isPaused = false
+        currentSentenceIndex += 1
+        speakNextSentence()
+    }
+
+    func previousSentence() {
+        guard totalSentences > 0 else { return }
+        guard currentSentenceIndex > 0 else { return }
+        audioPlayer?.stop()
+        audioPlayer = nil
+        isPaused = false
+        currentSentenceIndex -= 1
+        speakNextSentence()
+    }
+
+
     // ... (rest of the TTSManager file, no changes to other methods)
     
     // MARK: - Preloading, Audio Playback, etc.
