@@ -35,24 +35,28 @@ import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
 @Composable
 fun BookshelfScreen(
-    books: List<Book>,
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit,
-    onBookClick: (Book) -> Unit,
-    onSearchQueryChange: (String) -> Unit,
-    onSettingsClick: () -> Unit,
-    onImportClick: () -> Unit,
-    modifier: Modifier = Modifier
+    mainNavController: NavController,
+    bookViewModel: BookViewModel = viewModel(factory = BookViewModel.Factory)
 ) {
+    val books by bookViewModel.books.collectAsState()
+    val isLoading by bookViewModel.isLoading.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     val refreshState = rememberPullRefreshState(
-        refreshing = isRefreshing,
-        onRefresh = onRefresh
+        refreshing = isLoading,
+        onRefresh = { bookViewModel.refreshBooks() }
     )
+    val context = LocalContext.current
+
+    val importBookLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            bookViewModel.importBook(it)
+        }
+    }
     
     Scaffold(
         topBar = {
-            // 顶部栏：标题和设置按钮
             TopAppBar(
                 title = {
                     Row(
@@ -73,15 +77,13 @@ fun BookshelfScreen(
                     }
                 },
                 actions = {
-                    // 导入按钮
-                    IconButton(onClick = onImportClick) {
+                    IconButton(onClick = { importBookLauncher.launch("*/*") }) {
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = "导入书籍"
                         )
                     }
-                    // 设置按钮
-                    IconButton(onClick = onSettingsClick) {
+                    IconButton(onClick = { mainNavController.navigate(Screen.Settings.route) }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "设置",
@@ -96,7 +98,7 @@ fun BookshelfScreen(
         }
     ) { paddingValues ->
         Box(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .pullRefresh(refreshState)
@@ -114,7 +116,7 @@ fun BookshelfScreen(
                         query = searchQuery,
                         onQueryChange = {
                             searchQuery = it
-                            onSearchQueryChange(it)
+                            bookViewModel.searchBooks(it)
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -150,14 +152,17 @@ fun BookshelfScreen(
                     items(books) { book ->
                         BookRow(
                             book = book,
-                            onClick = { onBookClick(book) }
+                            onClick = { 
+                                bookViewModel.selectBook(book)
+                                mainNavController.navigate(Screen.Reading.route)
+                            }
                         )
                     }
                 }
             }
 
             PullRefreshIndicator(
-                refreshing = isRefreshing,
+                refreshing = isLoading,
                 state = refreshState,
                 modifier = Modifier.align(Alignment.TopCenter)
             )

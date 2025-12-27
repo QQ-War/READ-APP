@@ -120,6 +120,38 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
         executeWithFailover { it.toggleReplaceRule(accessToken, id, if (isEnabled) 1 else 0) }(buildEndpoints(baseUrl, publicUrl))
     // endregion
 
+    // region Book Sources
+    suspend fun getBookSources(baseUrl: String, publicUrl: String?, accessToken: String): Result<List<com.readapp.data.model.BookSource>> {
+        val pageInfoResult = executeWithFailover {
+            it.getBookSourcesPage(accessToken)
+        }(buildEndpoints(baseUrl, publicUrl))
+
+        if (pageInfoResult.isFailure) {
+            return Result.failure(pageInfoResult.exceptionOrNull() ?: IllegalStateException("Failed to fetch page info"))
+        }
+        val pageInfo = pageInfoResult.getOrThrow()
+
+        val totalPages = pageInfo.page
+        if (totalPages <= 0 || pageInfo.md5.isBlank()) {
+            return Result.success(emptyList())
+        }
+
+        val allSources = mutableListOf<com.readapp.data.model.BookSource>()
+        for (page in 1..totalPages) {
+            val result = executeWithFailover {
+                it.getBookSourcesNew(accessToken, pageInfo.md5, page)
+            }(buildEndpoints(baseUrl, publicUrl))
+
+            if (result.isSuccess) {
+                allSources.addAll(result.getOrThrow())
+            } else {
+                return Result.failure(result.exceptionOrNull() ?: IllegalStateException("Failed to fetch page $page"))
+            }
+        }
+        return Result.success(allSources)
+    }
+    // endregion
+
     private fun createMultipartBodyPart(fileUri: Uri, context: Context): MultipartBody.Part? {
         return context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
             val fileBytes = inputStream.readBytes()

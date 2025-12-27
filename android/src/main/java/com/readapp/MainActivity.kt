@@ -24,6 +24,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.readapp.ui.screens.BookshelfScreen
+import com.readapp.ui.screens.MainScreen
 import com.readapp.ui.screens.LoginScreen
 import com.readapp.ui.screens.ReadingScreen
 import com.readapp.ui.screens.ReplaceRuleScreen
@@ -90,30 +91,9 @@ fun ReadAppMain() {
                 )
             }
 
-            // 书架页面（主页）
+            // 书架页面（主页），现在由 MainScreen 管理
             composable(Screen.Bookshelf.route) {
-                val books by bookViewModel.books.collectAsState()
-
-                BookshelfScreen(
-                    books = books,
-                    isRefreshing = isLoading,
-                    onRefresh = {
-                        bookViewModel.refreshBooks()
-                    },
-                    onBookClick = { book ->
-                        bookViewModel.selectBook(book)
-                        navController.navigate(Screen.Reading.route)
-                    },
-                    onSearchQueryChange = { query ->
-                        bookViewModel.searchBooks(query)
-                    },
-                    onSettingsClick = {
-                        navController.navigate(Screen.Settings.route)
-                    },
-                    onImportClick = {
-                        importBookLauncher.launch("*/*")
-                    }
-                )
+                MainScreen(mainNavController = navController)
             }
 
             // 阅读页面（集成听书功能）
@@ -291,4 +271,5 @@ sealed class Screen(val route: String) {
     object Reading : Screen("reading")
     object Settings : Screen("settings")
     object ReplaceRules : Screen("replace_rules")
+    object BookSource : Screen("book_source")
 }
