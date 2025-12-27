@@ -36,23 +36,23 @@ struct ReadingView: View {
             backgroundView
             mainContent
             if showUIControls {
-                GeometryReader { proxy in
+                GeometryReader { _ in
                     VStack(spacing: 0) {
                         topControlBar
-                            .padding(.top, proxy.safeAreaInsets.top)
                         Spacer()
                     }
                 }
+                .ignoresSafeArea(edges: .top)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
             if showUIControls {
-                GeometryReader { proxy in
+                GeometryReader { _ in
                     VStack(spacing: 0) {
                         Spacer()
                         controlBar
-                            .padding(.bottom, proxy.safeAreaInsets.bottom)
                     }
                 }
+                .ignoresSafeArea(edges: .bottom)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if isLoading { loadingOverlay }
