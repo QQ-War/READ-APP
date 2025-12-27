@@ -36,16 +36,28 @@ struct ReadingView: View {
             backgroundView
             mainContent
             if showUIControls {
-                controlBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                GeometryReader { proxy in
+                    VStack(spacing: 0) {
+                        topControlBar
+                            .padding(.top, proxy.safeAreaInsets.top + 6)
+                        Spacer()
+                    }
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            if showUIControls {
+                VStack(spacing: 0) {
+                    Spacer()
+                    controlBar
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if isLoading { loadingOverlay }
         }
-        .toolbar(content: toolbarContent)
         .animation(.easeInOut(duration: 0.2), value: showUIControls)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .applyNavigationToolbarStyle(showUIControls: showUIControls)
+        .navigationBarHidden(true)
         .sheet(isPresented: $showChapterList) {
             ChapterListView(
                 chapters: chapters,
@@ -82,26 +94,6 @@ struct ReadingView: View {
                     lastTTSSentenceIndex = ttsManager.currentSentenceIndex
                 }
             }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private func toolbarContent() -> some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
-            Button(action: { dismiss() }) {
-                Image(systemName: "chevron.left")
-            }
-            .opacity(showUIControls ? 1 : 0)
-        }
-        ToolbarItem(placement: .principal) {
-            Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "")
-                .font(.caption)
-                .lineLimit(1)
-                .opacity(showUIControls ? 1 : 0)
-        }
-        ToolbarItem(placement: .navigationBarTrailing) {
-            // Balance the leading item
-            Color.clear.frame(width: 30, height: 30)
         }
     }
 
@@ -253,6 +245,26 @@ struct ReadingView: View {
         }
     }
 
+    private var topControlBar: some View {
+        HStack(spacing: 12) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "chevron.left")
+                    .font(.title3)
+                    .frame(width: 36, height: 36)
+            }
+            Spacer()
+            Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "")
+                .font(.headline)
+                .lineLimit(1)
+            Spacer()
+            Color.clear
+                .frame(width: 36, height: 36)
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+        .background(Color(UIColor.systemBackground).opacity(0.95))
+        .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
+    }
     // MARK: - Content Processing
     private func updateProcessedContent(from rawText: String) {
         if rawText.isEmpty {
@@ -467,20 +479,6 @@ struct ReadingView: View {
             withAnimation { currentPageIndex += 1 }
         } else if currentChapterIndex < chapters.count - 1 {
             nextChapter()
-        }
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func applyNavigationToolbarStyle(showUIControls: Bool) -> some View {
-        if #available(iOS 16.0, *) {
-            self
-                .toolbarBackground(.automatic, for: .navigationBar)
-                .toolbar(showUIControls ? .visible : .hidden, for: .navigationBar)
-                .toolbar(.hidden, for: .tabBar)
-        } else {
-            self
         }
     }
 }
