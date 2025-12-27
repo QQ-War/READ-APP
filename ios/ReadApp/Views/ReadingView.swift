@@ -600,10 +600,10 @@ struct TextPaginator {
             let visibleRange = CTFrameGetVisibleStringRange(frame)
             let length = visibleRange.length
             if length == 0 { break }
-            let pageRange = NSRange(location: location, length: length)
-            let startSentenceIndex = sentenceIndex(for: location, in: paragraphStarts)
+            let pageRange = NSRange(location: visibleRange.location, length: length)
+            let startSentenceIndex = sentenceIndex(for: visibleRange.location, in: paragraphStarts)
             pages.append(PaginatedPage(range: pageRange, startSentenceIndex: startSentenceIndex))
-            location += length
+            location = visibleRange.location + length
         }
 
         return pages
