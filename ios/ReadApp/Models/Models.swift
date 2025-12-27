@@ -76,7 +76,7 @@ struct ChapterContentResponse: Codable {
 }
 
 // MARK: - Replace Rule Model
-struct ReplaceRule: Codable, Identifiable {
+struct ReplaceRule: Codable, Identifiable, Equatable {
     let id: String?
     let name: String
     let groupname: String?
@@ -325,4 +325,3 @@ class UserPreferences: ObservableObject {
         isLoggedIn = false
     }
 }
-

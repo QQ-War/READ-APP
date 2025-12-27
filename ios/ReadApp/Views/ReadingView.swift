@@ -472,8 +472,6 @@ struct ReadingView: View {
         }
     }
 
-}
-
     @ViewBuilder
     private var controlBar: some View {
         if ttsManager.isPlaying && !contentSentences.isEmpty {
@@ -519,6 +517,8 @@ struct ReadingView: View {
         .background(Color(UIColor.systemBackground).opacity(0.95))
         .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
     }
+
+}
 
 
 // MARK: - Text Paginator
