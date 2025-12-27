@@ -34,182 +34,11 @@ struct ReadingView: View {
     
     var body: some View {
         ZStack {
-            Color(UIColor.systemBackground)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                if preferences.readingMode == .horizontal && !ttsManager.isPlaying {
-                    GeometryReader { geometry in
-                        let contentInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
-                        let width = geometry.size.width
-                        let tapHandler: (CGFloat) -> Void = { tapX in
-                            if showUIControls {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    showUIControls = false
-                                }
-                            } else if tapX < width / 3 {
-                                goToPreviousPage()
-                            } else if tapX < width * 2 / 3 {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    showUIControls = true
-                                }
-                            } else {
-                                goToNextPage()
-                            }
-                        }
-
-                        let tabView = TabView(selection: $currentPageIndex) {
-                            ForEach(Array(paginatedPages.enumerated()), id: \.offset) { index, page in
-                                Text(page.text)
-                                    .font(.system(size: preferences.fontSize))
-                                    .lineSpacing(preferences.lineSpacing)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                    .padding(contentInsets)
-                                    .tag(index)
-                            }
-                        }
-                        .tabViewStyle(PageTabViewStyle())
-                        .onAppear {
-                            repaginateContent(in: geometry.size, contentInsets: contentInsets)
-                        }
-                        .onChange(of: contentSentences) { _ in
-                            repaginateContent(in: geometry.size, contentInsets: contentInsets)
-                        }
-                        .onChange(of: preferences.fontSize) { _ in
-                            repaginateContent(in: geometry.size, contentInsets: contentInsets)
-                        }
-                        .onChange(of: preferences.lineSpacing) { _ in
-                            repaginateContent(in: geometry.size, contentInsets: contentInsets)
-                        }
-                        .onChange(of: currentPageIndex) { newIndex in
-                            if paginatedPages.indices.contains(newIndex) {
-                                lastTTSSentenceIndex = paginatedPages[newIndex].startSentenceIndex
-                            }
-                        }
-
-                        if #available(iOS 17.0, *) {
-                            let singleTap = SpatialTapGesture(count: 1)
-                                .onEnded { value in
-                                    tapHandler(value.location.x)
-                                }
-                            tabView.simultaneousGesture(singleTap)
-                        } else {
-                            let fallbackTap = TapGesture()
-                                .onEnded {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        showUIControls.toggle()
-                                    }
-                                }
-                            tabView.simultaneousGesture(fallbackTap)
-                        }
-                    }
-                } else {
-                    // 内容区域
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 16) {
-                                if currentChapterIndex < chapters.count {
-                                    Text(chapters[currentChapterIndex].title)
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .padding(.bottom, 8)
-                                        .opacity(showUIControls ? 1 : 0)
-                                        .accessibilityHidden(!showUIControls)
-                                }
-                                
-                                if !contentSentences.isEmpty && ttsManager.isPlaying {
-                                    // TTS播放模式
-                                    VStack(alignment: .leading, spacing: preferences.fontSize * 0.8) {
-                                        ForEach(Array(contentSentences.enumerated()), id: \.offset) { index, sentence in
-                                            Text("　　" + sentence.trimmingCharacters(in: .whitespacesAndNewlines))
-                                                .font(.system(size: preferences.fontSize))
-                                                .lineSpacing(preferences.lineSpacing)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .fixedSize(horizontal: false, vertical: true)
-                                                .padding(.vertical, 6)
-                                                .padding(.horizontal, 8)
-                                                .background(
-                                                    RoundedRectangle(cornerRadius: 4)
-                                                        .fill(
-                                                            index == ttsManager.currentSentenceIndex
-                                                                ? Color.blue.opacity(0.25)
-                                                                : (ttsManager.preloadedIndices.contains(index) && index > ttsManager.currentSentenceIndex)
-                                                                    ? Color.green.opacity(0.15)
-                                                                    : Color.clear
-                                                        )
-                                                        .animation(.easeInOut(duration: 0.3), value: ttsManager.currentSentenceIndex)
-                                                )
-                                                .id(index)
-                                        }
-                                    }
-                                } else {
-                                    // 普通阅读模式
-                                    RichTextView(
-                                        sentences: contentSentences,
-                                        fontSize: preferences.fontSize,
-                                        lineSpacing: preferences.lineSpacing,
-                                        highlightIndex: lastTTSSentenceIndex,
-                                        scrollProxy: scrollProxy
-                                    )
-                                }
-                            }
-                            .padding()
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                showUIControls.toggle()
-                            }
-                        }
-                        .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
-                            if ttsManager.isPlaying && !contentSentences.isEmpty {
-                                withAnimation {
-                                    proxy.scrollTo(newIndex, anchor: .center)
-                                }
-                            }
-                        }
-                        .onAppear {
-                            scrollProxy = proxy
-                        }
-                    }
-                }
-                
-                if preferences.readingMode != .horizontal {
-                    controlBar
-                        .opacity(showUIControls ? 1 : 0)
-                        .allowsHitTesting(showUIControls)
-                        .accessibilityHidden(!showUIControls)
-                }
-            }
-            
-
-            if showUIControls {
-                GeometryReader { proxy in
-                    VStack {
-                        topBar
-                            .padding(.top, proxy.safeAreaInsets.top + 6)
-                        Spacer()
-                    }
-                }
-                .allowsHitTesting(showUIControls)
-                .accessibilityHidden(!showUIControls)
-            }
-            if isLoading {
-                ProgressView("加载中...")
-                    .padding()
-                    .background(Color(UIColor.systemBackground))
-                    .cornerRadius(10)
-                    .shadow(radius: 10)
-            }
-            if preferences.readingMode == .horizontal {
-                VStack {
-                    Spacer()
-                    controlBar
-                }
-                .opacity(showUIControls ? 1 : 0)
-                .allowsHitTesting(showUIControls)
-                .accessibilityHidden(!showUIControls)
-            }
+            backgroundView
+            mainContent
+            if showUIControls { topBarOverlay }
+            if isLoading { loadingOverlay }
+            if preferences.readingMode == .horizontal { bottomControlOverlay }
         }
         .navigationTitle(book.name ?? "阅读")
         // .navigationBarTitleDisplayMode(.inline) // ???????
@@ -272,6 +101,197 @@ struct ReadingView: View {
         }
     }
     
+
+
+    private var backgroundView: some View {
+        Color(UIColor.systemBackground)
+            .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            if preferences.readingMode == .horizontal && !ttsManager.isPlaying {
+                horizontalReader
+            } else {
+                verticalReader
+            }
+
+            if preferences.readingMode != .horizontal {
+                controlBar
+                    .opacity(showUIControls ? 1 : 0)
+                    .allowsHitTesting(showUIControls)
+                    .accessibilityHidden(!showUIControls)
+            }
+        }
+    }
+
+    private var horizontalReader: some View {
+        GeometryReader { geometry in
+            let contentInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
+            let width = geometry.size.width
+            let tapHandler: (CGFloat) -> Void = { tapX in
+                if showUIControls {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showUIControls = false
+                    }
+                } else if tapX < width / 3 {
+                    goToPreviousPage()
+                } else if tapX < width * 2 / 3 {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showUIControls = true
+                    }
+                } else {
+                    goToNextPage()
+                }
+            }
+
+            let tabView = TabView(selection: $currentPageIndex) {
+                ForEach(Array(paginatedPages.enumerated()), id: \.offset) { index, page in
+                    Text(page.text)
+                        .font(.system(size: preferences.fontSize))
+                        .lineSpacing(preferences.lineSpacing)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(contentInsets)
+                        .tag(index)
+                }
+            }
+            .tabViewStyle(PageTabViewStyle())
+            .onAppear {
+                repaginateContent(in: geometry.size, contentInsets: contentInsets)
+            }
+            .onChange(of: contentSentences) { _ in
+                repaginateContent(in: geometry.size, contentInsets: contentInsets)
+            }
+            .onChange(of: preferences.fontSize) { _ in
+                repaginateContent(in: geometry.size, contentInsets: contentInsets)
+            }
+            .onChange(of: preferences.lineSpacing) { _ in
+                repaginateContent(in: geometry.size, contentInsets: contentInsets)
+            }
+            .onChange(of: currentPageIndex) { newIndex in
+                if paginatedPages.indices.contains(newIndex) {
+                    lastTTSSentenceIndex = paginatedPages[newIndex].startSentenceIndex
+                }
+            }
+
+            if #available(iOS 17.0, *) {
+                let singleTap = SpatialTapGesture(count: 1)
+                    .onEnded { value in
+                        tapHandler(value.location.x)
+                    }
+                tabView.simultaneousGesture(singleTap)
+            } else {
+                let fallbackTap = TapGesture()
+                    .onEnded {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showUIControls.toggle()
+                        }
+                    }
+                tabView.simultaneousGesture(fallbackTap)
+            }
+        }
+    }
+
+    private var verticalReader: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if currentChapterIndex < chapters.count {
+                        Text(chapters[currentChapterIndex].title)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .padding(.bottom, 8)
+                            .opacity(showUIControls ? 1 : 0)
+                            .accessibilityHidden(!showUIControls)
+                    }
+
+                    if !contentSentences.isEmpty && ttsManager.isPlaying {
+                        // TTS????
+                        VStack(alignment: .leading, spacing: preferences.fontSize * 0.8) {
+                            ForEach(Array(contentSentences.enumerated()), id: \.offset) { index, sentence in
+                                Text("　　" + sentence.trimmingCharacters(in: .whitespacesAndNewlines))
+                                    .font(.system(size: preferences.fontSize))
+                                    .lineSpacing(preferences.lineSpacing)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(
+                                                index == ttsManager.currentSentenceIndex
+                                                    ? Color.blue.opacity(0.25)
+                                                    : (ttsManager.preloadedIndices.contains(index) && index > ttsManager.currentSentenceIndex)
+                                                        ? Color.green.opacity(0.15)
+                                                        : Color.clear
+                                            )
+                                            .animation(.easeInOut(duration: 0.3), value: ttsManager.currentSentenceIndex)
+                                    )
+                                    .id(index)
+                            }
+                        }
+                    } else {
+                        // ??????
+                        RichTextView(
+                            sentences: contentSentences,
+                            fontSize: preferences.fontSize,
+                            lineSpacing: preferences.lineSpacing,
+                            highlightIndex: lastTTSSentenceIndex,
+                            scrollProxy: scrollProxy
+                        )
+                    }
+                }
+                .padding()
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showUIControls.toggle()
+                }
+            }
+            .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
+                if ttsManager.isPlaying && !contentSentences.isEmpty {
+                    withAnimation {
+                        proxy.scrollTo(newIndex, anchor: .center)
+                    }
+                }
+            }
+            .onAppear {
+                scrollProxy = proxy
+            }
+        }
+    }
+
+    private var topBarOverlay: some View {
+        GeometryReader { proxy in
+            VStack {
+                topBar
+                    .padding(.top, proxy.safeAreaInsets.top + 6)
+                Spacer()
+            }
+        }
+        .allowsHitTesting(showUIControls)
+        .accessibilityHidden(!showUIControls)
+    }
+
+    private var loadingOverlay: some View {
+        ProgressView("???...")
+            .padding()
+            .background(Color(UIColor.systemBackground))
+            .cornerRadius(10)
+            .shadow(radius: 10)
+    }
+
+    private var bottomControlOverlay: some View {
+        VStack {
+            Spacer()
+            controlBar
+        }
+        .opacity(showUIControls ? 1 : 0)
+        .allowsHitTesting(showUIControls)
+        .accessibilityHidden(!showUIControls)
+    }
     // MARK: - 内容处理
 
     private func updateProcessedContent(from rawText: String) {

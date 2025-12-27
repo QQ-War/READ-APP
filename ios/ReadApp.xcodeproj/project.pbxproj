@@ -24,6 +24,9 @@
 		1A00002A000000000000003 /* ReplaceRuleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00002D000000000000003 /* ReplaceRuleListView.swift */; };
 		1A00002B000000000000003 /* ReplaceRuleEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00002E000000000000003 /* ReplaceRuleEditView.swift */; };
 		1A00002C000000000000003 /* ReplaceRuleViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00002F000000000000003 /* ReplaceRuleViewModel.swift */; };
+		1A00003A000000000000003 /* BookSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000039000000000000003 /* BookSource.swift */; };
+		1A00003C000000000000003 /* SourceListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00003B000000000000003 /* SourceListViewModel.swift */; };
+		1A00003E000000000000003 /* SourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00003D000000000000003 /* SourceListView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +47,9 @@
 		1A00002D000000000000003 /* ReplaceRuleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRuleListView.swift; sourceTree = "<group>"; };
 		1A00002E000000000000003 /* ReplaceRuleEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRuleEditView.swift; sourceTree = "<group>"; };
 		1A00002F000000000000003 /* ReplaceRuleViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRuleViewModel.swift; sourceTree = "<group>"; };
+		1A000039000000000000003 /* BookSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSource.swift; sourceTree = "<group>"; };
+		1A00003B000000000000003 /* SourceListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceListViewModel.swift; sourceTree = "<group>"; };
+		1A00003D000000000000003 /* SourceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceListView.swift; sourceTree = "<group>"; };
 		1A000020000000000000001 /* ReadApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000021000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -94,6 +100,7 @@
 			isa = PBXGroup;
 			children = (
 				1A000012000000000000001 /* BookListView.swift */,
+				1A00003D000000000000003 /* SourceListView.swift */,
 				1A000014000000000000001 /* ReadingView.swift */,
 				1A000018000000000000001 /* SettingsView.swift */,
 				1A000020000000000000002 /* TTSSelectionView.swift */,
@@ -110,6 +117,7 @@
 			isa = PBXGroup;
 			children = (
 				1A00002F000000000000003 /* ReplaceRuleViewModel.swift */,
+				1A00003B000000000000003 /* SourceListViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -128,6 +136,7 @@
 			isa = PBXGroup;
 			children = (
 				1A000010000000000000001 /* Models.swift */,
+				1A000039000000000000003 /* BookSource.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -205,7 +214,9 @@
 				1A000003000000000000001 /* ContentView.swift in Sources */,
 				1A000007000000000000001 /* APIService.swift in Sources */,
 				1A000009000000000000001 /* Models.swift in Sources */,
+				1A00003A000000000000003 /* BookSource.swift in Sources */,
 				1A000011000000000000001 /* BookListView.swift in Sources */,
+				1A00003E000000000000003 /* SourceListView.swift in Sources */,
 				1A000013000000000000001 /* ReadingView.swift in Sources */,
 				1A000015000000000000001 /* TTSManager.swift in Sources */,
 				1A000017000000000000001 /* SettingsView.swift in Sources */,
@@ -217,6 +228,7 @@
 				1A00002A000000000000003 /* ReplaceRuleListView.swift in Sources */,
 				1A00002B000000000000003 /* ReplaceRuleEditView.swift in Sources */,
 				1A00002C000000000000003 /* ReplaceRuleViewModel.swift in Sources */,
+				1A00003C000000000000003 /* SourceListViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
