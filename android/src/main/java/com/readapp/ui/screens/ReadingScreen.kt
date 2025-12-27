@@ -370,7 +370,7 @@ fun ReadingScreen(
                         }
 
                         LaunchedEffect(pendingJumpToLastPage, paginatedPages, currentChapterIndex) {
-                            if (pendingJumpToLastPage && paginatedPages.isNotEmpty()) {
+                            if (pendingJumpToLastPage && !paginatedPages.isEmpty()) {
                                 pagerState.scrollToPage(paginatedPages.lastIndex)
                                 pendingJumpToLastPage = false
                             }
