@@ -9,7 +9,7 @@ struct ReadingView: View {
     @StateObject private var ttsManager = TTSManager.shared
     @StateObject private var preferences = UserPreferences.shared
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
-    
+
     @State private var chapters: [BookChapter] = []
     @State private var currentChapterIndex: Int
     @State private var currentContent = ""
@@ -24,43 +24,34 @@ struct ReadingView: View {
     @State private var showFontSettings = false
     @State private var currentPageIndex: Int = 0
     @State private var paginatedPages: [PaginatedPage] = []
-    
+
     init(book: Book) {
         self.book = book
         _currentChapterIndex = State(initialValue: book.durChapterIndex ?? 0)
         _lastTTSSentenceIndex = State(initialValue: Int(book.durChapterPos ?? 0))
     }
-    
+
     var body: some View {
-        ZStack {
-            backgroundView
-            mainContent
-            if showUIControls {
-                GeometryReader { proxy in
-                    VStack(spacing: 0) {
-                        topControlBar(safeAreaTop: proxy.safeAreaInsets.top)
-                        Spacer()
-                    }
+        GeometryReader { proxy in
+            ZStack {
+                backgroundView
+                mainContent(safeArea: proxy.safeAreaInsets)
+                
+                if showUIControls {
+                    topBar(safeArea: proxy.safeAreaInsets)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    
+                    bottomBar(safeArea: proxy.safeAreaInsets)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+                
+                if isLoading { loadingOverlay }
             }
-            if showUIControls {
-                GeometryReader { proxy in
-                    VStack(spacing: 0) {
-                        Spacer()
-                        controlBar
-                        Color(UIColor.systemBackground)
-                            .frame(height: proxy.safeAreaInsets.bottom)
-                    }
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            if isLoading { loadingOverlay }
+            .animation(.easeInOut(duration: 0.2), value: showUIControls)
+            .ignoresSafeArea()
+            .navigationBarHidden(true)
+            .navigationBarBackButtonHidden(true)
         }
-        .animation(.easeInOut(duration: 0.2), value: showUIControls)
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .navigationBarHidden(true)
         .sheet(isPresented: $showChapterList) {
             ChapterListView(
                 chapters: chapters,
@@ -101,21 +92,64 @@ struct ReadingView: View {
     }
 
     private var backgroundView: some View {
-        Color(UIColor.systemBackground).ignoresSafeArea()
+        Color(UIColor.systemBackground)
     }
 
     @ViewBuilder
-    private var mainContent: some View {
-        VStack(spacing: 0) {
-            if preferences.readingMode == .horizontal && !ttsManager.isPlaying {
-                horizontalReader
-            } else {
-                verticalReader
-            }
-            
+    private func mainContent(safeArea: EdgeInsets) -> some View {
+        if preferences.readingMode == .horizontal && !ttsManager.isPlaying {
+            horizontalReader
+        } else {
+            verticalReader
+                .padding(.top, safeArea.top)
+                .padding(.bottom, safeArea.bottom)
         }
     }
     
+    @ViewBuilder
+    private func topBar(safeArea: EdgeInsets) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                     Text(book.name ?? "阅读")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .lineLimit(1)
+                    
+                    Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "加载中...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                
+                Spacer()                
+                Color.clear.frame(width: 44, height: 44) // Placeholder for balance
+            }
+            .padding(.top, safeArea.top)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+            .background(.thinMaterial)
+            
+            Spacer()
+        }
+    }
+    
+    @ViewBuilder
+    private func bottomBar(safeArea: EdgeInsets) -> some View {
+        VStack(spacing: 0) {
+            Spacer()
+            controlBar
+                .padding(.bottom, safeArea.bottom)
+                .background(.thinMaterial)
+        }
+    }
+
     private var verticalReader: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -130,9 +164,7 @@ struct ReadingView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    showUIControls.toggle()
-                }
+                showUIControls.toggle()
             }
             .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
                 if ttsManager.isPlaying && !contentSentences.isEmpty {
@@ -148,27 +180,22 @@ struct ReadingView: View {
     }
     
     private var horizontalReader: some View {
-        // Horizontal reader implementation remains the same
         GeometryReader { geometry in
             let contentInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
             let width = geometry.size.width
             let tapHandler: (CGFloat) -> Void = { tapX in
                 if showUIControls {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        showUIControls = false
-                    }
+                    showUIControls = false
                 } else if tapX < width / 3 {
                     goToPreviousPage()
                 } else if tapX < width * 2 / 3 {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        showUIControls = true
-                    }
+                    showUIControls = true
                 } else {
                     goToNextPage()
                 }
             }
 
-            let tabView = TabView(selection: $currentPageIndex) { 
+            let tabView = TabView(selection: $currentPageIndex) {
                 ForEach(Array(paginatedPages.enumerated()), id: \.offset) { index, page in
                     Text(page.text)
                         .font(.system(size: preferences.fontSize))
@@ -178,7 +205,7 @@ struct ReadingView: View {
                         .tag(index)
                 }
             }
-            .tabViewStyle(PageTabViewStyle())
+            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             .onAppear {
                 repaginateContent(in: geometry.size, contentInsets: contentInsets)
             }
@@ -206,9 +233,7 @@ struct ReadingView: View {
             } else {
                 let fallbackTap = TapGesture()
                     .onEnded {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showUIControls.toggle()
-                        }
+                        showUIControls.toggle()
                     }
                 tabView.simultaneousGesture(fallbackTap)
             }
@@ -223,7 +248,6 @@ struct ReadingView: View {
             .shadow(radius: 10)
     }
 
-    // MARK: - Control Bar
     @ViewBuilder
     private var controlBar: some View {
         if ttsManager.isPlaying && !contentSentences.isEmpty {
@@ -248,28 +272,9 @@ struct ReadingView: View {
         }
     }
 
-    private func topControlBar(safeAreaTop: CGFloat) -> some View {
-        HStack(spacing: 12) {
-            Button(action: { dismiss() }) {
-                Image(systemName: "chevron.left")
-                    .font(.title3)
-                    .frame(width: 36, height: 36)
-            }
-            Spacer()
-            Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "")
-                .font(.headline)
-                .lineLimit(1)
-            Spacer()
-            Color.clear
-                .frame(width: 36, height: 36)
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, safeAreaTop)
-        .padding(.bottom, 8)
-        .background(Color(UIColor.systemBackground).opacity(0.95).ignoresSafeArea(edges: .top))
-        .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
-    }
-    // MARK: - Content Processing
+    // MARK: - Content Processing & Data Loading (and other logic) 
+    // All other functions (updateProcessedContent, loadChapters, etc.) remain unchanged.
+    
     private func updateProcessedContent(from rawText: String) {
         if rawText.isEmpty {
             currentContent = "章节内容为空"
@@ -299,7 +304,7 @@ struct ReadingView: View {
 
     private func removeHTMLAndSVG(_ text: String) -> String {
         var result = text
-        let svgPattern = "<svg[^>]*>.*?</svg>"
+        let svgPattern = "<svg[^>]*>.*?<\/svg>"
         if let svgRegex = try? NSRegularExpression(pattern: svgPattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
             result = svgRegex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
         }
@@ -316,7 +321,6 @@ struct ReadingView: View {
             .filter { !$0.isEmpty }
     }
     
-    // MARK: - Data Loading
     private func loadChapters() async {
         isLoading = true
         do {
@@ -369,7 +373,6 @@ struct ReadingView: View {
         }
     }
     
-    // MARK: - Navigation
     private func previousChapter() {
         guard currentChapterIndex > 0 else { return }
         currentChapterIndex -= 1
@@ -384,7 +387,6 @@ struct ReadingView: View {
         saveProgress()
     }
     
-    // MARK: - TTS Control
     private func toggleTTS() {
         if ttsManager.isPlaying {
             if ttsManager.isPaused {
@@ -424,7 +426,6 @@ struct ReadingView: View {
         )
     }
     
-    // MARK: - Progress & Preloading
     private func preloadNextChapter() {
         guard currentChapterIndex < chapters.count - 1 else { return }
         let nextChapterIndex = currentChapterIndex + 1
