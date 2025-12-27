@@ -330,7 +330,7 @@ private fun ReadingProgress(
                 color = MaterialTheme.customColors.textSecondary
             )
             Text(
-                text = "$currentChapter/$totalChapters章",
+                text = "$currentChapter/$totalChapters?",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.customColors.textSecondary
             )
