@@ -112,7 +112,7 @@ struct ReadingView: View {
     @ViewBuilder
     private func mainContent(safeArea: EdgeInsets) -> some View {
         if preferences.readingMode == .horizontal {
-            horizontalReader
+            horizontalReader(safeArea: safeArea)
         } else {
             verticalReader
                 .padding(.top, safeArea.top)
@@ -159,61 +159,91 @@ struct ReadingView: View {
         }
     }
     
-    private var horizontalReader: some View {
+    private func horizontalReader(safeArea: EdgeInsets) -> some View {
         GeometryReader { geometry in
-            // Calculate content area size, leaving space for status bar and bottom operation area
+            // Define desired margins *within* the safe area
+            let horizontalMargin: CGFloat = 10
+            let verticalMargin: CGFloat = 10
+
+            // The precise size for both pagination and rendering
             let contentSize = CGSize(
-                width: max(0, geometry.size.width - horizontalPadding * 2),
-                height: max(0, geometry.size.height - verticalPadding * 2)
+                width: max(0, geometry.size.width - safeArea.leading - safeArea.trailing - horizontalMargin * 2),
+                height: max(0, geometry.size.height - safeArea.top - safeArea.bottom - verticalMargin * 2)
             )
-            
-            ZStack(alignment: .bottomTrailing) {
-                // ReadPageViewController is now placed directly within a frame matching contentSize
-                ReadPageViewController(
-                    pages: paginatedPages,
-                    attributedContent: attributedContent,
-                    currentPageIndex: $currentPageIndex,
-                    onTapMiddle: { showUIControls.toggle() },
-                    onTapLeft: { goToPreviousPage() },
-                    onTapRight: { goToNextPage() },
-                    onSwipeToPreviousChapter: { 
-                        if currentChapterIndex > 0 {
-                            pendingJumpToLastPage = true
-                            previousChapter()
+
+            VStack(spacing: 0) {
+                Spacer().frame(height: safeArea.top + verticalMargin)
+                HStack(spacing: 0) {
+                    Spacer().frame(width: safeArea.leading + horizontalMargin)
+                    
+                    if contentSize.width > 0 && contentSize.height > 0 {
+                        ZStack(alignment: .bottomTrailing) {
+                            ReadPageViewController(
+                                pages: paginatedPages,
+                                attributedContent: attributedContent,
+                                currentPageIndex: $currentPageIndex,
+                                onTapMiddle: { showUIControls.toggle() },
+                                onTapLeft: { goToPreviousPage() },
+                                onTapRight: { goToNextPage() },
+                                onSwipeToPreviousChapter: { 
+                                    if currentChapterIndex > 0 {
+                                        pendingJumpToLastPage = true
+                                        previousChapter()
+                                    }
+                                },
+                                onSwipeToNextChapter: {
+                                    if currentChapterIndex < chapters.count - 1 {
+                                        nextChapter()
+                                    }
+                                }
+                            )
+                            
+                            if !showUIControls && paginatedPages.count > 0 {
+                                let percentage = Int((Double(currentPageIndex + 1) / Double(paginatedPages.count)) * 100)
+                                Text("\(currentPageIndex + 1)/\(paginatedPages.count) (\(percentage)%)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(8)
+                                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                    .padding(12)
+                                    .transition(.opacity.animation(.easeInOut(duration: 0.3)))
+                            }
                         }
-                    },
-                    onSwipeToNextChapter: {
-                        if currentChapterIndex < chapters.count - 1 {
-                            nextChapter()
-                        }
+                        .frame(width: contentSize.width, height: contentSize.height)
+                    } else {
+                        // Placeholder for when size is zero
+                        Rectangle().fill(Color.clear)
                     }
-                )
-                .frame(width: contentSize.width, height: contentSize.height)
-                .position(x: geometry.size.width / 2, y: geometry.size.height / 2) // Center the content area
-                
-                if !showUIControls && paginatedPages.count > 0 {
-                    let percentage = Int((Double(currentPageIndex + 1) / Double(paginatedPages.count)) * 100)
-                    Text("\(currentPageIndex + 1)/\(paginatedPages.count) (\(percentage)%)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(8)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                        .padding(.bottom, verticalPadding)
-                        .padding(.trailing, horizontalPadding)
-                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
+                    
+                    Spacer().frame(width: safeArea.trailing + horizontalMargin)
+                }
+                Spacer().frame(height: safeArea.bottom + verticalMargin)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .onAppear {
+                if contentSize.width > 0 && contentSize.height > 0 {
+                    repaginateContent(in: contentSize)
                 }
             }
-            .onAppear {
-                repaginateContent(in: contentSize)
-            }
             .onChange(of: contentSentences) { _ in
-                repaginateContent(in: contentSize)
+                if contentSize.width > 0 && contentSize.height > 0 {
+                    repaginateContent(in: contentSize)
+                }
             }
             .onChange(of: preferences.fontSize) { _ in
-                repaginateContent(in: contentSize)
+                if contentSize.width > 0 && contentSize.height > 0 {
+                    repaginateContent(in: contentSize)
+                }
             }
             .onChange(of: preferences.lineSpacing) { _ in
-                repaginateContent(in: contentSize)
+                if contentSize.width > 0 && contentSize.height > 0 {
+                    repaginateContent(in: contentSize)
+                }
+            }
+            .onChange(of: geometry.size) { _ in
+                 if contentSize.width > 0 && contentSize.height > 0 {
+                    repaginateContent(in: contentSize)
+                }
             }
             .onChange(of: currentPageIndex) { newIndex in
                 if paginatedPages.indices.contains(newIndex) {
@@ -946,6 +976,13 @@ struct NormalControlBar: View {
                 VStack(spacing: 4) {
                     Image(systemName: "textformat.size").font(.title2)
                     Text("\u{5B57}\u{4F53}").font(.caption2)
+                }
+            }
+            
+            Button(action: onNextChapter) {
+                VStack(spacing: 4) {
+                    Image(systemName: "chevron.right").font(.title2)
+                    Text("\u{4E0B}\u{4E00}\u{7AE0}").font(.caption2)
                 }
             }.disabled(currentChapterIndex >= chaptersCount - 1)
         }

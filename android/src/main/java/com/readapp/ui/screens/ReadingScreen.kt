@@ -248,6 +248,16 @@ fun ReadingScreen(
                         fontSize = readingFontSize.sp,
                         lineHeight = (readingFontSize * 1.8f).sp
                     )
+                    val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title.orEmpty()
+                    val headerLines = listOfNotNull(
+                        book.title.takeIf { it.isNotBlank() },
+                        chapterTitle.takeIf { it.isNotBlank() }
+                    )
+                    val headerText = if (headerLines.isNotEmpty()) {
+                        headerLines.joinToString(separator = "\n") + "\n\n"
+                    } else {
+                        ""
+                    }
                     val lineHeightPx = with(LocalDensity.current) {
                         val lineHeight = style.lineHeight
                         if (lineHeight.value.isNaN() || lineHeight.value <= 0f) {
@@ -266,7 +276,8 @@ fun ReadingScreen(
                         paragraphs = paragraphs,
                         style = style,
                         constraints = availableConstraints,
-                        lineHeightPx = lineHeightPx
+                        lineHeightPx = lineHeightPx,
+                        headerText = headerText
                     )
                     val pageTextCache = remember { mutableStateMapOf<Int, String>() }
                     val pagerState = rememberPagerState { paginatedPages.pages.size.coerceAtLeast(1) }
@@ -547,17 +558,18 @@ private fun rememberPaginatedText(
     paragraphs: List<String>,
     style: TextStyle,
     constraints: Constraints,
-    lineHeightPx: Float
+    lineHeightPx: Float,
+    headerText: String
 ): PaginationResult {
     val textMeasurer = rememberTextMeasurer()
 
-    return remember(paragraphs, style, constraints, lineHeightPx) {
+    return remember(paragraphs, style, constraints, lineHeightPx, headerText) {
         if (paragraphs.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) {
             return@remember PaginationResult(emptyList(), "")
         }
 
-        val paragraphStartIndices = paragraphStartIndices(paragraphs)
-        val fullText = fullContent(paragraphs)
+        val paragraphStartIndices = paragraphStartIndices(paragraphs, headerText.length)
+        val fullText = fullContent(paragraphs, headerText)
         val layout = textMeasurer.measure(
             text = AnnotatedString(fullText),
             style = style,
@@ -589,7 +601,8 @@ private fun rememberPaginatedText(
             if (endOffset <= startOffset) {
                 break
             }
-            val startParagraphIndex = paragraphIndexForOffset(startOffset, paragraphStartIndices)
+            val adjustedOffset = (startOffset - headerText.length).coerceAtLeast(0)
+            val startParagraphIndex = paragraphIndexForOffset(adjustedOffset, paragraphStartIndices)
             pages.add(PaginatedPage(start = startOffset, end = endOffset, startParagraphIndex = startParagraphIndex))
             startLine = endLine + 1
         }
@@ -620,13 +633,14 @@ private data class PaginationResult(
     operator fun get(index: Int): PaginatedPage = pages[index]
 }
 
-private fun fullContent(paragraphs: List<String>): String {
-    return paragraphs.joinToString(separator = "\n\n") { it.trim() }
+private fun fullContent(paragraphs: List<String>, headerText: String): String {
+    val body = paragraphs.joinToString(separator = "\n\n") { it.trim() }
+    return headerText + body
 }
 
-private fun paragraphStartIndices(paragraphs: List<String>): List<Int> {
+private fun paragraphStartIndices(paragraphs: List<String>, prefixLength: Int): List<Int> {
     val starts = mutableListOf<Int>()
-    var currentIndex = 0
+    var currentIndex = prefixLength
     paragraphs.forEachIndexed { index, paragraph ->
         starts.add(currentIndex)
         currentIndex += paragraph.trim().length
@@ -914,17 +928,17 @@ private fun BottomControlBar(
                 
                 // 下一章
                 ControlButton(
-                    icon = Icons.Default.SkipNext,
-                    label = "下一章",
-                    onClick = onNextChapter,
-                    enabled = canGoNext
+                    icon = Icons.Default.FormatSize,
+                    label = "字体",
+                    onClick = onFontSettings
                 )
                 
                 // 字体大小（TODO）
                 ControlButton(
-                    icon = Icons.Default.FormatSize,
-                    label = "字体",
-                    onClick = onFontSettings
+                    icon = Icons.Default.SkipNext,
+                    label = "下一章",
+                    onClick = onNextChapter,
+                    enabled = canGoNext
                 )
             }
         }
