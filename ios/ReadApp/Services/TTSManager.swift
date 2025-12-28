@@ -41,7 +41,7 @@ class TTSManager: NSObject, ObservableObject {
     
     // 绔犺妭鍚嶆湕璇?
     private var isReadingChapterTitle = false  // 鏄惁姝ｅ湪鏈楄绔犺妭鍚?
-    private var allowChapterTitlePlayback = !chapters[currentChapterIndex].title.isEmpty
+    private var allowChapterTitlePlayback = true
     
     // 鍚庡彴淇濇椿
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -123,7 +123,7 @@ class TTSManager: NSObject, ObservableObject {
     
     private override init() {
         super.init()
-        logger.log("TTSManager 鍒濆鍖?, category: "TTS")
+        logger.log("TTSManager 鍒濆鍖?", category: "TTS")
         setupAudioSession()
         setupRemoteCommands()
         setupNotifications()
@@ -207,28 +207,28 @@ class TTSManager: NSObject, ObservableObject {
         switch type {
         case .began:
             // 涓柇寮€濮嬶紙濡傛潵鐢点€侀椆閽熺瓑锛?
-            logger.log("馃敂 闊抽涓柇寮€濮?, category: "TTS")
+            logger.log("馃敂 闊抽涓柇寮€濮?", category: "TTS")
             if isPlaying && !isPaused {
                 pause()
-                logger.log("宸叉殏鍋滄挱鏀?, category: "TTS")
+                logger.log("宸叉殏鍋滄挱鏀?", category: "TTS")
             }
             
         case .ended:
             // 涓柇缁撴潫
             guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else {
-                logger.log("馃敂 闊抽涓柇缁撴潫锛堟棤鎭㈠閫夐」锛?, category: "TTS")
+                logger.log("馃敂 闊抽涓柇缁撴潫锛堟棤鎭㈠閫夐」锛?", category: "TTS")
                 return
             }
             
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
             if options.contains(.shouldResume) {
                 // 绯荤粺寤鸿鎭㈠鎾斁
-                logger.log("馃敂 闊抽涓柇缁撴潫锛岃嚜鍔ㄦ仮澶嶆挱鏀?, category: "TTS")
+                logger.log("馃敂 闊抽涓柇缁撴潫锛岃嚜鍔ㄦ仮澶嶆挱鏀?", category: "TTS")
                 
                 // 閲嶆柊婵€娲婚煶棰戜細璇?
                 do {
                     try AVAudioSession.sharedInstance().setActive(true)
-                    logger.log("闊抽浼氳瘽閲嶆柊婵€娲?, category: "TTS")
+                    logger.log("闊抽浼氳瘽閲嶆柊婵€娲?", category: "TTS")
                 } catch {
                     logger.log("鉂?閲嶆柊婵€娲婚煶棰戜細璇濆け璐? \(error)", category: "TTS閿欒")
                 }
@@ -238,15 +238,15 @@ class TTSManager: NSObject, ObservableObject {
                     guard let self = self else { return }
                     if self.isPlaying && self.isPaused {
                         self.resume()
-                        self.logger.log("鉁?鎾斁宸叉仮澶?, category: "TTS")
+                        self.logger.log("鉁?鎾斁宸叉仮澶?", category: "TTS")
                     }
                 }
             } else {
-                logger.log("馃敂 闊抽涓柇缁撴潫锛堜笉寤鸿鑷姩鎭㈠锛?, category: "TTS")
+                logger.log("馃敂 闊抽涓柇缁撴潫锛堜笉寤鸿鑷姩鎭㈠锛?", category: "TTS")
             }
             
         @unknown default:
-            logger.log("鈿狅笍 鏈煡鐨勯煶棰戜腑鏂被鍨?, category: "TTS")
+            logger.log("鈿狅笍 鏈煡鐨勯煶棰戜腑鏂被鍨?", category: "TTS")
         }
     }
     
@@ -261,14 +261,14 @@ class TTSManager: NSObject, ObservableObject {
         switch reason {
         case .oldDeviceUnavailable:
             // 闊抽杈撳嚭璁惧鏂紑锛堝鑰虫満鎷斿嚭锛?
-            logger.log("馃帶 闊抽璁惧鏂紑锛屾殏鍋滄挱鏀?, category: "TTS")
+            logger.log("馃帶 闊抽璁惧鏂紑锛屾殏鍋滄挱鏀?", category: "TTS")
             if isPlaying && !isPaused {
                 pause()
             }
             
         case .newDeviceAvailable:
             // 鏂扮殑闊抽杈撳嚭璁惧杩炴帴
-            logger.log("馃帶 鏂伴煶棰戣澶囪繛鎺?, category: "TTS")
+            logger.log("馃帶 鏂伴煶棰戣澶囪繛鎺?", category: "TTS")
             
         default:
             logger.log("馃帶 闊抽璺敱鍙樻洿: \(reason.rawValue)", category: "TTS")
@@ -385,7 +385,7 @@ class TTSManager: NSObject, ObservableObject {
             currentSentenceIndex = 0
         }
         
-        logger.log("鍒嗗彞瀹屾垚 - 鍏?\(totalSentences) 鍙? 浠庣 \(currentSentenceIndex + 1) 鍙ュ紑濮?, category: "TTS")
+        logger.log("鍒嗗彞瀹屾垚 - 鍏?\(totalSentences) 鍙? 浠庣 \(currentSentenceIndex + 1) 鍙ュ紑濮?", category: "TTS")
         
         // 鏇存柊閿佸睆淇℃伅
         if currentIndex < chapters.count {
@@ -516,7 +516,7 @@ class TTSManager: NSObject, ObservableObject {
     
     private func stopKeepAlive() {
         if keepAlivePlayer != nil {
-            logger.log("馃洃 鍋滄婵€杩涗繚娲?, category: "TTS")
+            logger.log("馃洃 鍋滄婵€杩涗繚娲?", category: "TTS")
             keepAlivePlayer?.stop()
             keepAlivePlayer = nil
         }
@@ -613,7 +613,7 @@ class TTSManager: NSObject, ObservableObject {
 
     private func isDialogueSentence(_ sentence: String) -> Bool {
         // 绮楃暐鍒ゆ柇锛氬寘鍚腑鏂?鑻辨枃寮曞彿鏃惰涓烘槸瀵硅瘽
-        return sentence.contains("鈥?) || sentence.contains("\"")
+        return sentence.contains("“") || sentence.contains("”") || sentence.contains("\"")
     }
 
     private func extractSpeaker(from sentence: String) -> String? {
@@ -683,7 +683,7 @@ class TTSManager: NSObject, ObservableObject {
             logger.log("鉁?浣跨敤棰勮浇鐨勭珷鑺傚悕闊抽", category: "TTS")
             playAudioWithData(data: cachedTitleData)
             // 鍦ㄧ珷鑺傚悕寮€濮嬫挱鏀炬椂灏卞惎鍔ㄩ杞斤紝閬垮厤闃诲
-            logger.log("绔犺妭鍚嶆挱鏀句腑锛屽悓鏃跺惎鍔ㄥ唴瀹归杞?, category: "TTS")
+            logger.log("绔犺妭鍚嶆挱鏀句腑锛屽悓鏃跺惎鍔ㄥ唴瀹归杞?", category: "TTS")
             startPreloading()
             return
         }
@@ -698,7 +698,7 @@ class TTSManager: NSObject, ObservableObject {
                     if validateAudioData(data, response: response) {
                         playAudioWithData(data: data)
                         // 鍦ㄧ珷鑺傚悕寮€濮嬫挱鏀炬椂灏卞惎鍔ㄩ杞斤紝閬垮厤闃诲
-                        logger.log("绔犺妭鍚嶆挱鏀句腑锛屽悓鏃跺惎鍔ㄥ唴瀹归杞?, category: "TTS")
+                        logger.log("绔犺妭鍚嶆挱鏀句腑锛屽悓鏃跺惎鍔ㄥ唴瀹归杞?", category: "TTS")
                         startPreloading()
                     } else {
                         logger.log("绔犺妭鍚嶉煶棰戞棤鏁堬紝璺宠繃", category: "TTS")
@@ -719,7 +719,7 @@ class TTSManager: NSObject, ObservableObject {
     // MARK: - 鏈楄涓嬩竴鍙?
     private func speakNextSentence() {
         guard currentSentenceIndex < sentences.count else {
-            logger.log("褰撳墠绔犺妭鏈楄瀹屾垚锛屽噯澶囦笅涓€绔?, category: "TTS")
+            logger.log("褰撳墠绔犺妭鏈楄瀹屾垚锛屽噯澶囦笅涓€绔?", category: "TTS")
             // 褰撳墠绔犺妭璇诲畬锛岃嚜鍔ㄨ涓嬩竴绔?
             nextChapter()
             return
@@ -742,7 +742,7 @@ class TTSManager: NSObject, ObservableObject {
         startPreloading()
 
         guard let audioURL = buildAudioURL(for: sentence) else {
-            logger.log("鏈€夋嫨 TTS 寮曟搸锛屽仠姝㈡挱鏀?, category: "TTS閿欒")
+            logger.log("鏈€夋嫨 TTS 寮曟搸锛屽仠姝㈡挱鏀?", category: "TTS閿欒")
             stop()
             return
         }
@@ -793,7 +793,7 @@ class TTSManager: NSObject, ObservableObject {
                     }
                     await MainActor.run {
                         isLoading = false
-                        logger.log("鈿狅笍 闊抽鏃犳晥锛屽皾璇曚笅涓€娈?, category: "TTS")
+                        logger.log("鈿狅笍 闊抽鏃犳晥锛屽皾璇曚笅涓€娈?", category: "TTS")
                         currentSentenceIndex += 1
                         speakNextSentence()
                     }
@@ -810,7 +810,7 @@ class TTSManager: NSObject, ObservableObject {
                 logger.log("鉂?缃戠粶閿欒: \(error.localizedDescription)", category: "TTS閿欒")
                 await MainActor.run {
                     isLoading = false
-                    logger.log("鈿狅笍 缃戠粶閿欒锛屽皾璇曚笅涓€娈?, category: "TTS")
+                    logger.log("鈿狅笍 缃戠粶閿欒锛屽皾璇曚笅涓€娈?", category: "TTS")
                     currentSentenceIndex += 1
                     speakNextSentence()
                 }
@@ -973,18 +973,18 @@ class TTSManager: NSObject, ObservableObject {
             audioPlayer?.prepareToPlay() // 棰勮В鐮侊紝鍑忓皯鎾斁鍓嶇殑绛夊緟
             
             logger.log("鍒涘缓 AVAudioPlayer 鎴愬姛", category: "TTS")
-            logger.log("闊抽鏃堕暱: \(audioPlayer?.duration ?? 0) 绉?, category: "TTS")
+            logger.log("闊抽鏃堕暱: \(audioPlayer?.duration ?? 0) 绉?", category: "TTS")
             logger.log("闊抽鏍煎紡: \(audioPlayer?.format.description ?? "unknown")", category: "TTS")
             
             let success = audioPlayer?.play() ?? false
             if success {
-                logger.log("鉁?闊抽寮€濮嬫挱鏀?, category: "TTS")
+                logger.log("鉁?闊抽寮€濮嬫挱鏀?", category: "TTS")
                 isLoading = false
                 currentSentenceDuration = audioPlayer?.duration ?? 0
                 // 寤堕暱鍚庡彴浠诲姟
                 beginBackgroundTask()
             } else {
-                logger.log("鉂?闊抽鎾斁澶辫触锛岃烦杩囧綋鍓嶆钀?, category: "TTS閿欒")
+                logger.log("鉂?闊抽鎾斁澶辫触锛岃烦杩囧綋鍓嶆钀?", category: "TTS閿欒")
                 isLoading = false
                 // 閿欒鎭㈠锛氳烦鍒颁笅涓€娈?
                 currentSentenceIndex += 1
@@ -995,7 +995,7 @@ class TTSManager: NSObject, ObservableObject {
             logger.log("閿欒璇︽儏: \(error)", category: "TTS閿欒")
             isLoading = false
             // 閿欒鎭㈠锛氳烦鍒颁笅涓€娈?
-            logger.log("鈿狅笍 闊抽瑙ｇ爜澶辫触锛屽皾璇曚笅涓€娈?, category: "TTS")
+            logger.log("鈿狅笍 闊抽瑙ｇ爜澶辫触锛屽皾璇曚笅涓€娈?", category: "TTS")
             currentSentenceIndex += 1
             speakNextSentence()
         }
@@ -1020,9 +1020,9 @@ class TTSManager: NSObject, ObservableObject {
                 logger.log("鈿狅笍 audioPlayer 涓嶅瓨鍦紝鏃犳硶鏆傚仠", category: "TTS")
             }
         } else if isPaused {
-            logger.log("TTS 宸茬粡澶勪簬鏆傚仠鐘舵€?, category: "TTS")
+            logger.log("TTS 宸茬粡澶勪簬鏆傚仠鐘舵€?", category: "TTS")
         } else {
-            logger.log("TTS 鏈湪鎾斁锛屾棤娉曟殏鍋?, category: "TTS")
+            logger.log("TTS 鏈湪鎾斁锛屾棤娉曟殏鍋?", category: "TTS")
         }
     }
     
@@ -1045,7 +1045,7 @@ class TTSManager: NSObject, ObservableObject {
             }
         } else if !isPlaying {
             // 濡傛灉宸茬粡鍋滄锛岄噸鏂板紑濮?
-            logger.log("TTS 鏈湪鎾斁锛岄噸鏂板紑濮?, category: "TTS")
+            logger.log("TTS 鏈湪鎾斁锛岄噸鏂板紑濮?", category: "TTS")
             isPlaying = true
             isPaused = false
             speakNextSentence()
@@ -1068,7 +1068,7 @@ class TTSManager: NSObject, ObservableObject {
         
         // 绔犺妭鍒囨崲鍚庡己鍒堕杞戒笅涓€绔狅紝閬垮厤鍒囨崲鏃跺崱椤?
         if force {
-            logger.log("绔犺妭鍒囨崲鍚庣珛鍗抽杞戒笅涓€绔?, category: "TTS")
+            logger.log("绔犺妭鍒囨崲鍚庣珛鍗抽杞戒笅涓€绔?", category: "TTS")
             preloadNextChapter()
             return
         }
@@ -1082,7 +1082,7 @@ class TTSManager: NSObject, ObservableObject {
         let preloadCount = UserPreferences.shared.ttsPreloadCount
 
         if progress >= 0.5 || (preloadCount > 0 && remainingSentences <= preloadCount) {
-            logger.log("馃摉 鎾斁杩涘害 \(Int(progress * 100))%锛屽墿浣?\(remainingSentences) 娈碉紝瑙﹀彂棰勮浇涓嬩竴绔?, category: "TTS")
+            logger.log("馃摉 鎾斁杩涘害 \(Int(progress * 100))%锛屽墿浣?\(remainingSentences) 娈碉紝瑙﹀彂棰勮浇涓嬩竴绔?", category: "TTS")
             preloadNextChapter()
         }
     }
@@ -1110,12 +1110,12 @@ class TTSManager: NSObject, ObservableObject {
                 await MainActor.run {
                     // 鍒嗘
                     nextChapterSentences = splitTextIntoSentences(content)
-                    logger.log("涓嬩竴绔犲垎娈靛畬鎴愶紝鍏?\(nextChapterSentences.count) 娈?, category: "TTS")
+                    logger.log("涓嬩竴绔犲垎娈靛畬鎴愶紝鍏?\(nextChapterSentences.count) 娈?", category: "TTS")
                     
                     // 棰勮浇涓嬩竴绔犵殑鍓嶅嚑涓钀斤紙鏍规嵁鐢ㄦ埛鐨勯杞借缃級
                     let userPreloadCount = UserPreferences.shared.ttsPreloadCount
                     let preloadCount = min(max(userPreloadCount, 3), nextChapterSentences.count)  // 鑷冲皯3娈碉紝鏈€澶氬埌鐢ㄦ埛璁剧疆鐨勫€?
-                    logger.log("寮€濮嬮杞戒笅涓€绔犵殑鍓?\(preloadCount) 娈甸煶棰?, category: "TTS")
+                    logger.log("寮€濮嬮杞戒笅涓€绔犵殑鍓?\(preloadCount) 娈甸煶棰?", category: "TTS")
                     
                     for i in 0..<preloadCount {
                         preloadNextChapterAudio(at: i)
@@ -1227,7 +1227,7 @@ class TTSManager: NSObject, ObservableObject {
     private func loadAndReadChapter() {
         // 妫€鏌ユ槸鍚︽湁棰勮浇鐨勪笅涓€绔犳暟鎹?
         if !nextChapterSentences.isEmpty {
-            logger.log("浣跨敤宸查杞界殑涓嬩竴绔犳暟鎹?, category: "TTS")
+            logger.log("浣跨敤宸查杞界殑涓嬩竴绔犳暟鎹?", category: "TTS")
             
             // 鍋滄褰撳墠鎾斁
             audioPlayer?.stop()
@@ -1267,7 +1267,7 @@ class TTSManager: NSObject, ObservableObject {
         }
         
         // 娌℃湁棰勮浇鏁版嵁锛屼粠缂撳瓨鎴栫綉缁滃姞杞?
-        logger.log("鈿狅笍 涓嬩竴绔犳湭棰勮浇瀹屾垚锛屽皾璇曚粠缂撳瓨鎴栫綉缁滃姞杞?, category: "TTS")
+        logger.log("鈿狅笍 涓嬩竴绔犳湭棰勮浇瀹屾垚锛屽皾璇曚粠缂撳瓨鎴栫綉缁滃姞杞?", category: "TTS")
         
         // 鍋滄褰撳墠鎾斁
         audioPlayer?.stop()
@@ -1334,7 +1334,7 @@ class TTSManager: NSObject, ObservableObject {
     deinit {
         NotificationCenter.default.removeObserver(self)
         endBackgroundTask()
-        logger.log("TTSManager 閿€姣?, category: "TTS")
+        logger.log("TTSManager 閿€姣?", category: "TTS")
     }
 }
 
@@ -1360,7 +1360,7 @@ extension TTSManager: AVAudioPlayerDelegate {
                 self.currentSentenceIndex += 1
                 self.speakNextSentence()
             } else {
-                self.logger.log("闊抽鎾斁澶辫触锛岃烦杩?, category: "TTS閿欒")
+                self.logger.log("闊抽鎾斁澶辫触锛岃烦杩?", category: "TTS閿欒")
                 self.currentSentenceIndex += 1
                 self.speakNextSentence()
             }
