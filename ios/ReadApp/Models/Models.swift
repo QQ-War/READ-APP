@@ -249,6 +249,12 @@ class UserPreferences: ObservableObject {
         }
     }
     
+    @Published var pageHorizontalMargin: CGFloat {
+        didSet {
+            UserDefaults.standard.set(pageHorizontalMargin, forKey: "pageHorizontalMargin")
+        }
+    }
+    
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex)
     private var ttsProgress: [String: (Int, Int)] {
         get {
@@ -283,6 +289,9 @@ class UserPreferences: ObservableObject {
         
         let savedLineSpacing = CGFloat(UserDefaults.standard.float(forKey: "lineSpacing"))
         self.lineSpacing = savedLineSpacing == 0 ? 8 : savedLineSpacing
+        
+        let savedMargin = CGFloat(UserDefaults.standard.float(forKey: "pageHorizontalMargin"))
+        self.pageHorizontalMargin = savedMargin == 0 ? 6 : savedMargin
         
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 10.0 : savedSpeechRate

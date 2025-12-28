@@ -90,7 +90,7 @@ struct ReadingView: View {
             )
         }
         .sheet(isPresented: $showFontSettings) {
-            FontSizeSheet(fontSize: $preferences.fontSize)
+            FontSizeSheet(preferences: preferences)
         }
         .task {
             await loadChapters()
@@ -179,7 +179,7 @@ struct ReadingView: View {
     private func horizontalReader(safeArea: EdgeInsets) -> some View {
         GeometryReader { geometry in
             // Define desired margins *within* the safe area
-            let horizontalMargin: CGFloat = 6
+            let horizontalMargin: CGFloat = preferences.pageHorizontalMargin
             let verticalMargin: CGFloat = 10
             
             let availableSize = CGSize(
@@ -280,6 +280,12 @@ struct ReadingView: View {
                 }
             }
             .onChange(of: preferences.lineSpacing) { _ in
+                if contentSize.width > 0 && contentSize.height > 0 {
+                    pageSize = contentSize
+                    repaginateContent(in: contentSize)
+                }
+            }
+            .onChange(of: preferences.pageHorizontalMargin) { _ in
                 if contentSize.width > 0 && contentSize.height > 0 {
                     pageSize = contentSize
                     repaginateContent(in: contentSize)
@@ -865,7 +871,7 @@ class ReadContentViewController: UIViewController {
     let textContainer: NSTextContainer
     
     private lazy var textView: UITextView = {
-        let tv = UITextView(frame: .zero, textContainer: textContainer)
+        let tv = UITextView(frame: CGRect(origin: .zero, size: renderStore.size), textContainer: textContainer)
         tv.isEditable = false; tv.isScrollEnabled = false; tv.isSelectable = false
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
@@ -1292,17 +1298,24 @@ struct NormalControlBar: View {
 }
 
 struct FontSizeSheet: View {
-    @Binding var fontSize: CGFloat
+    @ObservedObject var preferences: UserPreferences
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 16) {
-                Text("\u{5B57}\u{4F53}\u{5927}\u{5C0F}")
-                    .font(.headline)
-                Text(String(format: "%.0f", fontSize))
-                    .font(.system(size: 28, weight: .semibold))
-                Slider(value: $fontSize, in: 12...30, step: 1)
+            VStack(spacing: 24) {
+                VStack(spacing: 8) {
+                    Text("\u{5B57}\u{4F53}\u{5927}\u{5C0F}: \(String(format: "%.0f", preferences.fontSize))")
+                        .font(.headline)
+                    Slider(value: $preferences.fontSize, in: 12...30, step: 1)
+                }
+                
+                VStack(spacing: 8) {
+                    Text("\u{5DE6}\u{53F3}\u{8FB9}\u{8DDD}: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
+                        .font(.headline)
+                    Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
+                }
+
                 Spacer()
             }
             .padding(20)
