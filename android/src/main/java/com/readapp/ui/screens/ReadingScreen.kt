@@ -63,6 +63,7 @@ fun ReadingScreen(
     currentChapterContent: String,
     isContentLoading: Boolean,
     readingFontSize: Float,
+    readingHorizontalPadding: Float,
     errorMessage: String?,
     onClearError: () -> Unit,
     onChapterClick: (Int) -> Unit,
@@ -82,6 +83,7 @@ fun ReadingScreen(
     onPreviousParagraph: () -> Unit = {},
     onNextParagraph: () -> Unit = {},
     onReadingFontSizeChange: (Float) -> Unit = {},
+    onReadingHorizontalPaddingChange: (Float) -> Unit = {},
     onExit: () -> Unit = {},
     readingMode: com.readapp.data.ReadingMode = com.readapp.data.ReadingMode.Vertical,
     lockPageOnTTS: Boolean = false,
@@ -93,7 +95,8 @@ fun ReadingScreen(
     var showFontDialog by remember { mutableStateOf(false) }
     var currentPageStartIndex by remember { mutableStateOf(0) }
     var currentPageStartOffset by remember { mutableStateOf(0) }
-    var pendingJumpToLastPage by remember { mutableStateOf(false) }
+    var pendingJumpToLastPageTarget by remember { mutableStateOf<Int?>(null) }
+    var lastChapterIndex by remember { mutableStateOf(currentChapterIndex) }
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val latestOnExit by rememberUpdatedState(onExit)
@@ -101,10 +104,10 @@ fun ReadingScreen(
     var lastAutoScrollTarget by remember { mutableStateOf<Int?>(null) }
     var resolveCurrentPageStart by remember { mutableStateOf<(() -> Pair<Int, Int>?)?>(null) }
 
-    val contentPadding = remember {
+    val contentPadding = remember(readingHorizontalPadding) {
         PaddingValues(
-            start = AppDimens.PaddingLarge,
-            end = AppDimens.PaddingLarge,
+            start = readingHorizontalPadding.dp,
+            end = readingHorizontalPadding.dp,
             top = AppDimens.PaddingLarge,
             bottom = AppDimens.PaddingLarge
         )
@@ -299,12 +302,13 @@ fun ReadingScreen(
                     val viewConfiguration = LocalViewConfiguration.current
                     val onPreviousChapterFromPager = {
                         if (currentChapterIndex > 0) {
-                            pendingJumpToLastPage = true
+                            pendingJumpToLastPageTarget = currentChapterIndex - 1
                             onChapterClick(currentChapterIndex - 1)
                         }
                     }
                     val onNextChapterFromPager = {
                         if (currentChapterIndex < chapters.size - 1) {
+                            pendingJumpToLastPageTarget = null
                             onChapterClick(currentChapterIndex + 1)
                         }
                     }
@@ -483,11 +487,21 @@ fun ReadingScreen(
                             }
                         }
                     
-                        LaunchedEffect(pendingJumpToLastPage, paginatedPages, currentChapterIndex) {
-                            if (pendingJumpToLastPage && !paginatedPages.isEmpty()) {
-                                pagerState.scrollToPage(paginatedPages.lastIndex)
-                                pendingJumpToLastPage = false
+                        LaunchedEffect(pendingJumpToLastPageTarget, paginatedPages, currentChapterIndex) {
+                            if (currentChapterIndex == lastChapterIndex) return@LaunchedEffect
+                            if (paginatedPages.isEmpty()) {
+                                lastChapterIndex = currentChapterIndex
+                                pendingJumpToLastPageTarget = null
+                                return@LaunchedEffect
                             }
+                            val target = pendingJumpToLastPageTarget
+                            if (target != null && currentChapterIndex == target) {
+                                pagerState.scrollToPage(paginatedPages.lastIndex)
+                            } else {
+                                pagerState.scrollToPage(0)
+                            }
+                            lastChapterIndex = currentChapterIndex
+                            pendingJumpToLastPageTarget = null
                         }
                     
                     }
@@ -525,13 +539,14 @@ fun ReadingScreen(
                 onPreviousChapter = {
                     if (currentChapterIndex > 0) {
                         if (readingMode == ReadingMode.Horizontal) {
-                            pendingJumpToLastPage = true
+                            pendingJumpToLastPageTarget = currentChapterIndex - 1
                         }
                         onChapterClick(currentChapterIndex - 1)
                     }
                 },
                 onNextChapter = {
                     if (currentChapterIndex < chapters.size - 1) {
+                        pendingJumpToLastPageTarget = null
                         onChapterClick(currentChapterIndex + 1)
                     }
                 },
@@ -595,6 +610,8 @@ fun ReadingScreen(
             FontSizeDialog(
                 value = readingFontSize,
                 onValueChange = onReadingFontSizeChange,
+                horizontalPadding = readingHorizontalPadding,
+                onHorizontalPaddingChange = onReadingHorizontalPaddingChange,
                 lockPageOnTTS = lockPageOnTTS,
                 onLockPageOnTTSChange = onLockPageOnTTSChange,
                 onDismiss = { showFontDialog = false }
@@ -690,9 +707,10 @@ private fun rememberPaginatedText(
                 break
             }
             val adjustedOffset = (startOffset - headerText.length).coerceAtLeast(0)
-            val startParagraphIndex = paragraphIndexForOffset(adjustedOffset, paragraphStartIndices)
+            val normalizedOffset = normalizePageOffset(fullText.text, adjustedOffset, headerText.length)
+            val startParagraphIndex = paragraphIndexForOffset(normalizedOffset, paragraphStartIndices)
             val paragraphStart = paragraphStartIndices.getOrElse(startParagraphIndex) { 0 }
-            val startOffsetInParagraph = (adjustedOffset - paragraphStart).coerceAtLeast(0)
+            val startOffsetInParagraph = (normalizedOffset - paragraphStart).coerceAtLeast(0)
             pages.add(
                 PaginatedPage(
                     start = startOffset,
@@ -758,6 +776,20 @@ private fun paragraphStartIndices(paragraphs: List<String>, prefixLength: Int): 
 
 private fun paragraphIndexForOffset(offset: Int, starts: List<Int>): Int {
     return starts.indexOfLast { it <= offset }.coerceAtLeast(0)
+}
+
+private fun normalizePageOffset(fullText: String, bodyOffset: Int, headerLength: Int): Int {
+    if (bodyOffset <= 0) return 0
+    val absoluteStart = (bodyOffset + headerLength).coerceIn(0, fullText.length)
+    var absoluteOffset = absoluteStart
+    while (absoluteOffset < fullText.length) {
+        val ch = fullText[absoluteOffset]
+        if (ch != '\n' && ch != '\r') {
+            break
+        }
+        absoluteOffset++
+    }
+    return (absoluteOffset - headerLength).coerceAtLeast(0)
 }
 
 private fun lastVisibleOffset(result: androidx.compose.ui.text.TextLayoutResult): Int {
@@ -1054,6 +1086,8 @@ private fun BottomControlBar(
 private fun FontSizeDialog(
     value: Float,
     onValueChange: (Float) -> Unit,
+    horizontalPadding: Float,
+    onHorizontalPaddingChange: (Float) -> Unit,
     lockPageOnTTS: Boolean,
     onLockPageOnTTSChange: (Boolean) -> Unit,
     onDismiss: () -> Unit
@@ -1069,6 +1103,13 @@ private fun FontSizeDialog(
                     onValueChange = onValueChange,
                     valueRange = 12f..28f,
                     steps = 7
+                )
+                Text(text = "\u5de6\u53f3\u7a7a\u767d: ${horizontalPadding.toInt()}dp")
+                Slider(
+                    value = horizontalPadding,
+                    onValueChange = onHorizontalPaddingChange,
+                    valueRange = 8f..48f,
+                    steps = 4
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

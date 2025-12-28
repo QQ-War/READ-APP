@@ -2,7 +2,6 @@ package com.readapp.media
 
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
@@ -13,10 +12,6 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class ReadAudioService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
@@ -52,16 +47,12 @@ class ReadAudioService : MediaSessionService() {
     private fun filterCachedItems(mediaItems: List<MediaItem>): List<MediaItem> {
         return mediaItems.filter { item ->
             val cached = AudioCache.get(item.mediaId)
-            if (cached == null) {
-                appendLog("TTS cache miss: ${item.mediaId}")
-            }
             cached != null
         }
     }
 
     override fun onCreate() {
         super.onCreate()
-        appendLog("ReadAudioService onCreate")
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -82,7 +73,6 @@ class ReadAudioService : MediaSessionService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        appendLog("ReadAudioService onStartCommand action=${intent?.action} flags=$flags startId=$startId")
         return super.onStartCommand(intent, flags, startId)
     }
 
@@ -91,29 +81,14 @@ class ReadAudioService : MediaSessionService() {
     }
 
     override fun onDestroy() {
-        appendLog("ReadAudioService onDestroy")
         mediaSession?.release()
         mediaSession = null
         player.release()
         super.onDestroy()
     }
 
-    private fun appendLog(message: String) {
-        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-        val line = "[$timestamp] $message\n"
-        runCatching {
-            File(filesDir, "reader_logs.txt").appendText(line)
-        }
-        Log.d("ReadAudioService", message)
-    }
-
     companion object {
         fun startService(context: Context) {
-            runCatching {
-                val file = File(context.filesDir, "reader_logs.txt")
-                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-                file.appendText("[$timestamp] ReadAudioService startService\n")
-            }
             context.startService(Intent(context, ReadAudioService::class.java))
         }
     }

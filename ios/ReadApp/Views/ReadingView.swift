@@ -56,6 +56,8 @@ struct ReadingView: View {
     @State private var pendingWindowShiftAfterTransition = false
     @State private var ttsBaseIndex: Int = 0
     @State private var pendingFlipId: UUID = UUID()
+    @State private var isTTSSyncingPage = false
+    @State private var suppressTTSSync = false
     
     // Pagination Cache for seamless transition
     @State private var isAutoFlipping: Bool = false
@@ -134,8 +136,11 @@ struct ReadingView: View {
         }
         .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
             if preferences.readingMode == .horizontal && ttsManager.isPlaying {
-                syncPageForSentenceIndex(newIndex)
+                if !suppressTTSSync {
+                    syncPageForSentenceIndex(newIndex)
+                }
                 scheduleAutoFlip(duration: ttsManager.currentSentenceDuration)
+                suppressTTSSync = false
             }
         }
         .onChange(of: ttsManager.currentSentenceDuration) { duration in
@@ -329,6 +334,13 @@ struct ReadingView: View {
             }
             .onChange(of: currentPageIndex) { newIndex in
                 // This logic handles TTS restart on manual flip
+                if isTTSSyncingPage {
+                    isTTSSyncingPage = false
+                    if currentCache.pages.indices.contains(newIndex) {
+                        lastTTSSentenceIndex = currentCache.pages[newIndex].startSentenceIndex
+                    }
+                    return
+                }
                 if ttsManager.isPlaying && !isAutoFlipping {
                     if !preferences.lockPageOnTTS {
                         ttsManager.stop()
@@ -567,16 +579,27 @@ struct ReadingView: View {
         if currentCache.pages.indices.contains(currentPageIndex),
            let sentenceStart = globalCharIndexForSentence(realIndex) {
             let pageRange = currentCache.pages[currentPageIndex].globalRange
-            if NSLocationInRange(sentenceStart, pageRange) {
+            let sentenceLen = contentSentences.indices.contains(realIndex) ? contentSentences[realIndex].utf16.count : 0
+            if sentenceLen > 0 {
+                let sentenceRange = NSRange(location: sentenceStart, length: sentenceLen)
+                if NSIntersectionRange(sentenceRange, pageRange).length > 0 {
+                    return
+                }
+            } else if NSLocationInRange(sentenceStart, pageRange) {
                 return
             }
         }
 
         if let pageIndex = pageIndexForSentence(realIndex), pageIndex != currentPageIndex {
+            isTTSSyncingPage = true
             withAnimation { currentPageIndex = pageIndex }
+            DispatchQueue.main.async {
+                isTTSSyncingPage = false
+            }
             return
         }
         if let globalCharIndex = globalCharIndexForSentence(realIndex), pageSize.width > 0, pageSize.height > 0 {
+            isTTSSyncingPage = true
             applyWindow(
                 startCharIndex: max(0, globalCharIndex),
                 basePageIndex: windowBasePageIndex,
@@ -588,6 +611,9 @@ struct ReadingView: View {
                 pStarts: currentCache.paragraphStarts,
                 prefixLen: currentCache.chapterPrefixLen
             )
+            DispatchQueue.main.async {
+                isTTSSyncingPage = false
+            }
         }
     }
     
@@ -871,6 +897,7 @@ struct ReadingView: View {
     
     private func startTTS(pageIndexOverride: Int? = nil) {
         showUIControls = true
+        suppressTTSSync = true
         let fallbackIndex = lastTTSSentenceIndex ?? Int(book.durChapterPos ?? 0)
         
         var startIndex = fallbackIndex

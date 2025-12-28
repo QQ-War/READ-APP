@@ -30,6 +30,7 @@ class UserPreferences(private val context: Context) {
         val DialogueTtsId = stringPreferencesKey("dialogueTtsId")
         val SpeakerTtsMapping = stringPreferencesKey("speakerTtsMapping")
         val ReadingFontSize = floatPreferencesKey("readingFontSize")
+        val ReadingHorizontalPadding = floatPreferencesKey("readingHorizontalPadding")
         val ReadingMode = stringPreferencesKey("readingMode")
         val SpeechRate = doublePreferencesKey("speechRate")
         val PreloadCount = floatPreferencesKey("preloadCount")
@@ -47,6 +48,7 @@ class UserPreferences(private val context: Context) {
     val dialogueTtsId: Flow<String> = context.dataStore.data.map { it[Keys.DialogueTtsId] ?: "" }
     val speakerTtsMapping: Flow<String> = context.dataStore.data.map { it[Keys.SpeakerTtsMapping] ?: "" }
     val readingFontSize: Flow<Float> = context.dataStore.data.map { it[Keys.ReadingFontSize] ?: 16f }
+    val readingHorizontalPadding: Flow<Float> = context.dataStore.data.map { it[Keys.ReadingHorizontalPadding] ?: 24f }
     val speechRate: Flow<Double> = context.dataStore.data.map { it[Keys.SpeechRate] ?: 1.0 }
     val preloadCount: Flow<Float> = context.dataStore.data.map { it[Keys.PreloadCount] ?: 3f }
     val loggingEnabled: Flow<Boolean> = context.dataStore.data.map {
@@ -125,6 +127,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveReadingFontSize(value: Float) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.ReadingFontSize] = value
+        }
+    }
+
+    suspend fun saveReadingHorizontalPadding(value: Float) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.ReadingHorizontalPadding] = value
         }
     }
 

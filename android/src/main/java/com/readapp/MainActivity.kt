@@ -109,6 +109,7 @@ fun ReadAppMain() {
                 val currentChapterContent by bookViewModel.currentChapterContent.collectAsState()
                 val isContentLoading by bookViewModel.isChapterContentLoading.collectAsState()
                 val readingFontSize by bookViewModel.readingFontSize.collectAsState()
+                val readingHorizontalPadding by bookViewModel.readingHorizontalPadding.collectAsState()
                 val errorMessage by bookViewModel.errorMessage.collectAsState()
                 val readingMode by bookViewModel.readingMode.collectAsState()
                 val lockPageOnTTS by bookViewModel.lockPageOnTTS.collectAsState()
@@ -129,6 +130,7 @@ fun ReadAppMain() {
                         currentChapterContent = currentChapterContent,
                         isContentLoading = isContentLoading,
                         readingFontSize = readingFontSize,
+                        readingHorizontalPadding = readingHorizontalPadding,
                         errorMessage = errorMessage,
                         readingMode = readingMode,
                         lockPageOnTTS = lockPageOnTTS,
@@ -171,6 +173,9 @@ fun ReadAppMain() {
                         },
                         onReadingFontSizeChange = { size ->
                             bookViewModel.updateReadingFontSize(size)
+                        },
+                        onReadingHorizontalPaddingChange = { padding ->
+                            bookViewModel.updateReadingHorizontalPadding(padding)
                         },
                         onExit = {
                             bookViewModel.saveBookProgress()
