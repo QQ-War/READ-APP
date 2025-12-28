@@ -40,6 +40,8 @@ struct ReadingView: View {
     @State private var chapterPrefixLen: Int = 0
     @State private var pageSize: CGSize = .zero
     @State private var isWindowShiftInProgress = false
+    @State private var isPageTransitioning = false
+    @State private var pendingWindowShiftAfterTransition = false
 
     // Unified Insets for consistency
     private let horizontalPadding: CGFloat = 20
@@ -203,6 +205,17 @@ struct ReadingView: View {
                                 currentPageIndex: $currentPageIndex,
                                 isAtChapterStart: windowStartCharIndex == 0,
                                 isAtChapterEnd: windowEndCharIndex >= attributedChapterText.length && attributedChapterText.length > 0,
+                                onTransitioningChanged: { transitioning in
+                                    isPageTransitioning = transitioning
+                                    if !transitioning,
+                                       pendingWindowShiftAfterTransition,
+                                       !isWindowShiftInProgress,
+                                       pageSize.width > 0,
+                                       pageSize.height > 0 {
+                                        pendingWindowShiftAfterTransition = false
+                                        handleWindowShiftIfNeeded(in: pageSize)
+                                    }
+                                },
                                 onTapMiddle: { showUIControls.toggle() },
                                 onTapLeft: { goToPreviousPage() },
                                 onTapRight: { goToNextPage() },
@@ -281,6 +294,10 @@ struct ReadingView: View {
             .onChange(of: currentPageIndex) { newIndex in
                 if paginatedPages.indices.contains(newIndex) {
                     lastTTSSentenceIndex = paginatedPages[newIndex].startSentenceIndex
+                }
+                if isPageTransitioning {
+                    pendingWindowShiftAfterTransition = true
+                    return
                 }
                 if !isWindowShiftInProgress, pageSize.width > 0, pageSize.height > 0 {
                     handleWindowShiftIfNeeded(in: pageSize)
@@ -702,6 +719,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
     @Binding var currentPageIndex: Int
     var isAtChapterStart: Bool
     var isAtChapterEnd: Bool
+    var onTransitioningChanged: (Bool) -> Void
     var onTapMiddle: () -> Void
     var onTapLeft: () -> Void
     var onTapRight: () -> Void
@@ -781,27 +799,26 @@ struct ReadPageViewController: UIViewControllerRepresentable {
 
         func pageViewController(_ pvc: UIPageViewController, viewControllerBefore viewController: UIViewController) -> UIViewController? {
             guard let vc = viewController as? ReadContentViewController else { return nil }
-            guard let store = (snapshot ?? pendingSnapshot)?.renderStore else { return nil }
             let index = vc.pageIndex
             guard index > 0 else { return nil } // No previous page in this chapter
             
             let prevIndex = index - 1
-            return ReadContentViewController(pageIndex: prevIndex, renderStore: store)
+            return ReadContentViewController(pageIndex: prevIndex, renderStore: vc.renderStore)
         }
 
         func pageViewController(_ pvc: UIPageViewController, viewControllerAfter viewController: UIViewController) -> UIViewController? {
             guard let vc = viewController as? ReadContentViewController else { return nil }
-            guard let store = (snapshot ?? pendingSnapshot)?.renderStore else { return nil }
-            let pages = (snapshot ?? pendingSnapshot)?.pages ?? []
             let index = vc.pageIndex
-            guard index < pages.count - 1 else { return nil } // No next page in this chapter
+            let pageCount = vc.renderStore.containers.count
+            guard index < pageCount - 1 else { return nil } // No next page in this chapter
             
             let nextIndex = index + 1
-            return ReadContentViewController(pageIndex: nextIndex, renderStore: store)
+            return ReadContentViewController(pageIndex: nextIndex, renderStore: vc.renderStore)
         }
         
         func pageViewController(_ pvc: UIPageViewController, willTransitionTo pendingViewControllers: [UIViewController]) {
             isAnimating = true
+            parent.onTransitioningChanged(true)
         }
 
         func pageViewController(_ pvc: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
@@ -809,6 +826,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                 parent.currentPageIndex = visibleVC.pageIndex
             }
             isAnimating = false
+            parent.onTransitioningChanged(false)
             if let nextSnapshot = pendingSnapshot {
                 snapshot = nextSnapshot
                 pendingSnapshot = nil
@@ -826,11 +844,14 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             guard gesture.state == .ended else { return }
             let translation = gesture.translation(in: gesture.view)
             let velocity = gesture.velocity(in: gesture.view)
+            let currentVC = pageViewController?.viewControllers?.first as? ReadContentViewController
+            let pageCount = currentVC?.renderStore.containers.count ?? 0
+            let pageIndex = currentVC?.pageIndex ?? parent.currentPageIndex
             
             // Detect strong swipe at edges
-            if parent.isAtChapterStart && parent.currentPageIndex == 0 && (translation.x > 100 || velocity.x > 500) {
+            if parent.isAtChapterStart && pageIndex == 0 && (translation.x > 100 || velocity.x > 500) {
                 parent.onSwipeToPreviousChapter()
-            } else if parent.isAtChapterEnd && parent.currentPageIndex == ((snapshot ?? pendingSnapshot)?.pages.count ?? 0) - 1 && (translation.x < -100 || velocity.x < -500) {
+            } else if parent.isAtChapterEnd && pageCount > 0 && pageIndex == pageCount - 1 && (translation.x < -100 || velocity.x < -500) {
                 parent.onSwipeToNextChapter()
             }
         }
@@ -1076,7 +1097,6 @@ struct RichTextView: View {
                     .lineSpacing(lineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, fontSize * 2)
                     .padding(.vertical, 6)
                     .padding(.horizontal, 8)
                     .background(

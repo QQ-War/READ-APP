@@ -893,7 +893,7 @@ private fun BottomControlBar(
                     IconButton(onClick = onPreviousParagraph) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = "‰∏ä‰∏ÄÊÆ?,
+                            contentDescription = "…œ“ª∂Œ",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -916,7 +916,7 @@ private fun BottomControlBar(
                     IconButton(onClick = onNextParagraph) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "‰∏ã‰∏ÄÊÆ?,
+                            contentDescription = "œ¬“ª∂Œ",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -945,7 +945,7 @@ private fun BottomControlBar(
                 // ‰∏ä‰∏ÄÁ´?
                 ControlButton(
                     icon = Icons.Default.SkipPrevious,
-                    label = "‰∏ä‰∏ÄÁ´?,
+                    label = "…œ“ª’¬",
                     onClick = onPreviousChapter,
                     enabled = canGoPrevious
                 )
@@ -985,7 +985,7 @@ private fun BottomControlBar(
                 // Â≠ó‰ΩìÂ§ßÂ∞èÔºàTODOÔº?
                 ControlButton(
                     icon = Icons.Default.SkipNext,
-                    label = "‰∏ã‰∏ÄÁ´?,
+                    label = "œ¬“ª’¬",
                     onClick = onNextChapter,
                     enabled = canGoNext
                 )
