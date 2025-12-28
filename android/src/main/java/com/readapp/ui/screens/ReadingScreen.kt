@@ -76,7 +76,7 @@ fun ReadingScreen(
     preloadedChapters: Set<Int> = emptySet(),
     showTtsControls: Boolean = false,
     onPlayPauseClick: () -> Unit = {},
-    onStartListening: (Int, Int) -> Unit = {},
+    onStartListening: (Int, Int) -> Unit = { _, _ -> },
     onStopListening: () -> Unit = {},
     onPreviousParagraph: () -> Unit = {},
     onNextParagraph: () -> Unit = {},
