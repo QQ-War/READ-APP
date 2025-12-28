@@ -255,6 +255,12 @@ class UserPreferences: ObservableObject {
         }
     }
     
+    @Published var lockPageOnTTS: Bool {
+        didSet {
+            UserDefaults.standard.set(lockPageOnTTS, forKey: "lockPageOnTTS")
+        }
+    }
+    
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex)
     private var ttsProgress: [String: (Int, Int)] {
         get {
@@ -292,6 +298,8 @@ class UserPreferences: ObservableObject {
         
         let savedMargin = CGFloat(UserDefaults.standard.float(forKey: "pageHorizontalMargin"))
         self.pageHorizontalMargin = savedMargin == 0 ? 6 : savedMargin
+        
+        self.lockPageOnTTS = UserDefaults.standard.bool(forKey: "lockPageOnTTS")
         
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 10.0 : savedSpeechRate
