@@ -232,6 +232,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private inner class ControllerListener : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
+            if (isPlaying) {
+                _showTtsControls.value = true
+            }
             appendLog("TTS controller isPlaying=$isPlaying playbackState=${mediaController?.playbackState} " +
                         "playWhenReady=${mediaController?.playWhenReady} keepPlaying=${_keepPlaying.value}")
         }
