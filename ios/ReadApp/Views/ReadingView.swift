@@ -332,7 +332,7 @@ struct ReadingView: View {
                 if ttsManager.isPlaying && !isAutoFlipping {
                     if !preferences.lockPageOnTTS {
                         ttsManager.stop()
-                        startTTS()
+                        startTTS(pageIndexOverride: newIndex)
                     }
                 }
                 isAutoFlipping = false // Reset flag after use
@@ -869,16 +869,17 @@ struct ReadingView: View {
         }
     }
     
-    private func startTTS() {
+    private func startTTS(pageIndexOverride: Int? = nil) {
         showUIControls = true
         let fallbackIndex = lastTTSSentenceIndex ?? Int(book.durChapterPos ?? 0)
         
         var startIndex = fallbackIndex
         var textForTTS = contentSentences.joined(separator: "\n")
+        let pageIndex = pageIndexOverride ?? currentPageIndex
         
         if preferences.readingMode == .horizontal {
-            if currentCache.pages.indices.contains(currentPageIndex) {
-                let page = currentCache.pages[currentPageIndex]
+            if currentCache.pages.indices.contains(pageIndex) {
+                let page = currentCache.pages[pageIndex]
                 startIndex = page.startSentenceIndex
                 
                 if currentCache.paragraphStarts.indices.contains(startIndex) {
@@ -920,7 +921,7 @@ struct ReadingView: View {
         lastTTSSentenceIndex = ttsBaseIndex + startIndex
 
         let shouldSpeakChapterTitle = preferences.readingMode == .horizontal
-            && currentPageIndex == 0
+            && pageIndex == 0
             && currentCache.chapterPrefixLen > 0
 
         ttsManager.startReading(
