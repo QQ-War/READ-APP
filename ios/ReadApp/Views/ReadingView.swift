@@ -636,17 +636,20 @@ struct ReadingView: View {
         let pageRange = currentCache.pages[currentPageIndex].globalRange
         
         let intersection = NSIntersectionRange(sentenceRange, pageRange)
-        
-        if intersection.length > 0 && intersection.length < sentenceLen {
-             let visibleRatio = Double(intersection.length) / Double(sentenceLen)
-             let delay = duration * visibleRatio
-             
-             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                 if self.pendingFlipId == taskId {
+        let sentenceEnd = NSMaxRange(sentenceRange)
+        let pageStart = pageRange.location
+        let pageEnd = NSMaxRange(pageRange)
+
+        if sentenceStart >= pageStart, sentenceEnd > pageEnd, intersection.length > 0 {
+            let visibleRatio = Double(intersection.length) / Double(sentenceLen)
+            let delay = duration * visibleRatio
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                if self.pendingFlipId == taskId {
                     isAutoFlipping = true
                     goToNextPage()
-                 }
-             }
+                }
+            }
         }
     }
     

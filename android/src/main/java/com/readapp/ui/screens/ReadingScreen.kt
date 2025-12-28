@@ -96,7 +96,7 @@ fun ReadingScreen(
     var currentPageStartIndex by remember { mutableStateOf(0) }
     var currentPageStartOffset by remember { mutableStateOf(0) }
     var pendingJumpToLastPageTarget by remember { mutableStateOf<Int?>(null) }
-    var lastChapterIndex by remember { mutableStateOf(currentChapterIndex) }
+    var lastHandledChapterIndex by remember { mutableStateOf(-1) }
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val latestOnExit by rememberUpdatedState(onExit)
@@ -488,19 +488,15 @@ fun ReadingScreen(
                         }
                     
                         LaunchedEffect(pendingJumpToLastPageTarget, paginatedPages, currentChapterIndex) {
-                            if (currentChapterIndex == lastChapterIndex) return@LaunchedEffect
-                            if (paginatedPages.isEmpty()) {
-                                lastChapterIndex = currentChapterIndex
-                                pendingJumpToLastPageTarget = null
-                                return@LaunchedEffect
-                            }
+                            if (paginatedPages.isEmpty()) return@LaunchedEffect
+                            if (currentChapterIndex == lastHandledChapterIndex) return@LaunchedEffect
                             val target = pendingJumpToLastPageTarget
                             if (target != null && currentChapterIndex == target) {
                                 pagerState.scrollToPage(paginatedPages.lastIndex)
                             } else {
                                 pagerState.scrollToPage(0)
                             }
-                            lastChapterIndex = currentChapterIndex
+                            lastHandledChapterIndex = currentChapterIndex
                             pendingJumpToLastPageTarget = null
                         }
                     
