@@ -1,4 +1,4 @@
-// ReadingScreen.kt - 阅读页面集成听书功能（段落高亮）
+﻿// ReadingScreen.kt - 闃呰椤甸潰闆嗘垚鍚功鍔熻兘锛堟钀介珮浜級
 package com.readapp.ui.screens
 
 import androidx.compose.animation.*
@@ -67,12 +67,12 @@ fun ReadingScreen(
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
     onNavigateBack: () -> Unit,
-    // TTS 相关状�?
+    // TTS 鐩稿叧鐘舵€?
     isPlaying: Boolean = false,
-    currentPlayingParagraph: Int = -1,  // ��ǰ���ŵĶ�������
+    currentPlayingParagraph: Int = -1,  // 当前播放的段落索引
     currentParagraphStartOffset: Int = 0,
     playbackProgress: Float = 0f,
-    preloadedParagraphs: Set<Int> = emptySet(),  // 已预载的段落索引
+    preloadedParagraphs: Set<Int> = emptySet(),  // 宸查杞界殑娈佃惤绱㈠紩
     preloadedChapters: Set<Int> = emptySet(),
     showTtsControls: Boolean = false,
     onPlayPauseClick: () -> Unit = {},
@@ -106,17 +106,17 @@ fun ReadingScreen(
     if (errorMessage != null) {
         AlertDialog(
             onDismissRequest = onClearError,
-            title = { Text("错误") },
+            title = { Text("閿欒") },
             text = { Text(errorMessage) },
             confirmButton = {
                 TextButton(onClick = onClearError) {
-                    Text("好的")
+                    Text("濂界殑")
                 }
             }
         )
     }
     
-    // 分割段落
+    // 鍒嗗壊娈佃惤
     val displayContent = remember(currentChapterContent, currentChapterIndex, chapters) {
         if (currentChapterContent.isNotBlank()) {
             currentChapterContent
@@ -136,7 +136,7 @@ fun ReadingScreen(
         }
     }
 
-    // 当章节索引变化或章节列表加载完成时，自动加载章节内容并回到顶�?
+    // 褰撶珷鑺傜储寮曞彉鍖栨垨绔犺妭鍒楄〃鍔犺浇瀹屾垚鏃讹紝鑷姩鍔犺浇绔犺妭鍐呭骞跺洖鍒伴《閮?
     LaunchedEffect(currentChapterIndex, chapters.size) {
         if (chapters.isNotEmpty() && currentChapterIndex in chapters.indices) {
             onLoadChapterContent(currentChapterIndex)
@@ -144,11 +144,11 @@ fun ReadingScreen(
         }
     }
     
-    // 当前播放段落变化时，自动滚动到该段落
+    // 褰撳墠鎾斁娈佃惤鍙樺寲鏃讹紝鑷姩婊氬姩鍒拌娈佃惤
     LaunchedEffect(currentPlayingParagraph) {
         if (currentPlayingParagraph >= 0 && currentPlayingParagraph < paragraphs.size) {
             coroutineScope.launch {
-                // +1 是因为第一�?item 是章节标�?
+                // +1 鏄洜涓虹涓€涓?item 鏄珷鑺傛爣棰?
                 scrollState.animateScrollToItem(currentPlayingParagraph + 1)
             }
         }
@@ -165,7 +165,7 @@ fun ReadingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 主要内容区域：显示章节正�?
+        // 涓昏鍐呭鍖哄煙锛氭樉绀虹珷鑺傛鏂?
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -174,11 +174,11 @@ fun ReadingScreen(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
                 ) {
-                    // 点击切换控制栏显�?隐藏
+                    // 鐐瑰嚮鍒囨崲鎺у埗鏍忔樉绀?闅愯棌
                     showControls = !showControls
                 }
         ) {
-            // 内容区域
+            // 鍐呭鍖哄煙
             if (readingMode == com.readapp.data.ReadingMode.Vertical) {
                 LazyColumn(
                     state = scrollState,
@@ -187,13 +187,13 @@ fun ReadingScreen(
                         .weight(1f),
                     contentPadding = contentPadding
                 ) {
-                    // 章节标题
+                    // 绔犺妭鏍囬
                     item {
                         Text(
                             text = if (currentChapterIndex < chapters.size) {
                                 chapters[currentChapterIndex].title
                             } else {
-                                "章节"
+                                "绔犺妭"
                             },
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -213,14 +213,14 @@ fun ReadingScreen(
                                 if (isContentLoading) {
                                     CircularProgressIndicator()
                                     Text(
-                                        text = "正在加载章节内容...",
+                                        text = "姝ｅ湪鍔犺浇绔犺妭鍐呭...",
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.customColors.textSecondary,
                                         textAlign = TextAlign.Center
                                     )
                                 } else {
                                     Text(
-                                        text = displayContent.ifBlank { "暂无可显示的内容" },
+                                        text = displayContent.ifBlank { "鏆傛棤鍙樉绀虹殑鍐呭" },
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.customColors.textSecondary,
                                         textAlign = TextAlign.Center
@@ -229,7 +229,7 @@ fun ReadingScreen(
                             }
                         }
                     } else {
-                        // 章节内容（分段显示，带高亮）
+                        // 绔犺妭鍐呭锛堝垎娈垫樉绀猴紝甯﹂珮浜級
                         itemsIndexed(paragraphs) { index, paragraph ->
                             ParagraphItem(
                                 text = paragraph,
@@ -367,8 +367,10 @@ fun ReadingScreen(
                     
                                             LaunchedEffect(pagerState.currentPage, paginatedPages) {
                                                 val pageInfo = paginatedPages.getOrNull(pagerState.currentPage)
-                                                currentPageStartIndex = pageInfo?.startParagraphIndex ?: 0
-                                                currentPageStartOffset = pageInfo?.startOffsetInParagraph ?: 0
+                                                if (pageInfo != null) {
+                                                    currentPageStartIndex = pageInfo.startParagraphIndex
+                                                    currentPageStartOffset = pageInfo.startOffsetInParagraph
+                                                }
                                             }
 
                                             LaunchedEffect(
@@ -389,13 +391,24 @@ fun ReadingScreen(
                                                 val playableLength = (paragraphLength - startOffset).coerceAtLeast(1)
                                                 val offsetInParagraph =
                                                     startOffset + (playbackProgress.coerceIn(0f, 1f) * playableLength).toInt()
-                                                val matchingPages = paginatedPages.pages.withIndex()
+                                                val pagesForParagraph = paginatedPages.pages.withIndex()
                                                     .filter { it.value.startParagraphIndex == currentPlayingParagraph }
-                                                    .map { it.index }
-                                                if (matchingPages.isEmpty()) return@LaunchedEffect
-                                                val targetPage = matchingPages.lastOrNull {
-                                                    paginatedPages.pages[it].startOffsetInParagraph <= offsetInParagraph
-                                                } ?: matchingPages.first()
+                                                if (pagesForParagraph.isEmpty()) return@LaunchedEffect
+                                                var targetPage = pagesForParagraph.first().index
+                                                for (i in pagesForParagraph.indices) {
+                                                    val entry = pagesForParagraph[i]
+                                                    val start = entry.value.startOffsetInParagraph
+                                                    val nextStart = pagesForParagraph.getOrNull(i + 1)?.value?.startOffsetInParagraph
+                                                    val inThisPage = if (nextStart == null || nextStart <= start) {
+                                                        offsetInParagraph >= start
+                                                    } else {
+                                                        offsetInParagraph >= start && offsetInParagraph < nextStart
+                                                    }
+                                                    if (inThisPage) {
+                                                        targetPage = entry.index
+                                                        break
+                                                    }
+                                                }
                                                 if (targetPage != pagerState.currentPage) {
                                                     pagerState.animateScrollToPage(targetPage)
                                                 }
@@ -441,7 +454,7 @@ fun ReadingScreen(
                                 }
                             }
         
-        // 顶部控制栏（动画显示/隐藏�?
+        // 椤堕儴鎺у埗鏍忥紙鍔ㄧ敾鏄剧ず/闅愯棌锛?
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn() + slideInVertically(),
@@ -459,7 +472,7 @@ fun ReadingScreen(
             )
         }
         
-        // 底部控制栏（动画显示/隐藏�?
+        // 搴曢儴鎺у埗鏍忥紙鍔ㄧ敾鏄剧ず/闅愯棌锛?
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
@@ -507,7 +520,7 @@ fun ReadingScreen(
                 onFontSettings = { showFontDialog = true },
                 canGoPrevious = currentChapterIndex > 0,
                 canGoNext = currentChapterIndex < chapters.size - 1,
-                showTtsControls = showTtsControls  // 仅在实际播放/保持播放时显�?TTS 控制
+                showTtsControls = showTtsControls  // 浠呭湪瀹為檯鎾斁/淇濇寔鎾斁鏃舵樉绀?TTS 鎺у埗
             )
         }
 
@@ -523,7 +536,7 @@ fun ReadingScreen(
             }
         }
 
-        // 章节列表弹窗
+        // 绔犺妭鍒楄〃寮圭獥
         if (showChapterList) {
             ChapterListDialog(
                 chapters = chapters,
@@ -548,7 +561,7 @@ fun ReadingScreen(
 }
 
 /**
- * 段落项组�?- 带高亮效�?
+ * 娈佃惤椤圭粍浠?- 甯﹂珮浜晥鏋?
  */
 @Composable
 private fun ParagraphItem(
@@ -559,8 +572,8 @@ private fun ParagraphItem(
     modifier: Modifier = Modifier
 ) {
     val backgroundColor = when {
-        isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)  // 当前播放：深蓝色高亮
-        isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)  // 已预载：浅绿色标�?
+        isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)  // 褰撳墠鎾斁锛氭繁钃濊壊楂樹寒
+        isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)  // 宸查杞斤細娴呯豢鑹叉爣璁?
         else -> Color.Transparent
     }
     
@@ -829,7 +842,7 @@ private fun TopControlBar(
             IconButton(onClick = onNavigateBack) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "返回",
+                    contentDescription = "杩斿洖",
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -882,23 +895,23 @@ private fun BottomControlBar(
                 .fillMaxWidth()
                 .padding(AppDimens.PaddingMedium)
         ) {
-            // TTS 段落控制（播放时显示�?
+            // TTS 娈佃惤鎺у埗锛堟挱鏀炬椂鏄剧ず锛?
             if (showTtsControls) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 上一�?
+                    // 涓婁竴娈?
                     IconButton(onClick = onPreviousParagraph) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = "��һ��",
+                            contentDescription = "\u4e0a\u4e00\u6bb5",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     
-                    // 播放/暂停
+                    // 鎾斁/鏆傚仠
                     FloatingActionButton(
                         onClick = onPlayPause,
                         containerColor = MaterialTheme.customColors.gradientStart,
@@ -906,26 +919,26 @@ private fun BottomControlBar(
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "暂停" else "播放",
+                            contentDescription = if (isPlaying) "\u6682\u505c" else "\u64ad\u653e",
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(28.dp)
                         )
                     }
                     
-                    // 下一�?
+                    // 涓嬩竴娈?
                     IconButton(onClick = onNextParagraph) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "��һ��",
+                            contentDescription = "\u4e0b\u4e00\u6bb5",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     
-                    // 停止听书
+                    // 鍋滄鍚功
                     IconButton(onClick = onStopListening) {
                         Icon(
                             imageVector = Icons.Default.Stop,
-                            contentDescription = "停止",
+                            contentDescription = "\u505c\u6b62",
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -936,28 +949,28 @@ private fun BottomControlBar(
                 Spacer(modifier = Modifier.height(8.dp))
             }
             
-            // 基础阅读控制
+            // 鍩虹闃呰鎺у埗
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 上一�?
+                // 涓婁竴绔?
                 ControlButton(
                     icon = Icons.Default.SkipPrevious,
-                    label = "��һ��",
+                    label = "\u4e0a\u4e00\u7ae0",
                     onClick = onPreviousChapter,
                     enabled = canGoPrevious
                 )
                 
-                // 目录
+                // 鐩綍
                 ControlButton(
                     icon = Icons.Default.List,
-                    label = "目录",
+                    label = "\u76ee\u5f55",
                     onClick = onShowChapterList
                 )
                 
-                // 听书按钮（未播放时显示）
+                // 鍚功鎸夐挳锛堟湭鎾斁鏃舵樉绀猴級
                 if (!showTtsControls) {
                     FloatingActionButton(
                         onClick = onPlayPause,
@@ -968,24 +981,24 @@ private fun BottomControlBar(
                     ) {
                         Icon(
                             imageVector = Icons.Default.VolumeUp,
-                            contentDescription = "听书",
+                            contentDescription = "\u542c\u4e66",
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(28.dp)
                         )
                     }
                 }
                 
-                // 下一�?
+                // 涓嬩竴绔?
                 ControlButton(
                     icon = Icons.Default.FormatSize,
-                    label = "字体",
+                    label = "\u5b57\u4f53",
                     onClick = onFontSettings
                 )
                 
-                // 字体大小（TODO�?
+                // 瀛椾綋澶у皬锛圱ODO锛?
                 ControlButton(
                     icon = Icons.Default.SkipNext,
-                    label = "��һ��",
+                    label = "\u4e0b\u4e00\u7ae0",
                     onClick = onNextChapter,
                     enabled = canGoNext
                 )
@@ -1002,10 +1015,10 @@ private fun FontSizeDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "字体大小") },
+        title = { Text(text = "瀛椾綋澶у皬") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "当前: ${value.toInt()}sp")
+                Text(text = "褰撳墠: ${value.toInt()}sp")
                 Slider(
                     value = value,
                     onValueChange = onValueChange,
@@ -1016,7 +1029,7 @@ private fun FontSizeDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("完成")
+                Text("瀹屾垚")
             }
         }
     )
@@ -1073,7 +1086,7 @@ private fun ChapterListDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "章节列表",
+                text = "绔犺妭鍒楄〃",
                 style = MaterialTheme.typography.titleLarge
             )
         },
@@ -1121,7 +1134,7 @@ private fun ChapterListDialog(
                                     color = MaterialTheme.customColors.gradientStart
                                 ) {
                                     Text(
-                                        text = "当前",
+                                        text = "褰撳墠",
                                         modifier = Modifier.padding(
                                             horizontal = 8.dp,
                                             vertical = 4.dp
@@ -1143,11 +1156,12 @@ private fun ChapterListDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("关闭")
+                Text("鍏抽棴")
             }
         },
         shape = RoundedCornerShape(AppDimens.CornerRadiusLarge)
     )
 }
+
 
 
