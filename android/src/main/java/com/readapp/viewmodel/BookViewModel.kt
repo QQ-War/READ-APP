@@ -256,7 +256,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         override fun onPlayerError(error: PlaybackException) {
             appendLog("TTS controller error: ${error.errorCodeName} ${error.message}")
-            _errorMessage.value = "鎾斁澶辫触: ${error.errorCodeName}"
+            _errorMessage.value = "播放失败: ${error.errorCodeName}"
             if (_keepPlaying.value) {
                 viewModelScope.launch {
                     delay(500)
@@ -292,7 +292,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _isChapterContentLoading.value = false
 
             if (content.isNullOrBlank()) {
-                _errorMessage.value = "Current chapter content is empty; cannot start playback."
+                _errorMessage.value = "当前章节内容为空，无法播放。"
                 return@launch
             }
 
@@ -370,14 +370,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 val audioUrl = buildTtsAudioUrl(trimmedSentence, false)
 
                 if (audioUrl == null) {
-                    _errorMessage.value = "鏃犳硫鐢熸垚TTS閾炬帴锛岃妫€鏌TS璁剧疆"
+                    _errorMessage.value = "无法生成TTS链接，请检查TTS设置"
                     stopPlayback("error")
                     return@launch
                 }
 
                 val data = fetchAudioBytes(audioUrl)
                 if (data == null) {
-                    _errorMessage.value = "TTS闊抽涓嬭В澶辫触"
+                    _errorMessage.value = "TTS音频下载失败"
                     stopPlayback("error")
                     return@launch
                 }
@@ -539,7 +539,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             ).onSuccess {
                 _replaceRules.value = it
             }.onFailure {
-                _errorMessage.value = "鍔犺浇鍑€鍖栬鍒欏け璐? ${it.message}"
+                _errorMessage.value = "加载净化规则失败: ${it.message}"
             }
         }
     }
@@ -554,7 +554,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             ).onSuccess {
                 loadReplaceRules()
             }.onFailure {
-                _errorMessage.value = "娣诲姞瑙勫垯澶辫触: ${it.message}"
+                _errorMessage.value = "添加规则失败: ${it.message}"
             }
         }
     }
@@ -569,7 +569,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             ).onSuccess {
                 loadReplaceRules()
             }.onFailure {
-                _errorMessage.value = "鍒犻櫎瑙勫垯澶辫触: ${it.message}"
+                _errorMessage.value = "删除规则失败: ${it.message}"
             }
         }
     }
@@ -587,7 +587,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _replaceRules.value = updatedRules
                 loadReplaceRules()
             }.onFailure {
-                _errorMessage.value = "鍒囨崲瑙勫垯鐘舵€佸け璐? ${it.message}"
+                _errorMessage.value = "切换规则状态失败: ${it.message}"
             }
         }
     }
@@ -878,13 +878,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 appendLog("绔犺妭鍐呭娓呮礂鍚? index=$index length=${resolved.length}")
                 updateChapterContent(index, resolved)
             }.onFailure { error ->
-                _errorMessage.value = "鍔犺浇澶辫触: ${error.message}".trim()
+                _errorMessage.value = "加载失败: ${error.message}"
                 appendLog("绔犺妭鍐呭鍔犺浇澶辫触: index=$index error=${error.message.orEmpty()}")
                 Log.e(TAG, "鍔犺浇绔犺妭鍐呭澶辫触", error)
             }
             _currentChapterContent.value
         } catch (e: Exception) {
-            _errorMessage.value = "绯荤粺寮傚父: ${e.localizedMessage}".trim()
+            _errorMessage.value = "系统异常: ${e.localizedMessage}"
             appendLog("绔犺妭鍐呭鍔犺浇寮傚父: index=$index error=${e.localizedMessage.orEmpty()}")
             Log.e(TAG, "鍔犺浇绔犺妭鍐呭寮傚父", e)
             null
