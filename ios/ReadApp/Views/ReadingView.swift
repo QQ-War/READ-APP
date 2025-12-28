@@ -42,6 +42,8 @@ struct ReadingView: View {
     @State private var isWindowShiftInProgress = false
     @State private var isPageTransitioning = false
     @State private var pendingWindowShiftAfterTransition = false
+    @State private var ttsBaseIndex: Int = 0
+    @State private var pendingFlipId: UUID = UUID()
 
     // Unified Insets for consistency
     private let horizontalPadding: CGFloat = 20
@@ -118,7 +120,13 @@ struct ReadingView: View {
         .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
             if preferences.readingMode == .horizontal && ttsManager.isPlaying {
                 syncPageForSentenceIndex(newIndex)
+                scheduleAutoFlip(duration: ttsManager.currentSentenceDuration)
             }
+        }
+        .onChange(of: ttsManager.currentSentenceDuration) { duration in
+             if preferences.readingMode == .horizontal && ttsManager.isPlaying {
+                 scheduleAutoFlip(duration: duration)
+             }
         }
     }
 
@@ -499,12 +507,58 @@ struct ReadingView: View {
 
     private func syncPageForSentenceIndex(_ index: Int) {
         guard index >= 0, preferences.readingMode == .horizontal else { return }
-        if let pageIndex = pageIndexForSentence(index), pageIndex != currentPageIndex {
+        
+        let realIndex = index + ttsBaseIndex
+        
+        // Only flip page immediately if the sentence starts AFTER the current page.
+        // If it starts ON this page (even partially), we wait for auto flip.
+        if paginatedPages.indices.contains(currentPageIndex),
+           let sentenceStart = globalCharIndexForSentence(realIndex) {
+            let pageRange = paginatedPages[currentPageIndex].globalRange
+            if NSLocationInRange(sentenceStart, pageRange) {
+                return
+            }
+        }
+
+        if let pageIndex = pageIndexForSentence(realIndex), pageIndex != currentPageIndex {
             withAnimation { currentPageIndex = pageIndex }
             return
         }
-        if let globalCharIndex = globalCharIndexForSentence(index), pageSize.width > 0, pageSize.height > 0 {
+        if let globalCharIndex = globalCharIndexForSentence(realIndex), pageSize.width > 0, pageSize.height > 0 {
             applyWindow(startCharIndex: max(0, globalCharIndex), basePageIndex: windowBasePageIndex, desiredGlobalPageIndex: windowBasePageIndex + currentPageIndex, focusCharIndex: globalCharIndex, size: pageSize)
+        }
+    }
+    
+    private func scheduleAutoFlip(duration: TimeInterval) {
+        guard duration > 0, ttsManager.isPlaying, preferences.readingMode == .horizontal else { return }
+        
+        pendingFlipId = UUID()
+        let taskId = pendingFlipId
+        
+        let index = ttsManager.currentSentenceIndex
+        let realIndex = index + ttsBaseIndex
+        
+        guard paginatedPages.indices.contains(currentPageIndex),
+              let sentenceStart = globalCharIndexForSentence(realIndex) else { return }
+              
+        let sentenceLen = contentSentences.indices.contains(realIndex) ? contentSentences[realIndex].utf16.count : 0
+        let sentenceRange = NSRange(location: sentenceStart, length: sentenceLen)
+        let pageRange = paginatedPages[currentPageIndex].globalRange
+        
+        let intersection = NSIntersectionRange(sentenceRange, pageRange)
+        
+        // If sentence is partially on this page (starts here, ends later)
+        if intersection.length > 0 && intersection.length < sentenceLen {
+             let visibleRatio = Double(intersection.length) / Double(sentenceLen)
+             let delay = duration * visibleRatio
+             
+             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                 if self.pendingFlipId == taskId {
+                     withAnimation {
+                         self.goToNextPage()
+                     }
+                 }
+             }
         }
     }
 
@@ -542,9 +596,24 @@ struct ReadingView: View {
     }
     
     private func splitIntoParagraphs(_ text: String) -> [String] {
-        return text.components(separatedBy: "\n")
+        // First split by newlines to preserve paragraph structure as much as possible
+        let blocks = text.components(separatedBy: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+            
+        var sentences: [String] = []
+        // Simple regex to split by common sentence terminators while keeping them attached to the sentence if possible.
+        // Or simply split. Splitting by punctuation improves TTS granularity.
+        // Let's use a simple approach: split by [。！？!?] followed by nothing or whitespace
+        // But re-joining them with \n in createAttributedText will alter layout.
+        // CONSTRAINT: We cannot easily change sentence splitting without affecting layout if createAttributedText joins with \n.
+        // However, if we split a long paragraph into multiple "sentences", they will be rendered as separate paragraphs.
+        // This is a trade-off. For now, let's keep the original logic to strictly preserve layout,
+        // relying on the Lazy Flip logic to handle cross-page reading.
+        // Only if the user explicitly requested finer granularity should we do this.
+        // User said: "根据字符时间的长度来大体计算".
+        // Let's stick to the original logic for now to ensure layout correctness.
+        return blocks
     }
     
     private func loadChapters() async {
@@ -570,6 +639,7 @@ struct ReadingView: View {
                     rawContent = cleanedContent
                     updateProcessedContent(from: cleanedContent)
                     isLoading = false
+                    ttsBaseIndex = 0
                     if ttsManager.isPlaying {
                         if ttsManager.bookUrl != book.bookUrl || ttsManager.currentChapterIndex != currentChapterIndex {
                             ttsManager.stop()
@@ -625,18 +695,49 @@ struct ReadingView: View {
     private func startTTS() {
         showUIControls = true
         let fallbackIndex = lastTTSSentenceIndex ?? Int(book.durChapterPos ?? 0)
-        let startIndex = preferences.readingMode == .horizontal
-            ? (paginatedPages.indices.contains(currentPageIndex) ? paginatedPages[currentPageIndex].startSentenceIndex : fallbackIndex)
-            : (currentVisibleSentenceIndex ?? fallbackIndex)
-        let textForTTS = contentSentences.isEmpty
-            ? currentContent
-            : contentSentences.joined(separator: "\n")
+        
+        var startIndex = fallbackIndex
+        var textForTTS = contentSentences.joined(separator: "\n")
+        
+        if preferences.readingMode == .horizontal {
+            if paginatedPages.indices.contains(currentPageIndex) {
+                let page = paginatedPages[currentPageIndex]
+                startIndex = page.startSentenceIndex
+                
+                if paragraphStarts.indices.contains(startIndex) {
+                    let sentenceStartGlobal = paragraphStarts[startIndex] + chapterPrefixLen
+                    let pageStartGlobal = page.globalRange.location
+                    let offset = max(0, pageStartGlobal - sentenceStartGlobal)
+                    
+                    if offset > 0 && startIndex < contentSentences.count {
+                        let firstSentence = contentSentences[startIndex]
+                        if offset < firstSentence.count {
+                             let partialFirstSentence = String(firstSentence.dropFirst(offset))
+                             var sentences = [partialFirstSentence]
+                             if startIndex + 1 < contentSentences.count {
+                                 sentences.append(contentsOf: contentSentences[(startIndex + 1)...])
+                             }
+                             textForTTS = sentences.joined(separator: "\n")
+                             ttsBaseIndex = startIndex
+                             startIndex = 0 
+                        }
+                    } else if startIndex < contentSentences.count {
+                        let sentences = contentSentences[startIndex...]
+                        textForTTS = sentences.joined(separator: "\n")
+                        ttsBaseIndex = startIndex
+                        startIndex = 0
+                    }
+                }
+            }
+        } else {
+            startIndex = currentVisibleSentenceIndex ?? fallbackIndex
+            ttsBaseIndex = 0
+        }
+
         let trimmedText = textForTTS.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
-
-        let maxIndex = max(contentSentences.count - 1, 0)
-        let boundedStartIndex = max(0, min(startIndex, maxIndex))
-        lastTTSSentenceIndex = boundedStartIndex
+        
+        lastTTSSentenceIndex = ttsBaseIndex + startIndex
 
         ttsManager.startReading(
             text: textForTTS,
@@ -651,7 +752,7 @@ struct ReadingView: View {
                 loadChapterContent()
                 saveProgress()
             },
-            startAtSentenceIndex: boundedStartIndex
+            startAtSentenceIndex: startIndex
         )
     }
     
@@ -855,9 +956,9 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             let pageIndex = currentVC?.pageIndex ?? parent.currentPageIndex
             
             // Detect strong swipe at edges
-            if parent.isAtChapterStart && pageIndex == 0 && (translation.x > 100 || velocity.x > 500) {
+            if parent.isAtChapterStart && pageIndex == 0 && (translation.x > 50 || velocity.x > 300) {
                 parent.onSwipeToPreviousChapter()
-            } else if parent.isAtChapterEnd && pageCount > 0 && pageIndex == pageCount - 1 && (translation.x < -100 || velocity.x < -500) {
+            } else if parent.isAtChapterEnd && pageCount > 0 && pageIndex == pageCount - 1 && (translation.x < -50 || velocity.x < -300) {
                 parent.onSwipeToNextChapter()
             }
         }

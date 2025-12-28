@@ -13,6 +13,7 @@ class TTSManager: NSObject, ObservableObject {
     @Published var totalSentences = 0
     @Published var isLoading = false
     @Published var preloadedIndices: Set<Int> = []  // 已预载成功的段落索引
+    @Published var currentSentenceDuration: TimeInterval = 0
     
     private var audioPlayer: AVAudioPlayer?
     private var sentences: [String] = []
@@ -977,6 +978,7 @@ class TTSManager: NSObject, ObservableObject {
             if success {
                 logger.log("✅ 音频开始播放", category: "TTS")
                 isLoading = false
+                currentSentenceDuration = audioPlayer?.duration ?? 0
                 // 延长后台任务
                 beginBackgroundTask()
             } else {
