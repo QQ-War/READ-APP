@@ -43,14 +43,6 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Cache Android SDK
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.android
-            ${{ env.ANDROID_HOME }}
-          key: android-sdk-${{ runner.os }}-api34-buildtools3400
-
       - name: Install Android SDK components
         run: |
           yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"

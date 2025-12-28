@@ -388,16 +388,16 @@ fun ReadingScreen(
                             )
                         }
                     
-                        LaunchedEffect(pagerState, paginatedPages) {
-                            snapshotFlow { pagerState.currentPage }
+                        LaunchedEffect(pagerState, paginatedPages, isPlaying, lockPageOnTTS) {
+                            snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
                                 .distinctUntilChanged()
-                                .collect { page ->
+                                .collect { (page, isScrolling) ->
                                     val pageInfo = paginatedPages.getOrNull(page)
                                     if (pageInfo != null) {
                                         currentPageStartIndex = pageInfo.startParagraphIndex
                                         currentPageStartOffset = pageInfo.startOffsetInParagraph
 
-                                        if (isPlaying && !isAutoScrolling) {
+                                        if (isPlaying && !lockPageOnTTS && !isAutoScrolling && isScrolling) {
                                             if (!lockPageOnTTS) {
                                                 onStopListening()
                                                 onStartListening(pageInfo.startParagraphIndex, pageInfo.startOffsetInParagraph)
@@ -420,6 +420,7 @@ fun ReadingScreen(
                             if (readingMode != ReadingMode.Horizontal) return@LaunchedEffect
                             if (!isPlaying) return@LaunchedEffect
                             if (currentPlayingParagraph < 0 || paginatedPages.isEmpty()) return@LaunchedEffect
+                            if (pagerState.currentPageOffsetFraction != 0f) return@LaunchedEffect
                             val paragraph = paragraphs.getOrNull(currentPlayingParagraph) ?: return@LaunchedEffect
                             val paragraphLength = paragraph.length
                             if (paragraphLength <= 0) return@LaunchedEffect
