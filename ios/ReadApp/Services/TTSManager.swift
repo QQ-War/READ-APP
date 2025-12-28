@@ -1,4 +1,4 @@
-import Foundation
+﻿import Foundation
 import AVFoundation
 import MediaPlayer
 import UIKit
@@ -12,14 +12,14 @@ class TTSManager: NSObject, ObservableObject {
     @Published var currentSentenceIndex = 0
     @Published var totalSentences = 0
     @Published var isLoading = false
-    @Published var preloadedIndices: Set<Int> = []  // 已预载成功的段落索引
+    @Published var preloadedIndices: Set<Int> = []  // 宸查杞芥垚鍔熺殑娈佃惤绱㈠紩
     @Published var currentSentenceDuration: TimeInterval = 0
     
     private var audioPlayer: AVAudioPlayer?
     private var sentences: [String] = []
-    var currentChapterIndex: Int = 0  // 公开给ReadingView使用
+    var currentChapterIndex: Int = 0  // 鍏紑缁橰eadingView浣跨敤
     private var chapters: [BookChapter] = []
-    var bookUrl: String = ""  // 公开给ReadingView使用
+    var bookUrl: String = ""  // 鍏紑缁橰eadingView浣跨敤
     private var bookSourceUrl: String?
     private var bookTitle: String = ""
     private var bookCoverUrl: String?
@@ -27,26 +27,27 @@ class TTSManager: NSObject, ObservableObject {
     private var onChapterChange: ((Int) -> Void)?
     private var currentSentenceObserver: Any?
     
-    // 预载缓存
-    private var audioCache: [Int: Data] = [:]  // 索引 -> 音频数据（索引-1为章节名，0~n为正文段落）
-    private var preloadQueue: [Int] = []       // 等待预载的队列
-    private var isPreloading = false           // 是否正在执行预载任务
-    private let maxPreloadRetries = 3          // 最大重试次数
-    private let maxConcurrentDownloads = 6     // 最大并发下载数
+    // 棰勮浇缂撳瓨
+    private var audioCache: [Int: Data] = [:]  // 绱㈠紩 -> 闊抽鏁版嵁锛堢储寮?1涓虹珷鑺傚悕锛?~n涓烘鏂囨钀斤級
+    private var preloadQueue: [Int] = []       // 绛夊緟棰勮浇鐨勯槦鍒?
+    private var isPreloading = false           // 鏄惁姝ｅ湪鎵ц棰勮浇浠诲姟
+    private let maxPreloadRetries = 3          // 鏈€澶ч噸璇曟鏁?
+    private let maxConcurrentDownloads = 6     // 鏈€澶у苟鍙戜笅杞芥暟
     private let preloadStateQueue = DispatchQueue(label: "com.readapp.tts.preloadStateQueue")
     
-    // 下一章预载
-    private var nextChapterSentences: [String] = []  // 下一章的段落
-    private var nextChapterCache: [Int: Data] = [:]  // 下一章的音频缓存（索引-1为章节名）
+    // 涓嬩竴绔犻杞?
+    private var nextChapterSentences: [String] = []  // 涓嬩竴绔犵殑娈佃惤
+    private var nextChapterCache: [Int: Data] = [:]  // 涓嬩竴绔犵殑闊抽缂撳瓨锛堢储寮?1涓虹珷鑺傚悕锛?
     
-    // 章节名朗读
-    private var isReadingChapterTitle = false  // 是否正在朗读章节名
+    // 绔犺妭鍚嶆湕璇?
+    private var isReadingChapterTitle = false  // 鏄惁姝ｅ湪鏈楄绔犺妭鍚?
+    private var allowChapterTitlePlayback = !chapters[currentChapterIndex].title.isEmpty
     
-    // 后台保活
+    // 鍚庡彴淇濇椿
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var keepAlivePlayer: AVAudioPlayer?
 
-    // MARK: - 预载状态封装（串行队列防竞态）
+    // MARK: - 棰勮浇鐘舵€佸皝瑁咃紙涓茶闃熷垪闃茬珵鎬侊級
     private func cachedAudio(for index: Int) -> Data? {
         preloadStateQueue.sync { audioCache[index] }
     }
@@ -122,32 +123,32 @@ class TTSManager: NSObject, ObservableObject {
     
     private override init() {
         super.init()
-        logger.log("TTSManager 初始化", category: "TTS")
+        logger.log("TTSManager 鍒濆鍖?, category: "TTS")
         setupAudioSession()
         setupRemoteCommands()
         setupNotifications()
     }
     
-    // MARK: - 配置音频会话
+    // MARK: - 閰嶇疆闊抽浼氳瘽
     private func setupAudioSession() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            logger.log("配置音频会话 - Category: playback, Mode: default", category: "TTS")
+            logger.log("閰嶇疆闊抽浼氳瘽 - Category: playback, Mode: default", category: "TTS")
             
-            // 使用更简单的配置，先设置category
+            // 浣跨敤鏇寸畝鍗曠殑閰嶇疆锛屽厛璁剧疆category
             try audioSession.setCategory(.playback, options: [])
             
-            // 然后激活会话
+            // 鐒跺悗婵€娲讳細璇?
             try audioSession.setActive(true)
             
-            logger.log("音频会话配置成功", category: "TTS")
+            logger.log("闊抽浼氳瘽閰嶇疆鎴愬姛", category: "TTS")
         } catch {
-            logger.log("音频会话设置失败: \(error.localizedDescription)", category: "TTS错误")
-            logger.log("错误详情: \(error)", category: "TTS错误")
+            logger.log("闊抽浼氳瘽璁剧疆澶辫触: \(error.localizedDescription)", category: "TTS閿欒")
+            logger.log("閿欒璇︽儏: \(error)", category: "TTS閿欒")
         }
     }
     
-    // MARK: - 设置远程控制
+    // MARK: - 璁剧疆杩滅▼鎺у埗
     private func setupRemoteCommands() {
         let commandCenter = MPRemoteCommandCenter.shared()
         
@@ -176,9 +177,9 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - 设置通知监听
+    // MARK: - 璁剧疆閫氱煡鐩戝惉
     private func setupNotifications() {
-        // 监听音频中断
+        // 鐩戝惉闊抽涓柇
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleAudioInterruption),
@@ -186,7 +187,7 @@ class TTSManager: NSObject, ObservableObject {
             object: AVAudioSession.sharedInstance()
         )
         
-        // 监听路由变更（如耳机拔出）
+        // 鐩戝惉璺敱鍙樻洿锛堝鑰虫満鎷斿嚭锛?
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleRouteChange),
@@ -195,7 +196,7 @@ class TTSManager: NSObject, ObservableObject {
         )
     }
     
-    // MARK: - 处理音频中断
+    // MARK: - 澶勭悊闊抽涓柇
     @objc private func handleAudioInterruption(notification: Notification) {
         guard let userInfo = notification.userInfo,
               let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -205,51 +206,51 @@ class TTSManager: NSObject, ObservableObject {
         
         switch type {
         case .began:
-            // 中断开始（如来电、闹钟等）
-            logger.log("🔔 音频中断开始", category: "TTS")
+            // 涓柇寮€濮嬶紙濡傛潵鐢点€侀椆閽熺瓑锛?
+            logger.log("馃敂 闊抽涓柇寮€濮?, category: "TTS")
             if isPlaying && !isPaused {
                 pause()
-                logger.log("已暂停播放", category: "TTS")
+                logger.log("宸叉殏鍋滄挱鏀?, category: "TTS")
             }
             
         case .ended:
-            // 中断结束
+            // 涓柇缁撴潫
             guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else {
-                logger.log("🔔 音频中断结束（无恢复选项）", category: "TTS")
+                logger.log("馃敂 闊抽涓柇缁撴潫锛堟棤鎭㈠閫夐」锛?, category: "TTS")
                 return
             }
             
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
             if options.contains(.shouldResume) {
-                // 系统建议恢复播放
-                logger.log("🔔 音频中断结束，自动恢复播放", category: "TTS")
+                // 绯荤粺寤鸿鎭㈠鎾斁
+                logger.log("馃敂 闊抽涓柇缁撴潫锛岃嚜鍔ㄦ仮澶嶆挱鏀?, category: "TTS")
                 
-                // 重新激活音频会话
+                // 閲嶆柊婵€娲婚煶棰戜細璇?
                 do {
                     try AVAudioSession.sharedInstance().setActive(true)
-                    logger.log("音频会话重新激活", category: "TTS")
+                    logger.log("闊抽浼氳瘽閲嶆柊婵€娲?, category: "TTS")
                 } catch {
-                    logger.log("❌ 重新激活音频会话失败: \(error)", category: "TTS错误")
+                    logger.log("鉂?閲嶆柊婵€娲婚煶棰戜細璇濆け璐? \(error)", category: "TTS閿欒")
                 }
                 
-                // 延迟一点恢复，确保音频会话稳定
+                // 寤惰繜涓€鐐规仮澶嶏紝纭繚闊抽浼氳瘽绋冲畾
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                     guard let self = self else { return }
                     if self.isPlaying && self.isPaused {
                         self.resume()
-                        self.logger.log("✅ 播放已恢复", category: "TTS")
+                        self.logger.log("鉁?鎾斁宸叉仮澶?, category: "TTS")
                     }
                 }
             } else {
-                logger.log("🔔 音频中断结束（不建议自动恢复）", category: "TTS")
+                logger.log("馃敂 闊抽涓柇缁撴潫锛堜笉寤鸿鑷姩鎭㈠锛?, category: "TTS")
             }
             
         @unknown default:
-            logger.log("⚠️ 未知的音频中断类型", category: "TTS")
+            logger.log("鈿狅笍 鏈煡鐨勯煶棰戜腑鏂被鍨?, category: "TTS")
         }
     }
     
-    // MARK: - 处理音频路由变更
+    // MARK: - 澶勭悊闊抽璺敱鍙樻洿
     @objc private func handleRouteChange(notification: Notification) {
         guard let userInfo = notification.userInfo,
               let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
@@ -259,22 +260,22 @@ class TTSManager: NSObject, ObservableObject {
         
         switch reason {
         case .oldDeviceUnavailable:
-            // 音频输出设备断开（如耳机拔出）
-            logger.log("🎧 音频设备断开，暂停播放", category: "TTS")
+            // 闊抽杈撳嚭璁惧鏂紑锛堝鑰虫満鎷斿嚭锛?
+            logger.log("馃帶 闊抽璁惧鏂紑锛屾殏鍋滄挱鏀?, category: "TTS")
             if isPlaying && !isPaused {
                 pause()
             }
             
         case .newDeviceAvailable:
-            // 新的音频输出设备连接
-            logger.log("🎧 新音频设备连接", category: "TTS")
+            // 鏂扮殑闊抽杈撳嚭璁惧杩炴帴
+            logger.log("馃帶 鏂伴煶棰戣澶囪繛鎺?, category: "TTS")
             
         default:
-            logger.log("🎧 音频路由变更: \(reason.rawValue)", category: "TTS")
+            logger.log("馃帶 闊抽璺敱鍙樻洿: \(reason.rawValue)", category: "TTS")
         }
     }
     
-    // MARK: - 更新锁屏信息
+    // MARK: - 鏇存柊閿佸睆淇℃伅
     private func updateNowPlayingInfo(chapterTitle: String) {
         var nowPlayingInfo = [String: Any]()
         nowPlayingInfo[MPMediaItemPropertyTitle] = chapterTitle
@@ -287,7 +288,7 @@ class TTSManager: NSObject, ObservableObject {
             nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Double(currentSentenceIndex)
         }
         
-        // 添加封面图片
+        // 娣诲姞灏侀潰鍥剧墖
         if let artwork = coverArtwork {
             nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
         }
@@ -295,20 +296,20 @@ class TTSManager: NSObject, ObservableObject {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
     
-    // MARK: - 加载封面图片
+    // MARK: - 鍔犺浇灏侀潰鍥剧墖
     private func loadCoverArtwork() {
         guard let coverUrlString = bookCoverUrl, !coverUrlString.isEmpty else {
-            logger.log("未提供封面URL", category: "TTS")
+            logger.log("鏈彁渚涘皝闈RL", category: "TTS")
             return
         }
         
-        // 如果已有缓存，跳过
+        // 濡傛灉宸叉湁缂撳瓨锛岃烦杩?
         if coverArtwork != nil {
             return
         }
         
         guard let url = URL(string: coverUrlString) else {
-            logger.log("封面URL无效: \(coverUrlString)", category: "TTS错误")
+            logger.log("灏侀潰URL鏃犳晥: \(coverUrlString)", category: "TTS閿欒")
             return
         }
         
@@ -318,32 +319,32 @@ class TTSManager: NSObject, ObservableObject {
                 
                 if let image = UIImage(data: data) {
                     await MainActor.run {
-                        // 创建 MPMediaItemArtwork
+                        // 鍒涘缓 MPMediaItemArtwork
                         let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in
                             return image
                         }
                         self.coverArtwork = artwork
                         
-                        // 更新锁屏信息
+                        // 鏇存柊閿佸睆淇℃伅
                         if self.currentChapterIndex < self.chapters.count {
                             self.updateNowPlayingInfo(chapterTitle: self.chapters[self.currentChapterIndex].title)
                         }
                         
-                        self.logger.log("✅ 封面加载成功", category: "TTS")
+                        self.logger.log("鉁?灏侀潰鍔犺浇鎴愬姛", category: "TTS")
                     }
                 } else {
-                    logger.log("封面图片解码失败", category: "TTS错误")
+                    logger.log("灏侀潰鍥剧墖瑙ｇ爜澶辫触", category: "TTS閿欒")
                 }
             } catch {
-                logger.log("封面下载失败: \(error.localizedDescription)", category: "TTS错误")
+                logger.log("灏侀潰涓嬭浇澶辫触: \(error.localizedDescription)", category: "TTS閿欒")
             }
         }
     }
     
-    // MARK: - 开始朗读
-    func startReading(text: String, chapters: [BookChapter], currentIndex: Int, bookUrl: String, bookSourceUrl: String?, bookTitle: String, coverUrl: String?, onChapterChange: @escaping (Int) -> Void, startAtSentenceIndex: Int? = nil) {
-        logger.log("开始朗读 - 书名: \(bookTitle), 章节: \(currentIndex)/\(chapters.count)", category: "TTS")
-        logger.log("内容长度: \(text.count) 字符", category: "TTS")
+    // MARK: - 寮€濮嬫湕璇?
+    func startReading(text: String, chapters: [BookChapter], currentIndex: Int, bookUrl: String, bookSourceUrl: String?, bookTitle: String, coverUrl: String?, onChapterChange: @escaping (Int) -> Void, startAtSentenceIndex: Int? = nil, shouldSpeakChapterTitle: Bool = true) {
+        logger.log("寮€濮嬫湕璇?- 涔﹀悕: \(bookTitle), 绔犺妭: \(currentIndex)/\(chapters.count)", category: "TTS")
+        logger.log("鍐呭闀垮害: \(text.count) 瀛楃", category: "TTS")
         
         self.chapters = chapters
         self.currentChapterIndex = currentIndex
@@ -352,14 +353,15 @@ class TTSManager: NSObject, ObservableObject {
         self.bookTitle = bookTitle
         self.bookCoverUrl = coverUrl
         self.onChapterChange = onChapterChange
+        self.allowChapterTitlePlayback = shouldSpeakChapterTitle
         
-        // 加载封面图片
+        // 鍔犺浇灏侀潰鍥剧墖
         loadCoverArtwork()
         
-        // 开始后台任务
+        // 寮€濮嬪悗鍙颁换鍔?
         beginBackgroundTask()
         
-        // 清空缓存和预载状态
+        // 娓呯┖缂撳瓨鍜岄杞界姸鎬?
         clearAudioCache()
         preloadedIndices.removeAll()
         updatePreloadQueue([])
@@ -367,25 +369,25 @@ class TTSManager: NSObject, ObservableObject {
         clearNextChapterCache()
         nextChapterSentences.removeAll()
         
-        // 分句
+        // 鍒嗗彞
         sentences = splitTextIntoSentences(text)
         totalSentences = sentences.count
         
-        // 优先使用外部传入的起始索引，其次是本地缓存，最后是0
+        // 浼樺厛浣跨敤澶栭儴浼犲叆鐨勮捣濮嬬储寮曪紝鍏舵鏄湰鍦扮紦瀛橈紝鏈€鍚庢槸0
         if let externalIndex = startAtSentenceIndex, externalIndex < sentences.count {
             currentSentenceIndex = externalIndex
-            logger.log("从服务器恢复TTS进度 - 章节: \(currentIndex), 段落: \(currentSentenceIndex)", category: "TTS")
+            logger.log("浠庢湇鍔″櫒鎭㈠TTS杩涘害 - 绔犺妭: \(currentIndex), 娈佃惤: \(currentSentenceIndex)", category: "TTS")
         } else if let progress = UserPreferences.shared.getTTSProgress(bookUrl: bookUrl),
                   progress.chapterIndex == currentIndex && progress.sentenceIndex < sentences.count {
             currentSentenceIndex = progress.sentenceIndex
-            logger.log("从本地恢复TTS进度 - 章节: \(currentIndex), 段落: \(currentSentenceIndex)", category: "TTS")
+            logger.log("浠庢湰鍦版仮澶峊TS杩涘害 - 绔犺妭: \(currentIndex), 娈佃惤: \(currentSentenceIndex)", category: "TTS")
         } else {
             currentSentenceIndex = 0
         }
         
-        logger.log("分句完成 - 共 \(totalSentences) 句, 从第 \(currentSentenceIndex + 1) 句开始", category: "TTS")
+        logger.log("鍒嗗彞瀹屾垚 - 鍏?\(totalSentences) 鍙? 浠庣 \(currentSentenceIndex + 1) 鍙ュ紑濮?, category: "TTS")
         
-        // 更新锁屏信息
+        // 鏇存柊閿佸睆淇℃伅
         if currentIndex < chapters.count {
             updateNowPlayingInfo(chapterTitle: chapters[currentIndex].title)
         }
@@ -393,22 +395,22 @@ class TTSManager: NSObject, ObservableObject {
         isPlaying = true
         isPaused = false
         
-        // 如果从头开始播放，先朗读章节名
-        if currentSentenceIndex == 0 {
+        // 濡傛灉浠庡ご寮€濮嬫挱鏀撅紝鍏堟湕璇荤珷鑺傚悕
+        if currentSentenceIndex == 0 && allowChapterTitlePlayback {
             speakChapterTitle()
         } else {
             speakNextSentence()
         }
     }
     
-    // MARK: - 上一段
+    // MARK: - 涓婁竴娈?
     func previousSentence() {
         if currentSentenceIndex > 0 {
             currentSentenceIndex -= 1
             audioPlayer?.stop()
             audioPlayer = nil
             
-            // 保存进度
+            // 淇濆瓨杩涘害
             UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex)
             
             if isPlaying {
@@ -417,14 +419,14 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - 下一段
+    // MARK: - 涓嬩竴娈?
     func nextSentence() {
         if currentSentenceIndex < sentences.count - 1 {
             currentSentenceIndex += 1
             audioPlayer?.stop()
             audioPlayer = nil
             
-            // 保存进度
+            // 淇濆瓨杩涘害
             UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex)
             
             if isPlaying {
@@ -433,19 +435,19 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - 判断是否为纯标点或空白
+    // MARK: - 鍒ゆ柇鏄惁涓虹函鏍囩偣鎴栫┖鐧?
     private func isPunctuationOnly(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             return true
         }
         
-        // 定义标点符号集合
+        // 瀹氫箟鏍囩偣绗﹀彿闆嗗悎
         let punctuationSet = CharacterSet.punctuationCharacters
             .union(.symbols)
             .union(.whitespacesAndNewlines)
         
-        // 检查是否所有字符都是标点、符号或空白
+        // 妫€鏌ユ槸鍚︽墍鏈夊瓧绗﹂兘鏄爣鐐广€佺鍙锋垨绌虹櫧
         for scalar in trimmed.unicodeScalars {
             if !punctuationSet.contains(scalar) {
                 return false
@@ -455,7 +457,7 @@ class TTSManager: NSObject, ObservableObject {
         return true
     }
     
-    // MARK: - 激进保活 (Silent Audio)
+    // MARK: - 婵€杩涗繚娲?(Silent Audio)
     private func createSilentAudioUrl() -> URL? {
         let fileManager = FileManager.default
         let tempDir = fileManager.temporaryDirectory
@@ -484,12 +486,12 @@ class TTSManager: NSObject, ObservableObject {
             if let format = AVAudioFormat(settings: settings),
                let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount)) {
                 buffer.frameLength = AVAudioFrameCount(frameCount)
-                // buffer 默认为静音(0)
+                // buffer 榛樿涓洪潤闊?0)
                 try audioFile.write(from: buffer)
             }
             return fileUrl
         } catch {
-            logger.log("创建静音文件失败: \(error)", category: "TTS错误")
+            logger.log("鍒涘缓闈欓煶鏂囦欢澶辫触: \(error)", category: "TTS閿欒")
             return nil
         }
     }
@@ -497,106 +499,106 @@ class TTSManager: NSObject, ObservableObject {
     private func startKeepAlive() {
         guard keepAlivePlayer == nil || !keepAlivePlayer!.isPlaying else { return }
         
-        logger.log("🛡️ 启动激进保活(静音播放)", category: "TTS")
+        logger.log("馃洝锔?鍚姩婵€杩涗繚娲?闈欓煶鎾斁)", category: "TTS")
         
         if let url = createSilentAudioUrl() {
             do {
                 keepAlivePlayer = try AVAudioPlayer(contentsOf: url)
-                keepAlivePlayer?.numberOfLoops = -1 // 无限循环
-                keepAlivePlayer?.volume = 0.0 // 静音
+                keepAlivePlayer?.numberOfLoops = -1 // 鏃犻檺寰幆
+                keepAlivePlayer?.volume = 0.0 // 闈欓煶
                 keepAlivePlayer?.prepareToPlay()
                 keepAlivePlayer?.play()
             } catch {
-                logger.log("❌ 启动保活失败: \(error)", category: "TTS错误")
+                logger.log("鉂?鍚姩淇濇椿澶辫触: \(error)", category: "TTS閿欒")
             }
         }
     }
     
     private func stopKeepAlive() {
         if keepAlivePlayer != nil {
-            logger.log("🛑 停止激进保活", category: "TTS")
+            logger.log("馃洃 鍋滄婵€杩涗繚娲?, category: "TTS")
             keepAlivePlayer?.stop()
             keepAlivePlayer = nil
         }
     }
 
-    // MARK: - 开始后台任务
+    // MARK: - 寮€濮嬪悗鍙颁换鍔?
     private func beginBackgroundTask() {
-        endBackgroundTask()  // 先结束之前的任务
+        endBackgroundTask()  // 鍏堢粨鏉熶箣鍓嶇殑浠诲姟
         
-        // 启动静音保活
+        // 鍚姩闈欓煶淇濇椿
         startKeepAlive()
         
         backgroundTask = UIApplication.shared.beginBackgroundTask { [weak self] in
-            self?.logger.log("⚠️ 后台任务即将过期", category: "TTS")
+            self?.logger.log("鈿狅笍 鍚庡彴浠诲姟鍗冲皢杩囨湡", category: "TTS")
             self?.endBackgroundTask()
         }
         
         if backgroundTask != .invalid {
-            logger.log("✅ 后台任务已开始: \(backgroundTask.rawValue)", category: "TTS")
+            logger.log("鉁?鍚庡彴浠诲姟宸插紑濮? \(backgroundTask.rawValue)", category: "TTS")
         }
     }
     
-    // MARK: - 结束后台任务
+    // MARK: - 缁撴潫鍚庡彴浠诲姟
     private func endBackgroundTask() {
         if backgroundTask != .invalid {
-            logger.log("结束后台任务: \(backgroundTask.rawValue)", category: "TTS")
+            logger.log("缁撴潫鍚庡彴浠诲姟: \(backgroundTask.rawValue)", category: "TTS")
             UIApplication.shared.endBackgroundTask(backgroundTask)
             backgroundTask = .invalid
         }
     }
     
-    // MARK: - 过滤SVG标签
+    // MARK: - 杩囨护SVG鏍囩
     private func removeSVGTags(_ text: String) -> String {
         var result = text
         
-        // 移除SVG标签（包括多行SVG）
+        // 绉婚櫎SVG鏍囩锛堝寘鎷琛孲VG锛?
         let svgPattern = "<svg[^>]*>.*?</svg>"
         if let svgRegex = try? NSRegularExpression(pattern: svgPattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
             let range = NSRange(location: 0, length: result.utf16.count)
             result = svgRegex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "")
         }
         
-        // 只移除常见的HTML标签，保留文本内容
-        // 先移除img标签
+        // 鍙Щ闄ゅ父瑙佺殑HTML鏍囩锛屼繚鐣欐枃鏈唴瀹?
+        // 鍏堢Щ闄mg鏍囩
         let imgPattern = "<img[^>]*>"
         if let imgRegex = try? NSRegularExpression(pattern: imgPattern, options: [.caseInsensitive]) {
             let range = NSRange(location: 0, length: result.utf16.count)
             result = imgRegex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "")
         }
         
-        // 移除其他标签但保留内容
+        // 绉婚櫎鍏朵粬鏍囩浣嗕繚鐣欏唴瀹?
         let htmlPattern = "<[^>]+>"
         if let htmlRegex = try? NSRegularExpression(pattern: htmlPattern, options: []) {
             let range = NSRange(location: 0, length: result.utf16.count)
             result = htmlRegex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "")
         }
         
-        // 清理HTML实体
+        // 娓呯悊HTML瀹炰綋
         result = result.replacingOccurrences(of: "&nbsp;", with: " ")
         result = result.replacingOccurrences(of: "&lt;", with: "<")
         result = result.replacingOccurrences(of: "&gt;", with: ">")
         result = result.replacingOccurrences(of: "&amp;", with: "&")
         result = result.replacingOccurrences(of: "&quot;", with: "\"")
         
-        logger.log("原始文本长度: \(text.count), 过滤后: \(result.count)", category: "TTS")
+        logger.log("鍘熷鏂囨湰闀垮害: \(text.count), 杩囨护鍚? \(result.count)", category: "TTS")
         return result
     }
     
-    // MARK: - 智能分段（优化版）
+    // MARK: - 鏅鸿兘鍒嗘锛堜紭鍖栫増锛?
     private func splitTextIntoSentences(_ text: String) -> [String] {
-        // 先过滤SVG和HTML标签
+        // 鍏堣繃婊VG鍜孒TML鏍囩
         let filtered = removeSVGTags(text)
         
-        // 按换行符分割，保持原文分段
+        // 鎸夋崲琛岀鍒嗗壊锛屼繚鎸佸師鏂囧垎娈?
         let paragraphs = filtered.components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }  // 移除每段的前后空白
-            .filter { !$0.isEmpty }  // 过滤空段落
+            .map { $0.trimmingCharacters(in: .whitespaces) }  // 绉婚櫎姣忔鐨勫墠鍚庣┖鐧?
+            .filter { !$0.isEmpty }  // 杩囨护绌烘钀?
         
         return paragraphs
     }
 
-    // MARK: - TTS 选择逻辑
+    // MARK: - TTS 閫夋嫨閫昏緫
     private func resolvedNarrationTTSId() -> String {
         let prefs = UserPreferences.shared
         if !prefs.narrationTTSId.isEmpty { return prefs.narrationTTSId }
@@ -610,13 +612,13 @@ class TTSManager: NSObject, ObservableObject {
     }
 
     private func isDialogueSentence(_ sentence: String) -> Bool {
-        // 粗略判断：包含中文/英文引号时认为是对话
-        return sentence.contains("“") || sentence.contains("\"")
+        // 绮楃暐鍒ゆ柇锛氬寘鍚腑鏂?鑻辨枃寮曞彿鏃惰涓烘槸瀵硅瘽
+        return sentence.contains("鈥?) || sentence.contains("\"")
     }
 
     private func extractSpeaker(from sentence: String) -> String? {
-        // 匹配“张三：”或“张三说：”等格式
-        let pattern = "^\\s*([\\p{Han}A-Za-z0-9_·]{1,12})[\\s　]*[：:，,]?\\s*[\"“]"
+        // 鍖归厤鈥滃紶涓夛細鈥濇垨鈥滃紶涓夎锛氣€濈瓑鏍煎紡
+        let pattern = "^\\s*([\\p{Han}A-Za-z0-9_路]{1,12})[\\s銆€]*[锛?锛?]?\\s*[\"鈥淽"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
         let range = NSRange(location: 0, length: sentence.utf16.count)
         if let match = regex.firstMatch(in: sentence, options: [], range: range),
@@ -657,7 +659,7 @@ class TTSManager: NSObject, ObservableObject {
         return APIService.shared.buildTTSAudioURL(ttsId: ttsId, text: sentence, speechRate: speechRate)
     }
     
-    // MARK: - 朗读章节名
+    // MARK: - 鏈楄绔犺妭鍚?
     private func speakChapterTitle() {
         guard currentChapterIndex < chapters.count else {
             speakNextSentence()
@@ -665,47 +667,47 @@ class TTSManager: NSObject, ObservableObject {
         }
         
         let chapterTitle = chapters[currentChapterIndex].title
-        logger.log("开始朗读章节名: \(chapterTitle)", category: "TTS")
+        logger.log("寮€濮嬫湕璇荤珷鑺傚悕: \(chapterTitle)", category: "TTS")
         
         isReadingChapterTitle = true
         
         guard let audioURL = buildAudioURL(for: chapterTitle, isChapterTitle: true) else {
-            logger.log("未选择 TTS 引擎，跳过章节名朗读", category: "TTS")
+            logger.log("鏈€夋嫨 TTS 寮曟搸锛岃烦杩囩珷鑺傚悕鏈楄", category: "TTS")
             isReadingChapterTitle = false
             speakNextSentence()
             return
         }
 
-        // 检查是否有预载的章节名缓存（使用索引-1表示章节名）
+        // 妫€鏌ユ槸鍚︽湁棰勮浇鐨勭珷鑺傚悕缂撳瓨锛堜娇鐢ㄧ储寮?1琛ㄧず绔犺妭鍚嶏級
         if let cachedTitleData = cachedAudio(for: -1) {
-            logger.log("✅ 使用预载的章节名音频", category: "TTS")
+            logger.log("鉁?浣跨敤棰勮浇鐨勭珷鑺傚悕闊抽", category: "TTS")
             playAudioWithData(data: cachedTitleData)
-            // 在章节名开始播放时就启动预载，避免阻塞
-            logger.log("章节名播放中，同时启动内容预载", category: "TTS")
+            // 鍦ㄧ珷鑺傚悕寮€濮嬫挱鏀炬椂灏卞惎鍔ㄩ杞斤紝閬垮厤闃诲
+            logger.log("绔犺妭鍚嶆挱鏀句腑锛屽悓鏃跺惎鍔ㄥ唴瀹归杞?, category: "TTS")
             startPreloading()
             return
         }
         
-        // 播放音频
+        // 鎾斁闊抽
         Task {
             do {
                 let (data, response) = try await URLSession.shared.data(from: audioURL)
 
                 await MainActor.run {
-                    // 检查HTTP响应
+                    // 妫€鏌TTP鍝嶅簲
                     if validateAudioData(data, response: response) {
                         playAudioWithData(data: data)
-                        // 在章节名开始播放时就启动预载，避免阻塞
-                        logger.log("章节名播放中，同时启动内容预载", category: "TTS")
+                        // 鍦ㄧ珷鑺傚悕寮€濮嬫挱鏀炬椂灏卞惎鍔ㄩ杞斤紝閬垮厤闃诲
+                        logger.log("绔犺妭鍚嶆挱鏀句腑锛屽悓鏃跺惎鍔ㄥ唴瀹归杞?, category: "TTS")
                         startPreloading()
                     } else {
-                        logger.log("章节名音频无效，跳过", category: "TTS")
+                        logger.log("绔犺妭鍚嶉煶棰戞棤鏁堬紝璺宠繃", category: "TTS")
                         isReadingChapterTitle = false
                         speakNextSentence()
                     }
                 }
             } catch {
-                logger.log("章节名音频下载失败: \(error)", category: "TTS错误")
+                logger.log("绔犺妭鍚嶉煶棰戜笅杞藉け璐? \(error)", category: "TTS閿欒")
                 await MainActor.run {
                     isReadingChapterTitle = false
                     speakNextSentence()
@@ -714,101 +716,101 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - 朗读下一句
+    // MARK: - 鏈楄涓嬩竴鍙?
     private func speakNextSentence() {
         guard currentSentenceIndex < sentences.count else {
-            logger.log("当前章节朗读完成，准备下一章", category: "TTS")
-            // 当前章节读完，自动读下一章
+            logger.log("褰撳墠绔犺妭鏈楄瀹屾垚锛屽噯澶囦笅涓€绔?, category: "TTS")
+            // 褰撳墠绔犺妭璇诲畬锛岃嚜鍔ㄨ涓嬩竴绔?
             nextChapter()
             return
         }
         
         let sentence = sentences[currentSentenceIndex]
         
-        // 跳过纯标点或空白
+        // 璺宠繃绾爣鐐规垨绌虹櫧
         if isPunctuationOnly(sentence) {
-            logger.log("⏭️ 跳过纯标点/空白段落 [\(currentSentenceIndex + 1)/\(totalSentences)]: \(sentence)", category: "TTS")
+            logger.log("鈴笍 璺宠繃绾爣鐐?绌虹櫧娈佃惤 [\(currentSentenceIndex + 1)/\(totalSentences)]: \(sentence)", category: "TTS")
             currentSentenceIndex += 1
             speakNextSentence()
             return
         }
         
-        // 保存进度
+        // 淇濆瓨杩涘害
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex)
 
-        // 提前准备后续段落，尽量消除句间空档
+        // 鎻愬墠鍑嗗鍚庣画娈佃惤锛屽敖閲忔秷闄ゅ彞闂寸┖妗?
         startPreloading()
 
         guard let audioURL = buildAudioURL(for: sentence) else {
-            logger.log("未选择 TTS 引擎，停止播放", category: "TTS错误")
+            logger.log("鏈€夋嫨 TTS 寮曟搸锛屽仠姝㈡挱鏀?, category: "TTS閿欒")
             stop()
             return
         }
 
         let speechRate = UserPreferences.shared.speechRate
 
-        logger.log("朗读句子 \(currentSentenceIndex + 1)/\(totalSentences) - 语速: \(speechRate)", category: "TTS")
-        logger.log("句子内容: \(sentence.prefix(50))...", category: "TTS")
+        logger.log("鏈楄鍙ュ瓙 \(currentSentenceIndex + 1)/\(totalSentences) - 璇€? \(speechRate)", category: "TTS")
+        logger.log("鍙ュ瓙鍐呭: \(sentence.prefix(50))...", category: "TTS")
 
-        // 播放音频
+        // 鎾斁闊抽
         playAudio(url: audioURL)
         
-        // 更新锁屏信息
+        // 鏇存柊閿佸睆淇℃伅
         if currentChapterIndex < chapters.count {
             updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
         }
     }
     
-    // MARK: - 播放音频
+    // MARK: - 鎾斁闊抽
     private func playAudio(url: URL) {
         isLoading = true
         
-        logger.log("TTS 音频 URL: \(url.absoluteString)", category: "TTS")
+        logger.log("TTS 闊抽 URL: \(url.absoluteString)", category: "TTS")
         
-        // 检查缓存
+        // 妫€鏌ョ紦瀛?
         if let cachedData = cachedAudio(for: currentSentenceIndex) {
-            logger.log("✅ 使用缓存音频 - 索引: \(currentSentenceIndex)", category: "TTS")
+            logger.log("鉁?浣跨敤缂撳瓨闊抽 - 绱㈠紩: \(currentSentenceIndex)", category: "TTS")
             playAudioWithData(data: cachedData)
-            // 触发下一批预载
+            // 瑙﹀彂涓嬩竴鎵归杞?
             startPreloading()
             return
         }
         
-        // 下载音频数据并使用 AVAudioPlayer 播放
+        // 涓嬭浇闊抽鏁版嵁骞朵娇鐢?AVAudioPlayer 鎾斁
         Task {
             do {
                 let (data, response) = try await URLSession.shared.data(from: url)
-                logger.log("✅ URL可访问，数据大小: \(data.count) 字节", category: "TTS")
+                logger.log("鉁?URL鍙闂紝鏁版嵁澶у皬: \(data.count) 瀛楄妭", category: "TTS")
 
                 let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? "unknown"
                 logger.log("Content-Type: \(contentType)", category: "TTS")
 
-                // 检查数据是否为有效音频
+                // 妫€鏌ユ暟鎹槸鍚︿负鏈夋晥闊抽
                 if !validateAudioData(data, response: response) {
-                    logger.log("❌ 数据无效或解码失败，大小: \(data.count) 字节", category: "TTS错误")
+                    logger.log("鉂?鏁版嵁鏃犳晥鎴栬В鐮佸け璐ワ紝澶у皬: \(data.count) 瀛楄妭", category: "TTS閿欒")
                     if data.count < 2000, let text = String(data: data, encoding: .utf8) {
-                        logger.log("返回内容: \(text.prefix(500))", category: "TTS错误")
+                        logger.log("杩斿洖鍐呭: \(text.prefix(500))", category: "TTS閿欒")
                     }
                     await MainActor.run {
                         isLoading = false
-                        logger.log("⚠️ 音频无效，尝试下一段", category: "TTS")
+                        logger.log("鈿狅笍 闊抽鏃犳晥锛屽皾璇曚笅涓€娈?, category: "TTS")
                         currentSentenceIndex += 1
                         speakNextSentence()
                     }
                     return
                 }
                 
-                // 在主线程创建并播放音频
+                // 鍦ㄤ富绾跨▼鍒涘缓骞舵挱鏀鹃煶棰?
                 await MainActor.run {
                     playAudioWithData(data: data)
-                    // 触发预载
+                    // 瑙﹀彂棰勮浇
                     startPreloading()
                 }
             } catch {
-                logger.log("❌ 网络错误: \(error.localizedDescription)", category: "TTS错误")
+                logger.log("鉂?缃戠粶閿欒: \(error.localizedDescription)", category: "TTS閿欒")
                 await MainActor.run {
                     isLoading = false
-                    logger.log("⚠️ 网络错误，尝试下一段", category: "TTS")
+                    logger.log("鈿狅笍 缃戠粶閿欒锛屽皾璇曚笅涓€娈?, category: "TTS")
                     currentSentenceIndex += 1
                     speakNextSentence()
                 }
@@ -816,28 +818,28 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - 开始预载
+    // MARK: - 寮€濮嬮杞?
     private func startPreloading() {
         let preloadCount = UserPreferences.shared.ttsPreloadCount
         
-        // 预载当前章节的段落
+        // 棰勮浇褰撳墠绔犺妭鐨勬钀?
         if preloadCount > 0 {
             let startIndex = currentSentenceIndex + 1
             let endIndex = min(startIndex + preloadCount, sentences.count)
             
-            // 计算需要预载的索引 (未缓存且不在队列中)
-            // 注意：这里简化为只检查缓存，每次都刷新队列以确保顺序优先
+            // 璁＄畻闇€瑕侀杞界殑绱㈠紩 (鏈紦瀛樹笖涓嶅湪闃熷垪涓?
+            // 娉ㄦ剰锛氳繖閲岀畝鍖栦负鍙鏌ョ紦瀛橈紝姣忔閮藉埛鏂伴槦鍒椾互纭繚椤哄簭浼樺厛
             let neededIndices = (startIndex..<endIndex).filter {
                 cachedAudio(for: $0) == nil
             }
 
             if !neededIndices.isEmpty {
-                // 更新队列：覆盖为当前最需要的
+                // 鏇存柊闃熷垪锛氳鐩栦负褰撳墠鏈€闇€瑕佺殑
                 updatePreloadQueue(neededIndices)
-                // 启动队列处理
+                // 鍚姩闃熷垪澶勭悊
                 processPreloadQueue()
             } else {
-                // 当前段落都OK了，检查下一章
+                // 褰撳墠娈佃惤閮絆K浜嗭紝妫€鏌ヤ笅涓€绔?
                 checkAndPreloadNextChapter()
             }
         } else {
@@ -845,7 +847,7 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - 处理预载队列 (并发下载 + 顺序优先)
+    // MARK: - 澶勭悊棰勮浇闃熷垪 (骞跺彂涓嬭浇 + 椤哄簭浼樺厛)
     private func processPreloadQueue() {
         guard !getIsPreloading() else { return }
 
@@ -860,18 +862,18 @@ class TTSManager: NSObject, ObservableObject {
                 var queueIndex = 0
 
                 while queueIndex < queue.count || activeDownloads > 0 {
-                    // 检查是否被停止
+                    // 妫€鏌ユ槸鍚﹁鍋滄
                     if !self.getIsPreloading() {
                         group.cancelAll()
                         break
                     }
 
-                    // 启动新的下载任务（在并发限制内）
+                    // 鍚姩鏂扮殑涓嬭浇浠诲姟锛堝湪骞跺彂闄愬埗鍐咃級
                     while activeDownloads < self.maxConcurrentDownloads && queueIndex < queue.count {
                         let index = queue[queueIndex]
                         queueIndex += 1
 
-                        // 跳过已缓存的
+                        // 璺宠繃宸茬紦瀛樼殑
                         if self.cachedAudio(for: index) != nil {
                             continue
                         }
@@ -884,7 +886,7 @@ class TTSManager: NSObject, ObservableObject {
                         }
                     }
 
-                    // 等待至少一个任务完成
+                    // 绛夊緟鑷冲皯涓€涓换鍔″畬鎴?
                     if activeDownloads > 0 {
                         await group.next()
                         activeDownloads -= 1
@@ -894,7 +896,7 @@ class TTSManager: NSObject, ObservableObject {
 
             self.setIsPreloading(false)
 
-            // 队列空了，检查下一章或处理新加入的任务
+            // 闃熷垪绌轰簡锛屾鏌ヤ笅涓€绔犳垨澶勭悊鏂板姞鍏ョ殑浠诲姟
             if self.hasPendingPreloadQueue() {
                 self.processPreloadQueue()
             } else {
@@ -905,10 +907,10 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - 带重试的下载
+    // MARK: - 甯﹂噸璇曠殑涓嬭浇
     private func downloadAudioWithRetry(at index: Int) async {
         for attempt in 0...maxPreloadRetries {
-            // 检查是否还需要下载 (可能用户已经切走了)
+            // 妫€鏌ユ槸鍚﹁繕闇€瑕佷笅杞?(鍙兘鐢ㄦ埛宸茬粡鍒囪蛋浜?
             if !getIsPreloading() { return }
             
             let success = await downloadAudio(at: index)
@@ -917,19 +919,19 @@ class TTSManager: NSObject, ObservableObject {
             }
             
             if attempt < maxPreloadRetries {
-                logger.log("⚠️ 预载重试 \(attempt + 1)/\(maxPreloadRetries) - 索引: \(index)", category: "TTS")
-                try? await Task.sleep(nanoseconds: 1_000_000_000) // 失败延迟 1s
+                logger.log("鈿狅笍 棰勮浇閲嶈瘯 \(attempt + 1)/\(maxPreloadRetries) - 绱㈠紩: \(index)", category: "TTS")
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 澶辫触寤惰繜 1s
             }
         }
-        logger.log("❌ 预载最终失败 - 索引: \(index)", category: "TTS错误")
+        logger.log("鉂?棰勮浇鏈€缁堝け璐?- 绱㈠紩: \(index)", category: "TTS閿欒")
     }
     
-    // MARK: - 单个下载实现
+    // MARK: - 鍗曚釜涓嬭浇瀹炵幇
     private func downloadAudio(at index: Int) async -> Bool {
         guard index < sentences.count else { return false }
         let sentence = sentences[index]
         
-        // 跳过纯标点
+        // 璺宠繃绾爣鐐?
         if isPunctuationOnly(sentence) {
             _ = await MainActor.run {
                 preloadedIndices.insert(index)
@@ -943,119 +945,119 @@ class TTSManager: NSObject, ObservableObject {
             let (data, response) = try await URLSession.shared.data(from: url)
             
             return await MainActor.run {
-                // 检查HTTP响应
+                // 妫€鏌TTP鍝嶅簲
                 if validateAudioData(data, response: response) {
                     cacheAudio(data, for: index)
                     preloadedIndices.insert(index)
-                    logger.log("✅ 顺序预载成功 - 索引: \(index), 大小: \(data.count)", category: "TTS")
+                    logger.log("鉁?椤哄簭棰勮浇鎴愬姛 - 绱㈠紩: \(index), 澶у皬: \(data.count)", category: "TTS")
                     return true
                 } else {
                     return false
                 }
             }
         } catch {
-            logger.log("预载网络错误: \(error)", category: "TTS错误")
+            logger.log("棰勮浇缃戠粶閿欒: \(error)", category: "TTS閿欒")
             return false
         }
     }
     
     private func playAudioWithData(data: Data) {
         do {
-            // 播放正式音频前，停止静音保活
+            // 鎾斁姝ｅ紡闊抽鍓嶏紝鍋滄闈欓煶淇濇椿
             stopKeepAlive()
             
-            // 使用 AVAudioPlayer 播放下载的数据
+            // 浣跨敤 AVAudioPlayer 鎾斁涓嬭浇鐨勬暟鎹?
             audioPlayer = try AVAudioPlayer(data: data)
             audioPlayer?.delegate = self
             audioPlayer?.volume = 1.0
-            audioPlayer?.prepareToPlay() // 预解码，减少播放前的等待
+            audioPlayer?.prepareToPlay() // 棰勮В鐮侊紝鍑忓皯鎾斁鍓嶇殑绛夊緟
             
-            logger.log("创建 AVAudioPlayer 成功", category: "TTS")
-            logger.log("音频时长: \(audioPlayer?.duration ?? 0) 秒", category: "TTS")
-            logger.log("音频格式: \(audioPlayer?.format.description ?? "unknown")", category: "TTS")
+            logger.log("鍒涘缓 AVAudioPlayer 鎴愬姛", category: "TTS")
+            logger.log("闊抽鏃堕暱: \(audioPlayer?.duration ?? 0) 绉?, category: "TTS")
+            logger.log("闊抽鏍煎紡: \(audioPlayer?.format.description ?? "unknown")", category: "TTS")
             
             let success = audioPlayer?.play() ?? false
             if success {
-                logger.log("✅ 音频开始播放", category: "TTS")
+                logger.log("鉁?闊抽寮€濮嬫挱鏀?, category: "TTS")
                 isLoading = false
                 currentSentenceDuration = audioPlayer?.duration ?? 0
-                // 延长后台任务
+                // 寤堕暱鍚庡彴浠诲姟
                 beginBackgroundTask()
             } else {
-                logger.log("❌ 音频播放失败，跳过当前段落", category: "TTS错误")
+                logger.log("鉂?闊抽鎾斁澶辫触锛岃烦杩囧綋鍓嶆钀?, category: "TTS閿欒")
                 isLoading = false
-                // 错误恢复：跳到下一段
+                // 閿欒鎭㈠锛氳烦鍒颁笅涓€娈?
                 currentSentenceIndex += 1
                 speakNextSentence()
             }
         } catch {
-            logger.log("❌ 创建 AVAudioPlayer 失败: \(error.localizedDescription)", category: "TTS错误")
-            logger.log("错误详情: \(error)", category: "TTS错误")
+            logger.log("鉂?鍒涘缓 AVAudioPlayer 澶辫触: \(error.localizedDescription)", category: "TTS閿欒")
+            logger.log("閿欒璇︽儏: \(error)", category: "TTS閿欒")
             isLoading = false
-            // 错误恢复：跳到下一段
-            logger.log("⚠️ 音频解码失败，尝试下一段", category: "TTS")
+            // 閿欒鎭㈠锛氳烦鍒颁笅涓€娈?
+            logger.log("鈿狅笍 闊抽瑙ｇ爜澶辫触锛屽皾璇曚笅涓€娈?, category: "TTS")
             currentSentenceIndex += 1
             speakNextSentence()
         }
     }
     
     
-    // MARK: - 暂停
+    // MARK: - 鏆傚仠
     func pause() {
-        logger.log("收到暂停命令 - isPlaying: \(isPlaying), isPaused: \(isPaused), audioPlayer: \(audioPlayer != nil)", category: "TTS")
+        logger.log("鏀跺埌鏆傚仠鍛戒护 - isPlaying: \(isPlaying), isPaused: \(isPaused), audioPlayer: \(audioPlayer != nil)", category: "TTS")
         
         if isPlaying && !isPaused {
             if let player = audioPlayer {
                 player.pause()
                 isPaused = true
-                logger.log("✅ TTS 暂停", category: "TTS")
+                logger.log("鉁?TTS 鏆傚仠", category: "TTS")
                 
-                // 暂停时启动保活，防止 App 被挂起
+                // 鏆傚仠鏃跺惎鍔ㄤ繚娲伙紝闃叉 App 琚寕璧?
                 startKeepAlive()
                 
                 updatePlaybackRate()
             } else {
-                logger.log("⚠️ audioPlayer 不存在，无法暂停", category: "TTS")
+                logger.log("鈿狅笍 audioPlayer 涓嶅瓨鍦紝鏃犳硶鏆傚仠", category: "TTS")
             }
         } else if isPaused {
-            logger.log("TTS 已经处于暂停状态", category: "TTS")
+            logger.log("TTS 宸茬粡澶勪簬鏆傚仠鐘舵€?, category: "TTS")
         } else {
-            logger.log("TTS 未在播放，无法暂停", category: "TTS")
+            logger.log("TTS 鏈湪鎾斁锛屾棤娉曟殏鍋?, category: "TTS")
         }
     }
     
-    // MARK: - 继续
+    // MARK: - 缁х画
     func resume() {
-        logger.log("收到恢复命令 - isPlaying: \(isPlaying), isPaused: \(isPaused), audioPlayer: \(audioPlayer != nil)", category: "TTS")
+        logger.log("鏀跺埌鎭㈠鍛戒护 - isPlaying: \(isPlaying), isPaused: \(isPaused), audioPlayer: \(audioPlayer != nil)", category: "TTS")
         
         if isPlaying && isPaused {
-            // 检查 audioPlayer 是否存在
+            // 妫€鏌?audioPlayer 鏄惁瀛樺湪
             if let player = audioPlayer {
                 player.play()
                 isPaused = false
-                logger.log("✅ TTS 恢复播放", category: "TTS")
+                logger.log("鉁?TTS 鎭㈠鎾斁", category: "TTS")
                 updatePlaybackRate()
             } else {
-                // audioPlayer 不存在，重新播放当前句子
-                logger.log("⚠️ audioPlayer 不存在，重新播放当前句子", category: "TTS")
+                // audioPlayer 涓嶅瓨鍦紝閲嶆柊鎾斁褰撳墠鍙ュ瓙
+                logger.log("鈿狅笍 audioPlayer 涓嶅瓨鍦紝閲嶆柊鎾斁褰撳墠鍙ュ瓙", category: "TTS")
                 isPaused = false
                 speakNextSentence()
             }
         } else if !isPlaying {
-            // 如果已经停止，重新开始
-            logger.log("TTS 未在播放，重新开始", category: "TTS")
+            // 濡傛灉宸茬粡鍋滄锛岄噸鏂板紑濮?
+            logger.log("TTS 鏈湪鎾斁锛岄噸鏂板紑濮?, category: "TTS")
             isPlaying = true
             isPaused = false
             speakNextSentence()
         } else {
-            // isPlaying = true 但 isPaused = false，已经在播放中
-            logger.log("TTS 已经在播放中", category: "TTS")
+            // isPlaying = true 浣?isPaused = false锛屽凡缁忓湪鎾斁涓?
+            logger.log("TTS 宸茬粡鍦ㄦ挱鏀句腑", category: "TTS")
         }
     }
     
-    // MARK: - 检查当前章节是否预载完成，并预载下一章
+    // MARK: - 妫€鏌ュ綋鍓嶇珷鑺傛槸鍚﹂杞藉畬鎴愶紝骞堕杞戒笅涓€绔?
     private func checkAndPreloadNextChapter(force: Bool = false) {
-        // 如果已经在预载下一章，跳过
+        // 濡傛灉宸茬粡鍦ㄩ杞戒笅涓€绔狅紝璺宠繃
         guard nextChapterSentences.isEmpty else {
             return
         }
@@ -1064,37 +1066,37 @@ class TTSManager: NSObject, ObservableObject {
             return
         }
         
-        // 章节切换后强制预载下一章，避免切换时卡顿
+        // 绔犺妭鍒囨崲鍚庡己鍒堕杞戒笅涓€绔狅紝閬垮厤鍒囨崲鏃跺崱椤?
         if force {
-            logger.log("章节切换后立即预载下一章", category: "TTS")
+            logger.log("绔犺妭鍒囨崲鍚庣珛鍗抽杞戒笅涓€绔?, category: "TTS")
             preloadNextChapter()
             return
         }
 
-        // 计算进度百分比
+        // 璁＄畻杩涘害鐧惧垎姣?
         let progress = Double(currentSentenceIndex) / Double(max(sentences.count, 1))
 
-        // 当播放到章节的 50% 时，开始预载下一章
-        // 或者剩余段落少于用户设置的预载段数时也开始预载（确保跨章节保持预读数量）
+        // 褰撴挱鏀惧埌绔犺妭鐨?50% 鏃讹紝寮€濮嬮杞戒笅涓€绔?
+        // 鎴栬€呭墿浣欐钀藉皯浜庣敤鎴疯缃殑棰勮浇娈垫暟鏃朵篃寮€濮嬮杞斤紙纭繚璺ㄧ珷鑺備繚鎸侀璇绘暟閲忥級
         let remainingSentences = sentences.count - currentSentenceIndex
         let preloadCount = UserPreferences.shared.ttsPreloadCount
 
         if progress >= 0.5 || (preloadCount > 0 && remainingSentences <= preloadCount) {
-            logger.log("📖 播放进度 \(Int(progress * 100))%，剩余 \(remainingSentences) 段，触发预载下一章", category: "TTS")
+            logger.log("馃摉 鎾斁杩涘害 \(Int(progress * 100))%锛屽墿浣?\(remainingSentences) 娈碉紝瑙﹀彂棰勮浇涓嬩竴绔?, category: "TTS")
             preloadNextChapter()
         }
     }
 
-    // MARK: - 预载下一章
+    // MARK: - 棰勮浇涓嬩竴绔?
     private func preloadNextChapter() {
-        // 如果已经在预载下一章或已有下一章数据，跳过
+        // 濡傛灉宸茬粡鍦ㄩ杞戒笅涓€绔犳垨宸叉湁涓嬩竴绔犳暟鎹紝璺宠繃
         guard nextChapterSentences.isEmpty else { return }
         guard currentChapterIndex < chapters.count - 1 else { return }
         
         let nextChapterIndex = currentChapterIndex + 1
-        logger.log("开始预载下一章: \(nextChapterIndex)", category: "TTS")
+        logger.log("寮€濮嬮杞戒笅涓€绔? \(nextChapterIndex)", category: "TTS")
         
-        // 预载下一章的章节名
+        // 棰勮浇涓嬩竴绔犵殑绔犺妭鍚?
         preloadNextChapterTitle(chapterIndex: nextChapterIndex)
         
         Task {
@@ -1106,32 +1108,32 @@ class TTSManager: NSObject, ObservableObject {
                 )
                 
                 await MainActor.run {
-                    // 分段
+                    // 鍒嗘
                     nextChapterSentences = splitTextIntoSentences(content)
-                    logger.log("下一章分段完成，共 \(nextChapterSentences.count) 段", category: "TTS")
+                    logger.log("涓嬩竴绔犲垎娈靛畬鎴愶紝鍏?\(nextChapterSentences.count) 娈?, category: "TTS")
                     
-                    // 预载下一章的前几个段落（根据用户的预载设置）
+                    // 棰勮浇涓嬩竴绔犵殑鍓嶅嚑涓钀斤紙鏍规嵁鐢ㄦ埛鐨勯杞借缃級
                     let userPreloadCount = UserPreferences.shared.ttsPreloadCount
-                    let preloadCount = min(max(userPreloadCount, 3), nextChapterSentences.count)  // 至少3段，最多到用户设置的值
-                    logger.log("开始预载下一章的前 \(preloadCount) 段音频", category: "TTS")
+                    let preloadCount = min(max(userPreloadCount, 3), nextChapterSentences.count)  // 鑷冲皯3娈碉紝鏈€澶氬埌鐢ㄦ埛璁剧疆鐨勫€?
+                    logger.log("寮€濮嬮杞戒笅涓€绔犵殑鍓?\(preloadCount) 娈甸煶棰?, category: "TTS")
                     
                     for i in 0..<preloadCount {
                         preloadNextChapterAudio(at: i)
                     }
                 }
             } catch {
-                logger.log("预载下一章失败: \(error)", category: "TTS错误")
+                logger.log("棰勮浇涓嬩竴绔犲け璐? \(error)", category: "TTS閿欒")
             }
         }
     }
     
-    // MARK: - 预载下一章的章节名
+    // MARK: - 棰勮浇涓嬩竴绔犵殑绔犺妭鍚?
     private func preloadNextChapterTitle(chapterIndex: Int) {
         guard chapterIndex < chapters.count else { return }
         guard nextChapterCache[-1] == nil else { return }
         
         let chapterTitle = chapters[chapterIndex].title
-        logger.log("预载下一章章节名: \(chapterTitle)", category: "TTS")
+        logger.log("棰勮浇涓嬩竴绔犵珷鑺傚悕: \(chapterTitle)", category: "TTS")
 
         guard let audioURL = buildAudioURL(for: chapterTitle, isChapterTitle: true) else { return }
         
@@ -1142,18 +1144,18 @@ class TTSManager: NSObject, ObservableObject {
                 await MainActor.run {
                     if validateAudioData(data, response: response) {
                         cacheNextChapterAudio(data, for: -1)
-                        logger.log("✅ 下一章章节名预载成功，大小: \(data.count) 字节", category: "TTS")
+                        logger.log("鉁?涓嬩竴绔犵珷鑺傚悕棰勮浇鎴愬姛锛屽ぇ灏? \(data.count) 瀛楄妭", category: "TTS")
                     } else {
-                        logger.log("⚠️ 下一章章节名预载失败，数据格式或体积异常 (大小: \(data.count) 字节)", category: "TTS")
+                        logger.log("鈿狅笍 涓嬩竴绔犵珷鑺傚悕棰勮浇澶辫触锛屾暟鎹牸寮忔垨浣撶Н寮傚父 (澶у皬: \(data.count) 瀛楄妭)", category: "TTS")
                     }
                 }
             } catch {
-                logger.log("下一章章节名预载失败: \(error)", category: "TTS错误")
+                logger.log("涓嬩竴绔犵珷鑺傚悕棰勮浇澶辫触: \(error)", category: "TTS閿欒")
             }
         }
     }
     
-    // MARK: - 预载下一章的音频
+    // MARK: - 棰勮浇涓嬩竴绔犵殑闊抽
     private func preloadNextChapterAudio(at index: Int) {
         guard index < nextChapterSentences.count else { return }
         guard cachedNextChapterAudio(for: index) == nil else { return }
@@ -1161,7 +1163,7 @@ class TTSManager: NSObject, ObservableObject {
         let sentence = nextChapterSentences[index]
         guard let url = buildAudioURL(for: sentence) else { return }
         
-        logger.log("预载下一章音频 - 索引: \(index)", category: "TTS")
+        logger.log("棰勮浇涓嬩竴绔犻煶棰?- 绱㈠紩: \(index)", category: "TTS")
         
         Task {
             do {
@@ -1172,18 +1174,18 @@ class TTSManager: NSObject, ObservableObject {
                 await MainActor.run {
                     if validateAudioData(data, response: response) {
                         cacheNextChapterAudio(data, for: index)
-                        logger.log("✅ 下一章预载成功 - 索引: \(index), 大小: \(data.count) 字节, Content-Type: \(contentType)", category: "TTS")
+                        logger.log("鉁?涓嬩竴绔犻杞芥垚鍔?- 绱㈠紩: \(index), 澶у皬: \(data.count) 瀛楄妭, Content-Type: \(contentType)", category: "TTS")
                     } else {
-                        logger.log("⚠️ 下一章预载音频无效，Content-Type: \(contentType), 大小: \(data.count) 字节", category: "TTS")
+                        logger.log("鈿狅笍 涓嬩竴绔犻杞介煶棰戞棤鏁堬紝Content-Type: \(contentType), 澶у皬: \(data.count) 瀛楄妭", category: "TTS")
                     }
                 }
             } catch {
-                logger.log("下一章预载失败 - 索引: \(index), 错误: \(error)", category: "TTS错误")
+                logger.log("涓嬩竴绔犻杞藉け璐?- 绱㈠紩: \(index), 閿欒: \(error)", category: "TTS閿欒")
             }
         }
     }
     
-    // MARK: - 停止
+    // MARK: - 鍋滄
     func stop() {
         stopKeepAlive()
         audioPlayer?.stop()
@@ -1193,19 +1195,19 @@ class TTSManager: NSObject, ObservableObject {
         currentSentenceIndex = 0
         sentences = []
         isLoading = false
-        // 清理缓存
+        // 娓呯悊缂撳瓨
         clearAudioCache()
         updatePreloadQueue([])
         setIsPreloading(false)
         clearNextChapterCache()
         nextChapterSentences.removeAll()
-        coverArtwork = nil  // 清理封面缓存
-        // 结束后台任务
+        coverArtwork = nil  // 娓呯悊灏侀潰缂撳瓨
+        // 缁撴潫鍚庡彴浠诲姟
         endBackgroundTask()
-        logger.log("TTS 停止", category: "TTS")
+        logger.log("TTS 鍋滄", category: "TTS")
     }
     
-    // MARK: - 下一章
+    // MARK: - 涓嬩竴绔?
     func nextChapter() {
         guard currentChapterIndex < chapters.count - 1 else { return }
         currentChapterIndex += 1
@@ -1213,7 +1215,7 @@ class TTSManager: NSObject, ObservableObject {
         loadAndReadChapter()
     }
     
-    // MARK: - 上一章
+    // MARK: - 涓婁竴绔?
     func previousChapter() {
         guard currentChapterIndex > 0 else { return }
         currentChapterIndex -= 1
@@ -1221,25 +1223,25 @@ class TTSManager: NSObject, ObservableObject {
         loadAndReadChapter()
     }
     
-    // MARK: - 加载并朗读章节
+    // MARK: - 鍔犺浇骞舵湕璇荤珷鑺?
     private func loadAndReadChapter() {
-        // 检查是否有预载的下一章数据
+        // 妫€鏌ユ槸鍚︽湁棰勮浇鐨勪笅涓€绔犳暟鎹?
         if !nextChapterSentences.isEmpty {
-            logger.log("使用已预载的下一章数据", category: "TTS")
+            logger.log("浣跨敤宸查杞界殑涓嬩竴绔犳暟鎹?, category: "TTS")
             
-            // 停止当前播放
+            // 鍋滄褰撳墠鎾斁
             audioPlayer?.stop()
             audioPlayer = nil
             
-            // 使用预载的数据
+            // 浣跨敤棰勮浇鐨勬暟鎹?
             sentences = nextChapterSentences
             totalSentences = sentences.count
             currentSentenceIndex = 0
 
-            // 将下一章的缓存移动到当前章节（包括章节名索引-1和正文段落）
+            // 灏嗕笅涓€绔犵殑缂撳瓨绉诲姩鍒板綋鍓嶇珷鑺傦紙鍖呮嫭绔犺妭鍚嶇储寮?1鍜屾鏂囨钀斤級
             preloadedIndices = moveNextChapterCacheToCurrent()
 
-            // 清空下一章缓存
+            // 娓呯┖涓嬩竴绔犵紦瀛?
             nextChapterSentences.removeAll()
             
             isPlaying = true
@@ -1250,19 +1252,24 @@ class TTSManager: NSObject, ObservableObject {
                 updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
             }
             
-            // 章节切换后提前准备下一章，避免章节衔接等待
+            // 绔犺妭鍒囨崲鍚庢彁鍓嶅噯澶囦笅涓€绔狅紝閬垮厤绔犺妭琛旀帴绛夊緟
             checkAndPreloadNextChapter(force: true)
 
-            // 先朗读章节名
-            speakChapterTitle()
+            // 鍏堟湕璇荤珷鑺傚悕
+            allowChapterTitlePlayback = !chapters[currentChapterIndex].title.isEmpty
+            if allowChapterTitlePlayback {
+                speakChapterTitle()
+            } else {
+                speakNextSentence()
+            }
             
             return
         }
         
-        // 没有预载数据，从缓存或网络加载
-        logger.log("⚠️ 下一章未预载完成，尝试从缓存或网络加载", category: "TTS")
+        // 娌℃湁棰勮浇鏁版嵁锛屼粠缂撳瓨鎴栫綉缁滃姞杞?
+        logger.log("鈿狅笍 涓嬩竴绔犳湭棰勮浇瀹屾垚锛屽皾璇曚粠缂撳瓨鎴栫綉缁滃姞杞?, category: "TTS")
         
-        // 停止当前播放
+        // 鍋滄褰撳墠鎾斁
         audioPlayer?.stop()
         audioPlayer = nil
         
@@ -1278,16 +1285,16 @@ class TTSManager: NSObject, ObservableObject {
                 
                 await MainActor.run {
                     if loadTime < 0.1 {
-                        logger.log("✅ 从缓存加载章节内容，耗时: \(Int(loadTime * 1000))ms", category: "TTS")
+                        logger.log("鉁?浠庣紦瀛樺姞杞界珷鑺傚唴瀹癸紝鑰楁椂: \(Int(loadTime * 1000))ms", category: "TTS")
                     } else {
-                        logger.log("⏳ 从网络加载章节内容，耗时: \(String(format: "%.2f", loadTime))s", category: "TTS")
+                        logger.log("鈴?浠庣綉缁滃姞杞界珷鑺傚唴瀹癸紝鑰楁椂: \(String(format: "%.2f", loadTime))s", category: "TTS")
                     }
                     
                     sentences = splitTextIntoSentences(content)
                     totalSentences = sentences.count
                     currentSentenceIndex = 0
 
-                    // 清空当前章节的缓存
+                    // 娓呯┖褰撳墠绔犺妭鐨勭紦瀛?
                     clearAudioCache()
                     updatePreloadQueue([])
                     setIsPreloading(false)
@@ -1300,19 +1307,24 @@ class TTSManager: NSObject, ObservableObject {
                         updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
                     }
                     
-                    // 章节切换后提前准备下一章，避免章节衔接等待
+                    // 绔犺妭鍒囨崲鍚庢彁鍓嶅噯澶囦笅涓€绔狅紝閬垮厤绔犺妭琛旀帴绛夊緟
                     checkAndPreloadNextChapter(force: true)
 
-                    // 先朗读章节名
-                    speakChapterTitle()
+                    // 鍏堟湕璇荤珷鑺傚悕
+                    allowChapterTitlePlayback = !chapters[currentChapterIndex].title.isEmpty
+                    if allowChapterTitlePlayback {
+                        speakChapterTitle()
+                    } else {
+                        speakNextSentence()
+                    }
                 }
             } catch {
-                logger.log("加载章节失败: \(error)", category: "TTS错误")
+                logger.log("鍔犺浇绔犺妭澶辫触: \(error)", category: "TTS閿欒")
             }
         }
     }
     
-    // MARK: - 更新播放速率
+    // MARK: - 鏇存柊鎾斁閫熺巼
     private func updatePlaybackRate() {
         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying && !isPaused ? 1.0 : 0.0
@@ -1322,21 +1334,21 @@ class TTSManager: NSObject, ObservableObject {
     deinit {
         NotificationCenter.default.removeObserver(self)
         endBackgroundTask()
-        logger.log("TTSManager 销毁", category: "TTS")
+        logger.log("TTSManager 閿€姣?, category: "TTS")
     }
 }
 
 // MARK: - AVAudioPlayerDelegate
 extension TTSManager: AVAudioPlayerDelegate {
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        // AVAudioPlayer 的回调线程不保证在主线程，统一切换到主线程更新状态
+        // AVAudioPlayer 鐨勫洖璋冪嚎绋嬩笉淇濊瘉鍦ㄤ富绾跨▼锛岀粺涓€鍒囨崲鍒颁富绾跨▼鏇存柊鐘舵€?
         DispatchQueue.main.async {
-            self.logger.log("音频播放完成 - 成功: \(flag)", category: "TTS")
+            self.logger.log("闊抽鎾斁瀹屾垚 - 鎴愬姛: \(flag)", category: "TTS")
 
-            // 播放间隙启动保活
+            // 鎾斁闂撮殭鍚姩淇濇椿
             self.startKeepAlive()
 
-            // 如果正在朗读章节名，播放完后开始朗读内容
+            // 濡傛灉姝ｅ湪鏈楄绔犺妭鍚嶏紝鎾斁瀹屽悗寮€濮嬫湕璇诲唴瀹?
             if self.isReadingChapterTitle {
                 self.isReadingChapterTitle = false
                 self.speakNextSentence()
@@ -1344,11 +1356,11 @@ extension TTSManager: AVAudioPlayerDelegate {
             }
 
             if flag {
-                // 播放下一句
+                // 鎾斁涓嬩竴鍙?
                 self.currentSentenceIndex += 1
                 self.speakNextSentence()
             } else {
-                self.logger.log("音频播放失败，跳过", category: "TTS错误")
+                self.logger.log("闊抽鎾斁澶辫触锛岃烦杩?, category: "TTS閿欒")
                 self.currentSentenceIndex += 1
                 self.speakNextSentence()
             }
@@ -1357,10 +1369,15 @@ extension TTSManager: AVAudioPlayerDelegate {
     
     func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
         if let error = error {
-            logger.log("❌ 音频解码错误: \(error.localizedDescription)", category: "TTS错误")
+            logger.log("鉂?闊抽瑙ｇ爜閿欒: \(error.localizedDescription)", category: "TTS閿欒")
         }
-        // 跳过这一句
+        // 璺宠繃杩欎竴鍙?
         currentSentenceIndex += 1
         speakNextSentence()
     }
 }
+
+
+
+
+

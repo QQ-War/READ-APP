@@ -888,15 +888,18 @@ struct ReadingView: View {
                     
                     if offset > 0 && startIndex < contentSentences.count {
                         let firstSentence = contentSentences[startIndex]
-                        if offset < firstSentence.count {
-                             let partialFirstSentence = String(firstSentence.dropFirst(offset))
-                             var sentences = [partialFirstSentence]
-                             if startIndex + 1 < contentSentences.count {
-                                 sentences.append(contentsOf: contentSentences[(startIndex + 1)...])
-                             }
-                             textForTTS = sentences.joined(separator: "\n")
-                             ttsBaseIndex = startIndex
-                             startIndex = 0 
+                        if offset < firstSentence.utf16.count {
+                            let start = firstSentence.utf16.index(firstSentence.utf16.startIndex, offsetBy: offset)
+                            if let strIndex = String.Index(start, within: firstSentence) {
+                                let partialFirstSentence = String(firstSentence[strIndex...])
+                                var sentences = [partialFirstSentence]
+                                if startIndex + 1 < contentSentences.count {
+                                    sentences.append(contentsOf: contentSentences[(startIndex + 1)...])
+                                }
+                                textForTTS = sentences.joined(separator: "\n")
+                                ttsBaseIndex = startIndex
+                                startIndex = 0
+                            }
                         }
                     } else if startIndex < contentSentences.count {
                         let sentences = contentSentences[startIndex...]
@@ -916,6 +919,10 @@ struct ReadingView: View {
         
         lastTTSSentenceIndex = ttsBaseIndex + startIndex
 
+        let shouldSpeakChapterTitle = preferences.readingMode == .horizontal
+            && currentPageIndex == 0
+            && currentCache.chapterPrefixLen > 0
+
         ttsManager.startReading(
             text: textForTTS,
             chapters: chapters,
@@ -929,7 +936,8 @@ struct ReadingView: View {
                 loadChapterContent()
                 saveProgress()
             },
-            startAtSentenceIndex: startIndex
+            startAtSentenceIndex: startIndex,
+            shouldSpeakChapterTitle: shouldSpeakChapterTitle
         )
     }
     
