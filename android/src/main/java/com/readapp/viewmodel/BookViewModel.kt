@@ -333,6 +333,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private fun speakParagraph(index: Int) {
         viewModelScope.launch {
             _currentParagraphIndex.value = index
+            _playbackProgress.value = 0f
 
             if (index < 0 || index >= currentSentences.size) {
                 appendLog("鏈楄瀹屾瘯鎴栫储寮曟棤鏁堬紝鍋滄鎾斁. Index: $index, Sentences: ${currentSentences.size}")
@@ -617,8 +618,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     delay(500)
                     continue
                 }
-                val duration = currentMediaController.duration.takeIf { it > 0 } ?: 1L
+                val duration = currentMediaController.duration
                 val position = currentMediaController.currentPosition
+                if (duration <= 0L || position < 0L || position > duration) {
+                    _playbackProgress.value = 0f
+                    delay(200)
+                    continue
+                }
                 _playbackProgress.value = (position.toFloat() / duration).coerceIn(0f, 1f)
                 _totalTime.value = formatTime(duration)
                 _currentTime.value = formatTime(position)

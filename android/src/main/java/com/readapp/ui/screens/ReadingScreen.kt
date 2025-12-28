@@ -39,6 +39,7 @@ import com.readapp.data.model.Chapter
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -365,12 +366,16 @@ fun ReadingScreen(
                                                 )
                                             }
                     
-                                            LaunchedEffect(pagerState.currentPage, paginatedPages) {
-                                                val pageInfo = paginatedPages.getOrNull(pagerState.currentPage)
-                                                if (pageInfo != null) {
-                                                    currentPageStartIndex = pageInfo.startParagraphIndex
-                                                    currentPageStartOffset = pageInfo.startOffsetInParagraph
-                                                }
+                                            LaunchedEffect(pagerState, paginatedPages) {
+                                                snapshotFlow { pagerState.currentPage }
+                                                    .distinctUntilChanged()
+                                                    .collect { page ->
+                                                        val pageInfo = paginatedPages.getOrNull(page)
+                                                        if (pageInfo != null) {
+                                                            currentPageStartIndex = pageInfo.startParagraphIndex
+                                                            currentPageStartOffset = pageInfo.startOffsetInParagraph
+                                                        }
+                                                    }
                                             }
 
                                             LaunchedEffect(
