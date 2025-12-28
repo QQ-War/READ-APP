@@ -27,7 +27,7 @@ struct ReadingView: View {
     // Pagination State
     @State private var currentPageIndex: Int = 0
     @State private var paginatedPages: [PaginatedPage] = []
-    @State private var attributedContent: NSAttributedString?
+    @State private var textKitStore: TextKitRenderStore?
     @State private var pendingJumpToLastPage = false
 
     // Unified Insets for consistency
@@ -164,11 +164,12 @@ struct ReadingView: View {
             // Define desired margins *within* the safe area
             let horizontalMargin: CGFloat = 10
             let verticalMargin: CGFloat = 10
+            let overlayInset: CGFloat = 44
 
             // The precise size for both pagination and rendering
             let contentSize = CGSize(
-                width: max(0, geometry.size.width - safeArea.leading - safeArea.trailing - horizontalMargin * 2),
-                height: max(0, geometry.size.height - safeArea.top - safeArea.bottom - verticalMargin * 2)
+                width: max(0, geometry.size.width - safeArea.leading - safeArea.trailing - horizontalMargin * 2 - overlayInset),
+                height: max(0, geometry.size.height - safeArea.top - safeArea.bottom - verticalMargin * 2 - overlayInset)
             )
 
             VStack(spacing: 0) {
@@ -180,7 +181,7 @@ struct ReadingView: View {
                         ZStack(alignment: .bottomTrailing) {
                             ReadPageViewController(
                                 pages: paginatedPages,
-                                attributedContent: attributedContent,
+                                renderStore: textKitStore,
                                 currentPageIndex: $currentPageIndex,
                                 onTapMiddle: { showUIControls.toggle() },
                                 onTapLeft: { goToPreviousPage() },
@@ -215,9 +216,9 @@ struct ReadingView: View {
                         Rectangle().fill(Color.clear)
                     }
                     
-                    Spacer().frame(width: safeArea.trailing + horizontalMargin)
+                    Spacer().frame(width: safeArea.trailing + horizontalMargin + overlayInset)
                 }
-                Spacer().frame(height: safeArea.bottom + verticalMargin)
+                Spacer().frame(height: safeArea.bottom + verticalMargin + overlayInset)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .onAppear {
@@ -268,7 +269,7 @@ struct ReadingView: View {
             chapterTitle: chapterTitle
         )
         
-        self.attributedContent = result.attributedText
+        self.textKitStore = result.renderStore
         self.paginatedPages = result.pages
         
         if pendingJumpToLastPage {
@@ -515,7 +516,7 @@ struct ReadingView: View {
 // MARK: - UIPageViewController Wrapper
 struct ReadPageViewController: UIViewControllerRepresentable {
     var pages: [PaginatedPage]
-    var attributedContent: NSAttributedString?
+    var renderStore: TextKitRenderStore?
     @Binding var currentPageIndex: Int
     var onTapMiddle: () -> Void
     var onTapLeft: () -> Void
@@ -539,11 +540,15 @@ struct ReadPageViewController: UIViewControllerRepresentable {
 
     func updateUIViewController(_ pvc: UIPageViewController, context: Context) {
         context.coordinator.parent = self
-        guard !pages.isEmpty, let content = attributedContent, currentPageIndex < pages.count else { return }
+        guard !pages.isEmpty, let store = renderStore, currentPageIndex < pages.count else { return }
         
-        if let currentVC = pvc.viewControllers?.first as? ReadContentViewController, currentVC.pageIndex == currentPageIndex { return }
+        if let currentVC = pvc.viewControllers?.first as? ReadContentViewController,
+           currentVC.pageIndex == currentPageIndex,
+           currentVC.renderStore === store {
+            return
+        }
         
-        let vc = ReadContentViewController(pageIndex: currentPageIndex, range: pages[currentPageIndex].range, attributedText: content)
+        let vc = ReadContentViewController(pageIndex: currentPageIndex, renderStore: store)
         pvc.setViewControllers([vc], direction: .forward, animated: false)
     }
 
@@ -564,20 +569,22 @@ struct ReadPageViewController: UIViewControllerRepresentable {
 
         func pageViewController(_ pvc: UIPageViewController, viewControllerBefore viewController: UIViewController) -> UIViewController? {
             guard let vc = viewController as? ReadContentViewController else { return nil }
+            guard let store = parent.renderStore else { return nil }
             let index = vc.pageIndex
             guard index > 0 else { return nil } // No previous page in this chapter
             
             let prevIndex = index - 1
-            return ReadContentViewController(pageIndex: prevIndex, range: parent.pages[prevIndex].range, attributedText: parent.attributedContent!)
+            return ReadContentViewController(pageIndex: prevIndex, renderStore: store)
         }
 
         func pageViewController(_ pvc: UIPageViewController, viewControllerAfter viewController: UIViewController) -> UIViewController? {
             guard let vc = viewController as? ReadContentViewController else { return nil }
+            guard let store = parent.renderStore else { return nil }
             let index = vc.pageIndex
             guard index < parent.pages.count - 1 else { return nil } // No next page in this chapter
             
             let nextIndex = index + 1
-            return ReadContentViewController(pageIndex: nextIndex, range: parent.pages[nextIndex].range, attributedText: parent.attributedContent!)
+            return ReadContentViewController(pageIndex: nextIndex, renderStore: store)
         }
         
         func pageViewController(_ pvc: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
@@ -610,11 +617,11 @@ struct ReadPageViewController: UIViewControllerRepresentable {
 // MARK: - Content View Controller
 class ReadContentViewController: UIViewController {
     let pageIndex: Int
-    let range: NSRange
-    let attributedText: NSAttributedString
+    let renderStore: TextKitRenderStore
+    let textContainer: NSTextContainer
     
     private lazy var textView: UITextView = {
-        let tv = UITextView()
+        let tv = UITextView(frame: .zero, textContainer: textContainer)
         tv.isEditable = false; tv.isScrollEnabled = false; tv.isSelectable = false
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
@@ -623,8 +630,10 @@ class ReadContentViewController: UIViewController {
         return tv
     }()
     
-    init(pageIndex: Int, range: NSRange, attributedText: NSAttributedString) {
-        self.pageIndex = pageIndex; self.range = range; self.attributedText = attributedText
+    init(pageIndex: Int, renderStore: TextKitRenderStore) {
+        self.pageIndex = pageIndex
+        self.renderStore = renderStore
+        self.textContainer = renderStore.containers[pageIndex]
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -639,19 +648,30 @@ class ReadContentViewController: UIViewController {
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor), // No extra padding here
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
-        if range.location + range.length <= attributedText.length {
-            textView.attributedText = attributedText.attributedSubstring(from: range)
-        }
     }
 }
 
 // MARK: - TextKit Paginator
 struct PaginatedPage { let range: NSRange; let startSentenceIndex: Int }
-struct PaginationResult { let pages: [PaginatedPage]; let attributedText: NSAttributedString }
+struct PaginationResult { let pages: [PaginatedPage]; let renderStore: TextKitRenderStore? }
+
+final class TextKitRenderStore {
+    let textStorage: NSTextStorage
+    let layoutManager: NSLayoutManager
+    let containers: [NSTextContainer]
+    let size: CGSize
+
+    init(textStorage: NSTextStorage, layoutManager: NSLayoutManager, containers: [NSTextContainer], size: CGSize) {
+        self.textStorage = textStorage
+        self.layoutManager = layoutManager
+        self.containers = containers
+        self.size = size
+    }
+}
 
 struct TextKitPaginator {
     static func paginate(sentences: [String], in size: CGSize, fontSize: CGFloat, lineSpacing: CGFloat, chapterTitle: String?) -> PaginationResult {
-        guard !sentences.isEmpty, size.width > 0, size.height > 0 else { return PaginationResult(pages: [], attributedText: NSAttributedString()) }
+        guard !sentences.isEmpty, size.width > 0, size.height > 0 else { return PaginationResult(pages: [], renderStore: nil) }
         
         let fullAttributedText = createAttributedText(sentences: sentences, fontSize: fontSize, lineSpacing: lineSpacing, chapterTitle: chapterTitle)
         let textStorage = NSTextStorage(attributedString: fullAttributedText)
@@ -659,6 +679,7 @@ struct TextKitPaginator {
         textStorage.addLayoutManager(layoutManager)
         
         var pages: [PaginatedPage] = []
+        var containers: [NSTextContainer] = []
         var rangeOffset = 0
         let fullLength = textStorage.length
         let paragraphStarts = paragraphStartIndices(sentences: sentences)
@@ -668,18 +689,24 @@ struct TextKitPaginator {
             let textContainer = NSTextContainer(size: size)
             textContainer.lineFragmentPadding = 0
             layoutManager.addTextContainer(textContainer)
+            containers.append(textContainer)
             
             let glyphRange = layoutManager.glyphRange(for: textContainer)
             let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
             
-            if charRange.length == 0 { break }
+            if charRange.length == 0 {
+                layoutManager.removeTextContainer(at: containers.count - 1)
+                containers.removeLast()
+                break
+            }
             
             let adjustedLocation = max(0, charRange.location - prefixLen)
             let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
             pages.append(PaginatedPage(range: charRange, startSentenceIndex: startIdx))
             rangeOffset = NSMaxRange(charRange)
         }
-        return PaginationResult(pages: pages, attributedText: fullAttributedText)
+        let renderStore = TextKitRenderStore(textStorage: textStorage, layoutManager: layoutManager, containers: containers, size: size)
+        return PaginationResult(pages: pages, renderStore: renderStore)
     }
     
     static func createAttributedText(sentences: [String], fontSize: CGFloat, lineSpacing: CGFloat, chapterTitle: String?) -> NSAttributedString {
