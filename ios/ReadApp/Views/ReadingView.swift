@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 import UIKit
 
 // MARK: - ReadingView
@@ -97,8 +97,8 @@ struct ReadingView: View {
         .onChange(of: replaceRuleViewModel.rules) { _ in
             updateProcessedContent(from: rawContent)
         }
-        .alert("閿欒", isPresented: .constant(errorMessage != nil)) {
-            Button("纭畾") { errorMessage = nil }
+        .alert("闂佹寧鐟ㄩ?, isPresented: .constant(errorMessage != nil)) {
+            Button("缁绢収鍠栭悾?) { errorMessage = nil }
         } message: {
             if let error = errorMessage { Text(error) }
         }
@@ -177,9 +177,8 @@ struct ReadingView: View {
     private func horizontalReader(safeArea: EdgeInsets) -> some View {
         GeometryReader { geometry in
             // Define desired margins *within* the safe area
-            let horizontalMargin: CGFloat = 10
+            let horizontalMargin: CGFloat = 6
             let verticalMargin: CGFloat = 10
-            let overlayInset: CGFloat = 44
             
             let availableSize = CGSize(
                 width: max(0, geometry.size.width - safeArea.leading - safeArea.trailing - horizontalMargin * 2),
@@ -187,10 +186,7 @@ struct ReadingView: View {
             )
 
             // The precise size for both pagination and rendering
-            let contentSize = CGSize(
-                width: max(0, availableSize.width - overlayInset),
-                height: max(0, availableSize.height - overlayInset)
-            )
+            let contentSize = availableSize
 
             VStack(spacing: 0) {
                 Spacer().frame(height: safeArea.top + verticalMargin)
@@ -229,12 +225,10 @@ struct ReadingView: View {
                                 let safeTotal = max(displayTotal, displayCurrent)
                                 let percentage = Int((Double(displayCurrent) / Double(safeTotal)) * 100)
                                 Text("\(displayCurrent)/\(safeTotal) (\(percentage)%)")
-                                    .font(.caption)
+                                    .font(.caption2)
                                     .foregroundColor(.secondary)
-                                    .padding(8)
-                                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                                    .padding(.trailing, 12)
-                                    .padding(.bottom, 6)
+                                    .padding(.trailing, 8)
+                                    .padding(.bottom, 2)
                                     .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                             }
                         }
@@ -490,7 +484,7 @@ struct ReadingView: View {
     
     private func updateProcessedContent(from rawText: String) {
         let processedContent = applyReplaceRules(to: rawText)
-        currentContent = processedContent.isEmpty ? "绔犺妭鍐呭涓虹┖" : processedContent
+        currentContent = processedContent.isEmpty ? "缂佹梻濮炬俊顓㈠礃閸涱収鍟囧☉鎾规閳? : processedContent
         contentSentences = splitIntoParagraphs(currentContent)
     }
 
@@ -557,7 +551,7 @@ struct ReadingView: View {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "鑾峰彇绔犺妭澶辫触: \(error.localizedDescription)"
+                    errorMessage = "闁兼儳鍢茶ぐ鍥╃博閻樺搫螡濠㈡儼绮剧憴? \(error.localizedDescription)"
                     isLoading = false
                 }
             }
@@ -660,8 +654,8 @@ struct ReadingView: View {
             HStack(spacing: 12) {
                 Button(action: { dismiss() }) { Image(systemName: "chevron.left").font(.title3).frame(width: 44, height: 44) }
                 VStack(alignment: .leading, spacing: 2) {
-                     Text(book.name ?? "闃呰").font(.headline).fontWeight(.bold).lineLimit(1)
-                     Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "鍔犺浇涓?..").font(.caption).foregroundColor(.secondary).lineLimit(1)
+                     Text(book.name ?? "闂傚啫鎳撻?).font(.headline).fontWeight(.bold).lineLimit(1)
+                     Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "闁告梻濮惧ù鍥ㄧ▔?..").font(.caption).foregroundColor(.secondary).lineLimit(1)
                 }
                 Spacer()
                 Color.clear.frame(width: 44, height: 44)
@@ -679,7 +673,7 @@ struct ReadingView: View {
     }
     
     private var loadingOverlay: some View {
-        ProgressView("鍔犺浇涓?..").padding().background(Color(UIColor.systemBackground).opacity(0.8)).cornerRadius(10).shadow(radius: 10)
+        ProgressView("闁告梻濮惧ù鍥ㄧ▔?..").padding().background(Color(UIColor.systemBackground).opacity(0.8)).cornerRadius(10).shadow(radius: 10)
     }
 
     @ViewBuilder private var controlBar: some View {
@@ -922,6 +916,7 @@ struct TextKitPaginator {
         paragraphStyle.lineSpacing = lineSpacing
         paragraphStyle.paragraphSpacing = fontSize * 0.5
         paragraphStyle.alignment = .justified
+        paragraphStyle.firstLineHeadIndent = fontSize * 2
         
         let result = NSMutableAttributedString()
         if let title = chapterTitle, !title.isEmpty {
@@ -931,7 +926,7 @@ struct TextKitPaginator {
         }
         
         let body = sentences
-            .map { sentence in "銆€銆€" + sentence.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .map { sentence in sentence.trimmingCharacters(in: .whitespacesAndNewlines) }
             .joined(separator: "\n")
         result.append(NSAttributedString(string: body, attributes: [.font: font, .paragraphStyle: paragraphStyle, .foregroundColor: UIColor.label]))
         return result
@@ -941,7 +936,7 @@ struct TextKitPaginator {
         var starts: [Int] = []; var current = 0
         for (idx, s) in sentences.enumerated() {
             starts.append(current)
-            current += ("銆€銆€" + s.trimmingCharacters(in: .whitespacesAndNewlines)).utf16.count + (idx < sentences.count - 1 ? 1 : 0)
+            current += (s.trimmingCharacters(in: .whitespacesAndNewlines)).utf16.count + (idx < sentences.count - 1 ? 1 : 0)
         }
         return starts
     }
@@ -983,7 +978,7 @@ struct ChapterListView: View {
                         .listRowBackground(item.offset == currentIndex ? Color.blue.opacity(0.1) : Color.clear)
                     }
                 }
-                .navigationTitle("鐩綍锛堝叡\(chapters.count)绔狅級")
+                .navigationTitle("闁烩晩鍠栫紞宥夋晬閸繂褰橽(chapters.count)缂佹梻濯寸槐?)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
@@ -995,13 +990,13 @@ struct ChapterListView: View {
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: isReversed ? "arrow.up" : "arrow.down")
-                                Text(isReversed ? "鍊掑簭" : "姝ｅ簭")
+                                Text(isReversed ? "闁稿﹥甯掔花? : "婵繐绲界花?)
                             }
                             .font(.caption)
                         }
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("鍏抽棴") { dismiss() }
+                        Button("闁稿繑濞婂Λ?) { dismiss() }
                     }
                 }
                 .onAppear {
@@ -1027,11 +1022,12 @@ struct RichTextView: View {
         VStack(alignment: .leading, spacing: fontSize * 0.8) {
             ForEach(Array(sentences.enumerated()), id: \.offset) {
                 index, sentence in
-                Text("銆€銆€" + sentence.trimmingCharacters(in: .whitespacesAndNewlines))
+                Text(sentence.trimmingCharacters(in: .whitespacesAndNewlines))
                     .font(.system(size: fontSize))
                     .lineSpacing(lineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, fontSize * 2)
                     .padding(.vertical, 6)
                     .padding(.horizontal, 8)
                     .background(
