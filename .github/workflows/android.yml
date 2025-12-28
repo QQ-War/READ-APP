@@ -24,19 +24,29 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          build-root-directory: android
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android
+            ${{ env.ANDROID_HOME }}
+          key: android-sdk-${{ runner.os }}-api34-buildtools3400
 
       - name: Install Android SDK components
         run: |
           yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Build release APK
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: 8.2.1
-          build-root-directory: android
-          arguments: assembleUnsigned assembleDebug
+        run: ./gradlew assembleUnsigned assembleDebug
+        working-directory: android
 
       - name: Prepare APK artifacts
         run: |
