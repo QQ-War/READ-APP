@@ -98,6 +98,7 @@ fun ReadingScreen(
     val coroutineScope = rememberCoroutineScope()
     val latestOnExit by rememberUpdatedState(onExit)
     var isAutoScrolling by remember { mutableStateOf(false) }
+    var lastAutoScrollTarget by remember { mutableStateOf<Int?>(null) }
     var resolveCurrentPageStart by remember { mutableStateOf<(() -> Pair<Int, Int>?)?>(null) }
 
     val contentPadding = remember {
@@ -402,6 +403,7 @@ fun ReadingScreen(
                                                 onStartListening(pageInfo.startParagraphIndex, pageInfo.startOffsetInParagraph)
                                             }
                                         }
+                                        lastAutoScrollTarget = null
                                         isAutoScrolling = false
                                     }
                                 }
@@ -444,8 +446,11 @@ fun ReadingScreen(
                                 }
                             }
                             if (targetPage != pagerState.currentPage) {
+                                if (pagerState.isScrollInProgress) return@LaunchedEffect
+                                if (lastAutoScrollTarget == targetPage) return@LaunchedEffect
+                                lastAutoScrollTarget = targetPage
                                 isAutoScrolling = true
-                                pagerState.animateScrollToPage(targetPage)
+                                pagerState.scrollToPage(targetPage)
                             }
                         }
                         
