@@ -67,14 +67,16 @@ fun ReadingScreen(
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
     onNavigateBack: () -> Unit,
-    // TTS 相关状态
+    // TTS 相关状�?
     isPlaying: Boolean = false,
-    currentPlayingParagraph: Int = -1,  // 当前播放的段落索引
+    currentPlayingParagraph: Int = -1,  // ��ǰ���ŵĶ�������
+    currentParagraphStartOffset: Int = 0,
+    playbackProgress: Float = 0f,
     preloadedParagraphs: Set<Int> = emptySet(),  // 已预载的段落索引
     preloadedChapters: Set<Int> = emptySet(),
     showTtsControls: Boolean = false,
     onPlayPauseClick: () -> Unit = {},
-    onStartListening: (Int) -> Unit = {},
+    onStartListening: (Int, Int) -> Unit = {},
     onStopListening: () -> Unit = {},
     onPreviousParagraph: () -> Unit = {},
     onNextParagraph: () -> Unit = {},
@@ -87,6 +89,7 @@ fun ReadingScreen(
     var showChapterList by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
     var currentPageStartIndex by remember { mutableStateOf(0) }
+    var currentPageStartOffset by remember { mutableStateOf(0) }
     var pendingJumpToLastPage by remember { mutableStateOf(false) }
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -133,7 +136,7 @@ fun ReadingScreen(
         }
     }
 
-    // 当章节索引变化或章节列表加载完成时，自动加载章节内容并回到顶部
+    // 当章节索引变化或章节列表加载完成时，自动加载章节内容并回到顶�?
     LaunchedEffect(currentChapterIndex, chapters.size) {
         if (chapters.isNotEmpty() && currentChapterIndex in chapters.indices) {
             onLoadChapterContent(currentChapterIndex)
@@ -145,7 +148,7 @@ fun ReadingScreen(
     LaunchedEffect(currentPlayingParagraph) {
         if (currentPlayingParagraph >= 0 && currentPlayingParagraph < paragraphs.size) {
             coroutineScope.launch {
-                // +1 是因为第一个 item 是章节标题
+                // +1 是因为第一�?item 是章节标�?
                 scrollState.animateScrollToItem(currentPlayingParagraph + 1)
             }
         }
@@ -162,7 +165,7 @@ fun ReadingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 主要内容区域：显示章节正文
+        // 主要内容区域：显示章节正�?
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -171,7 +174,7 @@ fun ReadingScreen(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
                 ) {
-                    // 点击切换控制栏显示/隐藏
+                    // 点击切换控制栏显�?隐藏
                     showControls = !showControls
                 }
         ) {
@@ -363,10 +366,39 @@ fun ReadingScreen(
                                             }
                     
                                             LaunchedEffect(pagerState.currentPage, paginatedPages) {
-                                                currentPageStartIndex = paginatedPages
-                                                    .getOrNull(pagerState.currentPage)
-                                                    ?.startParagraphIndex
-                                                    ?: 0
+                                                val pageInfo = paginatedPages.getOrNull(pagerState.currentPage)
+                                                currentPageStartIndex = pageInfo?.startParagraphIndex ?: 0
+                                                currentPageStartOffset = pageInfo?.startOffsetInParagraph ?: 0
+                                            }
+
+                                            LaunchedEffect(
+                                                currentPlayingParagraph,
+                                                currentParagraphStartOffset,
+                                                playbackProgress,
+                                                paginatedPages,
+                                                readingMode,
+                                                isPlaying
+                                            ) {
+                                                if (readingMode != ReadingMode.Horizontal) return@LaunchedEffect
+                                                if (!isPlaying) return@LaunchedEffect
+                                                if (currentPlayingParagraph < 0 || paginatedPages.isEmpty()) return@LaunchedEffect
+                                                val paragraph = paragraphs.getOrNull(currentPlayingParagraph) ?: return@LaunchedEffect
+                                                val paragraphLength = paragraph.length
+                                                if (paragraphLength <= 0) return@LaunchedEffect
+                                                val startOffset = currentParagraphStartOffset.coerceIn(0, paragraphLength)
+                                                val playableLength = (paragraphLength - startOffset).coerceAtLeast(1)
+                                                val offsetInParagraph =
+                                                    startOffset + (playbackProgress.coerceIn(0f, 1f) * playableLength).toInt()
+                                                val matchingPages = paginatedPages.pages.withIndex()
+                                                    .filter { it.value.startParagraphIndex == currentPlayingParagraph }
+                                                    .map { it.index }
+                                                if (matchingPages.isEmpty()) return@LaunchedEffect
+                                                val targetPage = matchingPages.lastOrNull {
+                                                    paginatedPages.pages[it].startOffsetInParagraph <= offsetInParagraph
+                                                } ?: matchingPages.first()
+                                                if (targetPage != pagerState.currentPage) {
+                                                    pagerState.animateScrollToPage(targetPage)
+                                                }
                                             }
                                             
                                             LaunchedEffect(pagerState.currentPage, paginatedPages.fullText) {
@@ -409,7 +441,7 @@ fun ReadingScreen(
                                 }
                             }
         
-        // 顶部控制栏（动画显示/隐藏）
+        // 顶部控制栏（动画显示/隐藏�?
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn() + slideInVertically(),
@@ -427,7 +459,7 @@ fun ReadingScreen(
             )
         }
         
-        // 底部控制栏（动画显示/隐藏）
+        // 底部控制栏（动画显示/隐藏�?
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
@@ -456,18 +488,17 @@ fun ReadingScreen(
                     if (isPlaying) {
                         onPlayPauseClick()
                     } else {
-                        if (currentPlayingParagraph < 0) {
-                            // 第一次点击，开始听书
-                            val pageStart = if (readingMode == ReadingMode.Horizontal) {
-                                currentPageStartIndex
-                            } else {
-                                0
-                            }
-                            onStartListening(pageStart)
+                        val pageStart = if (readingMode == ReadingMode.Horizontal) {
+                            currentPageStartIndex
                         } else {
-                            // 继续播放
-                            onPlayPauseClick()
+                            (scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0)
                         }
+                        val pageStartOffset = if (readingMode == ReadingMode.Horizontal) {
+                            currentPageStartOffset
+                        } else {
+                            0
+                        }
+                        onStartListening(pageStart, pageStartOffset)
                     }
                 },
                 onStopListening = onStopListening,
@@ -476,7 +507,7 @@ fun ReadingScreen(
                 onFontSettings = { showFontDialog = true },
                 canGoPrevious = currentChapterIndex > 0,
                 canGoNext = currentChapterIndex < chapters.size - 1,
-                showTtsControls = showTtsControls  // 仅在实际播放/保持播放时显示 TTS 控制
+                showTtsControls = showTtsControls  // 仅在实际播放/保持播放时显�?TTS 控制
             )
         }
 
@@ -517,7 +548,7 @@ fun ReadingScreen(
 }
 
 /**
- * 段落项组件 - 带高亮效果
+ * 段落项组�?- 带高亮效�?
  */
 @Composable
 private fun ParagraphItem(
@@ -529,7 +560,7 @@ private fun ParagraphItem(
 ) {
     val backgroundColor = when {
         isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)  // 当前播放：深蓝色高亮
-        isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)  // 已预载：浅绿色标记
+        isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)  // 已预载：浅绿色标�?
         else -> Color.Transparent
     }
     
@@ -604,7 +635,16 @@ private fun rememberPaginatedText(
             }
             val adjustedOffset = (startOffset - headerText.length).coerceAtLeast(0)
             val startParagraphIndex = paragraphIndexForOffset(adjustedOffset, paragraphStartIndices)
-            pages.add(PaginatedPage(start = startOffset, end = endOffset, startParagraphIndex = startParagraphIndex))
+            val paragraphStart = paragraphStartIndices.getOrElse(startParagraphIndex) { 0 }
+            val startOffsetInParagraph = (adjustedOffset - paragraphStart).coerceAtLeast(0)
+            pages.add(
+                PaginatedPage(
+                    start = startOffset,
+                    end = endOffset,
+                    startParagraphIndex = startParagraphIndex,
+                    startOffsetInParagraph = startOffsetInParagraph
+                )
+            )
             startLine = endLine + 1
         }
         PaginationResult(pages, fullText)
@@ -614,7 +654,8 @@ private fun rememberPaginatedText(
 private data class PaginatedPage(
     val start: Int,
     val end: Int,
-    val startParagraphIndex: Int
+    val startParagraphIndex: Int,
+    val startOffsetInParagraph: Int
 )
 
 private data class PaginationResult(
@@ -841,18 +882,18 @@ private fun BottomControlBar(
                 .fillMaxWidth()
                 .padding(AppDimens.PaddingMedium)
         ) {
-            // TTS 段落控制（播放时显示）
+            // TTS 段落控制（播放时显示�?
             if (showTtsControls) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 上一段
+                    // 上一�?
                     IconButton(onClick = onPreviousParagraph) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = "上一段",
+                            contentDescription = "上一�?,
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -871,11 +912,11 @@ private fun BottomControlBar(
                         )
                     }
                     
-                    // 下一段
+                    // 下一�?
                     IconButton(onClick = onNextParagraph) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "下一段",
+                            contentDescription = "下一�?,
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -901,10 +942,10 @@ private fun BottomControlBar(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 上一章
+                // 上一�?
                 ControlButton(
                     icon = Icons.Default.SkipPrevious,
-                    label = "上一章",
+                    label = "上一�?,
                     onClick = onPreviousChapter,
                     enabled = canGoPrevious
                 )
@@ -934,17 +975,17 @@ private fun BottomControlBar(
                     }
                 }
                 
-                // 下一章
+                // 下一�?
                 ControlButton(
                     icon = Icons.Default.FormatSize,
                     label = "字体",
                     onClick = onFontSettings
                 )
                 
-                // 字体大小（TODO）
+                // 字体大小（TODO�?
                 ControlButton(
                     icon = Icons.Default.SkipNext,
-                    label = "下一章",
+                    label = "下一�?,
                     onClick = onNextChapter,
                     enabled = canGoNext
                 )
@@ -1108,3 +1149,5 @@ private fun ChapterListDialog(
         shape = RoundedCornerShape(AppDimens.CornerRadiusLarge)
     )
 }
+
+

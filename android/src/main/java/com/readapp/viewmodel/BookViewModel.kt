@@ -68,6 +68,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val httpClient = OkHttpClient()
     private val preloadingIndices = mutableSetOf<Int>()
     private var preloadJob: Job? = null
+    private var startOffsetOverrideIndex: Int? = null
+    private var startOffsetOverrideChars: Int = 0
 
 
     // ==================== 涔︾睄鐩稿叧鐘舵€?====================
@@ -102,6 +104,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _currentParagraphIndex = MutableStateFlow(-1)
     val currentParagraphIndex: StateFlow<Int> = _currentParagraphIndex.asStateFlow()
+    private val _currentParagraphStartOffset = MutableStateFlow(0)
+    val currentParagraphStartOffset: StateFlow<Int> = _currentParagraphStartOffset.asStateFlow()
 
     private val _totalParagraphs = MutableStateFlow(1)
     val totalParagraphs: StateFlow<Int> = _totalParagraphs.asStateFlow()
@@ -278,7 +282,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    private fun startPlayback(startParagraphIndex: Int = -1) {
+    private fun startPlayback(startParagraphIndex: Int = -1, startOffsetInParagraph: Int = 0) {
         viewModelScope.launch {
             _isChapterContentLoading.value = true
             val content = withContext(Dispatchers.IO) { ensureCurrentChapterContent() }
@@ -301,6 +305,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 0
             }
             _currentParagraphIndex.value = normalizedStart
+            val normalizedOffset = if (normalizedStart == startParagraphIndex) {
+                startOffsetInParagraph.coerceAtLeast(0)
+            } else {
+                0
+            }
+            if (normalizedOffset > 0) {
+                startOffsetOverrideIndex = normalizedStart
+                startOffsetOverrideChars = normalizedOffset
+            } else {
+                startOffsetOverrideIndex = null
+                startOffsetOverrideChars = 0
+            }
+            _currentParagraphStartOffset.value = normalizedOffset
 
             ReadAudioService.startService(appContext) // Ensure service is running
             speakParagraph(_currentParagraphIndex.value)
@@ -323,11 +340,30 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            if (startOffsetOverrideIndex != null && startOffsetOverrideIndex != index) {
+                startOffsetOverrideIndex = null
+                startOffsetOverrideChars = 0
+            }
+
             val sentence = currentSentences.getOrNull(index) ?: return@launch
-            val audioCacheKey = generateAudioCacheKey(index)
+            val overrideOffset = if (startOffsetOverrideIndex == index) startOffsetOverrideChars else 0
+            _currentParagraphStartOffset.value = overrideOffset
+            val trimmedSentence = if (overrideOffset in 1 until sentence.length) {
+                sentence.substring(overrideOffset)
+            } else {
+                sentence
+            }
+            if (overrideOffset >= sentence.length) {
+                startOffsetOverrideIndex = null
+                startOffsetOverrideChars = 0
+                _currentParagraphStartOffset.value = 0
+                playNextSeamlessly()
+                return@launch
+            }
+            val audioCacheKey = generateAudioCacheKey(index, overrideOffset)
 
             val audioData = AudioCache.get(audioCacheKey) ?: run {
-                val audioUrl = buildTtsAudioUrl(sentence, false)
+                val audioUrl = buildTtsAudioUrl(trimmedSentence, false)
 
                 if (audioUrl == null) {
                     _errorMessage.value = "鏃犳硫鐢熸垚TTS閾炬帴锛岃妫€鏌TS璁剧疆"
@@ -395,8 +431,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun generateAudioCacheKey(index: Int): String {
-        return "${_selectedBook.value?.bookUrl}/${_currentChapterIndex.value}/$index"
+    private fun generateAudioCacheKey(index: Int, offsetInParagraph: Int = 0): String {
+        val base = "${_selectedBook.value?.bookUrl}/${_currentChapterIndex.value}/$index"
+        return if (offsetInParagraph > 0) {
+            "$base/$offsetInParagraph"
+        } else {
+            base
+        }
     }
 
     private fun clearAudioCache() {
@@ -472,6 +513,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         _keepPlaying.value = false
         _showTtsControls.value = false
+        startOffsetOverrideIndex = null
+        startOffsetOverrideChars = 0
+        _currentParagraphStartOffset.value = 0
         mediaController?.stop()
         mediaController?.clearMediaItems()
         _currentParagraphIndex.value = -1
@@ -560,7 +604,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startTts(startParagraphIndex: Int = -1) { startPlayback(startParagraphIndex) }
+    fun startTts(startParagraphIndex: Int = -1, startOffsetInParagraph: Int = 0) {
+        startPlayback(startParagraphIndex, startOffsetInParagraph)
+    }
     fun stopTts() { stopPlayback("user") }
     
     private fun observeProgress() {

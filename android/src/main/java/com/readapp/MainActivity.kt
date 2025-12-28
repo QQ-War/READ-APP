@@ -116,6 +116,8 @@ fun ReadAppMain() {
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
                 val showTtsControls by bookViewModel.showTtsControls.collectAsState()
                 val currentPlayingParagraph by bookViewModel.currentParagraphIndex.collectAsState()
+                val currentParagraphStartOffset by bookViewModel.currentParagraphStartOffset.collectAsState()
+                val playbackProgress by bookViewModel.playbackProgress.collectAsState()
                 val preloadedParagraphs by bookViewModel.preloadedParagraphs.collectAsState()
 
                 selectedBook?.let { book ->
@@ -146,12 +148,14 @@ fun ReadAppMain() {
                         isPlaying = isPlaying,
                         showTtsControls = showTtsControls,
                         currentPlayingParagraph = currentPlayingParagraph,
+                        currentParagraphStartOffset = currentParagraphStartOffset,
+                        playbackProgress = playbackProgress,
                         preloadedParagraphs = preloadedParagraphs,
                         onPlayPauseClick = {
                             bookViewModel.togglePlayPause()
                         },
-                        onStartListening = { startIndex ->
-                            bookViewModel.startTts(startIndex)
+                        onStartListening = { startIndex, startOffset ->
+                            bookViewModel.startTts(startIndex, startOffset)
                         },
                         onStopListening = {
                             bookViewModel.stopTts()
