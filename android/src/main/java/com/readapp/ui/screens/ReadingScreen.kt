@@ -84,6 +84,8 @@ fun ReadingScreen(
     onReadingFontSizeChange: (Float) -> Unit = {},
     onExit: () -> Unit = {},
     readingMode: com.readapp.data.ReadingMode = com.readapp.data.ReadingMode.Vertical,
+    lockPageOnTTS: Boolean = false,
+    onLockPageOnTTSChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showControls by remember { mutableStateOf(false) }
@@ -95,6 +97,9 @@ fun ReadingScreen(
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val latestOnExit by rememberUpdatedState(onExit)
+    var isAutoScrolling by remember { mutableStateOf(false) }
+    var resolveCurrentPageStart by remember { mutableStateOf<(() -> Pair<Int, Int>?)?>(null) }
+
     val contentPadding = remember {
         PaddingValues(
             start = AppDimens.PaddingLarge,
@@ -107,11 +112,11 @@ fun ReadingScreen(
     if (errorMessage != null) {
         AlertDialog(
             onDismissRequest = onClearError,
-            title = { Text("閿欒") },
+            title = { Text("错误") },
             text = { Text(errorMessage) },
             confirmButton = {
                 TextButton(onClick = onClearError) {
-                    Text("濂界殑")
+                    Text("好的")
                 }
             }
         )
@@ -194,7 +199,7 @@ fun ReadingScreen(
                             text = if (currentChapterIndex < chapters.size) {
                                 chapters[currentChapterIndex].title
                             } else {
-                                "绔犺妭"
+                                "章节"
                             },
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -214,14 +219,14 @@ fun ReadingScreen(
                                 if (isContentLoading) {
                                     CircularProgressIndicator()
                                     Text(
-                                        text = "姝ｅ湪鍔犺浇绔犺妭鍐呭...",
+                                        text = "正在加载章节内容...",
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.customColors.textSecondary,
                                         textAlign = TextAlign.Center
                                     )
                                 } else {
                                     Text(
-                                        text = displayContent.ifBlank { "鏆傛棤鍙樉绀虹殑鍐呭" },
+                                        text = displayContent.ifBlank { "暂无显示内容" },
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.customColors.textSecondary,
                                         textAlign = TextAlign.Center
@@ -285,6 +290,11 @@ fun ReadingScreen(
                     )
                     val pageTextCache = remember { mutableStateMapOf<Int, AnnotatedString>() }
                     val pagerState = rememberPagerState { paginatedPages.pages.size.coerceAtLeast(1) }
+                    resolveCurrentPageStart = {
+                        paginatedPages.getOrNull(pagerState.currentPage)?.let {
+                            it.startParagraphIndex to it.startOffsetInParagraph
+                        }
+                    }
                     val viewConfiguration = LocalViewConfiguration.current
                     val onPreviousChapterFromPager = {
                         if (currentChapterIndex > 0) {
@@ -292,172 +302,192 @@ fun ReadingScreen(
                             onChapterClick(currentChapterIndex - 1)
                         }
                     }
-                                        val onNextChapterFromPager = {
-                                            if (currentChapterIndex < chapters.size - 1) {
-                                                onChapterClick(currentChapterIndex + 1)
+                    val onNextChapterFromPager = {
+                        if (currentChapterIndex < chapters.size - 1) {
+                            onChapterClick(currentChapterIndex + 1)
+                        }
+                    }
+                    
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        HorizontalPager(
+                            state = pagerState,
+                            userScrollEnabled = !(isPlaying && lockPageOnTTS),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(
+                                    showControls,
+                                    paginatedPages,
+                                    currentChapterIndex,
+                                    viewConfiguration,
+                                    isPlaying,
+                                    lockPageOnTTS
+                                ) {
+                                    detectTapGesturesWithoutConsuming(viewConfiguration) { offset, size ->
+                                        if (isPlaying && lockPageOnTTS) {
+                                            val width = size.width.toFloat()
+                                            val isMiddle = offset.x in (width / 3f)..(width * 2f / 3f)
+                                            if (isMiddle) {
+                                                showControls = !showControls
                                             }
+                                            return@detectTapGesturesWithoutConsuming
                                         }
-                    
-                                        Box(modifier = Modifier.fillMaxSize()) {
-                                            HorizontalPager(
-                                                state = pagerState,
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .pointerInput(
-                                                        showControls,
-                                                        paginatedPages,
-                                                        currentChapterIndex,
-                                                        viewConfiguration
-                                                    ) {
-                                                        detectTapGesturesWithoutConsuming(viewConfiguration) { offset, size ->
-                                                            handleHorizontalTap(
-                                                                offset = offset,
-                                                                size = size,
-                                                                showControls = showControls,
-                                                                pagerState = pagerState,
-                                                                paginatedPages = paginatedPages.pages,
-                                                                onPreviousChapter = onPreviousChapterFromPager,
-                                                                onNextChapter = onNextChapterFromPager,
-                                                                coroutineScope = coroutineScope,
-                                                                onToggleControls = { showControls = it }
-                                                            )
-                                                        }
-                                                    }
-                                            ) { page ->
-                                                val pageText = paginatedPages.getOrNull(page)?.let { pageInfo ->
-                                                    pageTextCache[page] ?: run {
-                                                        val safeStart = pageInfo.start.coerceAtLeast(0)
-                                                        val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.text.length)
-                                                        val text = if (safeEnd > safeStart) {
-                                                            paginatedPages.fullText.subSequence(safeStart, safeEnd)
-                                                        } else {
-                                                            AnnotatedString("")
-                                                        }
-                                                        pageTextCache[page] = text
-                                                        text
-                                                    }
-                                                } ?: AnnotatedString("")
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .padding(pagePadding)
-                                                ) {
-                                                    Text(
-                                                        text = pageText,
-                                                        style = style
-                                                    )
-                                                }
-                                            }
-                    
-                                            if (!showControls && pagerState.pageCount > 0) {
-                                                val percentage = ((pagerState.currentPage + 1) * 100) / pagerState.pageCount
-                                                Text(
-                                                    text = "${pagerState.currentPage + 1}/${pagerState.pageCount} ($percentage%)",
-                                                    modifier = Modifier
-                                                        .align(Alignment.BottomEnd)
-                                                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                                                        .background(
-                                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                                                            RoundedCornerShape(8.dp)
-                                                        )
-                                                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-                    
-                                            LaunchedEffect(pagerState, paginatedPages) {
-                                                snapshotFlow { pagerState.currentPage }
-                                                    .distinctUntilChanged()
-                                                    .collect { page ->
-                                                        val pageInfo = paginatedPages.getOrNull(page)
-                                                        if (pageInfo != null) {
-                                                            currentPageStartIndex = pageInfo.startParagraphIndex
-                                                            currentPageStartOffset = pageInfo.startOffsetInParagraph
-                                                        }
-                                                    }
-                                            }
-
-                                            LaunchedEffect(
-                                                currentPlayingParagraph,
-                                                currentParagraphStartOffset,
-                                                playbackProgress,
-                                                paginatedPages,
-                                                readingMode,
-                                                isPlaying
-                                            ) {
-                                                if (readingMode != ReadingMode.Horizontal) return@LaunchedEffect
-                                                if (!isPlaying) return@LaunchedEffect
-                                                if (currentPlayingParagraph < 0 || paginatedPages.isEmpty()) return@LaunchedEffect
-                                                val paragraph = paragraphs.getOrNull(currentPlayingParagraph) ?: return@LaunchedEffect
-                                                val paragraphLength = paragraph.length
-                                                if (paragraphLength <= 0) return@LaunchedEffect
-                                                val startOffset = currentParagraphStartOffset.coerceIn(0, paragraphLength)
-                                                val playableLength = (paragraphLength - startOffset).coerceAtLeast(1)
-                                                val offsetInParagraph =
-                                                    startOffset + (playbackProgress.coerceIn(0f, 1f) * playableLength).toInt()
-                                                val pagesForParagraph = paginatedPages.pages.withIndex()
-                                                    .filter { it.value.startParagraphIndex == currentPlayingParagraph }
-                                                if (pagesForParagraph.isEmpty()) return@LaunchedEffect
-                                                var targetPage = pagesForParagraph.first().index
-                                                for (i in pagesForParagraph.indices) {
-                                                    val entry = pagesForParagraph[i]
-                                                    val start = entry.value.startOffsetInParagraph
-                                                    val nextStart = pagesForParagraph.getOrNull(i + 1)?.value?.startOffsetInParagraph
-                                                    val inThisPage = if (nextStart == null || nextStart <= start) {
-                                                        offsetInParagraph >= start
-                                                    } else {
-                                                        offsetInParagraph >= start && offsetInParagraph < nextStart
-                                                    }
-                                                    if (inThisPage) {
-                                                        targetPage = entry.index
-                                                        break
-                                                    }
-                                                }
-                                                if (targetPage != pagerState.currentPage) {
-                                                    pagerState.animateScrollToPage(targetPage)
-                                                }
-                                            }
-                                            
-                                            LaunchedEffect(pagerState.currentPage, paginatedPages.fullText) {
-                                                if (paginatedPages.isEmpty()) {
-                                                    pageTextCache.clear()
-                                                    return@LaunchedEffect
-                                                }
-                                                val current = pagerState.currentPage
-                                                val indices = listOf(current - 1, current, current + 1)
-                                                    .filter { it in paginatedPages.indices }
-                                                    .toSet()
-                                                for (index in indices) {
-                                                    if (!pageTextCache.containsKey(index)) {
-                                                        val pageInfo = paginatedPages[index]
-                                                        val safeStart = pageInfo.start.coerceAtLeast(0)
-                                                        val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.text.length)
+                                        handleHorizontalTap(
+                                            offset = offset,
+                                            size = size,
+                                            showControls = showControls,
+                                            pagerState = pagerState,
+                                            paginatedPages = paginatedPages.pages,
+                                            onPreviousChapter = onPreviousChapterFromPager,
+                                            onNextChapter = onNextChapterFromPager,
+                                            coroutineScope = coroutineScope,
+                                            onToggleControls = { showControls = it }
+                                        )
+                                    }
+                                }
+                        ) { page ->
+                            val pageText = paginatedPages.getOrNull(page)?.let { pageInfo ->
+                                pageTextCache[page] ?: run {
+                                    val safeStart = pageInfo.start.coerceAtLeast(0)
+                                    val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.text.length)
                                     val text = if (safeEnd > safeStart) {
                                         paginatedPages.fullText.subSequence(safeStart, safeEnd)
                                     } else {
                                         AnnotatedString("")
                                     }
-                                                        pageTextCache[index] = text
-                                                    }
-                                                }
-                                                val staleKeys = pageTextCache.keys.filter { it !in indices }
-                                                for (key in staleKeys) {
-                                                    pageTextCache.remove(key)
-                                                }
-                                            }
+                                    pageTextCache[page] = text
+                                    text
+                                }
+                            } ?: AnnotatedString("")
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(pagePadding)
+                            ) {
+                                Text(
+                                    text = pageText,
+                                    style = style
+                                )
+                            }
+                        }
                     
-                                            LaunchedEffect(pendingJumpToLastPage, paginatedPages, currentChapterIndex) {
-                                                if (pendingJumpToLastPage && !paginatedPages.isEmpty()) {
-                                                    pagerState.scrollToPage(paginatedPages.lastIndex)
-                                                    pendingJumpToLastPage = false
-                                                }
-                                            }
+                        if (!showControls && pagerState.pageCount > 0) {
+                            val percentage = ((pagerState.currentPage + 1) * 100) / pagerState.pageCount
+                            Text(
+                                text = "${pagerState.currentPage + 1}/${pagerState.pageCount} ($percentage%)",
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     
+                        LaunchedEffect(pagerState, paginatedPages) {
+                            snapshotFlow { pagerState.currentPage }
+                                .distinctUntilChanged()
+                                .collect { page ->
+                                    val pageInfo = paginatedPages.getOrNull(page)
+                                    if (pageInfo != null) {
+                                        currentPageStartIndex = pageInfo.startParagraphIndex
+                                        currentPageStartOffset = pageInfo.startOffsetInParagraph
+
+                                        if (isPlaying && !isAutoScrolling) {
+                                            if (!lockPageOnTTS) {
+                                                onStopListening()
+                                                onStartListening(pageInfo.startParagraphIndex, pageInfo.startOffsetInParagraph)
+                                            }
                                         }
+                                        isAutoScrolling = false
                                     }
                                 }
+                        }
+
+                        LaunchedEffect(
+                            currentPlayingParagraph,
+                            currentParagraphStartOffset,
+                            playbackProgress,
+                            paginatedPages,
+                            readingMode,
+                            isPlaying
+                        ) {
+                            if (readingMode != ReadingMode.Horizontal) return@LaunchedEffect
+                            if (!isPlaying) return@LaunchedEffect
+                            if (currentPlayingParagraph < 0 || paginatedPages.isEmpty()) return@LaunchedEffect
+                            val paragraph = paragraphs.getOrNull(currentPlayingParagraph) ?: return@LaunchedEffect
+                            val paragraphLength = paragraph.length
+                            if (paragraphLength <= 0) return@LaunchedEffect
+                            val startOffset = currentParagraphStartOffset.coerceIn(0, paragraphLength)
+                            val playableLength = (paragraphLength - startOffset).coerceAtLeast(1)
+                            val offsetInParagraph =
+                                startOffset + (playbackProgress.coerceIn(0f, 1f) * playableLength).toInt()
+                            val pagesForParagraph = paginatedPages.pages.withIndex()
+                                .filter { it.value.startParagraphIndex == currentPlayingParagraph }
+                            if (pagesForParagraph.isEmpty()) return@LaunchedEffect
+                            var targetPage = pagesForParagraph.first().index
+                            for (i in pagesForParagraph.indices) {
+                                val entry = pagesForParagraph[i]
+                                val start = entry.value.startOffsetInParagraph
+                                val nextStart = pagesForParagraph.getOrNull(i + 1)?.value?.startOffsetInParagraph
+                                val inThisPage = if (nextStart == null || nextStart <= start) {
+                                    offsetInParagraph >= start
+                                } else {
+                                    offsetInParagraph >= start && offsetInParagraph < nextStart
+                                }
+                                if (inThisPage) {
+                                    targetPage = entry.index
+                                    break
+                                }
                             }
+                            if (targetPage != pagerState.currentPage) {
+                                isAutoScrolling = true
+                                pagerState.animateScrollToPage(targetPage)
+                            }
+                        }
+                        
+                        LaunchedEffect(pagerState.currentPage, paginatedPages.fullText) {
+                            if (paginatedPages.isEmpty()) {
+                                pageTextCache.clear()
+                                return@LaunchedEffect
+                            }
+                            val current = pagerState.currentPage
+                            val indices = listOf(current - 1, current, current + 1)
+                                .filter { it in paginatedPages.indices }
+                                .toSet()
+                            for (index in indices) {
+                                if (!pageTextCache.containsKey(index)) {
+                                    val pageInfo = paginatedPages[index]
+                                    val safeStart = pageInfo.start.coerceAtLeast(0)
+                                    val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.text.length)
+                                    val text = if (safeEnd > safeStart) {
+                                        paginatedPages.fullText.subSequence(safeStart, safeEnd)
+                                    } else {
+                                        AnnotatedString("")
+                                    }
+                                    pageTextCache[index] = text
+                                }
+                            }
+                            val staleKeys = pageTextCache.keys.filter { it !in indices }
+                            for (key in staleKeys) {
+                                pageTextCache.remove(key)
+                            }
+                        }
+                    
+                        LaunchedEffect(pendingJumpToLastPage, paginatedPages, currentChapterIndex) {
+                            if (pendingJumpToLastPage && !paginatedPages.isEmpty()) {
+                                pagerState.scrollToPage(paginatedPages.lastIndex)
+                                pendingJumpToLastPage = false
+                            }
+                        }
+                    
+                    }
+                }
+            }
+        }
         
         // 椤堕儴鎺у埗鏍忥紙鍔ㄧ敾鏄剧ず/闅愯棌锛?
         AnimatedVisibility(
@@ -507,12 +537,12 @@ fun ReadingScreen(
                         onPlayPauseClick()
                     } else {
                         val pageStart = if (readingMode == ReadingMode.Horizontal) {
-                            currentPageStartIndex
+                            resolveCurrentPageStart?.invoke()?.first ?: currentPageStartIndex
                         } else {
                             (scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0)
                         }
                         val pageStartOffset = if (readingMode == ReadingMode.Horizontal) {
-                            currentPageStartOffset
+                            resolveCurrentPageStart?.invoke()?.second ?: currentPageStartOffset
                         } else {
                             0
                         }
@@ -559,6 +589,8 @@ fun ReadingScreen(
             FontSizeDialog(
                 value = readingFontSize,
                 onValueChange = onReadingFontSizeChange,
+                lockPageOnTTS = lockPageOnTTS,
+                onLockPageOnTTSChange = onLockPageOnTTSChange,
                 onDismiss = { showFontDialog = false }
             )
         }
@@ -1016,25 +1048,34 @@ private fun BottomControlBar(
 private fun FontSizeDialog(
     value: Float,
     onValueChange: (Float) -> Unit,
+    lockPageOnTTS: Boolean,
+    onLockPageOnTTSChange: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "瀛椾綋澶у皬") },
+        title = { Text(text = "阅读设置") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "褰撳墠: ${value.toInt()}sp")
+                Text(text = "字体大小: ${value.toInt()}sp")
                 Slider(
                     value = value,
                     onValueChange = onValueChange,
                     valueRange = 12f..28f,
                     steps = 7
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onLockPageOnTTSChange(!lockPageOnTTS) }
+                ) {
+                    Checkbox(checked = lockPageOnTTS, onCheckedChange = onLockPageOnTTSChange)
+                    Text("播放时锁定翻页", modifier = Modifier.padding(start = 8.dp))
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("瀹屾垚")
+                Text("完成")
             }
         }
     )

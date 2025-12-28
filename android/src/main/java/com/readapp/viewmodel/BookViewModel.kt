@@ -164,6 +164,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val bookshelfSortByRecent: StateFlow<Boolean> = _bookshelfSortByRecent.asStateFlow()
     private val _readingMode = MutableStateFlow(com.readapp.data.ReadingMode.Vertical)
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = _readingMode.asStateFlow()
+    private val _lockPageOnTTS = MutableStateFlow(false)
+    val lockPageOnTTS: StateFlow<Boolean> = _lockPageOnTTS.asStateFlow()
     private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080/api/5")
     val serverAddress: StateFlow<String> = _serverAddress.asStateFlow()
     private val _publicServerAddress = MutableStateFlow("")
@@ -204,6 +206,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _loggingEnabled.value = preferences.loggingEnabled.first()
             _bookshelfSortByRecent.value = preferences.bookshelfSortByRecent.first()
             _readingMode.value = preferences.readingMode.first()
+            _lockPageOnTTS.value = preferences.lockPageOnTTS.first()
 
             if (_accessToken.value.isNotBlank()) {
                 _isLoading.value = true
@@ -621,7 +624,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 val duration = currentMediaController.duration
                 val position = currentMediaController.currentPosition
                 if (duration <= 0L || position < 0L || position > duration) {
-                    _playbackProgress.value = 0f
                     delay(200)
                     continue
                 }
@@ -961,6 +963,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updateLoggingEnabled(enabled: Boolean) { _loggingEnabled.value = enabled; viewModelScope.launch { preferences.saveLoggingEnabled(enabled) } }
     fun updateBookshelfSortByRecent(enabled: Boolean) { _bookshelfSortByRecent.value = enabled; viewModelScope.launch { preferences.saveBookshelfSortByRecent(enabled); applyBooksFilterAndSort() } }
     fun updateReadingMode(mode: com.readapp.data.ReadingMode) { _readingMode.value = mode; viewModelScope.launch { preferences.saveReadingMode(mode) } }
+    fun updateLockPageOnTTS(enabled: Boolean) { _lockPageOnTTS.value = enabled; viewModelScope.launch { preferences.saveLockPageOnTTS(enabled) } }
     fun clearCache() {
         viewModelScope.launch {
             clearAudioCache()

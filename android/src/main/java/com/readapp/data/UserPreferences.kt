@@ -35,6 +35,7 @@ class UserPreferences(private val context: Context) {
         val PreloadCount = floatPreferencesKey("preloadCount")
         val LoggingEnabled = stringPreferencesKey("loggingEnabled")
         val BookshelfSortByRecent = booleanPreferencesKey("bookshelfSortByRecent")
+        val LockPageOnTTS = booleanPreferencesKey("lockPageOnTTS")
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080/api/5" }
@@ -54,6 +55,9 @@ class UserPreferences(private val context: Context) {
     val bookshelfSortByRecent: Flow<Boolean> = context.dataStore.data.map {
         it[Keys.BookshelfSortByRecent] ?: false
     }
+    val lockPageOnTTS: Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.LockPageOnTTS] ?: false
+    }
     val readingMode: Flow<ReadingMode> = context.dataStore.data.map {
         ReadingMode.valueOf(it[Keys.ReadingMode] ?: ReadingMode.Vertical.name)
     }
@@ -61,6 +65,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveReadingMode(value: ReadingMode) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.ReadingMode] = value.name
+        }
+    }
+
+    suspend fun saveLockPageOnTTS(value: Boolean) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.LockPageOnTTS] = value
         }
     }
 

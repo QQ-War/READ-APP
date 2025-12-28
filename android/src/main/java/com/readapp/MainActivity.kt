@@ -111,6 +111,7 @@ fun ReadAppMain() {
                 val readingFontSize by bookViewModel.readingFontSize.collectAsState()
                 val errorMessage by bookViewModel.errorMessage.collectAsState()
                 val readingMode by bookViewModel.readingMode.collectAsState()
+                val lockPageOnTTS by bookViewModel.lockPageOnTTS.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
@@ -130,6 +131,8 @@ fun ReadAppMain() {
                         readingFontSize = readingFontSize,
                         errorMessage = errorMessage,
                         readingMode = readingMode,
+                        lockPageOnTTS = lockPageOnTTS,
+                        onLockPageOnTTSChange = { bookViewModel.updateLockPageOnTTS(it) },
                         onClearError = { bookViewModel.clearError() },
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
