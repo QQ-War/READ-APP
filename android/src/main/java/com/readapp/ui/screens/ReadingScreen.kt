@@ -44,7 +44,9 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.readapp.data.ReadingMode
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.input.pointer.pointerInput
@@ -249,15 +251,12 @@ fun ReadingScreen(
                         lineHeight = (readingFontSize * 1.8f).sp
                     )
                     val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title.orEmpty()
-                    val headerLines = listOfNotNull(
-                        book.title.takeIf { it.isNotBlank() },
-                        chapterTitle.takeIf { it.isNotBlank() }
-                    )
-                    val headerText = if (headerLines.isNotEmpty()) {
-                        headerLines.joinToString(separator = "\n") + "\n\n"
+                    val headerText = if (chapterTitle.isNotBlank()) {
+                        chapterTitle + "\n\n"
                     } else {
                         ""
                     }
+                    val headerFontSize = (readingFontSize + 6f).sp
                     val lineHeightPx = with(LocalDensity.current) {
                         val lineHeight = style.lineHeight
                         if (lineHeight.value.isNaN() || lineHeight.value <= 0f) {
@@ -277,9 +276,10 @@ fun ReadingScreen(
                         style = style,
                         constraints = availableConstraints,
                         lineHeightPx = lineHeightPx,
-                        headerText = headerText
+                        headerText = headerText,
+                        headerFontSize = headerFontSize
                     )
-                    val pageTextCache = remember { mutableStateMapOf<Int, String>() }
+                    val pageTextCache = remember { mutableStateMapOf<Int, AnnotatedString>() }
                     val pagerState = rememberPagerState { paginatedPages.pages.size.coerceAtLeast(1) }
                     val viewConfiguration = LocalViewConfiguration.current
                     val onPreviousChapterFromPager = {
@@ -323,16 +323,16 @@ fun ReadingScreen(
                                                 val pageText = paginatedPages.getOrNull(page)?.let { pageInfo ->
                                                     pageTextCache[page] ?: run {
                                                         val safeStart = pageInfo.start.coerceAtLeast(0)
-                                                        val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.length)
+                                                        val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.text.length)
                                                         val text = if (safeEnd > safeStart) {
-                                                            paginatedPages.fullText.substring(safeStart, safeEnd)
+                                                            paginatedPages.fullText.subSequence(safeStart, safeEnd)
                                                         } else {
-                                                            ""
+                                                            AnnotatedString("")
                                                         }
                                                         pageTextCache[page] = text
                                                         text
                                                     }
-                                                }.orEmpty()
+                                                } ?: AnnotatedString("")
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxSize()
@@ -382,12 +382,12 @@ fun ReadingScreen(
                                                     if (!pageTextCache.containsKey(index)) {
                                                         val pageInfo = paginatedPages[index]
                                                         val safeStart = pageInfo.start.coerceAtLeast(0)
-                                                        val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.length)
-                                                        val text = if (safeEnd > safeStart) {
-                                                            paginatedPages.fullText.substring(safeStart, safeEnd)
-                                                        } else {
-                                                            ""
-                                                        }
+                                                        val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.text.length)
+                                    val text = if (safeEnd > safeStart) {
+                                        paginatedPages.fullText.subSequence(safeStart, safeEnd)
+                                    } else {
+                                        AnnotatedString("")
+                                    }
                                                         pageTextCache[index] = text
                                                     }
                                                 }
@@ -559,19 +559,20 @@ private fun rememberPaginatedText(
     style: TextStyle,
     constraints: Constraints,
     lineHeightPx: Float,
-    headerText: String
+    headerText: String,
+    headerFontSize: TextUnit
 ): PaginationResult {
     val textMeasurer = rememberTextMeasurer()
 
-    return remember(paragraphs, style, constraints, lineHeightPx, headerText) {
+    return remember(paragraphs, style, constraints, lineHeightPx, headerText, headerFontSize) {
         if (paragraphs.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) {
-            return@remember PaginationResult(emptyList(), "")
+            return@remember PaginationResult(emptyList(), AnnotatedString(""))
         }
 
         val paragraphStartIndices = paragraphStartIndices(paragraphs, headerText.length)
-        val fullText = fullContent(paragraphs, headerText)
+        val fullText = fullContent(paragraphs, headerText, headerFontSize)
         val layout = textMeasurer.measure(
-            text = AnnotatedString(fullText),
+            text = fullText,
             style = style,
             constraints = Constraints(
                 maxWidth = constraints.maxWidth,
@@ -618,7 +619,7 @@ private data class PaginatedPage(
 
 private data class PaginationResult(
     val pages: List<PaginatedPage>,
-    val fullText: String
+    val fullText: AnnotatedString
 ) {
     val indices: IntRange
         get() = pages.indices
@@ -633,9 +634,16 @@ private data class PaginationResult(
     operator fun get(index: Int): PaginatedPage = pages[index]
 }
 
-private fun fullContent(paragraphs: List<String>, headerText: String): String {
+private fun fullContent(paragraphs: List<String>, headerText: String, headerFontSize: TextUnit): AnnotatedString {
     val body = paragraphs.joinToString(separator = "\n\n") { it.trim() }
-    return headerText + body
+    val builder = AnnotatedString.Builder()
+    if (headerText.isNotBlank()) {
+        builder.pushStyle(SpanStyle(fontSize = headerFontSize, fontWeight = FontWeight.Bold))
+        builder.append(headerText)
+        builder.pop()
+    }
+    builder.append(body)
+    return builder.toAnnotatedString()
 }
 
 private fun paragraphStartIndices(paragraphs: List<String>, prefixLength: Int): List<Int> {

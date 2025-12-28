@@ -29,6 +29,7 @@ struct ReadingView: View {
     @State private var paginatedPages: [PaginatedPage] = []
     @State private var textKitStore: TextKitRenderStore?
     @State private var pendingJumpToLastPage = false
+    @State private var pendingJumpToFirstPage = false
 
     // Unified Insets for consistency
     private let horizontalPadding: CGFloat = 20
@@ -67,6 +68,7 @@ struct ReadingView: View {
                 currentIndex: currentChapterIndex,
                 onSelectChapter: { index in
                     currentChapterIndex = index
+                    pendingJumpToFirstPage = true
                     loadChapterContent()
                     showChapterList = false
                 }
@@ -194,6 +196,7 @@ struct ReadingView: View {
                                 },
                                 onSwipeToNextChapter: {
                                     if currentChapterIndex < chapters.count - 1 {
+                                        pendingJumpToFirstPage = true
                                         nextChapter()
                                     }
                                 }
@@ -275,6 +278,9 @@ struct ReadingView: View {
         if pendingJumpToLastPage {
             currentPageIndex = max(paginatedPages.count - 1, 0)
             pendingJumpToLastPage = false
+        } else if pendingJumpToFirstPage {
+            currentPageIndex = 0
+            pendingJumpToFirstPage = false
         } else {
             // Keep position if possible (e.g. after font resize)
             if let lastIndex = lastTTSSentenceIndex, let page = pageIndexForSentence(lastIndex) {
@@ -298,6 +304,7 @@ struct ReadingView: View {
         if currentPageIndex < paginatedPages.count - 1 {
             currentPageIndex += 1
         } else if currentChapterIndex < chapters.count - 1 {
+            pendingJumpToFirstPage = true
             nextChapter()
         }
     }
