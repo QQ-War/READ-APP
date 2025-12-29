@@ -55,6 +55,7 @@ struct ReadingView: View {
     @State private var pausedChapterIndex: Int?
     @State private var pausedPageIndex: Int?
     @State private var needsTTSRestartAfterPause = false
+    @State private var preparedAdjacentChapterIndex: Int?
     
     // Pagination Cache for seamless transition
     @State private var isAutoFlipping: Bool = false
@@ -324,12 +325,13 @@ struct ReadingView: View {
                                 nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
                                 currentPageIndex: $currentPageIndex,
                                 pageSpacing: preferences.pageInterSpacing,
+                                showsPageSeparator: preferences.pageInterSpacing > 0,
                                 isAtChapterStart: currentPageIndex == 0,
                                 isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
                                 isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
                                 onTransitioningChanged: { transitioning in
                                     isPageTransitioning = transitioning
-                            },
+                                },
                             onTapMiddle: { showUIControls.toggle() },
                             onTapLeft: {
                                 if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
@@ -463,6 +465,11 @@ struct ReadingView: View {
             isFullyPaginated: isFully
         )
         ensurePageBuffer(around: currentPageIndex)
+        if preparedAdjacentChapterIndex != currentChapterIndex,
+           (prevCache.pages.isEmpty || nextCache.pages.isEmpty) {
+            preparedAdjacentChapterIndex = currentChapterIndex
+            prepareAdjacentChapters(for: currentChapterIndex)
+        }
     }
 
     private func pageIndexForChar(_ index: Int, in pages: [PaginatedPage]) -> Int? {
@@ -904,6 +911,7 @@ struct ReadingView: View {
         prevCache = .empty
         nextCache = .empty
         currentPageIndex = 0
+        preparedAdjacentChapterIndex = nil
     }
     
     private func previousChapter() {
@@ -1091,6 +1099,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
     
     @Binding var currentPageIndex: Int
     var pageSpacing: CGFloat
+    var showsPageSeparator: Bool
     var isAtChapterStart: Bool
     var isAtChapterEnd: Bool
     var isScrollEnabled: Bool
@@ -1109,7 +1118,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         // pvc.dataSource is set in updateUIViewController
         pvc.delegate = context.coordinator
         context.coordinator.pageViewController = pvc
-        pvc.view.backgroundColor = UIColor.secondarySystemBackground
+        pvc.view.backgroundColor = UIColor.systemBackground
         
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         pvc.view.addGestureRecognizer(tap)
@@ -1174,7 +1183,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             // Set new VC
             let pageCount = activeSnapshot.renderStore?.containers.count ?? activeSnapshot.pages.count
             if currentPageIndex < pageCount {
-                let vc = ReadContentViewController(pageIndex: currentPageIndex, renderStore: store, chapterOffset: 0)
+                let vc = ReadContentViewController(pageIndex: currentPageIndex, renderStore: store, chapterOffset: 0, showsSeparator: parent.showsPageSeparator)
                 pvc.setViewControllers([vc], direction: .forward, animated: false)
             }
         }
@@ -1193,12 +1202,12 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             if vc.chapterOffset == 0 {
                 let index = vc.pageIndex
                 if index > 0 {
-                    return ReadContentViewController(pageIndex: index - 1, renderStore: vc.renderStore, chapterOffset: 0)
+                    return ReadContentViewController(pageIndex: index - 1, renderStore: vc.renderStore, chapterOffset: 0, showsSeparator: parent.showsPageSeparator)
                 } else {
                     // Reached start of current chapter -> Try to fetch Previous Chapter
                     if let prev = parent.prevSnapshot, let store = prev.renderStore, !prev.pages.isEmpty {
                         let lastIndex = prev.pages.count - 1
-                        return ReadContentViewController(pageIndex: lastIndex, renderStore: store, chapterOffset: -1)
+                        return ReadContentViewController(pageIndex: lastIndex, renderStore: store, chapterOffset: -1, showsSeparator: parent.showsPageSeparator)
                     }
                 }
             }
@@ -1206,7 +1215,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             else if vc.chapterOffset == -1 {
                 let index = vc.pageIndex
                 if index > 0 {
-                    return ReadContentViewController(pageIndex: index - 1, renderStore: vc.renderStore, chapterOffset: -1)
+                    return ReadContentViewController(pageIndex: index - 1, renderStore: vc.renderStore, chapterOffset: -1, showsSeparator: parent.showsPageSeparator)
                 }
                 // If we reach start of prev chapter, we stop (or could implement prev-prev)
             }
@@ -1214,12 +1223,12 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             else if vc.chapterOffset == 1 {
                 let index = vc.pageIndex
                 if index > 0 {
-                    return ReadContentViewController(pageIndex: index - 1, renderStore: vc.renderStore, chapterOffset: 1)
+                    return ReadContentViewController(pageIndex: index - 1, renderStore: vc.renderStore, chapterOffset: 1, showsSeparator: parent.showsPageSeparator)
                 } else {
                     // Reached start of Next Chapter -> Go back to Current Chapter
                     if let current = parent.snapshot.renderStore, !parent.snapshot.pages.isEmpty {
                         let lastIndex = parent.snapshot.pages.count - 1
-                        return ReadContentViewController(pageIndex: lastIndex, renderStore: current, chapterOffset: 0)
+                        return ReadContentViewController(pageIndex: lastIndex, renderStore: current, chapterOffset: 0, showsSeparator: parent.showsPageSeparator)
                     }
                 }
             }
@@ -1235,11 +1244,11 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                 let index = vc.pageIndex
                 let pageCount = vc.renderStore.containers.count
                 if index < pageCount - 1 {
-                    return ReadContentViewController(pageIndex: index + 1, renderStore: vc.renderStore, chapterOffset: 0)
+                    return ReadContentViewController(pageIndex: index + 1, renderStore: vc.renderStore, chapterOffset: 0, showsSeparator: parent.showsPageSeparator)
                 } else {
                     // Reached end of current chapter -> Try to fetch Next Chapter
                     if let next = parent.nextSnapshot, let store = next.renderStore, !next.pages.isEmpty {
-                        return ReadContentViewController(pageIndex: 0, renderStore: store, chapterOffset: 1)
+                        return ReadContentViewController(pageIndex: 0, renderStore: store, chapterOffset: 1, showsSeparator: parent.showsPageSeparator)
                     }
                 }
             }
@@ -1248,7 +1257,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                 let index = vc.pageIndex
                 let pageCount = vc.renderStore.containers.count
                 if index < pageCount - 1 {
-                    return ReadContentViewController(pageIndex: index + 1, renderStore: vc.renderStore, chapterOffset: 1)
+                    return ReadContentViewController(pageIndex: index + 1, renderStore: vc.renderStore, chapterOffset: 1, showsSeparator: parent.showsPageSeparator)
                 }
             }
             // Logic for Previous Chapter (user scrolled forward from prev to current)
@@ -1256,11 +1265,11 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                 let index = vc.pageIndex
                 let pageCount = vc.renderStore.containers.count
                 if index < pageCount - 1 {
-                    return ReadContentViewController(pageIndex: index + 1, renderStore: vc.renderStore, chapterOffset: -1)
+                    return ReadContentViewController(pageIndex: index + 1, renderStore: vc.renderStore, chapterOffset: -1, showsSeparator: parent.showsPageSeparator)
                 } else {
                      // Reached end of Prev Chapter -> Go to Current Chapter
                      if let current = parent.snapshot.renderStore, !parent.snapshot.pages.isEmpty {
-                         return ReadContentViewController(pageIndex: 0, renderStore: current, chapterOffset: 0)
+                         return ReadContentViewController(pageIndex: 0, renderStore: current, chapterOffset: 0, showsSeparator: parent.showsPageSeparator)
                      }
                 }
             }
@@ -1308,6 +1317,8 @@ class ReadContentViewController: UIViewController {
     let renderStore: TextKitRenderStore
     let textContainer: NSTextContainer
     let chapterOffset: Int // 0: Current, -1: Prev, 1: Next
+    let showsSeparator: Bool
+    private let separatorView = UIView()
     
     private lazy var textView: UITextView = {
         let tv = UITextView(frame: CGRect(origin: .zero, size: renderStore.size), textContainer: textContainer)
@@ -1319,11 +1330,12 @@ class ReadContentViewController: UIViewController {
         return tv
     }()
     
-    init(pageIndex: Int, renderStore: TextKitRenderStore, chapterOffset: Int) {
+    init(pageIndex: Int, renderStore: TextKitRenderStore, chapterOffset: Int, showsSeparator: Bool) {
         self.pageIndex = pageIndex
         self.renderStore = renderStore
         self.textContainer = renderStore.containers[pageIndex]
         self.chapterOffset = chapterOffset
+        self.showsSeparator = showsSeparator
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -1333,12 +1345,25 @@ class ReadContentViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = UIColor.systemBackground
         view.addSubview(textView)
+        if showsSeparator {
+            separatorView.backgroundColor = UIColor.separator
+            separatorView.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(separatorView)
+        }
         NSLayoutConstraint.activate([
             textView.topAnchor.constraint(equalTo: view.topAnchor),
             textView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor), // No extra padding here
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+        if showsSeparator {
+            NSLayoutConstraint.activate([
+                separatorView.topAnchor.constraint(equalTo: view.topAnchor),
+                separatorView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                separatorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                separatorView.widthAnchor.constraint(equalToConstant: 0.5)
+            ])
+        }
     }
 }
 
