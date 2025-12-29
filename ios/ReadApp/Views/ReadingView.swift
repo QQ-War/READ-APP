@@ -218,80 +218,14 @@ struct ReadingView: View {
 
             // The precise size for both pagination and rendering
             let contentSize = availableSize
-
-            VStack(spacing: 0) {
-                Spacer().frame(height: safeArea.top + verticalMargin)
-                HStack(spacing: 0) {
-                    Color.clear
-                        .frame(width: safeArea.leading + horizontalMargin)
-                        .contentShape(Rectangle())
-                        .onTapGesture { 
-                            if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                            goToPreviousPage() 
-                        }
-                    
-                    if availableSize.width > 0 && availableSize.height > 0 {
-                        ZStack(alignment: .bottomTrailing) {
-                            ReadPageViewController(
-                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
-                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
-                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
-                                currentPageIndex: $currentPageIndex,
-                                isAtChapterStart: currentPageIndex == 0,
-                                isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
-                                isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
-                                onTransitioningChanged: { transitioning in
-                                    isPageTransitioning = transitioning
-                                },
-                                onTapMiddle: { showUIControls.toggle() },
-                                onTapLeft: { 
-                                    if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                                    goToPreviousPage() 
-                                },
-                                onTapRight: { 
-                                    if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                                    goToNextPage() 
-                                },
-                                onChapterChange: { offset in
-                                    isAutoFlipping = true
-                                    handleChapterSwitch(offset: offset)
-                                }
-                            )
-                            .frame(width: contentSize.width, height: contentSize.height)
-                            
-                            if !showUIControls && currentCache.pages.count > 0 {
-                                let displayCurrent = currentPageIndex + 1
-                                if currentCache.isFullyPaginated {
-                                    let total = max(currentCache.pages.count, displayCurrent)
-                                    let percentage = Int((Double(displayCurrent) / Double(total)) * 100)
-                                    Text("\(displayCurrent)/\(total) (\(percentage)%)")
-                                } else {
-                                    Text("\(displayCurrent)/\(currentCache.pages.count)+")
-                                }
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                    .padding(.trailing, 8)
-                                    .padding(.bottom, 2)
-                                    .transition(.opacity.animation(.easeInOut(duration: 0.3)))
-                            }
-                        }
-                        .frame(width: availableSize.width, height: availableSize.height)
-                    } else {
-                        // Placeholder for when size is zero
-                        Rectangle().fill(Color.clear)
-                    }
-                    
-                    Color.clear
-                        .frame(width: safeArea.trailing + horizontalMargin)
-                        .contentShape(Rectangle())
-                        .onTapGesture { 
-                            if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                            goToNextPage() 
-                        }
-                }
-                Spacer().frame(height: safeArea.bottom + verticalMargin)
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            horizontalReaderBody(
+                geometry: geometry,
+                safeArea: safeArea,
+                horizontalMargin: horizontalMargin,
+                verticalMargin: verticalMargin,
+                availableSize: availableSize,
+                contentSize: contentSize
+            )
             .onAppear {
                 if contentSize.width > 0 && contentSize.height > 0 {
                     pageSize = contentSize
@@ -354,6 +288,89 @@ struct ReadingView: View {
                 ensurePageBuffer(around: newIndex)
             }
         }
+    }
+
+    private func horizontalReaderBody(
+        geometry: GeometryProxy,
+        safeArea: EdgeInsets,
+        horizontalMargin: CGFloat,
+        verticalMargin: CGFloat,
+        availableSize: CGSize,
+        contentSize: CGSize
+    ) -> some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: safeArea.top + verticalMargin)
+            HStack(spacing: 0) {
+                Color.clear
+                    .frame(width: safeArea.leading + horizontalMargin)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
+                        goToPreviousPage()
+                    }
+                
+                if availableSize.width > 0 && availableSize.height > 0 {
+                    ZStack(alignment: .bottomTrailing) {
+                        ReadPageViewController(
+                            snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
+                            prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
+                            nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
+                            currentPageIndex: $currentPageIndex,
+                            isAtChapterStart: currentPageIndex == 0,
+                            isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
+                            isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
+                            onTransitioningChanged: { transitioning in
+                                isPageTransitioning = transitioning
+                            },
+                            onTapMiddle: { showUIControls.toggle() },
+                            onTapLeft: {
+                                if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
+                                goToPreviousPage()
+                            },
+                            onTapRight: {
+                                if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
+                                goToNextPage()
+                            },
+                            onChapterChange: { offset in
+                                isAutoFlipping = true
+                                handleChapterSwitch(offset: offset)
+                            }
+                        )
+                        .frame(width: contentSize.width, height: contentSize.height)
+                        
+                        if !showUIControls && currentCache.pages.count > 0 {
+                            let displayCurrent = currentPageIndex + 1
+                            if currentCache.isFullyPaginated {
+                                let total = max(currentCache.pages.count, displayCurrent)
+                                let percentage = Int((Double(displayCurrent) / Double(total)) * 100)
+                                Text("\(displayCurrent)/\(total) (\(percentage)%)")
+                            } else {
+                                Text("\(displayCurrent)/\(currentCache.pages.count)+")
+                            }
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .padding(.trailing, 8)
+                                .padding(.bottom, 2)
+                                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
+                        }
+                    }
+                    .frame(width: availableSize.width, height: availableSize.height)
+                } else {
+                    // Placeholder for when size is zero
+                    Rectangle().fill(Color.clear)
+                }
+                
+                Color.clear
+                    .frame(width: safeArea.trailing + horizontalMargin)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
+                        goToNextPage()
+                    }
+            }
+            Spacer().frame(height: safeArea.bottom + verticalMargin)
+        }
+        .frame(width: geometry.size.width, height: geometry.size.height)
     }
 
     // MARK: - Pagination & Navigation
@@ -812,7 +829,6 @@ struct ReadingView: View {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
             
-        var sentences: [String] = []
         // Simple regex to split by common sentence terminators while keeping them attached to the sentence if possible.
         // Or simply split. Splitting by punctuation improves TTS granularity.
         // Let's use a simple approach: split by [。！？!?] followed by nothing or whitespace
