@@ -24,7 +24,9 @@ data class Book(
     val coverEmoji: String = "📘",
     val progress: Float = 0f,
     val currentChapter: Int = 0,
-    val totalChapters: Int = 0
+    val totalChapters: Int = 0,
+    // Add new property for global search results
+    val sourceDisplayName: String? = null
 ) {
     val id: String = bookUrl ?: name
     val title: String

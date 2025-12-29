@@ -12,8 +12,27 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Response
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import com.google.gson.Gson
+import java.io.File
 
 class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
+
+    private val gson = Gson()
+    private val SOURCES_CACHE_FILE = "sources_cache.json"
+
+    private fun saveSourcesToCache(context: Context, sources: List<com.readapp.data.model.BookSource>) {
+        val json = gson.toJson(sources)
+        File(context.filesDir, SOURCES_CACHE_FILE).writeText(json)
+    }
+
+    private fun loadSourcesFromCache(context: Context): List<com.readapp.data.model.BookSource>? {
+        val file = File(context.filesDir, SOURCES_CACHE_FILE)
+        if (!file.exists()) return null
+        val json = file.readText()
+        return gson.fromJson(json, Array<com.readapp.data.model.BookSource>::class.java)?.toList()
+    }
 
     suspend fun login(baseUrl: String, publicUrl: String?, username: String, password: String): Result<BookLoginResult> =
         executeWithFailover<BookLoginResult> { api ->
@@ -121,19 +140,30 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
     // endregion
 
     // region Book Sources
-    suspend fun getBookSources(baseUrl: String, publicUrl: String?, accessToken: String): Result<List<com.readapp.data.model.BookSource>> {
+    fun getBookSources(context: Context, baseUrl: String, publicUrl: String?, accessToken: String): Flow<Result<List<com.readapp.data.model.BookSource>>> = flow {
+        val cachedSources = loadSourcesFromCache(context)
+        if (cachedSources != null) {
+            emit(Result.success(cachedSources))
+        }
+
         val pageInfoResult = executeWithFailover {
             it.getBookSourcesPage(accessToken)
         }(buildEndpoints(baseUrl, publicUrl))
 
         if (pageInfoResult.isFailure) {
-            return Result.failure(pageInfoResult.exceptionOrNull() ?: IllegalStateException("Failed to fetch page info"))
+            if (cachedSources == null) {
+                emit(Result.failure(pageInfoResult.exceptionOrNull() ?: IllegalStateException("Failed to fetch page info")))
+            }
+            return@flow
         }
         val pageInfo = pageInfoResult.getOrThrow()
 
         val totalPages = pageInfo.page
         if (totalPages <= 0 || pageInfo.md5.isBlank()) {
-            return Result.success(emptyList())
+            if (cachedSources == null) {
+                emit(Result.success(emptyList()))
+            }
+            return@flow
         }
 
         val allSources = mutableListOf<com.readapp.data.model.BookSource>()
@@ -145,10 +175,16 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
             if (result.isSuccess) {
                 allSources.addAll(result.getOrThrow())
             } else {
-                return Result.failure(result.exceptionOrNull() ?: IllegalStateException("Failed to fetch page $page"))
+                if (cachedSources == null) {
+                    emit(Result.failure(result.exceptionOrNull() ?: IllegalStateException("Failed to fetch page $page")))
+                }
+                return@flow
             }
         }
-        return Result.success(allSources)
+        if (allSources != cachedSources) {
+            emit(Result.success(allSources))
+            saveSourcesToCache(context, allSources)
+        }
     }
 
     suspend fun saveBookSource(
@@ -164,23 +200,45 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
     }
 
     suspend fun deleteBookSource(
+        context: Context,
         baseUrl: String,
         publicUrl: String?,
         accessToken: String,
         id: String
-    ): Result<Any> = executeWithFailover {
-        it.deleteBookSource(accessToken, id)
-    }(buildEndpoints(baseUrl, publicUrl))
+    ): Result<Any> {
+        val result = executeWithFailover {
+            it.deleteBookSource(accessToken, id)
+        }(buildEndpoints(baseUrl, publicUrl))
+
+        if(result.isSuccess) {
+            // Refresh cache
+            loadSourcesFromCache(context)?.filter { it.bookSourceUrl != id }?.let {
+                saveSourcesToCache(context, it)
+            }
+        }
+        return result
+    }
 
     suspend fun toggleBookSource(
+        context: Context,
         baseUrl: String,
         publicUrl: String?,
         accessToken: String,
         id: String,
         isEnabled: Boolean
-    ): Result<Any> = executeWithFailover {
-        it.toggleBookSource(accessToken, id, if (isEnabled) "1" else "0")
-    }(buildEndpoints(baseUrl, publicUrl))
+    ): Result<Any> {
+        val result = executeWithFailover {
+            it.toggleBookSource(accessToken, id, if (isEnabled) "1" else "0")
+        }(buildEndpoints(baseUrl, publicUrl))
+
+        if(result.isSuccess) {
+            // Refresh cache
+            loadSourcesFromCache(context)?.map { if(it.bookSourceUrl == id) it.copy(enabled = isEnabled) else it }?.let {
+                saveSourcesToCache(context, it)
+            }
+        }
+        return result
+    }
 
     suspend fun getBookSourceDetail(
         baseUrl: String,

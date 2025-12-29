@@ -28,6 +28,8 @@ struct Book: Codable, Identifiable {
     let kind: String?
     let type: Int?
     let durChapterTime: Int64?  // 最后阅读时间（时间戳）
+    
+    var sourceDisplayName: String? // For global search results
 
     enum CodingKeys: String, CodingKey {
         case name

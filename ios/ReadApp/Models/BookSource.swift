@@ -7,7 +7,7 @@ struct BookSource: Codable, Identifiable {
     let bookSourceUrl: String
     let bookSourceType: Int?
     let customOrder: Int?
-    let enabled: Bool
+    var enabled: Bool
     let enabledExplore: Bool?
     let lastUpdateTime: Int64?
     let weight: Int?
@@ -95,5 +95,15 @@ extension BookSource {
 extension Double {
     func toInt64() -> Int64 {
         return Int64(self)
+    }
+}
+
+// Equatable conformance for BookSource to allow comparison
+extension BookSource: Equatable {
+    static func == (lhs: BookSource, rhs: BookSource) -> Bool {
+        return lhs.bookSourceUrl == rhs.bookSourceUrl &&
+               lhs.bookSourceName == rhs.bookSourceName &&
+               lhs.enabled == rhs.enabled &&
+               lhs.bookSourceGroup == rhs.bookSourceGroup
     }
 }
