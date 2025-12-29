@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,6 +41,7 @@ import com.readapp.viewmodel.SourceViewModel
 @Composable
 fun SourceListScreen(
     onNavigateToEdit: (String?) -> Unit = {},
+    onNavigateToSearch: (BookSource) -> Unit = {},
     sourceViewModel: SourceViewModel = viewModel(factory = SourceViewModel.Factory)
 ) {
     val sources by sourceViewModel.sources.collectAsState()
@@ -69,7 +71,8 @@ fun SourceListScreen(
                             source = source,
                             onToggle = { sourceViewModel.toggleSource(source) },
                             onDelete = { sourceViewModel.deleteSource(source) },
-                            onClick = { onNavigateToEdit(source.bookSourceUrl) }
+                            onClick = { onNavigateToEdit(source.bookSourceUrl) },
+                            onSearchClick = { onNavigateToSearch(source) }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -84,7 +87,8 @@ fun BookSourceItem(
     source: BookSource,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onSearchClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -140,12 +144,21 @@ fun BookSourceItem(
                     checked = source.enabled,
                     onCheckedChange = { onToggle() }
                 )
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "删除",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                Row {
+                    IconButton(onClick = onSearchClick) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "搜索",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "删除",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }

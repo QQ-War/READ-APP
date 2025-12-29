@@ -68,6 +68,9 @@ fun MainScreen(
                     SourceListScreen(
                         onNavigateToEdit = { id ->
                             mainNavController.navigate(Screen.SourceEdit.createRoute(id))
+                        },
+                        onNavigateToSearch = { source ->
+                            mainNavController.navigate(Screen.BookSearch.createRoute(source))
                         }
                     )
                 }

@@ -158,6 +158,23 @@ interface ReadApiService {
     ): Response<ApiResponse<Map<String, Any>>>
     // endregion
 
+    // region Book Search
+    @GET("searchBook")
+    suspend fun searchBook(
+        @Query("accessToken") accessToken: String,
+        @Query("key") keyword: String,
+        @Query("bookSourceUrl") bookSourceUrl: String,
+        @Query("page") page: Int
+    ): Response<ApiResponse<List<Book>>>
+
+    @POST("saveBook")
+    suspend fun saveBook(
+        @Query("accessToken") accessToken: String,
+        @Query("useReplaceRule") useReplaceRule: Int = 0,
+        @Body book: Book
+    ): Response<ApiResponse<Any>>
+    // endregion
+
     companion object {
         fun create(baseUrl: String, tokenProvider: () -> String): ReadApiService {
             val authInterceptor = Interceptor { chain ->

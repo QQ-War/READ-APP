@@ -2,6 +2,9 @@ import SwiftUI
 
 struct SourceListView: View {
     @StateObject private var viewModel = SourceListViewModel()
+    
+    @State private var showingBookSearchView = false
+    @State private var selectedBookSource: BookSource?
 
     var body: some View {
         ZStack {
@@ -47,6 +50,15 @@ struct SourceListView: View {
                             }
                             .padding(.vertical, 4)
                         }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                selectedBookSource = source
+                                showingBookSearchView = true
+                            } label: {
+                                Label("搜索", systemImage: "magnifyingglass")
+                            }
+                            .tint(.blue)
+                        }
                     }
                     .onDelete(perform: deleteSource)
                 }
@@ -65,6 +77,11 @@ struct SourceListView: View {
         }
         .onAppear {
             viewModel.fetchSources()
+        }
+        .sheet(isPresented: $showingBookSearchView) {
+            if let bookSource = selectedBookSource {
+                BookSearchView(viewModel: BookSearchViewModel(bookSource: bookSource))
+            }
         }
     }
     

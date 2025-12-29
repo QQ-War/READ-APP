@@ -57,8 +57,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     // ==================== Dependencies & Player Management ====================
 
     private val appContext = getApplication<Application>()
-    private val preferences = UserPreferences(appContext)
-    private val repository = ReadRepository { endpoint ->
+    val preferences = UserPreferences(appContext)
+    val repository = ReadRepository { endpoint ->
         ReadApiService.create(endpoint) { accessToken.value }
     }
 

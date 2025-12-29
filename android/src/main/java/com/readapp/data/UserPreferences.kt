@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 
 private val Context.dataStore by preferencesDataStore(name = "readapp2")
 
@@ -158,5 +159,12 @@ class UserPreferences(private val context: Context) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.BookshelfSortByRecent] = value
         }
+    }
+
+    suspend fun getCredentials(): Triple<String, String?, String?> {
+        val baseUrl = serverUrl.first()
+        val publicUrl = publicServerUrl.first().ifBlank { null }
+        val token = accessToken.first().ifBlank { null }
+        return Triple(baseUrl, publicUrl, token)
     }
 }

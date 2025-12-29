@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2A83F7C979DC464A96CE4D4C /* BookSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */; };
+		72FDB17ADA4241E9BF6A5BB9 /* BookSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A79963738344134ACDF2305 /* BookSearchViewModel.swift */; };
 		1A000001000000000000001 /* ReadAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000001 /* ReadAppApp.swift */; };
 		1A000003000000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000004000000000000001 /* ContentView.swift */; };
 		1A000005000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A000006000000000000001 /* Assets.xcassets */; };
@@ -31,6 +33,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSearchView.swift; sourceTree = "<group>"; };
+		0A79963738344134ACDF2305 /* BookSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSearchViewModel.swift; sourceTree = "<group>"; };
 		1A000002000000000000001 /* ReadAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadAppApp.swift; sourceTree = "<group>"; };
 		1A000004000000000000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1A000006000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -112,6 +116,7 @@
 				1A000027000000000000003 /* DocumentPicker.swift */,
 				1A00002D000000000000003 /* ReplaceRuleListView.swift */,
 				1A00002E000000000000003 /* ReplaceRuleEditView.swift */,
+				BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -121,6 +126,7 @@
 			children = (
 				1A00002F000000000000003 /* ReplaceRuleViewModel.swift */,
 				1A00003B000000000000003 /* SourceListViewModel.swift */,
+				0A79963738344134ACDF2305 /* BookSearchViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -233,6 +239,8 @@
 				1A00002B000000000000003 /* ReplaceRuleEditView.swift in Sources */,
 				1A00002C000000000000003 /* ReplaceRuleViewModel.swift in Sources */,
 				1A00003C000000000000003 /* SourceListViewModel.swift in Sources */,
+				2A83F7C979DC464A96CE4D4C /* BookSearchView.swift in Sources */,
+				72FDB17ADA4241E9BF6A5BB9 /* BookSearchViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

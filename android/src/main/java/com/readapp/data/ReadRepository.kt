@@ -194,6 +194,28 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
     }
     // endregion
 
+    // region Book Search
+    suspend fun searchBook(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String,
+        keyword: String,
+        bookSourceUrl: String,
+        page: Int
+    ): Result<List<Book>> = executeWithFailover {
+        it.searchBook(accessToken, keyword, bookSourceUrl, page)
+    }(buildEndpoints(baseUrl, publicUrl))
+
+    suspend fun saveBook(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String,
+        book: Book
+    ): Result<Any> = executeWithFailover {
+        it.saveBook(accessToken, book = book)
+    }(buildEndpoints(baseUrl, publicUrl))
+    // endregion
+
     private fun createMultipartBodyPart(fileUri: Uri, context: Context): MultipartBody.Part? {
         return context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
             val fileBytes = inputStream.readBytes()

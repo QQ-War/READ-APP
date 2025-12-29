@@ -35,11 +35,19 @@ import com.readapp.ui.theme.ReadAppTheme
 import com.readapp.viewmodel.BookViewModel
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.navigation.NavType
+import com.google.gson.Gson
+import com.readapp.data.model.BookSource
+import com.readapp.ui.screens.BookSearchScreen
+import com.readapp.viewmodel.BookSearchViewModel
+import java.net.URLDecoder
+import java.net.URLEncoder
+import kotlin.text.Charsets.UTF_8
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        
         setContent {
             ReadAppTheme {
                 ReadAppMain()
@@ -47,7 +55,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 fun ReadAppMain() {
     val navController = rememberNavController()
@@ -281,6 +288,27 @@ fun ReadAppMain() {
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
+            composable(
+                route = Screen.BookSearch.route,
+                arguments = listOf(navArgument("bookSourceJson") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val json = backStackEntry.arguments?.getString("bookSourceJson")?.let {
+                    URLDecoder.decode(it, UTF_8.name())
+                }
+                val bookSource = Gson().fromJson(json, BookSource::class.java)
+                val searchViewModel: BookSearchViewModel = viewModel(
+                    factory = BookSearchViewModel.Factory(
+                        bookSource = bookSource,
+                        repository = bookViewModel.repository,
+                        userPreferences = bookViewModel.preferences
+                    )
+                )
+                BookSearchScreen(
+                    viewModel = searchViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
         }
 
         if (isLoading && accessToken.isNotBlank()) {
@@ -304,5 +332,12 @@ sealed class Screen(val route: String) {
     object BookSource : Screen("book_source")
     object SourceEdit : Screen("source_edit?id={id}") {
         fun createRoute(id: String?) = if (id != null) "source_edit?id=$id" else "source_edit"
+    }
+    object BookSearch : Screen("book_search/{bookSourceJson}") {
+        fun createRoute(bookSource: BookSource): String {
+            val json = Gson().toJson(bookSource)
+            val encodedJson = URLEncoder.encode(json, UTF_8.name())
+            return "book_search/$encodedJson"
+        }
     }
 }

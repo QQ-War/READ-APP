@@ -531,6 +531,71 @@ class APIService: ObservableObject {
         }
     }
     
+    // MARK: - Book Search
+    func searchBook(keyword: String, bookSourceUrl: String, page: Int = 1) async throws -> [Book] {
+        guard !accessToken.isEmpty else {
+            throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
+        }
+        
+        let queryItems = [
+            URLQueryItem(name: "accessToken", value: accessToken),
+            URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl),
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "key", value: keyword)
+        ]
+        
+        let (data, httpResponse) = try await requestWithFailback(endpoint: "searchBook", queryItems: queryItems)
+        
+        guard httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "搜索书籍失败"])
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<[Book]>.self, from: data)
+        if apiResponse.isSuccess, let books = apiResponse.data {
+            return books
+        } else {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "解析搜索结果失败"])
+        }
+    }
+    
+    // MARK: - Save Book to Bookshelf
+    func saveBook(book: Book, useReplaceRule: Int = 0) async throws {
+        guard !accessToken.isEmpty else {
+            throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
+        }
+        
+        guard var components = URLComponents(string: "\(baseURL)/saveBook") else {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
+        }
+        // AccessToken and useReplaceRule are query parameters, not part of the book JSON body
+        components.queryItems = [
+            URLQueryItem(name: "accessToken", value: accessToken),
+            URLQueryItem(name: "useReplaceRule", value: "\(useReplaceRule)")
+        ]
+        
+        guard let url = components.url else {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无法构建URL"])
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        
+        let encoder = JSONEncoder()
+        request.httpBody = try encoder.encode(book)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: "保存书籍失败"])
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+        if !apiResponse.isSuccess {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "保存书籍时发生未知错误"])
+        }
+    }
+    
     // MARK: - Cache Management
     func clearAllRemoteCache() async throws {
         guard !accessToken.isEmpty else {
