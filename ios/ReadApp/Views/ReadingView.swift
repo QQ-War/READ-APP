@@ -54,6 +54,7 @@ struct ReadingView: View {
     @State private var suppressTTSSync = false
     @State private var pausedChapterIndex: Int?
     @State private var pausedPageIndex: Int?
+    @State private var needsTTSRestartAfterPause = false
     
     // Pagination Cache for seamless transition
     @State private var isAutoFlipping: Bool = false
@@ -133,6 +134,9 @@ struct ReadingView: View {
             if isPaused {
                 pausedChapterIndex = currentChapterIndex
                 pausedPageIndex = currentPageIndex
+                needsTTSRestartAfterPause = false
+            } else {
+                needsTTSRestartAfterPause = false
             }
         }
         .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
@@ -276,6 +280,9 @@ struct ReadingView: View {
                         ttsManager.stop()
                         startTTS(pageIndexOverride: newIndex)
                     }
+                }
+                if ttsManager.isPlaying && ttsManager.isPaused {
+                    needsTTSRestartAfterPause = true
                 }
                 isAutoFlipping = false // Reset flag after use
 
@@ -912,9 +919,10 @@ struct ReadingView: View {
                 if preferences.readingMode == .horizontal,
                    let pausedChapterIndex,
                    let pausedPageIndex,
-                   (pausedChapterIndex != currentChapterIndex || pausedPageIndex != currentPageIndex) {
+                   (pausedChapterIndex != currentChapterIndex || pausedPageIndex != currentPageIndex || needsTTSRestartAfterPause) {
                     ttsManager.stop()
                     startTTS(pageIndexOverride: currentPageIndex)
+                    needsTTSRestartAfterPause = false
                 } else {
                     ttsManager.resume()
                 }
@@ -924,6 +932,7 @@ struct ReadingView: View {
                 ttsManager.pause()
             }
         } else {
+            needsTTSRestartAfterPause = false
             startTTS()
         }
     }
@@ -931,6 +940,7 @@ struct ReadingView: View {
     private func startTTS(pageIndexOverride: Int? = nil) {
         showUIControls = true
         suppressTTSSync = true
+        needsTTSRestartAfterPause = false
         let fallbackIndex = lastTTSSentenceIndex ?? Int(book.durChapterPos ?? 0)
         
         var startIndex = fallbackIndex
