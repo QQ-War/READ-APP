@@ -30,3 +30,8 @@ ReadApp ???????https://github.com/autobcb/read?? iOS/Android ??????????? + ?????
 - alias?`readappdebug`
 - store/key ???`readapp`
 - GitHub Actions ???Debug/Unsigned APK
+
+## Recent Fixes (iOS)
+- Fixed page flip to previous chapter incorrectly landing on chapter start.
+- Fixed TTS start position sometimes beginning mid-page after pagination changes.
+- Fixed TTS resume behavior: if page changes while paused, restart from the new page.

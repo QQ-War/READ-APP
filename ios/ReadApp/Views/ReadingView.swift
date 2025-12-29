@@ -9,9 +9,10 @@ private struct ChapterCache {
     let attributedText: NSAttributedString
     let paragraphStarts: [Int]
     let chapterPrefixLen: Int
+    let isFullyPaginated: Bool
     
     static var empty: ChapterCache {
-        ChapterCache(pages: [], store: nil, contentSentences: [], attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0)
+        ChapterCache(pages: [], store: nil, contentSentences: [], attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false)
     }
 }
 
@@ -45,15 +46,8 @@ struct ReadingView: View {
     @State private var nextCache: ChapterCache = .empty
     @State private var pendingJumpToLastPage = false
     @State private var pendingJumpToFirstPage = false
-    @State private var windowBasePageIndex: Int = 0
-    @State private var windowStartCharIndex: Int = 0
-    @State private var windowEndCharIndex: Int = 0
-    @State private var totalPageCount: Int?
-    @State private var windowHistory: [WindowAnchor] = []
     @State private var pageSize: CGSize = .zero
-    @State private var isWindowShiftInProgress = false
     @State private var isPageTransitioning = false
-    @State private var pendingWindowShiftAfterTransition = false
     @State private var ttsBaseIndex: Int = 0
     @State private var pendingFlipId: UUID = UUID()
     @State private var isTTSSyncingPage = false
@@ -67,9 +61,8 @@ struct ReadingView: View {
     // Unified Insets for consistency
     private let horizontalPadding: CGFloat = 20
     private let verticalPadding: CGFloat = 40
-    private let maxCachedPages: Int = 40
-    private let windowAdvanceThreshold: Int = 6
-    private let windowOverlapPages: Int = 3
+    private let initialPageBatch: Int = 12
+    private let prefetchPageBatch: Int = 8
 
     init(book: Book) {
         self.book = book
@@ -134,6 +127,12 @@ struct ReadingView: View {
                 if ttsManager.currentSentenceIndex > 0 && ttsManager.currentSentenceIndex <= contentSentences.count {
                     lastTTSSentenceIndex = ttsManager.currentSentenceIndex
                 }
+            }
+        }
+        .onChange(of: ttsManager.isPaused) { isPaused in
+            if isPaused {
+                pausedChapterIndex = currentChapterIndex
+                pausedPageIndex = currentPageIndex
             }
         }
         .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
@@ -238,19 +237,11 @@ struct ReadingView: View {
                                 prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
                                 nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
                                 currentPageIndex: $currentPageIndex,
-                                isAtChapterStart: windowStartCharIndex == 0,
-                                isAtChapterEnd: windowEndCharIndex >= currentCache.attributedText.length && currentCache.attributedText.length > 0,
+                                isAtChapterStart: currentPageIndex == 0,
+                                isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
                                 isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
                                 onTransitioningChanged: { transitioning in
                                     isPageTransitioning = transitioning
-                                    if !transitioning,
-                                       pendingWindowShiftAfterTransition,
-                                       !isWindowShiftInProgress,
-                                       pageSize.width > 0,
-                                       pageSize.height > 0 {
-                                        pendingWindowShiftAfterTransition = false
-                                        handleWindowShiftIfNeeded(in: pageSize)
-                                    }
                                 },
                                 onTapMiddle: { showUIControls.toggle() },
                                 onTapLeft: { 
@@ -269,11 +260,14 @@ struct ReadingView: View {
                             .frame(width: contentSize.width, height: contentSize.height)
                             
                             if !showUIControls && currentCache.pages.count > 0 {
-                                let displayTotal = max(windowBasePageIndex + currentCache.pages.count, totalPageCount ?? 0)
-                                let displayCurrent = windowBasePageIndex + currentPageIndex + 1
-                                let safeTotal = max(displayTotal, displayCurrent)
-                                let percentage = Int((Double(displayCurrent) / Double(safeTotal)) * 100)
-                                Text("\(displayCurrent)/\(safeTotal) (\(percentage)%)")
+                                let displayCurrent = currentPageIndex + 1
+                                if currentCache.isFullyPaginated {
+                                    let total = max(currentCache.pages.count, displayCurrent)
+                                    let percentage = Int((Double(displayCurrent) / Double(total)) * 100)
+                                    Text("\(displayCurrent)/\(total) (\(percentage)%)")
+                                } else {
+                                    Text("\(displayCurrent)/\(currentCache.pages.count)+")
+                                }
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                     .padding(.trailing, 8)
@@ -338,8 +332,8 @@ struct ReadingView: View {
                 // This logic handles TTS restart on manual flip
                 if isTTSSyncingPage {
                     isTTSSyncingPage = false
-                    if currentCache.pages.indices.contains(newIndex) {
-                        lastTTSSentenceIndex = currentCache.pages[newIndex].startSentenceIndex
+                    if let startIndex = pageStartSentenceIndex(for: newIndex) {
+                        lastTTSSentenceIndex = startIndex
                     }
                     return
                 }
@@ -351,16 +345,13 @@ struct ReadingView: View {
                 }
                 isAutoFlipping = false // Reset flag after use
 
-                if currentCache.pages.indices.contains(newIndex) {
-                    lastTTSSentenceIndex = currentCache.pages[newIndex].startSentenceIndex
+                if let startIndex = pageStartSentenceIndex(for: newIndex) {
+                    lastTTSSentenceIndex = startIndex
                 }
                 if isPageTransitioning {
-                    pendingWindowShiftAfterTransition = true
                     return
                 }
-                if !isWindowShiftInProgress, pageSize.width > 0, pageSize.height > 0 {
-                    handleWindowShiftIfNeeded(in: pageSize)
-                }
+                ensurePageBuffer(around: newIndex)
             }
         }
     }
@@ -382,144 +373,157 @@ struct ReadingView: View {
             return
         }
 
-        let globalPageIndex = windowBasePageIndex + currentPageIndex
+        let focusCharIndex: Int? = currentCache.pages.indices.contains(currentPageIndex)
+            ? currentCache.pages[currentPageIndex].globalRange.location
+            : nil
+
+        let renderStore = TextKitPaginator.createRenderStore(fullText: newAttrText, size: size)
+        var pages: [PaginatedPage] = []
+        var isFully = false
+
+        func appendPages(_ count: Int) {
+            let result = TextKitPaginator.appendPages(
+                renderStore: renderStore,
+                paragraphStarts: newPStarts,
+                prefixLen: newPrefixLen,
+                maxPages: count
+            )
+            pages.append(contentsOf: result.pages)
+            isFully = result.reachedEnd
+        }
 
         if pendingJumpToLastPage {
-            buildWindowForLastPage(in: size, from: newAttrText, sentences: sentences, paragraphStarts: newPStarts, prefixLen: newPrefixLen)
+            while !isFully {
+                appendPages(max(prefetchPageBatch * 2, 16))
+            }
+            currentPageIndex = max(0, pages.count - 1)
             pendingJumpToLastPage = false
             pendingJumpToFirstPage = false
-            return
-        }
-
-        if pendingJumpToFirstPage || currentCache.pages.isEmpty {
-            windowHistory.removeAll()
-            totalPageCount = nil
-            applyWindow(startCharIndex: 0, basePageIndex: 0, desiredGlobalPageIndex: 0, focusCharIndex: nil, size: size, from: newAttrText, sentences: sentences, pStarts: newPStarts, prefixLen: newPrefixLen)
-            pendingJumpToFirstPage = false
-            return
-        }
-
-        let anchorIndex = max(0, min(currentPageIndex, currentCache.pages.count - 1))
-        let dropCount = max(0, anchorIndex - windowOverlapPages)
-        let startChar = currentCache.pages[dropCount].globalRange.location
-        let basePage = windowBasePageIndex + dropCount
-        applyWindow(startCharIndex: startChar, basePageIndex: basePage, desiredGlobalPageIndex: globalPageIndex, focusCharIndex: nil, size: size, from: newAttrText, sentences: sentences, pStarts: newPStarts, prefixLen: newPrefixLen)
-    }
-
-    private func applyWindow(startCharIndex: Int, basePageIndex: Int, desiredGlobalPageIndex: Int, focusCharIndex: Int?, size: CGSize, from sourceText: NSAttributedString, sentences: [String], pStarts: [Int], prefixLen: Int) {
-        isWindowShiftInProgress = true
-        let result = TextKitPaginator.paginateWindow(
-            fullText: sourceText,
-            paragraphStarts: pStarts,
-            prefixLen: prefixLen,
-            startCharIndex: startCharIndex,
-            maxPages: maxCachedPages,
-            size: size
-        )
-
-        let newCache = ChapterCache(
-            pages: result.pages,
-            store: result.renderStore,
-            contentSentences: sentences,
-            attributedText: sourceText,
-            paragraphStarts: pStarts,
-            chapterPrefixLen: prefixLen
-        )
-        currentCache = newCache
-        
-        windowStartCharIndex = result.windowStart
-        windowEndCharIndex = result.windowEnd
-        windowBasePageIndex = basePageIndex
-        if result.reachedEnd {
-            totalPageCount = basePageIndex + result.pages.count
-        }
-
-        if !result.pages.isEmpty {
-            if let focusIndex = focusCharIndex,
-               let page = result.pages.firstIndex(where: { NSLocationInRange(focusIndex, $0.globalRange) }) {
-                currentPageIndex = page
-            } else {
-                let mappedIndex = desiredGlobalPageIndex - basePageIndex
-                currentPageIndex = max(0, min(mappedIndex, result.pages.count - 1))
-            }
         } else {
+            appendPages(initialPageBatch)
+            if let targetCharIndex = focusCharIndex {
+                while pageIndexForChar(targetCharIndex, in: pages) == nil && !isFully {
+                    appendPages(prefetchPageBatch)
+                }
+                if let pageIndex = pageIndexForChar(targetCharIndex, in: pages) {
+                    currentPageIndex = pageIndex
+                }
+            } else if pendingJumpToFirstPage || currentCache.pages.isEmpty {
+                currentPageIndex = 0
+            }
+            pendingJumpToFirstPage = false
+        }
+
+        if pages.isEmpty {
             currentPageIndex = 0
+        } else if currentPageIndex >= pages.count {
+            currentPageIndex = pages.count - 1
         }
 
-        DispatchQueue.main.async {
-            isWindowShiftInProgress = false
-        }
+        currentCache = ChapterCache(
+            pages: pages,
+            store: renderStore,
+            contentSentences: sentences,
+            attributedText: newAttrText,
+            paragraphStarts: newPStarts,
+            chapterPrefixLen: newPrefixLen,
+            isFullyPaginated: isFully
+        )
+        ensurePageBuffer(around: currentPageIndex)
     }
 
-    private func handleWindowShiftIfNeeded(in size: CGSize) {
-        guard !currentCache.pages.isEmpty, currentCache.attributedText.length > 0 else { return }
-        let globalPageIndex = windowBasePageIndex + currentPageIndex
-        let forwardTriggerIndex = max(0, currentCache.pages.count - windowAdvanceThreshold)
-
-        if currentPageIndex >= forwardTriggerIndex,
-           windowEndCharIndex < currentCache.attributedText.length {
-            let dropCount = max(0, currentPageIndex - windowOverlapPages)
-            guard dropCount > 0 else { return }
-            windowHistory.append(WindowAnchor(startCharIndex: windowStartCharIndex, basePageIndex: windowBasePageIndex))
-            let newStartChar = currentCache.pages[dropCount].globalRange.location
-            let newBasePage = windowBasePageIndex + dropCount
-            applyWindow(startCharIndex: newStartChar, basePageIndex: newBasePage, desiredGlobalPageIndex: globalPageIndex, focusCharIndex: nil, size: size, from: currentCache.attributedText, sentences: currentCache.contentSentences, pStarts: currentCache.paragraphStarts, prefixLen: currentCache.chapterPrefixLen)
-        } else if currentPageIndex <= windowOverlapPages, let anchor = windowHistory.popLast() {
-            applyWindow(startCharIndex: anchor.startCharIndex, basePageIndex: anchor.basePageIndex, desiredGlobalPageIndex: globalPageIndex, focusCharIndex: nil, size: size, from: currentCache.attributedText, sentences: currentCache.contentSentences, pStarts: currentCache.paragraphStarts, prefixLen: currentCache.chapterPrefixLen)
+    private func pageIndexForChar(_ index: Int, in pages: [PaginatedPage]) -> Int? {
+        guard index >= 0 else { return nil }
+        for (i, page) in pages.enumerated() {
+            if NSLocationInRange(index, page.globalRange) { return i }
         }
+        return nil
     }
 
-    private func buildWindowForLastPage(in size: CGSize, from sourceText: NSAttributedString, sentences: [String], paragraphStarts: [Int], prefixLen: Int) {
-        windowHistory.removeAll()
-        totalPageCount = nil
+    private func ensurePageBuffer(around index: Int) {
+        ensurePages(upTo: index + prefetchPageBatch)
+    }
 
-        var startChar = 0
-        var baseCount = 0
-        var lastResult: WindowPaginationResult?
-        var history: [WindowAnchor] = []
+    private func ensurePages(upTo index: Int) {
+        guard let store = currentCache.store, !currentCache.pages.isEmpty else { return }
+        guard !currentCache.isFullyPaginated else { return }
+        guard currentCache.pages.count <= index else { return }
 
-        while startChar < sourceText.length {
-            let result = TextKitPaginator.paginateWindow(
-                fullText: sourceText,
-                paragraphStarts: paragraphStarts,
-                prefixLen: prefixLen,
-                startCharIndex: startChar,
-                maxPages: maxCachedPages,
-                size: size
+        var pages = currentCache.pages
+        var isFully = currentCache.isFullyPaginated
+        var didAppend = false
+
+        while pages.count <= index && !isFully {
+            let result = TextKitPaginator.appendPages(
+                renderStore: store,
+                paragraphStarts: currentCache.paragraphStarts,
+                prefixLen: currentCache.chapterPrefixLen,
+                maxPages: prefetchPageBatch
             )
-            lastResult = result
-            baseCount += result.pages.count
-            if result.windowEnd >= sourceText.length || result.pages.isEmpty {
+            if result.pages.isEmpty {
+                isFully = true
                 break
             }
-            startChar = result.windowEnd
-            history.append(WindowAnchor(startCharIndex: startChar, basePageIndex: baseCount))
+            pages.append(contentsOf: result.pages)
+            isFully = result.reachedEnd
+            didAppend = true
         }
 
-        guard let finalResult = lastResult else { return }
-        let basePageIndex = max(0, baseCount - finalResult.pages.count)
-        let desiredGlobalPageIndex = max(0, baseCount - 1)
-        windowHistory = history
-        applyWindow(startCharIndex: finalResult.windowStart, basePageIndex: basePageIndex, desiredGlobalPageIndex: desiredGlobalPageIndex, focusCharIndex: nil, size: size, from: sourceText, sentences: sentences, pStarts: paragraphStarts, prefixLen: prefixLen)
-        totalPageCount = baseCount
+        guard didAppend else { return }
+        currentCache = ChapterCache(
+            pages: pages,
+            store: store,
+            contentSentences: currentCache.contentSentences,
+            attributedText: currentCache.attributedText,
+            paragraphStarts: currentCache.paragraphStarts,
+            chapterPrefixLen: currentCache.chapterPrefixLen,
+            isFullyPaginated: isFully
+        )
+    }
+
+    private func ensurePagesForCharIndex(_ index: Int) -> Int? {
+        if let pageIndex = pageIndexForChar(index, in: currentCache.pages) { return pageIndex }
+        guard let store = currentCache.store, !currentCache.pages.isEmpty else { return nil }
+        guard !currentCache.isFullyPaginated else { return nil }
+
+        var pages = currentCache.pages
+        var isFully = currentCache.isFullyPaginated
+        var didAppend = false
+
+        while pageIndexForChar(index, in: pages) == nil && !isFully {
+            let result = TextKitPaginator.appendPages(
+                renderStore: store,
+                paragraphStarts: currentCache.paragraphStarts,
+                prefixLen: currentCache.chapterPrefixLen,
+                maxPages: prefetchPageBatch
+            )
+            if result.pages.isEmpty {
+                isFully = true
+                break
+            }
+            pages.append(contentsOf: result.pages)
+            isFully = result.reachedEnd
+            didAppend = true
+        }
+
+        if didAppend {
+            currentCache = ChapterCache(
+                pages: pages,
+                store: store,
+                contentSentences: currentCache.contentSentences,
+                attributedText: currentCache.attributedText,
+                paragraphStarts: currentCache.paragraphStarts,
+                chapterPrefixLen: currentCache.chapterPrefixLen,
+                isFullyPaginated: isFully
+            )
+        }
+
+        return pageIndexForChar(index, in: pages)
     }
     
     private func goToPreviousPage() {
         if currentPageIndex > 0 {
             currentPageIndex -= 1
-        } else if let anchor = windowHistory.popLast(), pageSize.width > 0, pageSize.height > 0 {
-            let targetGlobalPage = max(0, windowBasePageIndex - 1)
-            applyWindow(
-                startCharIndex: anchor.startCharIndex,
-                basePageIndex: anchor.basePageIndex,
-                desiredGlobalPageIndex: targetGlobalPage,
-                focusCharIndex: nil,
-                size: pageSize,
-                from: currentCache.attributedText,
-                sentences: currentCache.contentSentences,
-                pStarts: currentCache.paragraphStarts,
-                prefixLen: currentCache.chapterPrefixLen
-            )
         } else if currentChapterIndex > 0 {
             pendingJumpToLastPage = true
             previousChapter()
@@ -529,23 +533,11 @@ struct ReadingView: View {
     private func goToNextPage() {
         if currentPageIndex < currentCache.pages.count - 1 {
             currentPageIndex += 1
-        } else if windowEndCharIndex < currentCache.attributedText.length, pageSize.width > 0, pageSize.height > 0 {
-            let anchorIndex = currentPageIndex <= windowOverlapPages ? currentPageIndex : (currentPageIndex - windowOverlapPages)
-            windowHistory.append(WindowAnchor(startCharIndex: windowStartCharIndex, basePageIndex: windowBasePageIndex))
-            let newStartChar = currentCache.pages.indices.contains(anchorIndex) ? currentCache.pages[anchorIndex].globalRange.location : windowStartCharIndex
-            let newBasePage = windowBasePageIndex + anchorIndex
-            let targetGlobalPage = windowBasePageIndex + currentPageIndex + 1
-            applyWindow(
-                startCharIndex: newStartChar,
-                basePageIndex: newBasePage,
-                desiredGlobalPageIndex: targetGlobalPage,
-                focusCharIndex: nil,
-                size: pageSize,
-                from: currentCache.attributedText,
-                sentences: currentCache.contentSentences,
-                pStarts: currentCache.paragraphStarts,
-                prefixLen: currentCache.chapterPrefixLen
-            )
+        } else if !currentCache.isFullyPaginated {
+            ensurePages(upTo: currentPageIndex + 1)
+            if currentPageIndex < currentCache.pages.count - 1 {
+                currentPageIndex += 1
+            }
         } else if currentChapterIndex < chapters.count - 1 {
             pendingJumpToFirstPage = true
             nextChapter()
@@ -564,6 +556,24 @@ struct ReadingView: View {
             }
         }
         return nil
+    }
+
+    private func pageRange(for pageIndex: Int) -> NSRange? {
+        if let store = currentCache.store, pageIndex >= 0, pageIndex < store.containers.count {
+            let container = store.containers[pageIndex]
+            let glyphRange = store.layoutManager.glyphRange(for: container)
+            return store.layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        }
+        if currentCache.pages.indices.contains(pageIndex) {
+            return currentCache.pages[pageIndex].globalRange
+        }
+        return nil
+    }
+
+    private func pageStartSentenceIndex(for pageIndex: Int) -> Int? {
+        guard let range = pageRange(for: pageIndex) else { return nil }
+        let adjustedLocation = max(0, range.location - currentCache.chapterPrefixLen)
+        return currentCache.paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
     }
 
     private func globalCharIndexForSentence(_ index: Int) -> Int? {
@@ -592,30 +602,14 @@ struct ReadingView: View {
             }
         }
 
-        if let pageIndex = pageIndexForSentence(realIndex), pageIndex != currentPageIndex {
+        if let pageIndex = pageIndexForSentence(realIndex) ?? (globalCharIndexForSentence(realIndex).flatMap { ensurePagesForCharIndex($0) }),
+           pageIndex != currentPageIndex {
             isTTSSyncingPage = true
             withAnimation { currentPageIndex = pageIndex }
             DispatchQueue.main.async {
                 isTTSSyncingPage = false
             }
             return
-        }
-        if let globalCharIndex = globalCharIndexForSentence(realIndex), pageSize.width > 0, pageSize.height > 0 {
-            isTTSSyncingPage = true
-            applyWindow(
-                startCharIndex: max(0, globalCharIndex),
-                basePageIndex: windowBasePageIndex,
-                desiredGlobalPageIndex: windowBasePageIndex + currentPageIndex,
-                focusCharIndex: globalCharIndex,
-                size: pageSize,
-                from: currentCache.attributedText,
-                sentences: currentCache.contentSentences,
-                pStarts: currentCache.paragraphStarts,
-                prefixLen: currentCache.chapterPrefixLen
-            )
-            DispatchQueue.main.async {
-                isTTSSyncingPage = false
-            }
         }
     }
     
@@ -694,6 +688,7 @@ struct ReadingView: View {
             currentCache = nextCache
             nextCache = .empty
             currentPageIndex = 0
+            pendingJumpToFirstPage = true
             
         } else if offset == -1 { // Switched to Prev Chapter
             guard !prevCache.pages.isEmpty else { return }
@@ -702,18 +697,14 @@ struct ReadingView: View {
             currentCache = prevCache
             prevCache = .empty
             currentPageIndex = currentCache.pages.count - 1
+            pendingJumpToLastPage = true
         }
 
-        // Reset window state for the new chapter
-        windowHistory.removeAll()
-        windowBasePageIndex = 0
-        totalPageCount = nil // Will be recalculated if needed
-        
-        // Trigger full window load for the new current chapter & preload for new adjacent chapters
+        // Trigger full layout load for the new current chapter & preload for new adjacent chapters
         loadChapterContent()
     }
     
-    // This function re-paginates the current chapter with a full window,
+    // This function re-paginates the current chapter with a full layout,
     // replacing the "gate" cache if necessary.
     private func repaginateCurrentChapterWindow(sentences: [String]? = nil) {
         guard pageSize.width > 0, pageSize.height > 0 else { return }
@@ -742,33 +733,43 @@ struct ReadingView: View {
         let attrText = TextKitPaginator.createAttributedText(sentences: sentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, chapterTitle: title)
         let pStarts = TextKitPaginator.paragraphStartIndices(sentences: sentences)
         let prefixLen = (title.isEmpty) ? 0 : (title + "\n").utf16.count
-        
-        var result: WindowPaginationResult
+
+        let renderStore = TextKitPaginator.createRenderStore(fullText: attrText, size: pageSize)
+        var pages: [PaginatedPage] = []
+        var isFully = false
+
+        func appendPages(_ count: Int) {
+            let result = TextKitPaginator.appendPages(
+                renderStore: renderStore,
+                paragraphStarts: pStarts,
+                prefixLen: prefixLen,
+                maxPages: count
+            )
+            pages.append(contentsOf: result.pages)
+            isFully = result.reachedEnd
+        }
+
         if forGate {
             if fromEnd {
-                // For prev chapter, we need last N pages. The simplest way is to paginate all and take last.
-                // This is a trade-off for simplicity over performance for huge chapters.
-                let fullResult = TextKitPaginator.paginateWindow(fullText: attrText, paragraphStarts: pStarts, prefixLen: prefixLen, startCharIndex: 0, maxPages: 2000, size: pageSize)
-                let pages = Array(fullResult.pages.suffix(windowAdvanceThreshold))
-                // Note: This creates a new store with just the last pages.
-                let gateResult = TextKitPaginator.paginateWindow(fullText: attrText, paragraphStarts: pStarts, prefixLen: prefixLen, startCharIndex: pages.first?.globalRange.location ?? 0, maxPages: windowAdvanceThreshold, size: pageSize)
-                result = gateResult
+                // TextKit can't paginate backward; run forward to the end to keep layout stable.
+                while !isFully {
+                    appendPages(max(prefetchPageBatch * 2, 16))
+                }
             } else {
-                // For next chapter, just paginate first N pages.
-                result = TextKitPaginator.paginateWindow(fullText: attrText, paragraphStarts: pStarts, prefixLen: prefixLen, startCharIndex: 0, maxPages: windowAdvanceThreshold, size: pageSize)
+                appendPages(initialPageBatch)
             }
         } else {
-            // Paginate a full window for the current chapter
-            result = TextKitPaginator.paginateWindow(fullText: attrText, paragraphStarts: pStarts, prefixLen: prefixLen, startCharIndex: 0, maxPages: maxCachedPages, size: pageSize)
+            appendPages(initialPageBatch)
         }
 
         return ChapterCache(
-            pages: result.pages,
-            store: result.renderStore,
+            pages: pages,
+            store: renderStore,
             contentSentences: sentences,
             attributedText: attrText,
             paragraphStarts: pStarts,
-            chapterPrefixLen: prefixLen
+            chapterPrefixLen: prefixLen,
+            isFullyPaginated: isFully
         )
     }
 
@@ -870,11 +871,6 @@ struct ReadingView: View {
         currentCache = .empty
         prevCache = .empty
         nextCache = .empty
-        windowBasePageIndex = 0
-        windowStartCharIndex = 0
-        windowEndCharIndex = 0
-        totalPageCount = nil
-        windowHistory.removeAll()
         currentPageIndex = 0
     }
     
@@ -924,13 +920,13 @@ struct ReadingView: View {
         let pageIndex = pageIndexOverride ?? currentPageIndex
         
         if preferences.readingMode == .horizontal {
-            if currentCache.pages.indices.contains(pageIndex) {
-                let page = currentCache.pages[pageIndex]
-                startIndex = page.startSentenceIndex
+            if let pageRange = pageRange(for: pageIndex),
+               let pageStartIndex = pageStartSentenceIndex(for: pageIndex) {
+                startIndex = pageStartIndex
                 
                 if currentCache.paragraphStarts.indices.contains(startIndex) {
                     let sentenceStartGlobal = currentCache.paragraphStarts[startIndex] + currentCache.chapterPrefixLen
-                    let pageStartGlobal = page.globalRange.location
+                    let pageStartGlobal = pageRange.location
                     let offset = max(0, pageStartGlobal - sentenceStartGlobal)
                     
                     if offset > 0 && startIndex < contentSentences.count {
@@ -1114,6 +1110,12 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                     return
                 }
                 snapshot = newSnapshot
+            } else if let current = snapshot, newSnapshot.pages.count > current.pages.count {
+                if isAnimating {
+                    pendingSnapshot = newSnapshot
+                } else {
+                    snapshot = newSnapshot
+                }
             }
             let activeSnapshot = snapshot ?? newSnapshot
             
@@ -1129,7 +1131,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             }
             
             // Set new VC
-            if currentPageIndex < activeSnapshot.pages.count {
+            let pageCount = activeSnapshot.renderStore?.containers.count ?? activeSnapshot.pages.count
+            if currentPageIndex < pageCount {
                 let vc = ReadContentViewController(pageIndex: currentPageIndex, renderStore: store, chapterOffset: 0)
                 pvc.setViewControllers([vc], direction: .forward, animated: false)
             }
@@ -1138,7 +1141,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         private func shouldReplaceSnapshot(with newSnapshot: PageSnapshot) -> Bool {
             guard let current = snapshot else { return true }
             if current.renderStore !== newSnapshot.renderStore { return true }
-            if current.pages.count != newSnapshot.pages.count { return true }
+            if newSnapshot.pages.count < current.pages.count { return true }
             return false
         }
 
@@ -1299,23 +1302,15 @@ class ReadContentViewController: UIViewController {
 
 // MARK: - TextKit Paginator
 struct PaginatedPage { let globalRange: NSRange; let startSentenceIndex: Int }
-struct WindowPaginationResult {
+struct AppendPaginationResult {
     let pages: [PaginatedPage]
-    let renderStore: TextKitRenderStore?
-    let windowStart: Int
-    let windowEnd: Int
     let reachedEnd: Bool
-}
-
-struct WindowAnchor {
-    let startCharIndex: Int
-    let basePageIndex: Int
 }
 
 final class TextKitRenderStore {
     let textStorage: NSTextStorage
     let layoutManager: NSLayoutManager
-    let containers: [NSTextContainer]
+    var containers: [NSTextContainer]
     let size: CGSize
 
     init(textStorage: NSTextStorage, layoutManager: NSLayoutManager, containers: [NSTextContainer], size: CGSize) {
@@ -1327,59 +1322,58 @@ final class TextKitRenderStore {
 }
 
 struct TextKitPaginator {
-    static func paginateWindow(
+    static func createRenderStore(
         fullText: NSAttributedString,
-        paragraphStarts: [Int],
-        prefixLen: Int,
-        startCharIndex: Int,
-        maxPages: Int,
         size: CGSize
-    ) -> WindowPaginationResult {
-        guard fullText.length > 0, size.width > 0, size.height > 0 else {
-            return WindowPaginationResult(pages: [], renderStore: nil, windowStart: 0, windowEnd: 0, reachedEnd: true)
-        }
-
-        let clampedStart = max(0, min(startCharIndex, max(fullText.length - 1, 0)))
-        let windowRange = NSRange(location: clampedStart, length: fullText.length - clampedStart)
-        let windowText = fullText.attributedSubstring(from: windowRange)
-
-        let textStorage = NSTextStorage(attributedString: windowText)
+    ) -> TextKitRenderStore {
+        let textStorage = NSTextStorage(attributedString: fullText)
         let layoutManager = NSLayoutManager()
         textStorage.addLayoutManager(layoutManager)
+        return TextKitRenderStore(textStorage: textStorage, layoutManager: layoutManager, containers: [], size: size)
+    }
+
+    static func appendPages(
+        renderStore: TextKitRenderStore,
+        paragraphStarts: [Int],
+        prefixLen: Int,
+        maxPages: Int
+    ) -> AppendPaginationResult {
+        let size = renderStore.size
+        guard renderStore.textStorage.length > 0, size.width > 0, size.height > 0 else {
+            return AppendPaginationResult(pages: [], reachedEnd: true)
+        }
 
         var pages: [PaginatedPage] = []
-        var containers: [NSTextContainer] = []
-        var windowEnd = clampedStart
+        var reachedEnd = false
 
         for _ in 0..<maxPages {
             let textContainer = NSTextContainer(size: size)
             textContainer.lineFragmentPadding = 0
-            layoutManager.addTextContainer(textContainer)
-            containers.append(textContainer)
+            renderStore.layoutManager.addTextContainer(textContainer)
+            renderStore.containers.append(textContainer)
 
-            let glyphRange = layoutManager.glyphRange(for: textContainer)
-            let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+            let glyphRange = renderStore.layoutManager.glyphRange(for: textContainer)
+            let charRange = renderStore.layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
 
             if charRange.length == 0 {
-                layoutManager.removeTextContainer(at: containers.count - 1)
-                containers.removeLast()
+                renderStore.layoutManager.removeTextContainer(at: renderStore.containers.count - 1)
+                renderStore.containers.removeLast()
+                reachedEnd = true
                 break
             }
 
-            let globalRange = NSRange(location: clampedStart + charRange.location, length: charRange.length)
+            let globalRange = charRange
             let adjustedLocation = max(0, globalRange.location - prefixLen)
             let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
             pages.append(PaginatedPage(globalRange: globalRange, startSentenceIndex: startIdx))
-            windowEnd = NSMaxRange(globalRange)
 
-            if windowEnd >= fullText.length {
+            if NSMaxRange(globalRange) >= renderStore.textStorage.length {
+                reachedEnd = true
                 break
             }
         }
 
-        let renderStore = TextKitRenderStore(textStorage: textStorage, layoutManager: layoutManager, containers: containers, size: size)
-        let reachedEnd = windowEnd >= fullText.length
-        return WindowPaginationResult(pages: pages, renderStore: renderStore, windowStart: clampedStart, windowEnd: windowEnd, reachedEnd: reachedEnd)
+        return AppendPaginationResult(pages: pages, reachedEnd: reachedEnd)
     }
     
     static func createAttributedText(sentences: [String], fontSize: CGFloat, lineSpacing: CGFloat, chapterTitle: String?) -> NSAttributedString {
