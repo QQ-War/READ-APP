@@ -352,6 +352,11 @@ struct ReadingView: View {
                                     let total = max(currentCache.pages.count, displayCurrent)
                                     let percentage = Int((Double(displayCurrent) / Double(total)) * 100)
                                     Text("\(displayCurrent)/\(total) (\(percentage)%)")
+                                } else if let range = pageRange(for: currentPageIndex),
+                                          currentCache.attributedText.length > 0 {
+                                    let progress = Double(NSMaxRange(range)) / Double(currentCache.attributedText.length)
+                                    let percentage = Int(progress * 100)
+                                    Text("\(displayCurrent)/\(currentCache.pages.count)+ (\(percentage)%)")
                                 } else {
                                     Text("\(displayCurrent)/\(currentCache.pages.count)+")
                                 }
@@ -1064,7 +1069,7 @@ struct ReadingView: View {
 
     @ViewBuilder private var controlBar: some View {
         if ttsManager.isPlaying && !contentSentences.isEmpty {
-            TTSControlBar(ttsManager: ttsManager, currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, onPreviousChapter: previousChapter, onNextChapter: nextChapter, onShowChapterList: { showChapterList = true })
+            TTSControlBar(ttsManager: ttsManager, currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, onPreviousChapter: previousChapter, onNextChapter: nextChapter, onShowChapterList: { showChapterList = true }, onTogglePlayPause: toggleTTS)
         } else {
             NormalControlBar(currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, onPreviousChapter: previousChapter, onNextChapter: nextChapter, onShowChapterList: { showChapterList = true }, onToggleTTS: toggleTTS, onShowFontSettings: { showFontSettings = true })
         }
@@ -1578,6 +1583,7 @@ struct TTSControlBar: View {
     let onPreviousChapter: () -> Void
     let onNextChapter: () -> Void
     let onShowChapterList: () -> Void
+    let onTogglePlayPause: () -> Void
     
     var body: some View {
         VStack(spacing: 12) {
@@ -1628,9 +1634,7 @@ struct TTSControlBar: View {
                 }
                 
                 Spacer()
-                Button(action: {
-                    if ttsManager.isPaused { ttsManager.resume() } else { ttsManager.pause() }
-                }) {
+                Button(action: { onTogglePlayPause() }) {
                     VStack(spacing: 2) {
                         Image(systemName: ttsManager.isPaused ? "play.circle.fill" : "pause.circle.fill")
                             .font(.system(size: 36)).foregroundColor(.blue)
