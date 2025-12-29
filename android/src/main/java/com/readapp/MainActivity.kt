@@ -334,7 +334,7 @@ sealed class Screen(val route: String) {
         fun createRoute(id: String?) = if (id != null) "source_edit?id=$id" else "source_edit"
     }
     object BookSearch : Screen("book_search/{bookSourceJson}") {
-        fun createRoute(bookSource: BookSource): String {
+        fun createRoute(bookSource: com.readapp.data.model.BookSource): String {
             val json = Gson().toJson(bookSource)
             val encodedJson = URLEncoder.encode(json, UTF_8.name())
             return "book_search/$encodedJson"

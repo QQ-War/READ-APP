@@ -28,7 +28,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.readapp.R
 import com.readapp.data.model.Book
 import com.readapp.viewmodel.BookSearchUiState
 import com.readapp.viewmodel.BookSearchViewModel
@@ -134,8 +133,8 @@ fun BookSearchItem(book: Book, onAdd: () -> Unit) {
             AsyncImage(
                 model = book.coverUrl,
                 contentDescription = book.name,
-                placeholder = painterResource(id = R.drawable.ic_launcher_background),
-                error = painterResource(id = R.drawable.ic_launcher_background),
+                placeholder = painterResource(id = android.R.drawable.ic_menu_report_image),
+                error = painterResource(id = android.R.drawable.ic_menu_report_image),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(60.dp, 80.dp)
             )
