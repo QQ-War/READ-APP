@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - feature/ios-progressive-pagination
+      - test
     paths:
       - "ios/**"
       - ".github/workflows/ios.yml"
