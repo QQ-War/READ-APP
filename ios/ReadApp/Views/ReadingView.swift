@@ -341,7 +341,7 @@ struct ReadingView: View {
                     }
                     return
                 }
-                if ttsManager.isPlaying && !isAutoFlipping {
+                if ttsManager.isPlaying && !ttsManager.isPaused && !isAutoFlipping {
                     if !preferences.lockPageOnTTS {
                         ttsManager.stop()
                         startTTS(pageIndexOverride: newIndex)

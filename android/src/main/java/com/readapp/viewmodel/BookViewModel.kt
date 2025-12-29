@@ -123,6 +123,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val isPlayingUi: StateFlow<Boolean> = combine(_isPlaying, _keepPlaying) { playing, keep ->
         playing || keep
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val _isPaused = MutableStateFlow(false)
+    val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
     private val _showTtsControls = MutableStateFlow(false)
     val showTtsControls: StateFlow<Boolean> = _showTtsControls.asStateFlow()
 
@@ -241,6 +243,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private inner class ControllerListener : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
+            _isPaused.value = !isPlaying && _currentParagraphIndex.value >= 0
             if (isPlaying) {
                 _showTtsControls.value = true
             }
@@ -271,10 +274,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         if (currentMediaController.isPlaying) {
             _keepPlaying.value = false
+            _isPaused.value = true
             pausePlayback("toggle")
         } else if (_currentParagraphIndex.value >= 0) {
             _keepPlaying.value = true
             _showTtsControls.value = true
+            _isPaused.value = false
             currentMediaController.play()
         } else {
             startPlayback()
@@ -319,6 +324,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _currentParagraphStartOffset.value = normalizedOffset
 
             ReadAudioService.startService(appContext) // Ensure service is running
+            _isPaused.value = false
             speakParagraph(_currentParagraphIndex.value)
             observeProgress()
         }
@@ -522,6 +528,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
         _keepPlaying.value = false
         _showTtsControls.value = false
+        _isPaused.value = false
         startOffsetOverrideIndex = null
         startOffsetOverrideChars = 0
         _currentParagraphStartOffset.value = 0

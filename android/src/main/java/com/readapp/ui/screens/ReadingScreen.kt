@@ -71,6 +71,7 @@ fun ReadingScreen(
     onNavigateBack: () -> Unit,
     // TTS 鐩稿叧鐘舵€?
     isPlaying: Boolean = false,
+    isPaused: Boolean = false,
     currentPlayingParagraph: Int = -1,  // 当前播放的段落索引
     currentParagraphStartOffset: Int = 0,
     playbackProgress: Float = 0f,
@@ -401,7 +402,7 @@ fun ReadingScreen(
                                         currentPageStartIndex = pageInfo.startParagraphIndex
                                         currentPageStartOffset = pageInfo.startOffsetInParagraph
 
-                                        if (isPlaying && !lockPageOnTTS && !isAutoScrolling && isScrolling) {
+                                        if (isPlaying && !isPaused && !lockPageOnTTS && !isAutoScrolling && isScrolling) {
                                             if (!lockPageOnTTS) {
                                                 onStopListening()
                                                 onStartListening(pageInfo.startParagraphIndex, pageInfo.startOffsetInParagraph)
