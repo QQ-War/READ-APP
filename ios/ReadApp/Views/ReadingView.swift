@@ -340,18 +340,20 @@ struct ReadingView: View {
                         
                         if !showUIControls && currentCache.pages.count > 0 {
                             let displayCurrent = currentPageIndex + 1
-                            if currentCache.isFullyPaginated {
-                                let total = max(currentCache.pages.count, displayCurrent)
-                                let percentage = Int((Double(displayCurrent) / Double(total)) * 100)
-                                Text("\(displayCurrent)/\(total) (\(percentage)%)")
-                            } else {
-                                Text("\(displayCurrent)/\(currentCache.pages.count)+")
+                            Group {
+                                if currentCache.isFullyPaginated {
+                                    let total = max(currentCache.pages.count, displayCurrent)
+                                    let percentage = Int((Double(displayCurrent) / Double(total)) * 100)
+                                    Text("\(displayCurrent)/\(total) (\(percentage)%)")
+                                } else {
+                                    Text("\(displayCurrent)/\(currentCache.pages.count)+")
+                                }
                             }
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .padding(.trailing, 8)
-                                .padding(.bottom, 2)
-                                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.trailing, 8)
+                            .padding(.bottom, 2)
+                            .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                         }
                     }
                     .frame(width: availableSize.width, height: availableSize.height)
