@@ -16,8 +16,8 @@ struct Book: Codable, Identifiable {
     let name: String?
     let author: String?
     let bookUrl: String?
-    let origin: String?
-    let originName: String?
+    var origin: String?
+    var originName: String?
     let coverUrl: String?
     let intro: String?
     let durChapterTitle: String?

@@ -6,6 +6,8 @@ struct SourceListView: View {
     // For specific source search via swipe action
     @State private var showingBookSearchView = false
     @State private var selectedBookSource: BookSource?
+    @State private var showAddResultAlert = false
+    @State private var addResultMessage = ""
 
     var body: some View {
         VStack {
@@ -25,6 +27,11 @@ struct SourceListView: View {
                     Image(systemName: "plus")
                 }
             }
+        }
+        .alert("加入书架", isPresented: $showAddResultAlert) {
+            Button("确定", role: .cancel) { }
+        } message: {
+            Text(addResultMessage)
         }
         .sheet(isPresented: $showingBookSearchView) {
             if let bookSource = selectedBookSource {
@@ -108,11 +115,11 @@ struct SourceListView: View {
                         // or handle errors appropriately
                         do {
                             try await APIService.shared.saveBook(book: book)
-                            // Optionally, show a success message
-                            print("Book \(book.name ?? "") added successfully!")
+                            addResultMessage = "已加入书架"
+                            showAddResultAlert = true
                         } catch {
-                            // Optionally, show an error message
-                            print("Failed to add book \(book.name ?? ""): \(error.localizedDescription)")
+                            addResultMessage = "加入失败: \(error.localizedDescription)"
+                            showAddResultAlert = true
                         }
                     }
                 }

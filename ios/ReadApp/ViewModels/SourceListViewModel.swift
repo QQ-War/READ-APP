@@ -116,6 +116,8 @@ class SourceListViewModel: ObservableObject {
                     let booksWithSource = books.map { book -> Book in
                         var mutableBook = book
                         mutableBook.sourceDisplayName = sourceName
+                        mutableBook.origin = source.bookSourceUrl
+                        mutableBook.originName = source.bookSourceName
                         return mutableBook
                     }
                     await MainActor.run {
