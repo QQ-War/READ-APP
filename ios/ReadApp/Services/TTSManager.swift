@@ -1007,6 +1007,7 @@ class TTSManager: NSObject, ObservableObject {
         logger.log("鏀跺埌鏆傚仠鍛戒护 - isPlaying: \(isPlaying), isPaused: \(isPaused), audioPlayer: \(audioPlayer != nil)", category: "TTS")
         
         if isPlaying && !isPaused {
+            isPaused = true
             if let player = audioPlayer {
                 player.pause()
                 isPaused = true
