@@ -58,6 +58,8 @@ struct ReadingView: View {
     @State private var pendingFlipId: UUID = UUID()
     @State private var isTTSSyncingPage = false
     @State private var suppressTTSSync = false
+    @State private var pausedChapterIndex: Int?
+    @State private var pausedPageIndex: Int?
     
     // Pagination Cache for seamless transition
     @State private var isAutoFlipping: Bool = false
@@ -892,7 +894,21 @@ struct ReadingView: View {
     
     private func toggleTTS() {
         if ttsManager.isPlaying {
-            if ttsManager.isPaused { ttsManager.resume() } else { ttsManager.pause() }
+            if ttsManager.isPaused {
+                if preferences.readingMode == .horizontal,
+                   let pausedChapterIndex,
+                   let pausedPageIndex,
+                   (pausedChapterIndex != currentChapterIndex || pausedPageIndex != currentPageIndex) {
+                    ttsManager.stop()
+                    startTTS(pageIndexOverride: currentPageIndex)
+                } else {
+                    ttsManager.resume()
+                }
+            } else {
+                pausedChapterIndex = currentChapterIndex
+                pausedPageIndex = currentPageIndex
+                ttsManager.pause()
+            }
         } else {
             startTTS()
         }

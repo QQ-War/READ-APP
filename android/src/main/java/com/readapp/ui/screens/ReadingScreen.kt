@@ -96,6 +96,8 @@ fun ReadingScreen(
     var showFontDialog by remember { mutableStateOf(false) }
     var currentPageStartIndex by remember { mutableStateOf(0) }
     var currentPageStartOffset by remember { mutableStateOf(0) }
+    var pausedPageStartIndex by remember { mutableStateOf<Int?>(null) }
+    var pausedPageStartOffset by remember { mutableStateOf<Int?>(null) }
     var pendingJumpToLastPageTarget by remember { mutableStateOf<Int?>(null) }
     var lastHandledChapterIndex by remember { mutableStateOf(-1) }
     val scrollState = rememberLazyListState()
@@ -552,7 +554,35 @@ fun ReadingScreen(
                 },
                 onPlayPause = {
                     if (isPlaying) {
+                        val pageStart = if (readingMode == ReadingMode.Horizontal) {
+                            resolveCurrentPageStart?.invoke()?.first ?: currentPageStartIndex
+                        } else {
+                            (scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0)
+                        }
+                        val pageStartOffset = if (readingMode == ReadingMode.Horizontal) {
+                            resolveCurrentPageStart?.invoke()?.second ?: currentPageStartOffset
+                        } else {
+                            0
+                        }
+                        pausedPageStartIndex = pageStart
+                        pausedPageStartOffset = pageStartOffset
                         onPlayPauseClick()
+                    } else if (isPaused) {
+                        val pageStart = if (readingMode == ReadingMode.Horizontal) {
+                            resolveCurrentPageStart?.invoke()?.first ?: currentPageStartIndex
+                        } else {
+                            (scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0)
+                        }
+                        val pageStartOffset = if (readingMode == ReadingMode.Horizontal) {
+                            resolveCurrentPageStart?.invoke()?.second ?: currentPageStartOffset
+                        } else {
+                            0
+                        }
+                        if (pausedPageStartIndex == pageStart && pausedPageStartOffset == pageStartOffset) {
+                            onPlayPauseClick()
+                        } else {
+                            onStartListening(pageStart, pageStartOffset)
+                        }
                     } else {
                         val pageStart = if (readingMode == ReadingMode.Horizontal) {
                             resolveCurrentPageStart?.invoke()?.first ?: currentPageStartIndex
