@@ -22,17 +22,22 @@ class SourceListViewModel: ObservableObject {
     }
 
     init() {
-        fetchSources()
-        
+        Task { @MainActor in
+            self.fetchSources()
+        }
+
         $searchText
             .debounce(for: .milliseconds(800), scheduler: RunLoop.main)
             .removeDuplicates()
             .sink { [weak self] searchText in
+                guard let self else { return }
                 if searchText.isEmpty {
-                    self?.searchResults = []
-                    self?.isSearching = false
+                    self.searchResults = []
+                    self.isSearching = false
                 } else {
-                    self?.performGlobalSearch()
+                    Task { @MainActor in
+                        self.performGlobalSearch()
+                    }
                 }
             }
             .store(in: &cancellables)

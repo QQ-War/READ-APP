@@ -41,7 +41,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.readapp.R
 import com.readapp.data.model.Book
 import com.readapp.data.model.BookSource
 import com.readapp.viewmodel.SourceViewModel
@@ -258,8 +257,8 @@ fun BookSearchResultItem(book: Book, onAdd: () -> Unit) {
             AsyncImage(
                 model = book.coverUrl,
                 contentDescription = book.name,
-                placeholder = painterResource(id = R.drawable.ic_launcher_background), // Fallback image
-                error = painterResource(id = R.drawable.ic_launcher_background), // Fallback image
+                placeholder = painterResource(id = android.R.drawable.ic_menu_report_image), // Fallback image
+                error = painterResource(id = android.R.drawable.ic_menu_report_image), // Fallback image
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(60.dp, 80.dp)
             )
