@@ -99,23 +99,23 @@ class SourceListViewModel: ObservableObject {
         searchResults = []
         
         Task {
-            await withTaskGroup(of: (String, [Book]).self) { group in
+            await withTaskGroup(of: (BookSource, [Book]).self) { group in
                 for source in enabledSources {
                     group.addTask {
                         do {
                             let books = try await APIService.shared.searchBook(keyword: self.searchText, bookSourceUrl: source.bookSourceUrl)
-                            return (source.bookSourceName, books)
+                            return (source, books)
                         } catch {
                             // Return empty array on failure for this source
-                            return (source.bookSourceName, [])
+                            return (source, [])
                         }
                     }
                 }
                 
-                for await (sourceName, books) in group {
+                for await (source, books) in group {
                     let booksWithSource = books.map { book -> Book in
                         var mutableBook = book
-                        mutableBook.sourceDisplayName = sourceName
+                        mutableBook.sourceDisplayName = source.bookSourceName
                         mutableBook.origin = source.bookSourceUrl
                         mutableBook.originName = source.bookSourceName
                         return mutableBook
