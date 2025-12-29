@@ -256,6 +256,12 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(pageHorizontalMargin, forKey: "pageHorizontalMargin")
         }
     }
+
+    @Published var pageInterSpacing: CGFloat {
+        didSet {
+            UserDefaults.standard.set(pageInterSpacing, forKey: "pageInterSpacing")
+        }
+    }
     
     @Published var lockPageOnTTS: Bool {
         didSet {
@@ -300,6 +306,9 @@ class UserPreferences: ObservableObject {
         
         let savedMargin = CGFloat(UserDefaults.standard.float(forKey: "pageHorizontalMargin"))
         self.pageHorizontalMargin = savedMargin == 0 ? 6 : savedMargin
+
+        let savedInterSpacing = CGFloat(UserDefaults.standard.float(forKey: "pageInterSpacing"))
+        self.pageInterSpacing = savedInterSpacing == 0 ? 12 : savedInterSpacing
         
         self.lockPageOnTTS = UserDefaults.standard.bool(forKey: "lockPageOnTTS")
         

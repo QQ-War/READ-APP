@@ -318,16 +318,17 @@ struct ReadingView: View {
                 
                 if availableSize.width > 0 && availableSize.height > 0 {
                     ZStack(alignment: .bottomTrailing) {
-                        ReadPageViewController(
-                            snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
-                            prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
-                            nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
-                            currentPageIndex: $currentPageIndex,
-                            isAtChapterStart: currentPageIndex == 0,
-                            isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
-                            isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
-                            onTransitioningChanged: { transitioning in
-                                isPageTransitioning = transitioning
+                            ReadPageViewController(
+                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
+                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
+                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
+                                currentPageIndex: $currentPageIndex,
+                                pageSpacing: preferences.pageInterSpacing,
+                                isAtChapterStart: currentPageIndex == 0,
+                                isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
+                                isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
+                                onTransitioningChanged: { transitioning in
+                                    isPageTransitioning = transitioning
                             },
                             onTapMiddle: { showUIControls.toggle() },
                             onTapLeft: {
@@ -342,8 +343,9 @@ struct ReadingView: View {
                                 isAutoFlipping = true
                                 handleChapterSwitch(offset: offset)
                             }
-                        )
-                        .frame(width: contentSize.width, height: contentSize.height)
+                            )
+                            .id(preferences.pageInterSpacing)
+                            .frame(width: contentSize.width, height: contentSize.height)
                         
                         if !showUIControls && currentCache.pages.count > 0 {
                             let displayCurrent = currentPageIndex + 1
@@ -1088,6 +1090,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
     var nextSnapshot: PageSnapshot?
     
     @Binding var currentPageIndex: Int
+    var pageSpacing: CGFloat
     var isAtChapterStart: Bool
     var isAtChapterEnd: Bool
     var isScrollEnabled: Bool
@@ -1098,10 +1101,15 @@ struct ReadPageViewController: UIViewControllerRepresentable {
     var onChapterChange: (Int) -> Void // offset: -1 or 1
 
     func makeUIViewController(context: Context) -> UIPageViewController {
-        let pvc = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: nil)
+        let pvc = UIPageViewController(
+            transitionStyle: .scroll,
+            navigationOrientation: .horizontal,
+            options: [UIPageViewController.OptionsKey.interPageSpacing: pageSpacing]
+        )
         // pvc.dataSource is set in updateUIViewController
         pvc.delegate = context.coordinator
         context.coordinator.pageViewController = pvc
+        pvc.view.backgroundColor = UIColor.secondarySystemBackground
         
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         pvc.view.addGestureRecognizer(tap)
@@ -1323,6 +1331,7 @@ class ReadContentViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.backgroundColor = UIColor.systemBackground
         view.addSubview(textView)
         NSLayoutConstraint.activate([
             textView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -1736,6 +1745,12 @@ struct FontSizeSheet: View {
                     Text("\u{5DE6}\u{53F3}\u{8FB9}\u{8DDD}: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
                         .font(.headline)
                     Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
+                }
+
+                VStack(spacing: 8) {
+                    Text("\u{7FFB}\u{9875}\u{95F4}\u{8DDD}: \(String(format: "%.0f", preferences.pageInterSpacing))")
+                        .font(.headline)
+                    Slider(value: $preferences.pageInterSpacing, in: 0...30, step: 1)
                 }
 
                 Toggle("播放时锁定翻页", isOn: $preferences.lockPageOnTTS)
