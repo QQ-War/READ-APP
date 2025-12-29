@@ -55,7 +55,7 @@ struct ReadingView: View {
     @State private var pausedChapterIndex: Int?
     @State private var pausedPageIndex: Int?
     @State private var needsTTSRestartAfterPause = false
-    @State private var preparedAdjacentChapterIndex: Int?
+    @State private var lastAdjacentPrepareAt: TimeInterval = 0
     
     // Pagination Cache for seamless transition
     @State private var isAutoFlipping: Bool = false
@@ -294,6 +294,9 @@ struct ReadingView: View {
                     return
                 }
                 ensurePageBuffer(around: newIndex)
+                if newIndex <= 1 || newIndex >= max(0, currentCache.pages.count - 2) {
+                    triggerAdjacentPrefetchIfNeeded()
+                }
             }
         }
     }
@@ -465,11 +468,7 @@ struct ReadingView: View {
             isFullyPaginated: isFully
         )
         ensurePageBuffer(around: currentPageIndex)
-        if preparedAdjacentChapterIndex != currentChapterIndex,
-           (prevCache.pages.isEmpty || nextCache.pages.isEmpty) {
-            preparedAdjacentChapterIndex = currentChapterIndex
-            prepareAdjacentChapters(for: currentChapterIndex)
-        }
+        triggerAdjacentPrefetchIfNeeded(force: true)
     }
 
     private func pageIndexForChar(_ index: Int, in pages: [PaginatedPage]) -> Int? {
@@ -482,6 +481,17 @@ struct ReadingView: View {
 
     private func ensurePageBuffer(around index: Int) {
         ensurePages(upTo: index + prefetchPageBatch)
+    }
+
+    private func triggerAdjacentPrefetchIfNeeded(force: Bool = false) {
+        guard pageSize.width > 0, pageSize.height > 0 else { return }
+        let now = Date().timeIntervalSince1970
+        if !force, now - lastAdjacentPrepareAt < 1.0 { return }
+        let needsPrev = currentChapterIndex > 0 && prevCache.pages.isEmpty
+        let needsNext = currentChapterIndex < chapters.count - 1 && nextCache.pages.isEmpty
+        guard needsPrev || needsNext else { return }
+        lastAdjacentPrepareAt = now
+        prepareAdjacentChapters(for: currentChapterIndex)
     }
 
     private func ensurePages(upTo index: Int) {
@@ -911,7 +921,7 @@ struct ReadingView: View {
         prevCache = .empty
         nextCache = .empty
         currentPageIndex = 0
-        preparedAdjacentChapterIndex = nil
+        lastAdjacentPrepareAt = 0
     }
     
     private func previousChapter() {
