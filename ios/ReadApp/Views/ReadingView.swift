@@ -1279,14 +1279,9 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         context.coordinator.pageViewController = pvc
         pvc.view.backgroundColor = UIColor.systemBackground
         
-        let separator = UIView(frame: .zero)
-        separator.backgroundColor = UIColor.separator
-        separator.isHidden = true
-        pvc.view.addSubview(separator)
-        context.coordinator.separatorView = separator
-        context.coordinator.attachScrollView(from: pvc.view)
-        
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        tap.cancelsTouchesInView = false
+        tap.delegate = context.coordinator
         pvc.view.addGestureRecognizer(tap)
         
         return pvc
@@ -1301,65 +1296,30 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         } else {
             pvc.dataSource = nil
         }
-        let shouldHideSeparator = pageSpacing <= 0.1 || !context.coordinator.isAnimating
-        context.coordinator.separatorView?.isHidden = shouldHideSeparator
-        if !shouldHideSeparator {
-            context.coordinator.updateSeparatorPosition()
-        }
-        
         context.coordinator.updateSnapshotIfNeeded(snapshot, currentPageIndex: currentPageIndex)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
+    class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate, UIGestureRecognizerDelegate {
         var parent: ReadPageViewController
         var isAnimating = false
         private var snapshot: PageSnapshot?
         private var pendingSnapshot: PageSnapshot?
         weak var pageViewController: UIPageViewController?
-        weak var separatorView: UIView?
-        private weak var scrollView: UIScrollView?
-        private var displayLink: CADisplayLink?
-
+        
         init(_ parent: ReadPageViewController) { self.parent = parent }
-
-        func attachScrollView(from container: UIView) {
-            if let scroll = container.subviews.compactMap({ $0 as? UIScrollView }).first {
-                scrollView = scroll
+        
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let view = touch.view else { return true }
+            var node: UIView? = view
+            while let current = node {
+                if current is UITextView {
+                    return false
+                }
+                node = current.superview
             }
-        }
-
-        func updateSeparatorPosition() {
-            guard let pvc = pageViewController,
-                  let scroll = scrollView,
-                  let separator = separatorView else { return }
-            let gapX = scroll.bounds.width + parent.pageSpacing / 2
-            let visibleX = gapX - scroll.contentOffset.x
-            separator.frame = CGRect(
-                x: visibleX - 0.25,
-                y: 0,
-                width: 0.5,
-                height: pvc.view.bounds.height
-            )
-        }
-
-        private func startSeparatorTracking() {
-            guard displayLink == nil else { return }
-            let link = CADisplayLink(target: self, selector: #selector(handleSeparatorTick))
-            link.add(to: .main, forMode: .common)
-            displayLink = link
-        }
-
-        private func stopSeparatorTracking() {
-            displayLink?.invalidate()
-            displayLink = nil
-        }
-
-        @objc private func handleSeparatorTick() {
-            if parent.pageSpacing > 0.1 {
-                updateSeparatorPosition()
-            }
+            return true
         }
         
         func updateSnapshotIfNeeded(_ newSnapshot: PageSnapshot, currentPageIndex: Int) {
@@ -1548,11 +1508,6 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         
         func pageViewController(_ pvc: UIPageViewController, willTransitionTo pendingViewControllers: [UIViewController]) {
             isAnimating = true
-            if parent.pageSpacing > 0.1 {
-                separatorView?.isHidden = false
-                updateSeparatorPosition()
-                startSeparatorTracking()
-            }
             parent.onTransitioningChanged(true)
         }
 
@@ -1569,8 +1524,6 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                 }
             }
             isAnimating = false
-            separatorView?.isHidden = true
-            stopSeparatorTracking()
             parent.onTransitioningChanged(false)
             if let nextSnapshot = pendingSnapshot {
                 snapshot = nextSnapshot
