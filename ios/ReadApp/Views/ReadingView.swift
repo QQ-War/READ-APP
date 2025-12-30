@@ -1343,15 +1343,11 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         init(_ parent: ReadPageViewController) { self.parent = parent }
         
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            guard let view = touch.view else { return true }
-            var node: UIView? = view
-            while let current = node {
-                if current is UITextView {
-                    return false
-                }
-                node = current.superview
-            }
-            return true
+            true
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            true
         }
         
         func updateSnapshotIfNeeded(_ newSnapshot: PageSnapshot, currentPageIndex: Int) {
