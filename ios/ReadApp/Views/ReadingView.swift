@@ -17,6 +17,12 @@ private struct ChapterCache {
 }
 
 // MARK: - ReadingView
+enum ReaderTapLocation {
+    case left
+    case right
+    case middle
+}
+
 struct ReadingView: View {
     let book: Book
     @Environment(\.dismiss) private var dismiss
@@ -74,12 +80,6 @@ struct ReadingView: View {
     private let verticalPadding: CGFloat = 40
     private let initialPageBatch: Int = 12
     private let prefetchPageBatch: Int = 8
-
-    private enum ReaderTapLocation {
-        case left
-        case right
-        case middle
-    }
 
     init(book: Book) {
         self.book = book
@@ -383,6 +383,9 @@ struct ReadingView: View {
                                 },
                                 onTapRight: {
                                     handleReaderTap(location: .right)
+                                },
+                                onTapLocation: { location in
+                                    handleReaderTap(location: location)
                                 },
                                 onChapterChange: { offset in
                                     isAutoFlipping = true
@@ -1304,6 +1307,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
     var onTapMiddle: () -> Void
     var onTapLeft: () -> Void
     var onTapRight: () -> Void
+    var onTapLocation: (ReaderTapLocation) -> Void
     var onChapterChange: (Int) -> Void // offset: -1 or 1
     var onAdjacentPrefetch: (Int) -> Void // offset: -1 or 1
     var onAddReplaceRule: (String) -> Void
@@ -1318,13 +1322,6 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         pvc.delegate = context.coordinator
         context.coordinator.pageViewController = pvc
         pvc.view.backgroundColor = UIColor.systemBackground
-        
-        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
-        tap.cancelsTouchesInView = false
-        tap.delaysTouchesBegan = false
-        tap.delaysTouchesEnded = false
-        tap.delegate = context.coordinator
-        pvc.view.addGestureRecognizer(tap)
         
         return pvc
     }
@@ -1351,18 +1348,6 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         weak var pageViewController: UIPageViewController?
         
         init(_ parent: ReadPageViewController) { self.parent = parent }
-        
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            true
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            true
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            otherGestureRecognizer is UILongPressGestureRecognizer
-        }
         
         func updateSnapshotIfNeeded(_ newSnapshot: PageSnapshot, currentPageIndex: Int) {
             guard let store = newSnapshot.renderStore, !newSnapshot.pages.isEmpty else { return }
@@ -1401,7 +1386,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                     pageIndex: currentPageIndex,
                     renderStore: store,
                     chapterOffset: 0,
-                    onAddReplaceRule: parent.onAddReplaceRule
+                    onAddReplaceRule: parent.onAddReplaceRule,
+                    onTapLocation: parent.onTapLocation
                 )
                 pvc.setViewControllers([vc], direction: .forward, animated: false)
             }
@@ -1425,7 +1411,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                         pageIndex: index - 1,
                         renderStore: vc.renderStore,
                         chapterOffset: 0,
-                        onAddReplaceRule: parent.onAddReplaceRule
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
                     )
                 } else {
                     // Reached start of current chapter -> Try to fetch Previous Chapter
@@ -1435,7 +1422,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                             pageIndex: lastIndex,
                             renderStore: store,
                             chapterOffset: -1,
-                            onAddReplaceRule: parent.onAddReplaceRule
+                            onAddReplaceRule: parent.onAddReplaceRule,
+                            onTapLocation: parent.onTapLocation
                         )
                     }
                     parent.onAdjacentPrefetch(-1)
@@ -1449,7 +1437,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                         pageIndex: index - 1,
                         renderStore: vc.renderStore,
                         chapterOffset: -1,
-                        onAddReplaceRule: parent.onAddReplaceRule
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
                     )
                 }
                 // If we reach start of prev chapter, we stop (or could implement prev-prev)
@@ -1462,7 +1451,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                         pageIndex: index - 1,
                         renderStore: vc.renderStore,
                         chapterOffset: 1,
-                        onAddReplaceRule: parent.onAddReplaceRule
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
                     )
                 } else {
                     // Reached start of Next Chapter -> Go back to Current Chapter
@@ -1472,7 +1462,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                             pageIndex: lastIndex,
                             renderStore: current,
                             chapterOffset: 0,
-                            onAddReplaceRule: parent.onAddReplaceRule
+                            onAddReplaceRule: parent.onAddReplaceRule,
+                            onTapLocation: parent.onTapLocation
                         )
                     }
                 }
@@ -1493,7 +1484,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                         pageIndex: index + 1,
                         renderStore: vc.renderStore,
                         chapterOffset: 0,
-                        onAddReplaceRule: parent.onAddReplaceRule
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
                     )
                 } else {
                     // Reached end of current chapter -> Try to fetch Next Chapter
@@ -1502,7 +1494,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                             pageIndex: 0,
                             renderStore: store,
                             chapterOffset: 1,
-                            onAddReplaceRule: parent.onAddReplaceRule
+                            onAddReplaceRule: parent.onAddReplaceRule,
+                            onTapLocation: parent.onTapLocation
                         )
                     }
                     parent.onAdjacentPrefetch(1)
@@ -1517,7 +1510,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                         pageIndex: index + 1,
                         renderStore: vc.renderStore,
                         chapterOffset: 1,
-                        onAddReplaceRule: parent.onAddReplaceRule
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
                     )
                 }
             }
@@ -1530,7 +1524,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                         pageIndex: index + 1,
                         renderStore: vc.renderStore,
                         chapterOffset: -1,
-                        onAddReplaceRule: parent.onAddReplaceRule
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
                     )
                 } else {
                      // Reached end of Prev Chapter -> Go to Current Chapter
@@ -1539,7 +1534,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                              pageIndex: 0,
                              renderStore: current,
                              chapterOffset: 0,
-                             onAddReplaceRule: parent.onAddReplaceRule
+                             onAddReplaceRule: parent.onAddReplaceRule,
+                             onTapLocation: parent.onTapLocation
                          )
                      }
                 }
@@ -1574,11 +1570,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             }
         }
         
-        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            let x = gesture.location(in: gesture.view).x
-            let w = gesture.view?.bounds.width ?? 0
-            if x < w / 3 { parent.onTapLeft() } else if x > w * 2 / 3 { parent.onTapRight() } else { parent.onTapMiddle() }
-        }
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {}
     }
 }
 
@@ -1603,12 +1595,13 @@ final class SelectableTextView: UITextView {
 }
 
 // MARK: - Content View Controller
-class ReadContentViewController: UIViewController {
+class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     let pageIndex: Int
     let renderStore: TextKitRenderStore
     let textContainer: NSTextContainer
     let chapterOffset: Int // 0: Current, -1: Prev, 1: Next
     let onAddReplaceRule: ((String) -> Void)?
+    let onTapLocation: ((ReaderTapLocation) -> Void)?
     
     private lazy var textView: SelectableTextView = {
         let tv = SelectableTextView(frame: CGRect(origin: .zero, size: renderStore.size), textContainer: textContainer)
@@ -1623,12 +1616,13 @@ class ReadContentViewController: UIViewController {
         return tv
     }()
     
-    init(pageIndex: Int, renderStore: TextKitRenderStore, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?) {
+    init(pageIndex: Int, renderStore: TextKitRenderStore, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
         self.pageIndex = pageIndex
         self.renderStore = renderStore
         self.textContainer = renderStore.containers[pageIndex]
         self.chapterOffset = chapterOffset
         self.onAddReplaceRule = onAddReplaceRule
+        self.onTapLocation = onTapLocation
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -1650,19 +1644,37 @@ class ReadContentViewController: UIViewController {
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor), // No extra padding here
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
-        ensureTapWaitsForSelection()
+        attachTextTap()
     }
 
-    private func ensureTapWaitsForSelection() {
-        guard let longPress = textView.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) else { return }
-        var node: UIView? = view
-        while let current = node {
-            if let taps = current.gestureRecognizers?.compactMap({ $0 as? UITapGestureRecognizer }) {
-                for tap in taps {
-                    tap.require(toFail: longPress)
-                }
-            }
-            node = current.superview
+    private func attachTextTap() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTextTap(_:)))
+        tap.cancelsTouchesInView = false
+        tap.delaysTouchesBegan = false
+        tap.delaysTouchesEnded = false
+        tap.delegate = self
+        textView.addGestureRecognizer(tap)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        true
+    }
+
+    @objc private func handleTextTap(_ gesture: UITapGestureRecognizer) {
+        if textView.selectedRange.length > 0 {
+            textView.selectedRange = NSRange(location: textView.selectedRange.location, length: 0)
+            textView.resignFirstResponder()
+            return
+        }
+        let x = gesture.location(in: textView).x
+        let w = textView.bounds.width
+        guard w > 0 else { return }
+        if x < w / 3 {
+            onTapLocation?(.left)
+        } else if x > w * 2 / 3 {
+            onTapLocation?(.right)
+        } else {
+            onTapLocation?(.middle)
         }
     }
 }
