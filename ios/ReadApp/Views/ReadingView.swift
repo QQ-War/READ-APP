@@ -956,8 +956,12 @@ struct ReadingView: View {
     
     private func updateProcessedContent(from rawText: String) {
         let processedContent = applyReplaceRules(to: rawText)
-        currentContent = processedContent.isEmpty ? "章节内容为空" : processedContent
-        contentSentences = splitIntoParagraphs(currentContent)
+        let trimmedContent = processedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isEffectivelyEmpty = trimmedContent.isEmpty
+        let timestamp = String(format: "%.2f", Date().timeIntervalSince1970)
+        let content = isEffectivelyEmpty ? "章节内容为空\n\(timestamp)" : processedContent
+        currentContent = content
+        contentSentences = splitIntoParagraphs(content)
         applyResumeProgressIfNeeded(sentences: contentSentences)
     }
 
