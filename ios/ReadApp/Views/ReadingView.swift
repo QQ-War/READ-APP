@@ -88,13 +88,29 @@ struct ReadingView: View {
         self.book = book
         let serverIndex = book.durChapterIndex ?? 0
         let localProgress = book.bookUrl.flatMap { UserPreferences.shared.getReadingProgress(bookUrl: $0) }
-        let startIndex = localProgress?.chapterIndex ?? serverIndex
+        
+        // Sync logic: Compare timestamps
+        let serverTime = book.durChapterTime ?? 0
+        let localTime = Int64(localProgress?.timestamp ?? 0)
+        
+        let useServer = serverTime > localTime
+        
+        let startIndex = useServer ? serverIndex : (localProgress?.chapterIndex ?? serverIndex)
+        
         _currentChapterIndex = State(initialValue: startIndex)
         _lastTTSSentenceIndex = State(initialValue: nil)
         _pendingResumePos = State(initialValue: book.durChapterPos)
-        _pendingResumeLocalBodyIndex = State(initialValue: localProgress?.bodyCharIndex)
-        _pendingResumeLocalChapterIndex = State(initialValue: localProgress?.chapterIndex)
-        _pendingResumeLocalPageIndex = State(initialValue: localProgress?.pageIndex)
+        
+        if useServer {
+            _pendingResumeLocalBodyIndex = State(initialValue: nil)
+            _pendingResumeLocalChapterIndex = State(initialValue: nil)
+            _pendingResumeLocalPageIndex = State(initialValue: nil)
+        } else {
+            _pendingResumeLocalBodyIndex = State(initialValue: localProgress?.bodyCharIndex)
+            _pendingResumeLocalChapterIndex = State(initialValue: localProgress?.chapterIndex)
+            _pendingResumeLocalPageIndex = State(initialValue: localProgress?.pageIndex)
+        }
+        
         _initialServerChapterIndex = State(initialValue: serverIndex)
     }
 
@@ -988,8 +1004,13 @@ struct ReadingView: View {
             pendingResumeLocalChapterIndex = nil
             pendingResumeLocalPageIndex = nil
         } else {
-            let ratio = min(max(pos, 0.0), 1.0)
-            bodyIndex = Int(Double(bodyLength) * ratio)
+            // New logic: if pos > 1, treat as char index; else treat as ratio
+            if pos > 1.0 {
+                bodyIndex = Int(pos)
+            } else {
+                let ratio = min(max(pos, 0.0), 1.0)
+                bodyIndex = Int(Double(bodyLength) * ratio)
+            }
         }
         let clampedBodyIndex = max(0, min(bodyIndex, max(0, bodyLength - 1)))
         pendingResumeCharIndex = clampedBodyIndex + prefixLen
@@ -1242,19 +1263,23 @@ struct ReadingView: View {
         guard let bookUrl = book.bookUrl else { return }
         Task {
             let title = currentChapterIndex < chapters.count ? chapters[currentChapterIndex].title : nil
-            let ratio = currentProgressRatio() ?? 0.0
-            if let bodyIndex = currentProgressBodyCharIndex() {
+            let bodyIndex = currentProgressBodyCharIndex()
+            
+            if let index = bodyIndex {
                 preferences.saveReadingProgress(
                     bookUrl: bookUrl,
                     chapterIndex: currentChapterIndex,
                     pageIndex: currentPageIndex,
-                    bodyCharIndex: bodyIndex
+                    bodyCharIndex: index
                 )
             }
+            
+            // Send character index as 'pos' instead of ratio for better cross-platform compatibility
+            let posToSave = Double(bodyIndex ?? 0)
             try? await apiService.saveBookProgress(
                 bookUrl: bookUrl,
                 index: currentChapterIndex,
-                pos: ratio,
+                pos: posToSave,
                 title: title
             )
         }

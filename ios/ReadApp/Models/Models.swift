@@ -286,22 +286,24 @@ class UserPreferences: ObservableObject {
         }
     }
 
-    // 阅读进度记录：bookUrl -> (chapterIndex, pageIndex, bodyCharIndex)
-    private var readingProgress: [String: (Int, Int, Int)] {
+    // 阅读进度记录：bookUrl -> (chapterIndex, pageIndex, bodyCharIndex, timestamp)
+    private var readingProgress: [String: (Int, Int, Int, Int)] {
         get {
             if let data = UserDefaults.standard.data(forKey: "readingProgress"),
                let dict = try? JSONDecoder().decode([String: [Int]].self, from: data) {
                 return dict.mapValues {
-                    if $0.count >= 3 {
-                        return ($0[0], $0[1], $0[2])
+                    if $0.count >= 4 {
+                        return ($0[0], $0[1], $0[2], $0[3])
+                    } else if $0.count >= 3 {
+                        return ($0[0], $0[1], $0[2], 0)
                     }
-                    return ($0.first ?? 0, 0, $0.count > 1 ? $0[1] : 0)
+                    return ($0.first ?? 0, 0, $0.count > 1 ? $0[1] : 0, 0)
                 }
             }
             return [:]
         }
         set {
-            let dict = newValue.mapValues { [$0.0, $0.1, $0.2] }
+            let dict = newValue.mapValues { [$0.0, $0.1, $0.2, $0.3] }
             if let data = try? JSONEncoder().encode(dict) {
                 UserDefaults.standard.set(data, forKey: "readingProgress")
             }
@@ -320,11 +322,12 @@ class UserPreferences: ObservableObject {
 
     func saveReadingProgress(bookUrl: String, chapterIndex: Int, pageIndex: Int, bodyCharIndex: Int) {
         var progress = readingProgress
-        progress[bookUrl] = (chapterIndex, pageIndex, bodyCharIndex)
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+        progress[bookUrl] = (chapterIndex, pageIndex, bodyCharIndex, timestamp)
         readingProgress = progress
     }
     
-    func getReadingProgress(bookUrl: String) -> (chapterIndex: Int, pageIndex: Int, bodyCharIndex: Int)? {
+    func getReadingProgress(bookUrl: String) -> (chapterIndex: Int, pageIndex: Int, bodyCharIndex: Int, timestamp: Int)? {
         return readingProgress[bookUrl]
     }
     
