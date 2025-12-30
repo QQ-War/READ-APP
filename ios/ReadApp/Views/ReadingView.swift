@@ -112,6 +112,8 @@ struct ReadingView: View {
     // Pagination Cache for seamless transition
     @State private var isAutoFlipping: Bool = false
     @StateObject private var contentControllerCache = ReadContentViewControllerCache()
+    @State private var pendingBufferPageIndex: Int?
+    @State private var lastHandledPageIndex: Int?
 
     // Unified Insets for consistency
     private let horizontalPadding: CGFloat = 20
@@ -384,28 +386,7 @@ struct ReadingView: View {
                     return
                 }
 
-                ensurePageBuffer(around: newIndex)
-                if newIndex <= 1 || newIndex >= max(0, currentCache.pages.count - 2) {
-                    triggerAdjacentPrefetchIfNeeded()
-                }
-
-                if ttsManager.isPlaying && !ttsManager.isPaused && !isAutoFlipping {
-                    if !preferences.lockPageOnTTS {
-                        ttsManager.stop()
-                        startTTS(pageIndexOverride: newIndex)
-                    }
-                }
-                if ttsManager.isPlaying && ttsManager.isPaused {
-                    needsTTSRestartAfterPause = true
-                }
-                isAutoFlipping = false // Reset flag after use
-                let startIndex = pageStartSentenceIndex(for: newIndex)
-                if let startIndex = startIndex {
-                    lastTTSSentenceIndex = startIndex
-                }
-                if isPageTransitioning {
-                    return
-                }
+                handlePageIndexChange(newIndex)
             }
         }
     }
@@ -445,29 +426,29 @@ struct ReadingView: View {
                             isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
                             isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
                             onTransitioningChanged: { transitioning in
-                                isPageTransitioning = transitioning
+                                pageTransitionChanged(isTransitioning: transitioning)
                             },
                             onTapLocation: { location in
                                 handleReaderTap(location: location)
                             },
-                            onChapterChange: { offset in
-                                isAutoFlipping = true
-                                handleChapterSwitch(offset: offset)
-                            },
-                            onAdjacentPrefetch: { offset in
-                                if offset > 0 {
-                                    if nextCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
-                                } else if offset < 0 {
-                                    if prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
-                                }
-                            },
-                            onAddReplaceRule: { selectedText in
-                                presentReplaceRuleEditor(selectedText: selectedText)
-                            },
-                            currentContentViewController: currentVC,
-                            prevContentViewController: prevVC,
-                            nextContentViewController: nextVC
-                        )
+                onChapterChange: { offset in
+                    isAutoFlipping = true
+                    handleChapterSwitch(offset: offset)
+                },
+                onAdjacentPrefetch: { offset in
+                    if offset > 0 {
+                        if nextCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                    } else if offset < 0 {
+                        if prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                    }
+                },
+                onAddReplaceRule: { selectedText in
+                    presentReplaceRuleEditor(selectedText: selectedText)
+                },
+                currentContentViewController: currentVC,
+                prevContentViewController: prevVC,
+                nextContentViewController: nextVC
+            )
                             .id(preferences.pageInterSpacing)
                             .frame(width: contentSize.width, height: contentSize.height)
                         
@@ -739,6 +720,48 @@ struct ReadingView: View {
             goToNextPage()
         case .middle:
             showUIControls = true
+        }
+    }
+
+    private func handlePageIndexChange(_ newIndex: Int) {
+        pendingBufferPageIndex = newIndex
+        processPendingPageChangeIfReady()
+    }
+
+    private func processPendingPageChangeIfReady() {
+        guard !isPageTransitioning else { return }
+        guard let newIndex = pendingBufferPageIndex else { return }
+        if lastHandledPageIndex == newIndex {
+            return
+        }
+        pendingBufferPageIndex = nil
+        lastHandledPageIndex = newIndex
+
+        ensurePageBuffer(around: newIndex)
+        if newIndex <= 1 || newIndex >= max(0, currentCache.pages.count - 2) {
+            triggerAdjacentPrefetchIfNeeded()
+        }
+
+        if ttsManager.isPlaying && !ttsManager.isPaused && !isAutoFlipping {
+            if !preferences.lockPageOnTTS {
+                ttsManager.stop()
+                startTTS(pageIndexOverride: newIndex)
+            }
+        }
+        if ttsManager.isPlaying && ttsManager.isPaused {
+            needsTTSRestartAfterPause = true
+        }
+        isAutoFlipping = false
+
+        if let startIndex = pageStartSentenceIndex(for: newIndex) {
+            lastTTSSentenceIndex = startIndex
+        }
+    }
+
+    private func pageTransitionChanged(isTransitioning: Bool) {
+        isPageTransitioning = isTransitioning
+        if !isTransitioning {
+            processPendingPageChangeIfReady()
         }
     }
 
@@ -1223,6 +1246,8 @@ struct ReadingView: View {
         nextCache = .empty
         currentPageIndex = 0
         lastAdjacentPrepareAt = 0
+        pendingBufferPageIndex = nil
+        lastHandledPageIndex = nil
     }
     
     private func previousChapter() {
