@@ -918,7 +918,13 @@ struct ReadingView: View {
     }
 
     private func applyResumeProgressIfNeeded(sentences: [String]) {
-        guard !didApplyResumePos, let pos = pendingResumePos, pos > 0 else { return }
+        guard !didApplyResumePos else { return }
+        let hasLocalResume = pendingResumeLocalBodyIndex != nil
+            && pendingResumeLocalChapterIndex == currentChapterIndex
+        let pos = pendingResumePos ?? 0
+        if !hasLocalResume && pos <= 0 {
+            return
+        }
         let chapterTitle = chapters.indices.contains(currentChapterIndex)
             ? chapters[currentChapterIndex].title
             : nil
@@ -1313,6 +1319,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         tap.cancelsTouchesInView = false
+        tap.delaysTouchesBegan = false
+        tap.delaysTouchesEnded = false
         tap.delegate = context.coordinator
         pvc.view.addGestureRecognizer(tap)
         
@@ -1348,6 +1356,10 @@ struct ReadPageViewController: UIViewControllerRepresentable {
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
             true
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            otherGestureRecognizer is UILongPressGestureRecognizer
         }
         
         func updateSnapshotIfNeeded(_ newSnapshot: PageSnapshot, currentPageIndex: Int) {
