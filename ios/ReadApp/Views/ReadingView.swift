@@ -393,36 +393,43 @@ struct ReadingView: View {
                 
                 if availableSize.width > 0 && availableSize.height > 0 {
                     ZStack(alignment: .bottomTrailing) {
-                            ReadPageViewController(
-                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
-                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
-                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
-                                currentPageIndex: $currentPageIndex,
-                                pageSpacing: preferences.pageInterSpacing,
-                                isAtChapterStart: currentPageIndex == 0,
-                                isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
-                                isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
-                                onTransitioningChanged: { transitioning in
-                                    isPageTransitioning = transitioning
-                                },
-                                onTapLocation: { location in
-                                    handleReaderTap(location: location)
-                                },
-                                onChapterChange: { offset in
-                                    isAutoFlipping = true
-                                    handleChapterSwitch(offset: offset)
-                                },
-                                onAdjacentPrefetch: { offset in
-                                    if offset > 0 {
-                                        if nextCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
-                                    } else if offset < 0 {
-                                        if prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
-                                    }
-                                },
-                                onAddReplaceRule: { selectedText in
-                                    presentReplaceRuleEditor(selectedText: selectedText)
-                                }
-                            )
+            let currentVC = makeContentViewController(cache: currentCache, pageIndex: currentPageIndex, chapterOffset: 0)
+            let prevVC = makeContentViewController(cache: prevCache, pageIndex: max(0, prevCache.pages.count - 1), chapterOffset: -1)
+            let nextVC = makeContentViewController(cache: nextCache, pageIndex: 0, chapterOffset: 1)
+
+            ReadPageViewController(
+                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
+                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
+                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
+                currentContentViewController: currentVC,
+                prevContentViewController: prevVC,
+                nextContentViewController: nextVC,
+                currentPageIndex: $currentPageIndex,
+                pageSpacing: preferences.pageInterSpacing,
+                isAtChapterStart: currentPageIndex == 0,
+                isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
+                isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
+                onTransitioningChanged: { transitioning in
+                    isPageTransitioning = transitioning
+                },
+                onTapLocation: { location in
+                    handleReaderTap(location: location)
+                },
+                onChapterChange: { offset in
+                    isAutoFlipping = true
+                    handleChapterSwitch(offset: offset)
+                },
+                onAdjacentPrefetch: { offset in
+                    if offset > 0 {
+                        if nextCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                    } else if offset < 0 {
+                        if prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                    }
+                },
+                onAddReplaceRule: { selectedText in
+                    presentReplaceRuleEditor(selectedText: selectedText)
+                }
+            )
                             .id(preferences.pageInterSpacing)
                             .frame(width: contentSize.width, height: contentSize.height)
                         
@@ -695,6 +702,20 @@ struct ReadingView: View {
         case .middle:
             showUIControls = true
         }
+    }
+
+    private func makeContentViewController(cache: ChapterCache, pageIndex: Int, chapterOffset: Int) -> ReadContentViewController? {
+        guard let store = cache.store else { return nil }
+        guard pageIndex >= 0, pageIndex < store.containers.count else { return nil }
+        return ReadContentViewController(
+            pageIndex: pageIndex,
+            renderStore: store,
+            chapterOffset: chapterOffset,
+            onAddReplaceRule: { selectedText in
+                presentReplaceRuleEditor(selectedText: selectedText)
+            },
+            onTapLocation: handleReaderTap
+        )
     }
 
     private func scheduleRepaginate(in size: CGSize) {
@@ -1386,6 +1407,9 @@ struct ReadPageViewController: UIViewControllerRepresentable {
     var onChapterChange: (Int) -> Void // offset: -1 or 1
     var onAdjacentPrefetch: (Int) -> Void // offset: -1 or 1
     var onAddReplaceRule: (String) -> Void
+    var currentContentViewController: ReadContentViewController?
+    var prevContentViewController: ReadContentViewController?
+    var nextContentViewController: ReadContentViewController?
 
     func makeUIViewController(context: Context) -> UIPageViewController {
         let pvc = UIPageViewController(
@@ -1403,7 +1427,10 @@ struct ReadPageViewController: UIViewControllerRepresentable {
 
     func updateUIViewController(_ pvc: UIPageViewController, context: Context) {
         context.coordinator.parent = self
-        
+        context.coordinator.currentContentViewController = currentContentViewController
+        context.coordinator.prevContentViewController = prevContentViewController
+        context.coordinator.nextContentViewController = nextContentViewController
+
         // Dynamically enable/disable swipe
         if isScrollEnabled {
             pvc.dataSource = context.coordinator
@@ -1421,6 +1448,9 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         private var snapshot: PageSnapshot?
         private var pendingSnapshot: PageSnapshot?
         weak var pageViewController: UIPageViewController?
+        var currentContentViewController: ReadContentViewController?
+        var prevContentViewController: ReadContentViewController?
+        var nextContentViewController: ReadContentViewController?
         
         init(_ parent: ReadPageViewController) { self.parent = parent }
         
@@ -1457,13 +1487,21 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             // Set new VC
             let pageCount = activeSnapshot.renderStore?.containers.count ?? activeSnapshot.pages.count
             if currentPageIndex < pageCount {
-                let vc = ReadContentViewController(
-                    pageIndex: currentPageIndex,
-                    renderStore: store,
-                    chapterOffset: 0,
-                    onAddReplaceRule: parent.onAddReplaceRule,
-                    onTapLocation: parent.onTapLocation
-                )
+                let vc: ReadContentViewController
+                if let custom = currentContentViewController,
+                   custom.chapterOffset == 0,
+                   custom.pageIndex == currentPageIndex,
+                   custom.renderStore === store {
+                    vc = custom
+                } else {
+                    vc = ReadContentViewController(
+                        pageIndex: currentPageIndex,
+                        renderStore: store,
+                        chapterOffset: 0,
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
+                    )
+                }
                 pvc.setViewControllers([vc], direction: .forward, animated: false)
             }
         }
@@ -1491,6 +1529,10 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                     )
                 } else {
                     // Reached start of current chapter -> Try to fetch Previous Chapter
+                    if let prevVC = parent.prevContentViewController,
+                       prevVC.chapterOffset == -1 {
+                        return prevVC
+                    }
                     if let prev = parent.prevSnapshot, let store = prev.renderStore, !prev.pages.isEmpty {
                         let lastIndex = prev.pages.count - 1
                         return ReadContentViewController(
@@ -1564,15 +1606,19 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                     )
                 } else {
                     // Reached end of current chapter -> Try to fetch Next Chapter
-                    if let next = parent.nextSnapshot, let store = next.renderStore, !next.pages.isEmpty {
-                        return ReadContentViewController(
-                            pageIndex: 0,
-                            renderStore: store,
-                            chapterOffset: 1,
-                            onAddReplaceRule: parent.onAddReplaceRule,
-                            onTapLocation: parent.onTapLocation
-                        )
-                    }
+                        if let nextVC = parent.nextContentViewController,
+                           nextVC.chapterOffset == 1 {
+                            return nextVC
+                        }
+                        if let next = parent.nextSnapshot, let store = next.renderStore, !next.pages.isEmpty {
+                            return ReadContentViewController(
+                                pageIndex: 0,
+                                renderStore: store,
+                                chapterOffset: 1,
+                                onAddReplaceRule: parent.onAddReplaceRule,
+                                onTapLocation: parent.onTapLocation
+                            )
+                        }
                     parent.onAdjacentPrefetch(1)
                 }
             }
