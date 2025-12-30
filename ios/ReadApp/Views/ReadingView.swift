@@ -401,9 +401,6 @@ struct ReadingView: View {
                 snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
                 prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
                 nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
-                currentContentViewController: currentVC,
-                prevContentViewController: prevVC,
-                nextContentViewController: nextVC,
                 currentPageIndex: $currentPageIndex,
                 pageSpacing: preferences.pageInterSpacing,
                 isAtChapterStart: currentPageIndex == 0,
@@ -428,7 +425,10 @@ struct ReadingView: View {
                 },
                 onAddReplaceRule: { selectedText in
                     presentReplaceRuleEditor(selectedText: selectedText)
-                }
+                },
+                currentContentViewController: currentVC,
+                prevContentViewController: prevVC,
+                nextContentViewController: nextVC
             )
                             .id(preferences.pageInterSpacing)
                             .frame(width: contentSize.width, height: contentSize.height)
