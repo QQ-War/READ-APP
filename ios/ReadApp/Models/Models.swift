@@ -285,6 +285,23 @@ class UserPreferences: ObservableObject {
             }
         }
     }
+
+    // 阅读进度记录：bookUrl -> (chapterIndex, bodyCharIndex)
+    private var readingProgress: [String: (Int, Int)] {
+        get {
+            if let data = UserDefaults.standard.data(forKey: "readingProgress"),
+               let dict = try? JSONDecoder().decode([String: [Int]].self, from: data) {
+                return dict.mapValues { ($0[0], $0[1]) }
+            }
+            return [:]
+        }
+        set {
+            let dict = newValue.mapValues { [$0.0, $0.1] }
+            if let data = try? JSONEncoder().encode(dict) {
+                UserDefaults.standard.set(data, forKey: "readingProgress")
+            }
+        }
+    }
     
     func saveTTSProgress(bookUrl: String, chapterIndex: Int, sentenceIndex: Int) {
         var progress = ttsProgress
@@ -294,6 +311,16 @@ class UserPreferences: ObservableObject {
     
     func getTTSProgress(bookUrl: String) -> (chapterIndex: Int, sentenceIndex: Int)? {
         return ttsProgress[bookUrl]
+    }
+
+    func saveReadingProgress(bookUrl: String, chapterIndex: Int, bodyCharIndex: Int) {
+        var progress = readingProgress
+        progress[bookUrl] = (chapterIndex, bodyCharIndex)
+        readingProgress = progress
+    }
+
+    func getReadingProgress(bookUrl: String) -> (chapterIndex: Int, bodyCharIndex: Int)? {
+        return readingProgress[bookUrl]
     }
     
     private init() {

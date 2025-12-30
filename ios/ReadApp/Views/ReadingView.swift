@@ -44,6 +44,9 @@ struct ReadingView: View {
     @State private var didApplyResumePos = false
     @State private var showAddReplaceRule = false
     @State private var pendingReplaceRule: ReplaceRule?
+    @State private var pendingResumeLocalBodyIndex: Int?
+    @State private var pendingResumeLocalChapterIndex: Int?
+    @State private var initialServerChapterIndex: Int?
     
     // Pagination State
     @State private var currentPageIndex: Int = 0
@@ -80,9 +83,15 @@ struct ReadingView: View {
 
     init(book: Book) {
         self.book = book
-        _currentChapterIndex = State(initialValue: book.durChapterIndex ?? 0)
+        let serverIndex = book.durChapterIndex ?? 0
+        let localProgress = book.bookUrl.flatMap { UserPreferences.shared.getReadingProgress(bookUrl: $0) }
+        let startIndex = localProgress?.chapterIndex ?? serverIndex
+        _currentChapterIndex = State(initialValue: startIndex)
         _lastTTSSentenceIndex = State(initialValue: nil)
         _pendingResumePos = State(initialValue: book.durChapterPos)
+        _pendingResumeLocalBodyIndex = State(initialValue: localProgress?.bodyCharIndex)
+        _pendingResumeLocalChapterIndex = State(initialValue: localProgress?.chapterIndex)
+        _initialServerChapterIndex = State(initialValue: serverIndex)
     }
 
     var body: some View {
@@ -919,8 +928,16 @@ struct ReadingView: View {
         let bodyLength = (paragraphStarts.last ?? 0) + lastSentence.utf16.count
         guard bodyLength > 0 else { return }
 
-        let ratio = min(max(pos, 0.0), 1.0)
-        let bodyIndex = Int(Double(bodyLength) * ratio)
+        let bodyIndex: Int
+        if let localIndex = pendingResumeLocalBodyIndex,
+           pendingResumeLocalChapterIndex == currentChapterIndex {
+            bodyIndex = localIndex
+            pendingResumeLocalBodyIndex = nil
+            pendingResumeLocalChapterIndex = nil
+        } else {
+            let ratio = min(max(pos, 0.0), 1.0)
+            bodyIndex = Int(Double(bodyLength) * ratio)
+        }
         let clampedBodyIndex = max(0, min(bodyIndex, max(0, bodyLength - 1)))
         pendingResumeCharIndex = clampedBodyIndex + prefixLen
         let sentenceIndex = paragraphStarts.lastIndex(where: { $0 <= clampedBodyIndex }) ?? 0
@@ -998,6 +1015,14 @@ struct ReadingView: View {
         isLoading = true
         do {
             chapters = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
+            if currentChapterIndex < 0 || currentChapterIndex >= chapters.count {
+                currentChapterIndex = max(0, chapters.count - 1)
+                pendingResumeLocalBodyIndex = nil
+                pendingResumeLocalChapterIndex = nil
+                if let fallback = initialServerChapterIndex, fallback >= 0, fallback < chapters.count {
+                    currentChapterIndex = fallback
+                }
+            }
             loadChapterContent()
         } catch {
             errorMessage = error.localizedDescription
@@ -1165,6 +1190,13 @@ struct ReadingView: View {
         Task {
             let title = currentChapterIndex < chapters.count ? chapters[currentChapterIndex].title : nil
             let ratio = currentProgressRatio() ?? 0.0
+            if let bodyIndex = currentProgressBodyCharIndex() {
+                preferences.saveReadingProgress(
+                    bookUrl: bookUrl,
+                    chapterIndex: currentChapterIndex,
+                    bodyCharIndex: bodyIndex
+                )
+            }
             try? await apiService.saveBookProgress(
                 bookUrl: bookUrl,
                 index: currentChapterIndex,
