@@ -38,6 +38,10 @@ struct ReadingView: View {
     @State private var lastTTSSentenceIndex: Int?
     @State private var currentVisibleSentenceIndex: Int?
     @State private var showFontSettings = false
+    @State private var pendingResumePos: Double?
+    @State private var pendingResumeCharIndex: Int?
+    @State private var pendingScrollToSentenceIndex: Int?
+    @State private var didApplyResumePos = false
     @State private var showAddReplaceRule = false
     @State private var pendingReplaceRule: ReplaceRule?
     
@@ -71,7 +75,8 @@ struct ReadingView: View {
     init(book: Book) {
         self.book = book
         _currentChapterIndex = State(initialValue: book.durChapterIndex ?? 0)
-        _lastTTSSentenceIndex = State(initialValue: Int(book.durChapterPos ?? 0))
+        _lastTTSSentenceIndex = State(initialValue: nil)
+        _pendingResumePos = State(initialValue: book.durChapterPos)
     }
 
     var body: some View {
@@ -124,6 +129,14 @@ struct ReadingView: View {
         }
         .onChange(of: replaceRuleViewModel.rules) { _ in
             updateProcessedContent(from: rawContent)
+        }
+        .onChange(of: pendingScrollToSentenceIndex) { pending in
+            guard preferences.readingMode != .horizontal else { return }
+            guard let index = pending, let proxy = scrollProxy else { return }
+            withAnimation {
+                proxy.scrollTo(index, anchor: .center)
+            }
+            pendingScrollToSentenceIndex = nil
         }
         .alert("错误", isPresented: .constant(errorMessage != nil)) {
             Button("确定") { errorMessage = nil }
@@ -215,6 +228,12 @@ struct ReadingView: View {
                 }
                 .onAppear {
                     scrollProxy = proxy
+                    if let pending = pendingScrollToSentenceIndex {
+                        withAnimation {
+                            proxy.scrollTo(pending, anchor: .center)
+                        }
+                        pendingScrollToSentenceIndex = nil
+                    }
                 }
             }
         }
@@ -430,9 +449,10 @@ struct ReadingView: View {
             return
         }
 
+        let resumeCharIndex = pendingResumeCharIndex
         let focusCharIndex: Int? = currentCache.pages.indices.contains(currentPageIndex)
             ? currentCache.pages[currentPageIndex].globalRange.location
-            : nil
+            : resumeCharIndex
 
         let renderStore = TextKitPaginator.createRenderStore(fullText: newAttrText, size: size)
         var pages: [PaginatedPage] = []
@@ -486,6 +506,9 @@ struct ReadingView: View {
             chapterPrefixLen: newPrefixLen,
             isFullyPaginated: isFully
         )
+        if resumeCharIndex != nil {
+            pendingResumeCharIndex = nil
+        }
         ensurePageBuffer(around: currentPageIndex)
         triggerAdjacentPrefetchIfNeeded(force: true)
     }
@@ -848,6 +871,7 @@ struct ReadingView: View {
         let processedContent = applyReplaceRules(to: rawText)
         currentContent = processedContent.isEmpty ? "章节内容为空" : processedContent
         contentSentences = splitIntoParagraphs(currentContent)
+        applyResumeProgressIfNeeded(sentences: contentSentences)
     }
 
     private func applyReplaceRules(to content: String) -> String {
@@ -860,6 +884,32 @@ struct ReadingView: View {
             }
         }
         return processedContent
+    }
+
+    private func applyResumeProgressIfNeeded(sentences: [String]) {
+        guard !didApplyResumePos, let pos = pendingResumePos, pos > 0 else { return }
+        let chapterTitle = chapters.indices.contains(currentChapterIndex)
+            ? chapters[currentChapterIndex].title
+            : nil
+        let prefixLen = (chapterTitle?.isEmpty ?? true) ? 0 : (chapterTitle! + "\n").utf16.count
+        let paragraphStarts = TextKitPaginator.paragraphStartIndices(sentences: sentences)
+        let lastSentence = sentences.last?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let bodyLength = (paragraphStarts.last ?? 0) + lastSentence.utf16.count
+        guard bodyLength > 0 else { return }
+
+        let bodyIndex: Int
+        if pos <= 2.0 {
+            let ratio = min(max(pos, 0.0), 1.0)
+            bodyIndex = Int(Double(bodyLength) * ratio)
+        } else {
+            bodyIndex = Int(pos)
+        }
+        let clampedBodyIndex = max(0, min(bodyIndex, max(0, bodyLength - 1)))
+        pendingResumeCharIndex = clampedBodyIndex + prefixLen
+        let sentenceIndex = paragraphStarts.lastIndex(where: { $0 <= clampedBodyIndex }) ?? 0
+        lastTTSSentenceIndex = sentenceIndex
+        pendingScrollToSentenceIndex = sentenceIndex
+        didApplyResumePos = true
     }
 
     private func presentReplaceRuleEditor(selectedText: String) {
@@ -1017,7 +1067,7 @@ struct ReadingView: View {
         showUIControls = true
         suppressTTSSync = true
         needsTTSRestartAfterPause = false
-        let fallbackIndex = lastTTSSentenceIndex ?? Int(book.durChapterPos ?? 0)
+        let fallbackIndex = lastTTSSentenceIndex ?? 0
         
         var startIndex = fallbackIndex
         var textForTTS = contentSentences.joined(separator: "\n")
@@ -1097,9 +1147,28 @@ struct ReadingView: View {
         guard let bookUrl = book.bookUrl else { return }
         Task {
             let title = currentChapterIndex < chapters.count ? chapters[currentChapterIndex].title : nil
-            let position = Double(ttsManager.isPlaying ? ttsManager.currentSentenceIndex : (lastTTSSentenceIndex ?? 0))
-            try? await apiService.saveBookProgress(bookUrl: bookUrl, index: currentChapterIndex, pos: position, title: title)
+            if let bodyCharIndex = currentProgressBodyCharIndex() {
+                try? await apiService.saveBookProgress(
+                    bookUrl: bookUrl,
+                    index: currentChapterIndex,
+                    pos: Double(bodyCharIndex),
+                    title: title
+                )
+            } else {
+                try? await apiService.saveBookProgress(bookUrl: bookUrl, index: currentChapterIndex, pos: 0.0, title: title)
+            }
         }
+    }
+
+    private func currentProgressBodyCharIndex() -> Int? {
+        if preferences.readingMode == .horizontal {
+            guard let range = pageRange(for: currentPageIndex) else { return nil }
+            return max(0, range.location - currentCache.chapterPrefixLen)
+        }
+        let sentenceIndex = currentVisibleSentenceIndex ?? lastTTSSentenceIndex ?? 0
+        let paragraphStarts = TextKitPaginator.paragraphStartIndices(sentences: contentSentences)
+        guard sentenceIndex >= 0, sentenceIndex < paragraphStarts.count else { return nil }
+        return paragraphStarts[sentenceIndex]
     }
 
     private func updateVisibleSentenceIndex(frames: [Int: CGRect], viewportHeight: CGFloat) {
