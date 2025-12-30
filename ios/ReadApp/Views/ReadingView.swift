@@ -1698,7 +1698,7 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
         tap.delaysTouchesBegan = false
         tap.delaysTouchesEnded = false
         tap.delegate = self
-        if let longPress = textView.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) {
+        if let longPress = textView.gestureRecognizers?.compactMap({ $0 as? UILongPressGestureRecognizer }).first {
             tap.require(toFail: longPress)
             bindPageScrollToFail(longPress)
         }
