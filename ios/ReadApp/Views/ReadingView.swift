@@ -72,6 +72,12 @@ struct ReadingView: View {
     private let initialPageBatch: Int = 12
     private let prefetchPageBatch: Int = 8
 
+    private enum ReaderTapLocation {
+        case left
+        case right
+        case middle
+    }
+
     init(book: Book) {
         self.book = book
         _currentChapterIndex = State(initialValue: book.durChapterIndex ?? 0)
@@ -214,7 +220,7 @@ struct ReadingView: View {
                 .coordinateSpace(name: "scroll")
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    showUIControls.toggle()
+                    handleReaderTap(location: .middle)
                 }
                 .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
                     if ttsManager.isPlaying && !contentSentences.isEmpty {
@@ -345,8 +351,7 @@ struct ReadingView: View {
                     .frame(width: safeArea.leading + horizontalMargin)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                        goToPreviousPage()
+                        handleReaderTap(location: .left)
                     }
                 
                 if availableSize.width > 0 && availableSize.height > 0 {
@@ -363,14 +368,12 @@ struct ReadingView: View {
                                 onTransitioningChanged: { transitioning in
                                     isPageTransitioning = transitioning
                                 },
-                                onTapMiddle: { showUIControls.toggle() },
+                                onTapMiddle: { handleReaderTap(location: .middle) },
                                 onTapLeft: {
-                                    if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                                    goToPreviousPage()
+                                    handleReaderTap(location: .left)
                                 },
                                 onTapRight: {
-                                    if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                                    goToNextPage()
+                                    handleReaderTap(location: .right)
                                 },
                                 onChapterChange: { offset in
                                     isAutoFlipping = true
@@ -423,8 +426,7 @@ struct ReadingView: View {
                     .frame(width: safeArea.trailing + horizontalMargin)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                        goToNextPage()
+                        handleReaderTap(location: .right)
                     }
             }
             Spacer().frame(height: safeArea.bottom + verticalMargin)
@@ -633,6 +635,26 @@ struct ReadingView: View {
         } else if currentChapterIndex < chapters.count - 1 {
             pendingJumpToFirstPage = true
             nextChapter()
+        }
+    }
+
+    private func handleReaderTap(location: ReaderTapLocation) {
+        if showUIControls {
+            showUIControls = false
+            return
+        }
+        if location == .middle {
+            showUIControls = true
+            return
+        }
+        if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
+        switch location {
+        case .left:
+            goToPreviousPage()
+        case .right:
+            goToNextPage()
+        case .middle:
+            showUIControls = true
         }
     }
 
