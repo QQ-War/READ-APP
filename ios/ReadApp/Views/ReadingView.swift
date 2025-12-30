@@ -897,13 +897,8 @@ struct ReadingView: View {
         let bodyLength = (paragraphStarts.last ?? 0) + lastSentence.utf16.count
         guard bodyLength > 0 else { return }
 
-        let bodyIndex: Int
-        if pos <= 2.0 {
-            let ratio = min(max(pos, 0.0), 1.0)
-            bodyIndex = Int(Double(bodyLength) * ratio)
-        } else {
-            bodyIndex = Int(pos)
-        }
+        let ratio = min(max(pos, 0.0), 1.0)
+        let bodyIndex = Int(Double(bodyLength) * ratio)
         let clampedBodyIndex = max(0, min(bodyIndex, max(0, bodyLength - 1)))
         pendingResumeCharIndex = clampedBodyIndex + prefixLen
         let sentenceIndex = paragraphStarts.lastIndex(where: { $0 <= clampedBodyIndex }) ?? 0
@@ -1147,16 +1142,13 @@ struct ReadingView: View {
         guard let bookUrl = book.bookUrl else { return }
         Task {
             let title = currentChapterIndex < chapters.count ? chapters[currentChapterIndex].title : nil
-            if let bodyCharIndex = currentProgressBodyCharIndex() {
-                try? await apiService.saveBookProgress(
-                    bookUrl: bookUrl,
-                    index: currentChapterIndex,
-                    pos: Double(bodyCharIndex),
-                    title: title
-                )
-            } else {
-                try? await apiService.saveBookProgress(bookUrl: bookUrl, index: currentChapterIndex, pos: 0.0, title: title)
-            }
+            let ratio = currentProgressRatio() ?? 0.0
+            try? await apiService.saveBookProgress(
+                bookUrl: bookUrl,
+                index: currentChapterIndex,
+                pos: ratio,
+                title: title
+            )
         }
     }
 
@@ -1169,6 +1161,20 @@ struct ReadingView: View {
         let paragraphStarts = TextKitPaginator.paragraphStartIndices(sentences: contentSentences)
         guard sentenceIndex >= 0, sentenceIndex < paragraphStarts.count else { return nil }
         return paragraphStarts[sentenceIndex]
+    }
+
+    private func currentProgressRatio() -> Double? {
+        guard let bodyIndex = currentProgressBodyCharIndex() else { return nil }
+        let bodyLength = currentBodyLength()
+        guard bodyLength > 0 else { return nil }
+        let ratio = Double(bodyIndex) / Double(bodyLength)
+        return min(max(ratio, 0.0), 1.0)
+    }
+
+    private func currentBodyLength() -> Int {
+        let paragraphStarts = TextKitPaginator.paragraphStartIndices(sentences: contentSentences)
+        let lastSentence = contentSentences.last?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (paragraphStarts.last ?? 0) + lastSentence.utf16.count
     }
 
     private func updateVisibleSentenceIndex(frames: [Int: CGRect], viewportHeight: CGFloat) {
@@ -1251,17 +1257,12 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         context.coordinator.pageViewController = pvc
         pvc.view.backgroundColor = UIColor.systemBackground
         
-        let separator = UIView()
+        let separator = UIView(frame: .zero)
         separator.backgroundColor = UIColor.separator
-        separator.translatesAutoresizingMaskIntoConstraints = false
+        separator.isHidden = true
         pvc.view.addSubview(separator)
-        NSLayoutConstraint.activate([
-            separator.topAnchor.constraint(equalTo: pvc.view.topAnchor),
-            separator.bottomAnchor.constraint(equalTo: pvc.view.bottomAnchor),
-            separator.centerXAnchor.constraint(equalTo: pvc.view.centerXAnchor),
-            separator.widthAnchor.constraint(equalToConstant: 0.5)
-        ])
         context.coordinator.separatorView = separator
+        context.coordinator.attachScrollView(from: pvc.view)
         
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         pvc.view.addGestureRecognizer(tap)
@@ -1280,6 +1281,9 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         }
         let shouldHideSeparator = pageSpacing <= 0.1 || !context.coordinator.isAnimating
         context.coordinator.separatorView?.isHidden = shouldHideSeparator
+        if !shouldHideSeparator {
+            context.coordinator.updateSeparatorPosition()
+        }
         
         context.coordinator.updateSnapshotIfNeeded(snapshot, currentPageIndex: currentPageIndex)
     }
@@ -1293,8 +1297,48 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         private var pendingSnapshot: PageSnapshot?
         weak var pageViewController: UIPageViewController?
         weak var separatorView: UIView?
+        private weak var scrollView: UIScrollView?
+        private var displayLink: CADisplayLink?
 
         init(_ parent: ReadPageViewController) { self.parent = parent }
+
+        func attachScrollView(from container: UIView) {
+            if let scroll = container.subviews.compactMap({ $0 as? UIScrollView }).first {
+                scrollView = scroll
+            }
+        }
+
+        func updateSeparatorPosition() {
+            guard let pvc = pageViewController,
+                  let scroll = scrollView,
+                  let separator = separatorView else { return }
+            let gapX = scroll.bounds.width + parent.pageSpacing / 2
+            let visibleX = gapX - scroll.contentOffset.x
+            separator.frame = CGRect(
+                x: visibleX - 0.25,
+                y: 0,
+                width: 0.5,
+                height: pvc.view.bounds.height
+            )
+        }
+
+        private func startSeparatorTracking() {
+            guard displayLink == nil else { return }
+            let link = CADisplayLink(target: self, selector: #selector(handleSeparatorTick))
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
+
+        private func stopSeparatorTracking() {
+            displayLink?.invalidate()
+            displayLink = nil
+        }
+
+        @objc private func handleSeparatorTick() {
+            if parent.pageSpacing > 0.1 {
+                updateSeparatorPosition()
+            }
+        }
         
         func updateSnapshotIfNeeded(_ newSnapshot: PageSnapshot, currentPageIndex: Int) {
             guard let store = newSnapshot.renderStore, !newSnapshot.pages.isEmpty else { return }
@@ -1484,6 +1528,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             isAnimating = true
             if parent.pageSpacing > 0.1 {
                 separatorView?.isHidden = false
+                updateSeparatorPosition()
+                startSeparatorTracking()
             }
             parent.onTransitioningChanged(true)
         }
@@ -1502,6 +1548,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             }
             isAnimating = false
             separatorView?.isHidden = true
+            stopSeparatorTracking()
             parent.onTransitioningChanged(false)
             if let nextSnapshot = pendingSnapshot {
                 snapshot = nextSnapshot
