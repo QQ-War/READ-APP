@@ -9,6 +9,8 @@ struct BookListView: View {
     @State private var showingActionSheet = false  // 显示操作菜单
     @State private var showingDocumentPicker = false
     @State private var selectedBook: Book?
+    @State private var showingDeleteBookAlert = false
+    @State private var bookToDelete: Book?
     
     // 过滤和排序后的书籍列表
     var filteredAndSortedBooks: [Book] {
@@ -60,7 +62,21 @@ struct BookListView: View {
                     BookRow(book: book)
                 }
                 .buttonStyle(PlainButtonStyle())
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        bookToDelete = book
+                        showingDeleteBookAlert = true
+                    } label: {
+                        Label("移出书架", systemImage: "trash")
+                    }
+                }
                 .contextMenu {
+                    Button(role: .destructive) {
+                        bookToDelete = book
+                        showingDeleteBookAlert = true
+                    } label: {
+                        Label("移出书架", systemImage: "trash")
+                    }
                     Button(role: .destructive) {
                         showingActionSheet = true
                     } label: {
@@ -153,6 +169,19 @@ struct BookListView: View {
         } message: {
             Text("确定要清除所有书籍的远程缓存吗？\n\n这将清除服务器上缓存的所有章节内容。")
         }
+        .alert("移出书架", isPresented: $showingDeleteBookAlert) {
+            Button("取消", role: .cancel) {
+                bookToDelete = nil
+            }
+            Button("移出", role: .destructive) {
+                if let book = bookToDelete {
+                    deleteBookFromShelf(book)
+                }
+                bookToDelete = nil
+            }
+        } message: {
+            Text("确定要将《\(bookToDelete?.name ?? "未知书名")》从书架移除吗？")
+        }
     }
     
     private func loadBooks() async {
@@ -184,6 +213,23 @@ struct BookListView: View {
                 await loadBooks()
             } catch {
                 apiService.errorMessage = "清除缓存失败: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func deleteBookFromShelf(_ book: Book) {
+        guard let bookUrl = book.bookUrl, !bookUrl.isEmpty else {
+            apiService.errorMessage = "删除失败: 书籍地址为空"
+            return
+        }
+        Task {
+            do {
+                try await apiService.deleteBook(bookUrl: bookUrl)
+                await MainActor.run {
+                    apiService.books.removeAll { $0.bookUrl == bookUrl }
+                }
+            } catch {
+                apiService.errorMessage = "删除失败: \(error.localizedDescription)"
             }
         }
     }
@@ -248,4 +294,3 @@ struct BookRow: View {
         .padding(.vertical, 4)
     }
 }
-
