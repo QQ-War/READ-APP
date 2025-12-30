@@ -256,6 +256,12 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(pageHorizontalMargin, forKey: "pageHorizontalMargin")
         }
     }
+
+    @Published var pageInterSpacing: CGFloat {
+        didSet {
+            UserDefaults.standard.set(pageInterSpacing, forKey: "pageInterSpacing")
+        }
+    }
     
     @Published var lockPageOnTTS: Bool {
         didSet {
@@ -279,6 +285,30 @@ class UserPreferences: ObservableObject {
             }
         }
     }
+
+    // 阅读进度记录：bookUrl -> (chapterIndex, pageIndex, bodyCharIndex, timestamp)
+    private var readingProgress: [String: (Int, Int, Int, Int)] {
+        get {
+            if let data = UserDefaults.standard.data(forKey: "readingProgress"),
+               let dict = try? JSONDecoder().decode([String: [Int]].self, from: data) {
+                return dict.mapValues {
+                    if $0.count >= 4 {
+                        return ($0[0], $0[1], $0[2], $0[3])
+                    } else if $0.count >= 3 {
+                        return ($0[0], $0[1], $0[2], 0)
+                    }
+                    return ($0.first ?? 0, 0, $0.count > 1 ? $0[1] : 0, 0)
+                }
+            }
+            return [:]
+        }
+        set {
+            let dict = newValue.mapValues { [$0.0, $0.1, $0.2, $0.3] }
+            if let data = try? JSONEncoder().encode(dict) {
+                UserDefaults.standard.set(data, forKey: "readingProgress")
+            }
+        }
+    }
     
     func saveTTSProgress(bookUrl: String, chapterIndex: Int, sentenceIndex: Int) {
         var progress = ttsProgress
@@ -288,6 +318,17 @@ class UserPreferences: ObservableObject {
     
     func getTTSProgress(bookUrl: String) -> (chapterIndex: Int, sentenceIndex: Int)? {
         return ttsProgress[bookUrl]
+    }
+
+    func saveReadingProgress(bookUrl: String, chapterIndex: Int, pageIndex: Int, bodyCharIndex: Int) {
+        var progress = readingProgress
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+        progress[bookUrl] = (chapterIndex, pageIndex, bodyCharIndex, timestamp)
+        readingProgress = progress
+    }
+    
+    func getReadingProgress(bookUrl: String) -> (chapterIndex: Int, pageIndex: Int, bodyCharIndex: Int, timestamp: Int)? {
+        return readingProgress[bookUrl]
     }
     
     private init() {
@@ -300,6 +341,9 @@ class UserPreferences: ObservableObject {
         
         let savedMargin = CGFloat(UserDefaults.standard.float(forKey: "pageHorizontalMargin"))
         self.pageHorizontalMargin = savedMargin == 0 ? 6 : savedMargin
+
+        let savedInterSpacing = CGFloat(UserDefaults.standard.float(forKey: "pageInterSpacing"))
+        self.pageInterSpacing = savedInterSpacing == 0 ? 12 : savedInterSpacing
         
         self.lockPageOnTTS = UserDefaults.standard.bool(forKey: "lockPageOnTTS")
         

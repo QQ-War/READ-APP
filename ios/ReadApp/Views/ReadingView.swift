@@ -17,6 +17,12 @@ private struct ChapterCache {
 }
 
 // MARK: - ReadingView
+enum ReaderTapLocation {
+    case left
+    case right
+    case middle
+}
+
 struct ReadingView: View {
     let book: Book
     @Environment(\.dismiss) private var dismiss
@@ -38,6 +44,18 @@ struct ReadingView: View {
     @State private var lastTTSSentenceIndex: Int?
     @State private var currentVisibleSentenceIndex: Int?
     @State private var showFontSettings = false
+    @State private var pendingResumePos: Double?
+    @State private var pendingResumeCharIndex: Int?
+    @State private var pendingScrollToSentenceIndex: Int?
+    @State private var didApplyResumePos = false
+    @State private var showAddReplaceRule = false
+    @State private var pendingReplaceRule: ReplaceRule?
+    @State private var pendingResumeLocalBodyIndex: Int?
+    @State private var pendingResumeLocalChapterIndex: Int?
+    @State private var pendingResumeLocalPageIndex: Int?
+    @State private var initialServerChapterIndex: Int?
+    @State private var isRepaginateQueued = false
+    @State private var lastPaginationKey: PaginationKey?
     
     // Pagination State
     @State private var currentPageIndex: Int = 0
@@ -55,6 +73,7 @@ struct ReadingView: View {
     @State private var pausedChapterIndex: Int?
     @State private var pausedPageIndex: Int?
     @State private var needsTTSRestartAfterPause = false
+    @State private var lastAdjacentPrepareAt: TimeInterval = 0
     
     // Pagination Cache for seamless transition
     @State private var isAutoFlipping: Bool = false
@@ -67,8 +86,45 @@ struct ReadingView: View {
 
     init(book: Book) {
         self.book = book
-        _currentChapterIndex = State(initialValue: book.durChapterIndex ?? 0)
-        _lastTTSSentenceIndex = State(initialValue: Int(book.durChapterPos ?? 0))
+        let serverIndex = book.durChapterIndex ?? 0
+        let localProgress = book.bookUrl.flatMap { UserPreferences.shared.getReadingProgress(bookUrl: $0) }
+        
+        // Sync logic: Compare timestamps (normalize to milliseconds)
+        let rawServerTime = book.durChapterTime ?? 0
+        let serverTime: Int64 = rawServerTime < 1_000_000_000_000 ? rawServerTime * 1000 : rawServerTime
+        let localTime = Int64(localProgress?.timestamp ?? 0)
+        
+        let useServer = serverTime > localTime
+        
+        let startIndex = useServer ? serverIndex : (localProgress?.chapterIndex ?? serverIndex)
+        
+        _currentChapterIndex = State(initialValue: startIndex)
+        _lastTTSSentenceIndex = State(initialValue: nil)
+        _pendingResumePos = State(initialValue: book.durChapterPos)
+        
+        if useServer {
+            _pendingResumeLocalBodyIndex = State(initialValue: nil)
+            _pendingResumeLocalChapterIndex = State(initialValue: nil)
+            _pendingResumeLocalPageIndex = State(initialValue: nil)
+        } else {
+            _pendingResumeLocalBodyIndex = State(initialValue: localProgress?.bodyCharIndex)
+            _pendingResumeLocalChapterIndex = State(initialValue: localProgress?.chapterIndex)
+            _pendingResumeLocalPageIndex = State(initialValue: localProgress?.pageIndex)
+        }
+        
+        _initialServerChapterIndex = State(initialValue: serverIndex)
+    }
+
+    private struct PaginationKey: Hashable {
+        let width: Int
+        let height: Int
+        let fontSize: Int
+        let lineSpacing: Int
+        let margin: Int
+        let sentenceCount: Int
+        let chapterIndex: Int
+        let resumeCharIndex: Int
+        let resumePageIndex: Int
     }
 
     var body: some View {
@@ -107,12 +163,28 @@ struct ReadingView: View {
         .sheet(isPresented: $showFontSettings) {
             FontSizeSheet(preferences: preferences)
         }
+        .sheet(isPresented: $showAddReplaceRule) {
+            ReplaceRuleEditView(viewModel: replaceRuleViewModel, rule: pendingReplaceRule)
+        }
+        .onChange(of: showAddReplaceRule) { isPresented in
+            if !isPresented {
+                pendingReplaceRule = nil
+            }
+        }
         .task {
             await loadChapters()
             await replaceRuleViewModel.fetchRules()
         }
         .onChange(of: replaceRuleViewModel.rules) { _ in
             updateProcessedContent(from: rawContent)
+        }
+        .onChange(of: pendingScrollToSentenceIndex) { pending in
+            guard preferences.readingMode != .horizontal else { return }
+            guard let index = pending, let proxy = scrollProxy else { return }
+            withAnimation {
+                proxy.scrollTo(index, anchor: .center)
+            }
+            pendingScrollToSentenceIndex = nil
         }
         .alert("错误", isPresented: .constant(errorMessage != nil)) {
             Button("确定") { errorMessage = nil }
@@ -190,7 +262,7 @@ struct ReadingView: View {
                 .coordinateSpace(name: "scroll")
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    showUIControls.toggle()
+                    handleReaderTap(location: .middle)
                 }
                 .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
                     if ttsManager.isPlaying && !contentSentences.isEmpty {
@@ -204,6 +276,12 @@ struct ReadingView: View {
                 }
                 .onAppear {
                     scrollProxy = proxy
+                    if let pending = pendingScrollToSentenceIndex {
+                        withAnimation {
+                            proxy.scrollTo(pending, anchor: .center)
+                        }
+                        pendingScrollToSentenceIndex = nil
+                    }
                 }
             }
         }
@@ -232,38 +310,32 @@ struct ReadingView: View {
             )
             .onAppear {
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: contentSentences) { _ in
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: preferences.fontSize) { _ in
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: preferences.lineSpacing) { _ in
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: preferences.pageHorizontalMargin) { _ in
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: geometry.size) { _ in
                  if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: currentPageIndex) { newIndex in
@@ -293,6 +365,9 @@ struct ReadingView: View {
                     return
                 }
                 ensurePageBuffer(around: newIndex)
+                if newIndex <= 1 || newIndex >= max(0, currentCache.pages.count - 2) {
+                    triggerAdjacentPrefetchIfNeeded()
+                }
             }
         }
     }
@@ -312,38 +387,43 @@ struct ReadingView: View {
                     .frame(width: safeArea.leading + horizontalMargin)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                        goToPreviousPage()
+                        handleReaderTap(location: .left)
                     }
                 
                 if availableSize.width > 0 && availableSize.height > 0 {
                     ZStack(alignment: .bottomTrailing) {
-                        ReadPageViewController(
-                            snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
-                            prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
-                            nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
-                            currentPageIndex: $currentPageIndex,
-                            isAtChapterStart: currentPageIndex == 0,
-                            isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
-                            isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
-                            onTransitioningChanged: { transitioning in
-                                isPageTransitioning = transitioning
-                            },
-                            onTapMiddle: { showUIControls.toggle() },
-                            onTapLeft: {
-                                if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                                goToPreviousPage()
-                            },
-                            onTapRight: {
-                                if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                                goToNextPage()
-                            },
-                            onChapterChange: { offset in
-                                isAutoFlipping = true
-                                handleChapterSwitch(offset: offset)
-                            }
-                        )
-                        .frame(width: contentSize.width, height: contentSize.height)
+                            ReadPageViewController(
+                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
+                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
+                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
+                                currentPageIndex: $currentPageIndex,
+                                pageSpacing: preferences.pageInterSpacing,
+                                isAtChapterStart: currentPageIndex == 0,
+                                isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
+                                isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
+                                onTransitioningChanged: { transitioning in
+                                    isPageTransitioning = transitioning
+                                },
+                                onTapLocation: { location in
+                                    handleReaderTap(location: location)
+                                },
+                                onChapterChange: { offset in
+                                    isAutoFlipping = true
+                                    handleChapterSwitch(offset: offset)
+                                },
+                                onAdjacentPrefetch: { offset in
+                                    if offset > 0 {
+                                        if nextCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                                    } else if offset < 0 {
+                                        if prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                                    }
+                                },
+                                onAddReplaceRule: { selectedText in
+                                    presentReplaceRuleEditor(selectedText: selectedText)
+                                }
+                            )
+                            .id(preferences.pageInterSpacing)
+                            .frame(width: contentSize.width, height: contentSize.height)
                         
                         if !showUIControls && currentCache.pages.count > 0 {
                             let displayCurrent = currentPageIndex + 1
@@ -378,8 +458,7 @@ struct ReadingView: View {
                     .frame(width: safeArea.trailing + horizontalMargin)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
-                        goToNextPage()
+                        handleReaderTap(location: .right)
                     }
             }
             Spacer().frame(height: safeArea.bottom + verticalMargin)
@@ -404,9 +483,10 @@ struct ReadingView: View {
             return
         }
 
+        let resumeCharIndex = pendingResumeCharIndex
         let focusCharIndex: Int? = currentCache.pages.indices.contains(currentPageIndex)
             ? currentCache.pages[currentPageIndex].globalRange.location
-            : nil
+            : resumeCharIndex
 
         let renderStore = TextKitPaginator.createRenderStore(fullText: newAttrText, size: size)
         var pages: [PaginatedPage] = []
@@ -460,7 +540,17 @@ struct ReadingView: View {
             chapterPrefixLen: newPrefixLen,
             isFullyPaginated: isFully
         )
+        if let localPage = pendingResumeLocalPageIndex,
+           pendingResumeLocalChapterIndex == currentChapterIndex,
+           pages.indices.contains(localPage) {
+            currentPageIndex = localPage
+            pendingResumeLocalPageIndex = nil
+        }
+        if resumeCharIndex != nil {
+            pendingResumeCharIndex = nil
+        }
         ensurePageBuffer(around: currentPageIndex)
+        triggerAdjacentPrefetchIfNeeded(force: true)
     }
 
     private func pageIndexForChar(_ index: Int, in pages: [PaginatedPage]) -> Int? {
@@ -473,6 +563,17 @@ struct ReadingView: View {
 
     private func ensurePageBuffer(around index: Int) {
         ensurePages(upTo: index + prefetchPageBatch)
+    }
+
+    private func triggerAdjacentPrefetchIfNeeded(force: Bool = false) {
+        guard pageSize.width > 0, pageSize.height > 0 else { return }
+        let now = Date().timeIntervalSince1970
+        if !force, now - lastAdjacentPrepareAt < 1.0 { return }
+        let needsPrev = currentChapterIndex > 0 && prevCache.pages.isEmpty
+        let needsNext = currentChapterIndex < chapters.count - 1 && nextCache.pages.isEmpty
+        guard needsPrev || needsNext else { return }
+        lastAdjacentPrepareAt = now
+        prepareAdjacentChapters(for: currentChapterIndex)
     }
 
     private func ensurePages(upTo index: Int) {
@@ -572,6 +673,53 @@ struct ReadingView: View {
         } else if currentChapterIndex < chapters.count - 1 {
             pendingJumpToFirstPage = true
             nextChapter()
+        }
+    }
+
+    private func handleReaderTap(location: ReaderTapLocation) {
+        if showUIControls {
+            showUIControls = false
+            return
+        }
+        if location == .middle {
+            showUIControls = true
+            return
+        }
+        if ttsManager.isPlaying && preferences.lockPageOnTTS { return }
+        switch location {
+        case .left:
+            goToPreviousPage()
+        case .right:
+            goToNextPage()
+        case .middle:
+            showUIControls = true
+        }
+    }
+
+    private func scheduleRepaginate(in size: CGSize) {
+        pageSize = size
+        let key = PaginationKey(
+            width: Int((size.width * 100).rounded()),
+            height: Int((size.height * 100).rounded()),
+            fontSize: Int((preferences.fontSize * 10).rounded()),
+            lineSpacing: Int((preferences.lineSpacing * 10).rounded()),
+            margin: Int((preferences.pageHorizontalMargin * 10).rounded()),
+            sentenceCount: contentSentences.count,
+            chapterIndex: currentChapterIndex,
+            resumeCharIndex: pendingResumeCharIndex ?? -1,
+            resumePageIndex: pendingResumeLocalPageIndex ?? -1
+        )
+        if key == lastPaginationKey {
+            return
+        }
+        lastPaginationKey = key
+        if isRepaginateQueued {
+            return
+        }
+        isRepaginateQueued = true
+        DispatchQueue.main.async {
+            repaginateContent(in: size)
+            isRepaginateQueued = false
         }
     }
 
@@ -810,6 +958,7 @@ struct ReadingView: View {
         let processedContent = applyReplaceRules(to: rawText)
         currentContent = processedContent.isEmpty ? "章节内容为空" : processedContent
         contentSentences = splitIntoParagraphs(currentContent)
+        applyResumeProgressIfNeeded(sentences: contentSentences)
     }
 
     private func applyReplaceRules(to content: String) -> String {
@@ -822,6 +971,79 @@ struct ReadingView: View {
             }
         }
         return processedContent
+    }
+
+    private func applyResumeProgressIfNeeded(sentences: [String]) {
+        guard !didApplyResumePos else { return }
+        let hasLocalResume = pendingResumeLocalBodyIndex != nil
+            && pendingResumeLocalChapterIndex == currentChapterIndex
+        let pos = pendingResumePos ?? 0
+        if !hasLocalResume && pos <= 0 {
+            return
+        }
+        let chapterTitle = chapters.indices.contains(currentChapterIndex)
+            ? chapters[currentChapterIndex].title
+            : nil
+        let prefixLen = (chapterTitle?.isEmpty ?? true) ? 0 : (chapterTitle! + "\n").utf16.count
+        let paragraphStarts = TextKitPaginator.paragraphStartIndices(sentences: sentences)
+        let lastSentence = sentences.last?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let bodyLength = (paragraphStarts.last ?? 0) + lastSentence.utf16.count
+        guard bodyLength > 0 else { return }
+
+        let bodyIndex: Int
+        if let localIndex = pendingResumeLocalBodyIndex,
+           pendingResumeLocalChapterIndex == currentChapterIndex {
+            bodyIndex = localIndex
+            pendingResumeLocalBodyIndex = nil
+            pendingResumeLocalChapterIndex = nil
+            pendingResumeLocalPageIndex = nil
+        } else {
+            // New logic: if pos > 1, treat as char index; else treat as ratio
+            if pos > 1.0 {
+                bodyIndex = Int(pos)
+            } else {
+                let ratio = min(max(pos, 0.0), 1.0)
+                bodyIndex = Int(Double(bodyLength) * ratio)
+            }
+        }
+        let clampedBodyIndex = max(0, min(bodyIndex, max(0, bodyLength - 1)))
+        pendingResumeCharIndex = clampedBodyIndex + prefixLen
+        let sentenceIndex = paragraphStarts.lastIndex(where: { $0 <= clampedBodyIndex }) ?? 0
+        lastTTSSentenceIndex = sentenceIndex
+        pendingScrollToSentenceIndex = sentenceIndex
+        didApplyResumePos = true
+    }
+
+    private func presentReplaceRuleEditor(selectedText: String) {
+        let trimmed = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        pendingReplaceRule = makeReplaceRuleDraft(from: trimmed)
+        showAddReplaceRule = true
+    }
+
+    private func makeReplaceRuleDraft(from text: String) -> ReplaceRule {
+        let escapedPattern = NSRegularExpression.escapedPattern(for: text)
+        let shortName: String
+        if text.count > 12 {
+            shortName = String(text.prefix(12)) + "..."
+        } else {
+            shortName = text
+        }
+        return ReplaceRule(
+            id: nil,
+            name: "正文净化-\(shortName)",
+            groupname: "",
+            pattern: escapedPattern,
+            replacement: "",
+            scope: book.name ?? "",
+            scopeTitle: false,
+            scopeContent: true,
+            excludeScope: "",
+            isEnabled: true,
+            isRegex: true,
+            timeoutMillisecond: 3000,
+            ruleorder: 0
+        )
     }
 
     private func removeHTMLAndSVG(_ text: String) -> String {
@@ -861,6 +1083,14 @@ struct ReadingView: View {
         isLoading = true
         do {
             chapters = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
+            if currentChapterIndex < 0 || currentChapterIndex >= chapters.count {
+                currentChapterIndex = max(0, chapters.count - 1)
+                pendingResumeLocalBodyIndex = nil
+                pendingResumeLocalChapterIndex = nil
+                if let fallback = initialServerChapterIndex, fallback >= 0, fallback < chapters.count {
+                    currentChapterIndex = fallback
+                }
+            }
             loadChapterContent()
         } catch {
             errorMessage = error.localizedDescription
@@ -890,7 +1120,7 @@ struct ReadingView: View {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "闂傚倸鍊搁崐鎼佸磹閹间礁纾归柟闂寸绾惧綊鏌熼梻瀵割槮缁炬儳缍婇弻鐔兼⒒鐎靛壊妲紒鐐劤缂嶅﹪寮婚悢鍏尖拻閻庨潧澹婂Σ顔剧磼閻愵剙鍔ょ紓宥咃躬瀵鎮㈤崗灏栨嫽闁诲酣娼ф竟濠偽ｉ鍓х＜闁绘劦鍓欓崝銈囩磽瀹ュ拑韬€殿喖顭烽幃銏ゅ礂鐏忔牗瀚介梺璇查叄濞佳勭珶婵犲伣锝夘敊閸撗咃紲闂佺粯鍔﹂崜娆撳礉閵堝洨纾界€广儱鎷戦煬顒傗偓娈垮枛椤兘骞冮姀銈呯閻忓繑鐗楃€氫粙姊虹拠鏌ュ弰婵炰匠鍕彾濠电姴浼ｉ敐澶樻晩闁告挆鍜冪床闂備胶绮崝锕傚礈濞嗘挸绀夐柕鍫濇川绾剧晫鈧箍鍎遍幏鎴︾叕椤掑倵鍋撳▓鍨灈妞ゎ厾鍏橀獮鍐閵堝懐顦ч柣蹇撶箲閻楁鈧矮绮欏铏规嫚閺屻儱寮板┑鐐板尃閸曨厾褰炬繝鐢靛Т娴硷綁鏁愭径妯绘櫓闂佸憡鎸嗛崪鍐簥闂傚倷娴囬鏍垂鎼淬劌绀冮柨婵嗘閻﹂亶姊婚崒娆掑厡妞ゃ垹锕ら埢宥夊即閵忕姷顔夐梺鎼炲労閸撴瑩鎮橀幎鑺ョ厸闁告劑鍔庢晶鏇犵磼閳ь剟宕橀埞澶哥盎闂婎偄娲ゅù鐑剿囬敃鈧湁婵犲﹤鐗忛悾娲煛鐏炶濡奸柍瑙勫灴瀹曞崬鈻庤箛鎾寸槗缂傚倸鍊烽梽宥夊礉瀹€鍕ч柟闂寸閽冪喖鏌ｉ弬鍨倯闁稿骸鐭傞弻娑樷攽閸曨偄濮㈤悶姘剧畵濮婄粯鎷呴崨濠冨創闂佹椿鍘奸ˇ杈╂閻愬鐟归柍褜鍓熸俊瀛樻媴閸撳弶寤洪梺閫炲苯澧存鐐插暙閳诲酣骞樺畷鍥跺晣婵＄偑鍊栭幐楣冨闯閵夈儙娑滎樄婵﹤顭峰畷鎺戔枎閹寸姷宕叉繝鐢靛仒閸栫娀宕楅悙顒傗槈闁宠閰ｉ獮瀣倷鐎涙﹩鍞堕梻鍌欑濠€閬嶅磿閵堝鈧啴骞囬鍓ь槸闂佸搫绉查崝搴ｅ姬閳ь剟姊婚崒姘卞濞撴碍顨婂畷鏇㈠箛閻楀牏鍘搁梺鍛婁緱閸犳岸宕ｉ埀顒勬⒑閸濆嫭婀扮紒瀣灴閸┿儲寰勯幇顒傤攨闂佺粯鍔曞Ο濠傤焽缂佹ü绻嗛柣鎰典簻閳ь剚鍨垮畷鏇㈠箵閹烘梹娈曠紓浣割儐椤戞瑥顭囬弽顓熺叄闊洦鍑瑰鎰版倵濮橆厼鍝洪柡灞剧☉閳诲氦绠涢敐鍠帮箓姊虹悰鈥充壕濡炪倖鎸鹃崕鎰€掓繝姘厪闁割偅绻堥妤€霉濠婂嫮鐭嬮柕鍥у閺佸倻鎷犻懠顑垮寲闂備礁鎲￠悷銉╁箠濡綍娑㈠川閹碱厽鏅濋梺闈涚箚閳ь剚鍓氬Σ杈╃磽閸屾瑧顦︽い鎴濇瀹曞湱鎲撮崟顓犲骄闂佸搫娲㈤崹褰掓煥閵堝棔绻嗛柕鍫濆閸忓矂鏌涘Ο鍏兼毈婵﹨娅ｉ幏鐘诲灳瀹曞洣鍖栧┑鐘媰閸曞灚鐤侀柦妯煎枎椤潡鎳滈棃娑橆潔闂佺粯鎸鹃崰鏍蓟閻斿吋鍊绘俊顖濇娴犲吋绻涚€电校闁烩晩鍨跺濠氬即閵忕姷鍊為悷婊冪Ч椤㈡棃顢橀悤浣诡啍闂佺粯鍔栧娆徝归绛嬫闁绘劕妯婇崕鏃€銇勯姀锛勨槈妞ゎ偅绻堥、妤佸緞鐎ｎ偆銈紓鍌氬€搁崐鎼佸磹閹间礁纾瑰瀣捣閻棗銆掑锝呬壕闁芥ɑ绻堝娲敆閳ь剛绮旈幘顔煎嚑濞达絿纭堕弨浠嬫煟濡櫣鏋冨瑙勶耿閺岋箓宕橀鍕€剧紓浣虹帛閻╊垶鐛€ｎ亖鏋庨煫鍥ㄦ磻閻ヮ亪姊绘担渚劸妞ゆ垵妫濆畷婵單旈崨顓犲姦濡炪倖甯掗崰姘焽閹邦厾绠鹃柛娆忣槺婢ь亪鎮￠妶澶嬬厪闁割偅绻嶅Σ鎼佹煟閹惧瓨绀嬮柡灞剧洴椤㈡洟濡堕崨顔句簴缂傚倷璁插褔宕戦幘缁樷拻濞撴埃鍋撴繛浣冲嫷娈介煫鍥ㄦ礈缁€濠囨煕閳╁喚娈㈤柣鎺嶇矙閺岀喖鏌囬敃鈧獮妯肩磼閻樿崵鐣洪柡灞诲€楅崰濠囧础閻愬樊娼婚梻浣告惈椤戝懘鏌婇敐澶婅摕闁挎繂顦伴弲鎻掝熆閼哥灙鎴λ夐弽顐ょ＝濞撴艾娲ら弸鐔兼煟閻旀繂娲ょ粻顖炴煟濡偐甯涢柛濠囨敱閵囧嫰骞掑鍫敼闂佺懓鍢茬紞濠傤潖濞差亝鍋￠柡澶嬪浜涢梻浣侯攰濞呮洟鏁嬮梺浼欑悼閸忔﹢銆侀弴銏℃櫇闁逞屽墰缁牏鈧綆鍋佹禍婊堟煙閹佃櫕娅呴柍褜鍏欓崐婵嗙暦閵壯€鍋撻敐搴℃灍闁抽攱甯￠弻娑氫沪閹规劕顥濋梺閫炲苯澧柟顔煎€搁悾鐑藉箛椤掑倹娈濋梺鐟板暱閿曘倗绱炴繝鍌滄殾闁割偅娲﹂弫鍡楊熆鐠轰警鍎愭繛鍛濮婄粯鎷呴崨濠冨創缂備礁顑勭欢姘暦閵忥紕闄勭紒瀣仢閻庮參姊虹粙璺ㄧ伇闁稿鍋ら幃锟犳晲婢跺苯褰勯梺鎼炲劦椤ユ捇宕氶弶妫电懓顭ㄩ崟顓犵暫缂備胶绮惄顖氱暦閵娾晩鏁嶆慨锝呭皡缁插€熷絹闂佹悶鍎滃鍫濇儓濠电姷顣介埀顒€纾崺锝団偓瑙勬磸閸旀垿銆佸▎鎾村亗閹肩补妲呭姘攽閻樺灚鏆╁┑顔诲嵆瀹曞綊鎮℃惔妯荤亙濠电偞鍨崺鍕极閸曨垱鐓曟繛鎴濆船閻忊剝銇勯幇顏嗙煓闁哄矉缍侀獮鍥敊閻撳骸顬嗛梻浣虹帛閹稿鎮烽埡渚囨綎婵炲樊浜堕弫鍥煏婵炑冩噺濞堢鈹戦悩顐ｅ闁告侗鍙庨弳顓㈡⒑闂堟稒鎼愰悗姘緲椤曪綁顢氶埀顒勫春閳ь剚銇勯幒鎴濐仼缂佲偓婢跺绠鹃柛鈩冾殕缁傚绻涢崗鑲╁缂佺粯绋戦蹇涱敊閼姐倗娉垮┑鐐殿棎閸嬫劖绻涢埀顒勬煛鐏炲墽娲寸€殿喗鎸抽幃娆撳礂閸濄儵鈹忛梻浣芥〃缁€渚€鎮ч幘鎰佹綎缂備焦蓱婵挳鏌ц箛鎾剁暛闁逞屽墮閿曨亪寮婚敓鐘插窛妞ゆ梻鍋撻崚娑㈡⒑鏉炴壆顦﹂柛鐔告尦閵嗕線寮崼婵嬪敹闂佺粯妫佸〒鍦姳閸偂绻嗛柣鎰典簻閳ь剚鐗滈弫顕€骞掗弬鍝勪壕婵ê宕崢瀵糕偓娈垮櫘閸嬪﹤鐣烽崡鐐╂婵炲棙鍨甸獮鍫ユ⒒娴ｅ憡鎯堟繛灞傚灲瀹曟繄浠﹂悙顒佺彿婵炲鍘ч悺銊╂偂閺囩喍绻嗘い鏍ㄧ矌鐢盯鏌涙繝鍐ㄥ闁哄备鈧磭鏆嗛悗锝庡墰琚ｇ紓鍌欒兌婵敻鎯勯姘煎殨闁圭虎鍠楅崐鐑芥煛婢跺顕滈柟灞傚灩閳规垿鏁嶉崟顐℃澀闂佺锕ラ悧鏇㈠煝閺冨牊鏅濋柛灞炬皑閸婄偤鎮峰鍐鐎规洘绻堥弫鍐焵椤掑嫧鈧棃宕橀鍢壯囨煕閳╁喚娈橀柣鐔稿姍濮婃椽鎮℃惔鈩冩瘣婵犫拃鍐╂崳闁告帗甯楃换婵嗩潩椤撶偐鍋撻悜鑺ョ厵缁炬澘宕獮妤併亜閺冣偓濡啫顫忛搹鍦＜婵☆垰鎼～鎴濐渻閵堝棙绀冪紒顔肩焸椤㈡瑨绠涘☉妯溿劑鏌嶉崫鍕偓濠氬储閹剧粯鐓熼柣鏂挎憸閹冲啴鎮楀鐓庡⒋闁诡喗锕㈤崺锟犲川椤旀儳甯楅柣鐔哥矋缁挸鐣峰鍫澪╃憸蹇曠矆婵犲洦鐓曢柍鈺佸枤閻掕姤銇勯埡鍌滃弨闁哄矉缍侀獮鍥敂閸ヨ泛濡抽梻浣芥〃缁€浣该洪銏犺摕闁挎繂顦粻濠氭煕閹邦垰鐨烘俊鍙夋緲閳规垿鎮欑€涙ê纰嶅銈庡幘閸忔ê顕ｆ繝姘嵆闁靛繒濞€閸炶泛鈹戦悩缁樻锭婵炴潙鍊歌灋闁炽儲鍓氬〒濠氭煏閸繂鏆欓柛鏃€纰嶆穱濠囶敃閿濆洨鐤勯悗娈垮枦椤曆囧煡婢跺娼╅柨婵嗘噸婢规洟姊洪幐搴ｇ畵濡ょ姴鎲＄粋宥咁煥閸愶絾鏂€濡炪倖妫侀崑鎰櫠閿曞倹鐓涚€光偓鐎ｎ剛鐦堥悗瑙勬磸閸旀垿銆佸鈧幃鈺呮嚑椤掆偓楠炴鈹戦敍鍕杭闁稿﹥鍨垮畷褰掓惞閸︻厾鐓撻梺纭呮彧鐠侊絿绱為弽銊х瘈闂傚牊渚楅崕鎰版煛閸涱喚鍙€闁哄本鐩崺鍕礂閳哄倸鐏ユい顓炴健楠炲鏁傜憴锝嗗闂備胶顭堥張顒勬偡閵娾晛绀傜€光偓閳ь剛妲愰幒妤婃晪闁告侗鍘炬禒鎼佹倵鐟欏嫭绀冪紒璇插€介悘鎺楁⒒閸屾艾鈧悂顢氶銏犵闁靛鍎弨浠嬫煟閹邦剙绾фい銉у仱閺岀喓绮欓幐搴㈠枑缂備緡鍠涢褏鍙呭銈呯箰閹虫劙宕㈤挊澶嗘斀闁宠棄妫楅悘鐘绘煕濮橆剦鍎旂€殿喗濞婇崺锟犲礃椤忓拑绱￠梻浣筋嚃閸ㄥ酣宕橀埡浣插亾椤栫偞鈷戦梻鍫熺⊕閹兼劙鎮楀顓熺凡妞ゆ洩缍侀、姘跺焵椤掆偓閻ｇ兘骞嗛柇锔叫ㄦ繝娈垮枦椤銆冩繝鍌ゆ綎闁惧繗顫夌€氭岸鏌ょ喊鍗炲妞ゆ梹鍨剁换娑氣偓娑欘焽閻倝鏌涢幘瀵糕槈閸楅亶鏌熼悧鍫熺凡缂佺姵濞婇弻鐔煎箚瑜滈崵鐔虹磼婢跺﹦鍩ｆ慨濠呮閳ь剙婀辨慨鐢稿Υ閸愨晙绻嗛柣鎰綑缁楁帡鏌嶇拋宕囩煓妞ゃ垺妫冨畷鍗炩枎閹搭垳闂繝鐢靛仩閹活亞绱為埀顒佺箾閸滃啰鎮奸柡渚囧枛閳藉顫濇潏鈺嬬床闂佽崵濮村ú鈺冧焊濞嗘劖娅犻柡鍥ュ灪閻撶喖鏌ㄥ┑鍡樻悙闁告ê鐡ㄩ〃銉╂倷閸欏妫﹂梺鍝勮嫰濞差參寮崒婊勫枂闁挎繂妫涢埀顒勪憾濮婂宕掑顑藉亾閻戣姤鍤勯柛顐ｆ磸閳ь兛鐒︾换婵嬪礃閳轰礁浼庨梻渚€娼ч悧鍡涘箖閸啔娲敂閸曨偄鏁ゆ俊鐐€栭幐楣冨磻閻旂厧鍌ㄩ柟缁㈠枟閳锋垹鐥鐐村櫤鐟滄妸鍥ㄢ拻闁告洦鍋勯顓犫偓瑙勬礃閸旀瑩骞冨鍫熷殟闁靛／鍐ㄧ婵犵數濮伴崹鐓庘枖濞戙埄鏁勯柛娑樼摠閸婂爼鏌嶆潪鐗堚偓銉ㄣ亹閹烘挸浜瑰┑鐐叉缁绘垶寰勯崟顖涚厓闂佸灝顑呴悘鎾煛瀹€鈧崰鏍箠閺嶎厼鐓涘ù锝夘棑閹规洖鈹戦悩娈挎毌闁逞屽墲濞呮洟宕戦妷鈺傜厸鐎光偓閳ь剟宕伴弽顓炵鐟滅増甯╅弫鍐煥濠靛棙鍣介柨娑欐崌閺岋絾鎯旈姀鈺佹櫛闂侀潻缍嗛崳锝呯暦閹寸偟绡€闁搞儯鍎崑鎾存媴閸撳弶鍍甸柣鐘荤細濞咃綁宕濋敃鈧—鍐Χ閸℃娼戦梺绋款儐閹稿濡甸崟顖ｆ晝闁靛繈鍨婚濠勭磽娴ｄ粙鍝洪悽顖涘笩閻忔帡姊洪崗鑲┿偞闁哄懏绮撳畷闈涚暆閸曨兘鎷绘繛鎾村焹閸嬫捇鏌嶈閸撴盯宕戝☉銏″殣妞ゆ牗绋掑▍鐘炽亜閺傛娼熷ù婊勭矋閵囧嫰骞樼捄杞版勃缂備礁鏈€笛囧Φ閸曨垱鏅滈柤鎭掑劚閸炲姊洪崫鍕伇闁哥姵鐗犻幃浼搭敋閳ь剙鐣疯ぐ鎺濇晩闁告瑣鍎崇粈鍕⒑鐠囧弶鍞夋い顐㈩槸鐓ら柡宓懏娈惧銈嗗笒鐎氼剟鎮￠垾鎰佺唵閻犲搫銈介敓鐘冲亜闁告繂瀚悗鎶芥煛婢跺﹦澧戦柛鎾讳憾婵″爼宕ㄩ鍛澑闂備胶绮敋闁诲繑宀稿鎶藉煛娴ｅ弶鏂€闂佺粯鍔忛弲娑欑閻愵剛绡€闁汇垽娼ф禒鎺楁煕閺嶎偄鈻堢€规洖鐖奸幊婊堝垂椤愶絿褰堥梻鍌氬€烽懗鍓佹兜閸洖绀堟繝闈涚墢閻瑩鏌熺€电孝妞ゃ儲鑹鹃埞鎴︽偐瀹曞浂鏆￠梺缁樻尵閸犳牠寮婚敓鐘茬＜婵ê褰夐搹搴ㄦ⒑鐠団€虫灍闁搞劌娼″濠氭晲婢跺﹦顔掗柣搴＄仛閹爼鍩€椤掍礁娴柡灞界Х椤т線鏌涢幘瀵告噮缂侇喛顕ч鍏煎緞婵犲嫸绱甸梺鍝勵槸閻楁粓鎮￠崼婵冩灁濞寸姴顑嗛悡娆撴⒒閸屾粠妫庨柛蹇撶灱閳ь剝顫夐幐鐑芥倿閿旂晫鈹嶅┑鐘叉搐鍥撮梺鍛婁緱閸犳牕鈻嶉妶澶嬧拺缂備焦蓱鐏忣參鏌涢悢鍛婄稇妞ゎ偄绻愮叅妞ゅ繐瀚悗顓烆渻閵堝棙绀€闁瑰啿閰ｅ畷婊勫鐎涙ǚ鎷洪柣鐘叉穿鐏忔瑧绮婚弻銉︾厵闁告稑锕ら埢鏇犫偓娈垮枛椤兘寮澶婄妞ゅ繐鎳庢刊浼存⒒娴ｅ憡鍟為柟绋挎閸┾偓妞ゆ巻鍋撻崡閬嶆煕椤愮姴鍔滈柍閿嬪灴閹宕烽鐐愶絾銇勯妷銉Ч闁靛洤瀚伴弫鍌滄嫚閼碱兛妗撻梻浣瑰缁诲嫰宕戝☉鈶┾偓锕傚Ω閳轰線鍞跺┑鐘绘涧濡粓鍩€椤掆偓閻忔繈鍩為幋锔藉€烽柛娆忣樈濡偟绱撴担铏瑰笡闁告梹顨呴銉︾節閸パ呯暰閻熸粌顦靛銊︾鐎ｎ偆鍘藉┑鈽嗗灥濞咃絾绂掑☉銏＄厸闁糕€崇箲濞呭﹪鏌＄仦鍓с€掗柍褜鍓ㄧ紞鍡涘磻閸℃娲箻椤旂晫鍘靛銈嗘煟閸斿瞼鈧凹鍠氬褔鍩€椤掑嫭鈷戠紒瀣儥閸庢盯鏌涢妸銈呭祮妤犵偞鐗犻、鏇㈡晜閸忓浜鹃柨鏇炲€告儫闂佸疇妗ㄧ欢姘跺船鐠鸿　鏀介柣妯肩帛濞懷囨煟濡も偓濡瑩骞堥妸鈺傛櫆闁瑰瓨甯炵粻姘舵⒑缂佹ê濮﹀ù婊勭矒閸┾偓妞ゆ帊鑳舵晶顏呫亜閺傝法绠茬紒缁樼箓椤繈顢楅崒锔惧耿闂傚倷鑳堕幊鎾存櫠閻ｅ苯鍨濇い鏍仦閸嬪倿鏌￠崶鈺佹瀺缂佽妫欓妵鍕冀閵娧呯暤闂佸憡鑹剧紞濠囧蓟閿濆鏁囬柣鏃堫棑椤戝倿姊洪柅鐐茶嫰婢у弶銇勯銏╂Ц閻撱倖鎱ㄥ璇蹭壕閻庤娲栫紞濠傜暦缁嬭鏃堝礃閵娧佸亰濠电姷顣藉Σ鍛村垂閻㈢纾婚柟閭﹀枛椤ユ岸鏌涜箛娑欙紵缂佽妫欓妵鍕冀閵娧呯厐闁汇埄鍨甸崺鏍€冮妷鈺傚€烽柤纰卞劮瑜庨幈銊︾節閸屻倗鍚嬮悗瑙勬礃鐢帡锝炲┑瀣垫晞闁芥ê顦竟鏇㈡⒑瑜版帗锛熺紒鈧担鍝勵棜鐟滅増甯楅悡娆撴⒒閸屾凹鍤熼悹鎰嵆閺屸剝鎷呴崜鎻掑壉闂侀潧娲ょ€氫即鐛鈧、娑樷槈濡崵鏋€闂傚倷鐒﹂幃鍫曞磿濞差亜绀堟慨妯挎硾閻ょ偓绻濋棃娑卞剱闁绘挻娲熼幃姗€鎮欓幓鎺嗘寖闂侀潧妫欑敮锟犲蓟濞戞ǚ鏋庨煫鍥ㄦ尰濞堣鈹戦纭锋敾婵＄偠妫勯悾鐑藉Ω閿斿墽鐦堥梺绋挎湰椤曟挳寮撮悢铏诡啎闁诲孩绋掗…鍥儗鐎ｎ剛纾兼い鏃囧Г鐏忣厽銇勯弴顏嗘偧缂侇喗鐟﹂幆鏃堝箻閹碱厽缍岄梻鍌欑窔濞佳勵殽韫囨洘顫曢柡鍥ュ灩閸屻劑鏌熼梻瀵稿妽闁绘挾鍠栭悡顐﹀炊閵婏妇顦ユ繛瀵稿Л閺呮粓濡甸崟顖氬嵆闁糕剝顨呴褏绱掔拠鍙夘棞闁宠鍨垮畷鎺戭潩椤撶偞娈橀梻浣虹帛閹告悂宕幘顔肩畺鐎瑰嫭澹嬮弸搴ㄧ叓閸ャ劍鎯勫ù鐘层偢濮婅櫣鎷犻懠顒傤唶濡炪倖娲﹂崣鍐春閳ь剚銇勯幒鎴濇灓婵炲吋鍔栫换娑㈠矗婢跺苯鈪归梺浼欑悼閸忔﹢銆佸Δ鍛妞ゅ繐鍟抽崺鍛存⒒閸屾艾鈧兘鎳楅崜浣稿灊妞ゆ牜鍋涢崹鍌炴煙椤栨粌顣奸柟鍐茬焸濮婄粯鎷呴搹鐟扮缂備浇顕ч崐鍧楀箖閵夆晜鍋傞幖鎼枟缂嶅孩绻濋悽闈浶ｉ柤鐟板⒔婢规洟宕楅懖鈺冾啎闂佺硶鍓濋敋缂佹甯￠弻娑橆潨閸垻锛熺紓浣介哺閹歌崵绮悢鐓庣倞鐟滃酣鎮甸鈧娲箹閻愭彃顫呭┑鐐差槹閻╊垶銆佸鑸垫櫜闁糕剝鐟ч惁鍫濃攽椤旀枻渚涢柛搴ｆ暬閸╋繝宕ㄩ鎯у笚闂佸搫顦遍崑鐔告櫠濡ゅ啰鐭堥柟娈垮枟閸嬫牗绻濋棃娑卞剱闁抽攱鍨块幃褰掑炊閵娿儳绁烽梺鎼炲€涙禍顒傛閹炬剚鍚嬮柛娑卞櫘濡箓鎮楃憴鍕；闁告鍟块锝嗙鐎ｅ灚鏅濋梺闈涚箚閺呮粓藟閿熺姵鈷掑〒姘ｅ亾婵炶壈宕甸埀顒勬涧閻倸鐣烽姀銈呯鐟滃秹藟濮樿埖鐓㈡俊顖欒濡妇鎲搁悧鍫濈瑲闁哄懏鐓￠弻娑橆煥閳ь剟鎮為敂鍓х婵せ鍋撴慨濠冩そ瀹曟鎳栭埞鍨沪闂備礁鎼幊蹇曞垝瀹€鍕仼闁绘垼妫勯拑鐔兼煏婢舵稑顩柛姗€浜跺娲棘閵夛附鐝旈梺鍛婄懃濞层倝鈥﹂妸鈺佺妞ゆ挆鍕暅濠电姷鏁告慨鎾晝閵堝鍋嬪┑鐘叉处閸嬪倹绻涢幋鐐茬劰闁稿鎹囬悰顕€宕归鐓庮潛闂備礁鎽滈崳銉╁磻閸涱喚鈹嶅┑鐘插瀹曞鏌曟繛褍鎷戠槐鏌ユ⒒娴ｈ櫣甯涢柨鏇楁櫊瀹曚即寮介鐐殿槷闂佹寧娲栭崐褰掓偂濞戙垺鍊堕柣鎰絻閳锋梹绻涢崣澶嬬稇闁宠鍨块崹鎯х暦閸パ呭幗闁诲氦顫夊ú鏍х暦椤掑嫬鐓濋幖娣妼缁犳稒銇勯幒宥堝厡鐟滅増鎸冲濠氬磼濮橆兘鍋撴搴ｇ焼濞撴埃鍋撴鐐寸墵椤㈡洟鏁冮埀顒傗偓姘槹閵囧嫰骞掗幋婵愪痪闂佺楠哥€涒晠濡甸崟顖氬唨妞ゆ劦婢€閹寸兘鎮楃憴鍕矮闁绘帪绠撻獮鍫ュΩ閵夘喗瀵岄柣鐘叉穿瀵挻绔熼弴銏♀拻濞达絼璀﹂弨鐗堢箾閸涱喗绀堥柛鎺撳浮楠炴ê鐣烽崶銊︻啎闁荤喐绮庢晶妤冩暜閳哄懎鏋侀柛鎰靛枟閻撱儲绻濋棃娑欘棡濠㈣泛瀚妵鍕敃閿濆洨鐓佺紓浣虹帛缁诲牓骞冩禒瀣棃婵炵顔愮徊楣冨Φ閸曨垰绫嶉柍褜鍓熼幃褔鎮╅懠顒佹婵炴潙鍚嬪娆撳礃閳ь剙顪冮妶鍡樺暗闁哥姵鍔曢埢宥夊炊椤掍讲鎷洪梻鍌氱墛娓氭危閸洘鐓曢幖绮瑰墲閹牓鏌曢崱妯虹瑲缂佺粯绻傞～婵嬵敇閻樻彃绫嶅┑鐘殿暯濡插懘宕归婊勫闁挎洍鍋撻崡杈ㄧ箾瀹割喕绨奸柣鎾寸洴閺屾盯鍩ラ崱妤€绫嶅┑锛勮檸閸犳氨妲愰幒鏃傜＜婵☆垵鍋愰悾铏圭磽娴ｈ櫣甯涚紒璇茬墕閻ｇ兘骞掗幋鏃€顫嶉悗瑙勬礀濞层劑藝椤栨埃鏀介柣妯活問閺嗩垶鏌涢幘瀵哥畾闁靛洦鍔欏畷姗€顢欓崗澶婁壕闁挎洍鍋撻柣锝忕節閺屽洭鏁傞悾宀€鈻夊┑鐘垫暩閸嬫稑螣婵犲啰顩叉繝濠傚枤閸熷懏绻濋棃娑欘棏闁衡偓娴犲鐓熸俊顖濐嚙缁插鏌＄€ｃ劌鈧牗绌辨繝鍥舵晝闁挎繂娲ら埛鍫㈢磽娴ｄ粙鍝洪柟绋款煼楠炲繘宕ㄩ弶鎴滅炊闂佸憡娲橀崺濠勭礊娓氣偓瀵鎮㈤崗鐓庝画闂佺粯顨呴悧濠囧箖濞嗗浚娓婚柕鍫濇缁岃法绱掗幓鎺撳仴妤犵偛绻橀幃鈺冩啑娴ｅ憡璐￠柍褜鍓ㄧ紞鍡涘磻閹烘埈鐒介柡鍐ㄧ墛閳锋帒銆掑锝呬壕濠电偘鍖犻崨顔煎簥闂佸湱鍎ら幐濠氬矗韫囨稒鐓熼柟瀵稿Х閹藉倿鏌℃担闈╄含闁哄瞼鍠栭幃婊冾潨閸℃鏆﹂梻浣虹帛閹搁箖宕伴弽顓犲祦闁哄稁鐏旀惔顭戞晢闁逞屽墯娣囧﹪鎳為妷褏顔曢梺鐟板暱閸㈡彃煤閿曞倹鍋傛繛鍡樻尰閻撶娀鏌熼鐔风瑨闁告柣鍊濋弻锝夘敇閻旈攱璇為梺鍝勭灱閸犳牠銆佸▎鎾崇畾鐟滃本绔熼弴鐘电＝濞达綀濮ら妴鍐磼椤旂晫鎳冮柣锝囧厴婵℃悂鏁傞崜褜鍟庨梻浣虹帛閸旓箓宕滃▎鎿冩晜鐟滅増甯楅埛鎺楁煕鐏炲墽鎳勭紒浣瑰閳ь剝顫夊ú婊堝极鐠囪尙鏆﹀ù鍏兼綑缁犳稒銇勯幘璺盒ョ憸浼寸畺濮婅櫣鍖栭弴鐐测拤缂備礁顑嗙敮鈥崇暦閹达箑鐓涢柛灞久肩花濠氭⒑鐟欏嫬鍔ょ€规洦鍓熼幃姗€顢旈崼鐔哄幗闂佽鍎抽悺銊х矆鐎ｎ喗鐓涢悘鐐靛亾缁€鍐磼缂佹娲寸€规洖缍婇、娆撴偂楠烆喗鍨圭槐鎾诲磼濞嗘埈妲銈忛檮濠㈡﹢鈥旈崘鈺冾浄閻庯綆浜ｉ幗鏇炩攽閻愭潙鐏熼柛銊ョ秺閹€斥槈閵忥紕鍘遍梺瑙勫閺呮稒淇婇悜妯圭箚闁告瑥顦慨鍥懚閺嶎厽鐓熸慨妞诲亾婵炰匠鍕浄婵犲﹤瀚ㄦ禍婊堟煙鐎涙绠ユ俊顖楀亾婵°倗濮烽崑娑㈠疮閹绢喖鏄ラ柨鐔哄Т濡炶棄霉閿濆牜娼愭繛鍛处娣囧﹪鎮欓鍕ㄥ亾閵堝纾婚柟鐑橆殔閸屻劌鈹戦崒娑欑秳濠㈣泛顭鈺呮煠閸濄儺鏆柟椋庣帛缁绘稒娼忛崜褎鍋ч梺纭呮珪閹瑰洭銆佸顒夌叆闁告侗鍨抽敍婊堟煟閻樺弶澶勭憸鏉垮暣閸┾偓妞ゆ巻鍋撴い顓犲厴楠炲﹪鎮欑€涙绉堕梺闈浤涢崶顭戔偓宥囩磽閸屾瑧顦︽い鎴濈墕閳绘棃寮撮姀鈥充痪闂佸憡绋戦悺銊╁煕閹寸姷纾藉ù锝咁潠椤忓懏鍙忛柨鏇炲€归悡鏇㈡煙閹屽殶闁靛棙甯炵槐鎺楊敊閸撗冪闂侀潧鐗炵紞浣哥暦濮椻偓閸╋繝宕橀妸銉ь啈闂傚倸鍊峰ù鍥綖婢舵劕纾块柟鎯版閻ゎ噣鏌涜椤ㄥ懘宕ヨぐ鎺撯拺妞ゆ巻鍋撶紒澶屾暬钘熷┑鐘插暔娴滄粓鏌熼悜妯虹劸婵¤尙顭堥…鑳檨闁搞劌鐖煎濠氭偄閸濄儳鎳濋梺鍓茬厛閸犳牠鈥栨径宀€纾藉ù锝堟鐢稓绱掔拠鑼闁伙絽鍢查～婊堝焵椤掑嫬鏄ラ柣鎰綑缁剁偞鎱ㄥ┑鍡樻拱妞ゅ孩顨婂濠氬磼濮橆兘鍋撳畡鎳婂綊宕堕澶嬫櫔闂佸搫绋侀崢鑲╃玻濡や椒绻嗛柕鍫濇噺閸ｆ椽鏌涚€ｅ墎绡€闁哄苯绉瑰畷顐﹀礋椤掆偓濞咃絿绱撴担鍝勑ｆ繝銏★耿閸╃偤骞嬮敂钘変汗闂佸湱绮敮妤€鈻撻鐘电＝濞达絿顭堥。鎶芥煕鐎ｎ偆娲撮柛鈺冨仱楠炲鏁傞挊澶夋睏闂備礁婀辩划顖滄暜婵犲嫯濮抽柦妯侯槴閺€浠嬫煟閹邦厼绲婚柟顔藉灴閺岋綁鍩℃繝鍌滀哗濡炪値鍋勭换鎴犳崲濠靛棭娼╂い鎺戝亰缁卞弶绻濋悽闈涗粶婵☆偅鐟╁畷娲醇濠㈩亷缍侀、姘跺焵椤掆偓椤繘鎼圭憴鍕幑闂佸憡渚楅崢婊堝箻閸撲胶锛滃銈嗘婵倗浜搁銏＄厽闁挎繂顦伴弫閬嶆倵闂堟稏鍋㈢€殿喖鐖奸獮瀣偐閸偅绶繝纰夌磿閸嬫垿宕愰弽褜娼栧┑鐘宠壘缁犵娀鏌熼幆褜鍤熸い鈺傜叀閺屾盯骞樺Δ鈧幊鎰版晬濠婂啠鏀介幒鎶藉磹閹剧粯鍤勯柛顐ｆ礀閻撯€愁熆鐠轰警鍎戠紒鐘荤畺閹﹢鎮欓幓鎺嗗亾閹间礁鐒垫い鎺嶇贰濞堟﹢鏌涢幒鎾崇瑲缂佺粯绻傞～婵嬵敇閻愨晛浜鹃柣鎴ｅГ閻撶喖鏌熺€电鍓遍柣鎺嶇矙閺屾稑顫滈崱鏇犲嚬缂備胶绮换鍫ュ箖娴犲顥堟繛鎴烆殕閸╂盯姊绘担渚劸妞ゆ垵妫濋獮鎰板箹娴ｅ摜鍘洪悗骞垮劚椤︻垰顔忓┑鍥ヤ簻闁圭儤鏌ㄧ敮鍓佺磽瀹ュ拑韬鐐诧躬瀵粙顢橀悙闈涘箰濠电偠鎻徊钘夘嚕閸洘鍊靛ù鐓庣摠閳锋帒霉閿濆懏鍟為柟顖氱墦閺岋繝宕奸銏狀潻闁绘挶鍊栨穱濠囶敍濠靛棔姹楅梺鍛婎殕瀹€鎼佸蓟閿濆绫嶉柛灞绢殕鐎氭盯姊烘潪鎵槮缂佸鏁婚獮鍫ュΩ閵夘喗寤洪梺绯曞墲椤ㄥ懐绮昏ぐ鎺撯拺缂備焦顭囩粻鏍ㄦ叏婵犲懎鍚规俊鍙夊姍楠炴鈧稒锚椤庢挾绱撴担鍓插創闁稿骸顭峰畷娲倷閻戞ǚ鎷洪梺鍛婄缚閸庨亶寮告惔銏㈢缁绢參顥撶弧鈧悗瑙勬礃濡炰粙骞冨▎鎾充紶闁告洦鍙庨崥鍛存⒒娴ｇ懓顕滄俊顐＄铻為柛鏇ㄥ灠閻掑灚銇勯幒鎴濃偓鎼佸储閹绢喗鐓欐い鏃傜摂濞堟棃鏌嶉挊澶樻Ц闁宠绉归、妯款槺闂侇収鍨辨穱濠囶敃閵忕媭浠煎銈嗘尭閸氬顕ラ崟顓涘亾閿涘崬瀚褰掓⒒閸屾瑨鍏岄柛妯犲懐绀婂┑鐘叉搐绾捐鈹戦悩鎻掍簽闁绘帊绮欓弻鐔煎箥椤旂⒈鏆梺缁樻尰濞茬喖鐛弽銊︾秶闁告挆鍜冪吹闂備焦瀵х粙鎴犵矓瑜版帒钃熸繛鎴炃氶弸搴ㄧ叓閸ャ劍鐓ユ繛鍫燁殔閳规垿顢欑涵閿嬫暰濠碉紕鍋犲Λ鍕亱闂佸憡鍔戦崝澶娢ｉ崼鐔稿弿婵妫楁晶濠氭煛閸♀晛浜濆ǎ鍥э躬閹瑩顢旈崟銊ヤ壕鐟滃繘鍩€椤掑嫭娑ч柣顓炲€搁悾鐑藉捶椤撶喎纾梺鎯х箺椤鈻撻幆褉鏀介柣鎰级椤ョ偤鏌熺粙娆剧吋鐎规洘鍨块獮鍥敊閻熼澹曢柣鐔哥懃鐎氼厾绮堥埀顒€鈹戦悙鑼勾闁告梹鍨块妴浣糕枎閹惧啿宓嗛梺闈涚箚濡狙囧箯濞差亝鈷戦柤濮愬€曢弸娑㈡煕鐎ｎ亷韬€规洜鏁婚幃銏ゅ礂閼测晛骞堥梺鐟板悑閻ｎ亪宕硅ぐ鎺撳€堕柨鏂垮⒔绾惧吋淇婇妶鍛殭闁哄閰ｉ弻宥夋寠婢舵ɑ鈻堟繝娈垮枓閸嬫捇姊洪幐搴ｂ槈閻庢凹鍓熼悰顔嘉旈崨顔规嫽婵炶揪绲介幉锟犲箚閸儲鐓曞┑鐘插€圭拹锟犳煃瑜滈崜娑㈡偡閹惰棄鐐婂ù锝呭濡偓闂佽鍠掗弲婵堟閹烘嚦鐔兼偂鎼达紕顓奸梻鍌氬€峰ù鍥磻閹版澘鐓曢柛顐犲劚缁€鍫ユ煥閺囩偛鈧綊宕愰崹顔ユ棃鏁愰崨顓熸闂佺粯鎸鹃崰鏍蓟閵娿儮鏀介柛鈩冿供濡倗绱撴担鍝勑ラ柛瀣ㄥ€濆璇测槈閵忕姷鍘撮梺璇″瀻閸屾凹妫滃┑鐘殿暜缁辨洟宕戦幋锕€纾归柡宥庡亝閺嗘粓鏌熼悜妯荤厸闁稿鎸搁～婵嬫偂鎼粹槅娼剧紓鍌欑贰閸犳牠鎮ч幘宕囨殾闁告鍋愬Σ鍫熺箾閸℃ê鐏ユ鐐茬Ч濮婄粯鎷呴搹鐟扮闂佹悶鍔岄悥濂稿极鐎ｎ喗鈷戦悹鍥皺缁犳壆绱掓径濠勭Ш鐎殿喖顭烽弫宥夊礋閵娿儰澹曢梺鎸庣箓缁ㄥジ鏌囬鐐寸厱婵炲棗绻愰顓㈡煛鐏炵硶鍋撳畷鍥ㄦ畷闂侀€炲苯澧寸€规洑鍗冲浠嬵敇閻樿尙銈﹂梻浣侯攰閹活亞绮婚幋鐘典笉婵炴垶鐟ｆ禍婊堟煙閹规劖纭剧悮銊╂⒑闁偛鑻晶顖炴煕閺冣偓椤ㄥ牆危? \(error.localizedDescription)"
+                    errorMessage = "加载章节失败：\(error.localizedDescription)"
                     isLoading = false
                 }
             }
@@ -902,6 +1132,7 @@ struct ReadingView: View {
         prevCache = .empty
         nextCache = .empty
         currentPageIndex = 0
+        lastAdjacentPrepareAt = 0
     }
     
     private func previousChapter() {
@@ -946,7 +1177,7 @@ struct ReadingView: View {
         showUIControls = true
         suppressTTSSync = true
         needsTTSRestartAfterPause = false
-        let fallbackIndex = lastTTSSentenceIndex ?? Int(book.durChapterPos ?? 0)
+        let fallbackIndex = lastTTSSentenceIndex ?? 0
         
         var startIndex = fallbackIndex
         var textForTTS = contentSentences.joined(separator: "\n")
@@ -1026,9 +1257,53 @@ struct ReadingView: View {
         guard let bookUrl = book.bookUrl else { return }
         Task {
             let title = currentChapterIndex < chapters.count ? chapters[currentChapterIndex].title : nil
-            let position = Double(ttsManager.isPlaying ? ttsManager.currentSentenceIndex : (lastTTSSentenceIndex ?? 0))
-            try? await apiService.saveBookProgress(bookUrl: bookUrl, index: currentChapterIndex, pos: position, title: title)
+            let bodyIndex = currentProgressBodyCharIndex()
+            
+            if let index = bodyIndex {
+                preferences.saveReadingProgress(
+                    bookUrl: bookUrl,
+                    chapterIndex: currentChapterIndex,
+                    pageIndex: currentPageIndex,
+                    bodyCharIndex: index
+                )
+            }
+            
+            // Send character index as 'pos' instead of ratio for better cross-platform compatibility
+            let posToSave = Double(bodyIndex ?? 0)
+            try? await apiService.saveBookProgress(
+                bookUrl: bookUrl,
+                index: currentChapterIndex,
+                pos: posToSave,
+                title: title
+            )
         }
+    }
+
+    private func currentProgressBodyCharIndex() -> Int? {
+        if preferences.readingMode == .horizontal {
+            guard let range = pageRange(for: currentPageIndex) else { return nil }
+            let offset = max(0, min(range.length - 1, range.length / 2))
+            let bodyLocation = range.location - currentCache.chapterPrefixLen + offset
+            return max(0, bodyLocation)
+        }
+        let sentenceIndex = currentVisibleSentenceIndex ?? lastTTSSentenceIndex ?? 0
+        let paragraphStarts = TextKitPaginator.paragraphStartIndices(sentences: contentSentences)
+        guard sentenceIndex >= 0, sentenceIndex < paragraphStarts.count else { return nil }
+        return paragraphStarts[sentenceIndex]
+    }
+
+    private func currentProgressRatio() -> Double? {
+        guard let bodyIndex = currentProgressBodyCharIndex() else { return nil }
+        let bodyLength = currentBodyLength()
+        guard bodyLength > 0 else { return nil }
+        let ratio = Double(bodyIndex) / Double(bodyLength)
+        return min(max(ratio, 0.0), 1.0)
+    }
+
+    private func currentBodyLength() -> Int {
+        let paragraphStarts = TextKitPaginator.paragraphStartIndices(sentences: contentSentences)
+        let lastSentence = contentSentences.last?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (paragraphStarts.last ?? 0) + lastSentence.utf16.count
     }
 
     private func updateVisibleSentenceIndex(frames: [Int: CGRect], viewportHeight: CGFloat) {
@@ -1088,23 +1363,26 @@ struct ReadPageViewController: UIViewControllerRepresentable {
     var nextSnapshot: PageSnapshot?
     
     @Binding var currentPageIndex: Int
+    var pageSpacing: CGFloat
     var isAtChapterStart: Bool
     var isAtChapterEnd: Bool
     var isScrollEnabled: Bool
     var onTransitioningChanged: (Bool) -> Void
-    var onTapMiddle: () -> Void
-    var onTapLeft: () -> Void
-    var onTapRight: () -> Void
+    var onTapLocation: (ReaderTapLocation) -> Void
     var onChapterChange: (Int) -> Void // offset: -1 or 1
+    var onAdjacentPrefetch: (Int) -> Void // offset: -1 or 1
+    var onAddReplaceRule: (String) -> Void
 
     func makeUIViewController(context: Context) -> UIPageViewController {
-        let pvc = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: nil)
+        let pvc = UIPageViewController(
+            transitionStyle: .scroll,
+            navigationOrientation: .horizontal,
+            options: [UIPageViewController.OptionsKey.interPageSpacing: pageSpacing]
+        )
         // pvc.dataSource is set in updateUIViewController
         pvc.delegate = context.coordinator
         context.coordinator.pageViewController = pvc
-        
-        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
-        pvc.view.addGestureRecognizer(tap)
+        pvc.view.backgroundColor = UIColor.systemBackground
         
         return pvc
     }
@@ -1118,7 +1396,6 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         } else {
             pvc.dataSource = nil
         }
-        
         context.coordinator.updateSnapshotIfNeeded(snapshot, currentPageIndex: currentPageIndex)
     }
 
@@ -1126,11 +1403,11 @@ struct ReadPageViewController: UIViewControllerRepresentable {
 
     class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
         var parent: ReadPageViewController
-        private var isAnimating = false
+        var isAnimating = false
         private var snapshot: PageSnapshot?
         private var pendingSnapshot: PageSnapshot?
         weak var pageViewController: UIPageViewController?
-
+        
         init(_ parent: ReadPageViewController) { self.parent = parent }
         
         func updateSnapshotIfNeeded(_ newSnapshot: PageSnapshot, currentPageIndex: Int) {
@@ -1166,7 +1443,13 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             // Set new VC
             let pageCount = activeSnapshot.renderStore?.containers.count ?? activeSnapshot.pages.count
             if currentPageIndex < pageCount {
-                let vc = ReadContentViewController(pageIndex: currentPageIndex, renderStore: store, chapterOffset: 0)
+                let vc = ReadContentViewController(
+                    pageIndex: currentPageIndex,
+                    renderStore: store,
+                    chapterOffset: 0,
+                    onAddReplaceRule: parent.onAddReplaceRule,
+                    onTapLocation: parent.onTapLocation
+                )
                 pvc.setViewControllers([vc], direction: .forward, animated: false)
             }
         }
@@ -1185,20 +1468,39 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             if vc.chapterOffset == 0 {
                 let index = vc.pageIndex
                 if index > 0 {
-                    return ReadContentViewController(pageIndex: index - 1, renderStore: vc.renderStore, chapterOffset: 0)
+                    return ReadContentViewController(
+                        pageIndex: index - 1,
+                        renderStore: vc.renderStore,
+                        chapterOffset: 0,
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
+                    )
                 } else {
                     // Reached start of current chapter -> Try to fetch Previous Chapter
                     if let prev = parent.prevSnapshot, let store = prev.renderStore, !prev.pages.isEmpty {
                         let lastIndex = prev.pages.count - 1
-                        return ReadContentViewController(pageIndex: lastIndex, renderStore: store, chapterOffset: -1)
+                        return ReadContentViewController(
+                            pageIndex: lastIndex,
+                            renderStore: store,
+                            chapterOffset: -1,
+                            onAddReplaceRule: parent.onAddReplaceRule,
+                            onTapLocation: parent.onTapLocation
+                        )
                     }
+                    parent.onAdjacentPrefetch(-1)
                 }
             }
             // Logic for Previous Chapter (user is scrolling back deeper into prev chapter)
             else if vc.chapterOffset == -1 {
                 let index = vc.pageIndex
                 if index > 0 {
-                    return ReadContentViewController(pageIndex: index - 1, renderStore: vc.renderStore, chapterOffset: -1)
+                    return ReadContentViewController(
+                        pageIndex: index - 1,
+                        renderStore: vc.renderStore,
+                        chapterOffset: -1,
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
+                    )
                 }
                 // If we reach start of prev chapter, we stop (or could implement prev-prev)
             }
@@ -1206,12 +1508,24 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             else if vc.chapterOffset == 1 {
                 let index = vc.pageIndex
                 if index > 0 {
-                    return ReadContentViewController(pageIndex: index - 1, renderStore: vc.renderStore, chapterOffset: 1)
+                    return ReadContentViewController(
+                        pageIndex: index - 1,
+                        renderStore: vc.renderStore,
+                        chapterOffset: 1,
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
+                    )
                 } else {
                     // Reached start of Next Chapter -> Go back to Current Chapter
                     if let current = parent.snapshot.renderStore, !parent.snapshot.pages.isEmpty {
                         let lastIndex = parent.snapshot.pages.count - 1
-                        return ReadContentViewController(pageIndex: lastIndex, renderStore: current, chapterOffset: 0)
+                        return ReadContentViewController(
+                            pageIndex: lastIndex,
+                            renderStore: current,
+                            chapterOffset: 0,
+                            onAddReplaceRule: parent.onAddReplaceRule,
+                            onTapLocation: parent.onTapLocation
+                        )
                     }
                 }
             }
@@ -1227,12 +1541,25 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                 let index = vc.pageIndex
                 let pageCount = vc.renderStore.containers.count
                 if index < pageCount - 1 {
-                    return ReadContentViewController(pageIndex: index + 1, renderStore: vc.renderStore, chapterOffset: 0)
+                    return ReadContentViewController(
+                        pageIndex: index + 1,
+                        renderStore: vc.renderStore,
+                        chapterOffset: 0,
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
+                    )
                 } else {
                     // Reached end of current chapter -> Try to fetch Next Chapter
                     if let next = parent.nextSnapshot, let store = next.renderStore, !next.pages.isEmpty {
-                        return ReadContentViewController(pageIndex: 0, renderStore: store, chapterOffset: 1)
+                        return ReadContentViewController(
+                            pageIndex: 0,
+                            renderStore: store,
+                            chapterOffset: 1,
+                            onAddReplaceRule: parent.onAddReplaceRule,
+                            onTapLocation: parent.onTapLocation
+                        )
                     }
+                    parent.onAdjacentPrefetch(1)
                 }
             }
             // Logic for Next Chapter (user is scrolling deeper into next chapter)
@@ -1240,7 +1567,13 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                 let index = vc.pageIndex
                 let pageCount = vc.renderStore.containers.count
                 if index < pageCount - 1 {
-                    return ReadContentViewController(pageIndex: index + 1, renderStore: vc.renderStore, chapterOffset: 1)
+                    return ReadContentViewController(
+                        pageIndex: index + 1,
+                        renderStore: vc.renderStore,
+                        chapterOffset: 1,
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
+                    )
                 }
             }
             // Logic for Previous Chapter (user scrolled forward from prev to current)
@@ -1248,11 +1581,23 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                 let index = vc.pageIndex
                 let pageCount = vc.renderStore.containers.count
                 if index < pageCount - 1 {
-                    return ReadContentViewController(pageIndex: index + 1, renderStore: vc.renderStore, chapterOffset: -1)
+                    return ReadContentViewController(
+                        pageIndex: index + 1,
+                        renderStore: vc.renderStore,
+                        chapterOffset: -1,
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
+                    )
                 } else {
                      // Reached end of Prev Chapter -> Go to Current Chapter
                      if let current = parent.snapshot.renderStore, !parent.snapshot.pages.isEmpty {
-                         return ReadContentViewController(pageIndex: 0, renderStore: current, chapterOffset: 0)
+                         return ReadContentViewController(
+                             pageIndex: 0,
+                             renderStore: current,
+                             chapterOffset: 0,
+                             onAddReplaceRule: parent.onAddReplaceRule,
+                             onTapLocation: parent.onTapLocation
+                         )
                      }
                 }
             }
@@ -1285,37 +1630,58 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                 updateSnapshotIfNeeded(nextSnapshot, currentPageIndex: parent.currentPageIndex)
             }
         }
-        
-        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            let x = gesture.location(in: gesture.view).x
-            let w = gesture.view?.bounds.width ?? 0
-            if x < w / 3 { parent.onTapLeft() } else if x > w * 2 / 3 { parent.onTapRight() } else { parent.onTapMiddle() }
+    }
+}
+
+final class SelectableTextView: UITextView {
+    var onAddRule: ((String) -> Void)?
+
+    @objc func addToReplaceRule() {
+        guard selectedRange.location != NSNotFound, selectedRange.length > 0 else { return }
+        let sourceText = attributedText?.string ?? text ?? ""
+        let selected = (sourceText as NSString).substring(with: selectedRange)
+        let trimmed = selected.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        onAddRule?(trimmed)
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(addToReplaceRule) {
+            return selectedRange.length > 0
         }
+        return super.canPerformAction(action, withSender: sender)
     }
 }
 
 // MARK: - Content View Controller
-class ReadContentViewController: UIViewController {
+class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     let pageIndex: Int
     let renderStore: TextKitRenderStore
     let textContainer: NSTextContainer
     let chapterOffset: Int // 0: Current, -1: Prev, 1: Next
+    let onAddReplaceRule: ((String) -> Void)?
+    let onTapLocation: ((ReaderTapLocation) -> Void)?
     
-    private lazy var textView: UITextView = {
-        let tv = UITextView(frame: CGRect(origin: .zero, size: renderStore.size), textContainer: textContainer)
-        tv.isEditable = false; tv.isScrollEnabled = false; tv.isSelectable = false
+    private lazy var textView: SelectableTextView = {
+        let tv = SelectableTextView(frame: CGRect(origin: .zero, size: renderStore.size), textContainer: textContainer)
+        tv.isEditable = false
+        tv.isScrollEnabled = false
+        tv.isSelectable = true
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
         tv.backgroundColor = .clear
         tv.translatesAutoresizingMaskIntoConstraints = false
+        tv.onAddRule = onAddReplaceRule
         return tv
     }()
     
-    init(pageIndex: Int, renderStore: TextKitRenderStore, chapterOffset: Int) {
+    init(pageIndex: Int, renderStore: TextKitRenderStore, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
         self.pageIndex = pageIndex
         self.renderStore = renderStore
         self.textContainer = renderStore.containers[pageIndex]
         self.chapterOffset = chapterOffset
+        self.onAddReplaceRule = onAddReplaceRule
+        self.onTapLocation = onTapLocation
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -1323,6 +1689,13 @@ class ReadContentViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.backgroundColor = UIColor.systemBackground
+        let item = UIMenuItem(title: "加入净化规则", action: #selector(SelectableTextView.addToReplaceRule))
+        if !(UIMenuController.shared.menuItems?.contains(where: { $0.action == item.action }) ?? false) {
+            var items = UIMenuController.shared.menuItems ?? []
+            items.append(item)
+            UIMenuController.shared.menuItems = items
+        }
         view.addSubview(textView)
         NSLayoutConstraint.activate([
             textView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -1330,6 +1703,58 @@ class ReadContentViewController: UIViewController {
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor), // No extra padding here
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+        attachTextTap()
+    }
+
+    private func attachTextTap() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTextTap(_:)))
+        tap.cancelsTouchesInView = false
+        tap.delaysTouchesBegan = false
+        tap.delaysTouchesEnded = false
+        tap.delegate = self
+        if let longPress = textView.gestureRecognizers?.compactMap({ $0 as? UILongPressGestureRecognizer }).first {
+            bindPageScrollToFail(longPress)
+        }
+        textView.addGestureRecognizer(tap)
+    }
+
+    private func bindPageScrollToFail(_ longPress: UILongPressGestureRecognizer) {
+        var node: UIView? = view
+        while let current = node {
+            if let scroll = current as? UIScrollView {
+                scroll.panGestureRecognizer.require(toFail: longPress)
+                scroll.delaysContentTouches = false
+                scroll.canCancelContentTouches = false
+                break
+            }
+            node = current.superview
+        }
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        if (gestureRecognizer is UITapGestureRecognizer && otherGestureRecognizer is UILongPressGestureRecognizer) ||
+           (otherGestureRecognizer is UITapGestureRecognizer && gestureRecognizer is UILongPressGestureRecognizer) {
+            return false
+        }
+        return true
+    }
+
+    @objc private func handleTextTap(_ gesture: UITapGestureRecognizer) {
+        if textView.selectedRange.length > 0 {
+            textView.selectedRange = NSRange(location: textView.selectedRange.location, length: 0)
+            textView.resignFirstResponder()
+            return
+        }
+        let x = gesture.location(in: textView).x
+        let w = textView.bounds.width
+        guard w > 0 else { return }
+        if x < w / 3 {
+            onTapLocation?(.left)
+        } else if x > w * 2 / 3 {
+            onTapLocation?(.right)
+        } else {
+            onTapLocation?(.middle)
+        }
     }
 }
 
@@ -1736,6 +2161,12 @@ struct FontSizeSheet: View {
                     Text("\u{5DE6}\u{53F3}\u{8FB9}\u{8DDD}: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
                         .font(.headline)
                     Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
+                }
+
+                VStack(spacing: 8) {
+                    Text("\u{7FFB}\u{9875}\u{95F4}\u{8DDD}: \(String(format: "%.0f", preferences.pageInterSpacing))")
+                        .font(.headline)
+                    Slider(value: $preferences.pageInterSpacing, in: 0...30, step: 1)
                 }
 
                 Toggle("播放时锁定翻页", isOn: $preferences.lockPageOnTTS)
