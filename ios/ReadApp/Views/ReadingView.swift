@@ -1699,7 +1699,6 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
         tap.delaysTouchesEnded = false
         tap.delegate = self
         if let longPress = textView.gestureRecognizers?.compactMap({ $0 as? UILongPressGestureRecognizer }).first {
-            tap.require(toFail: longPress)
             bindPageScrollToFail(longPress)
         }
         textView.addGestureRecognizer(tap)
@@ -1719,7 +1718,11 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        true
+        if (gestureRecognizer is UITapGestureRecognizer && otherGestureRecognizer is UILongPressGestureRecognizer) ||
+           (otherGestureRecognizer is UITapGestureRecognizer && gestureRecognizer is UILongPressGestureRecognizer) {
+            return false
+        }
+        return true
     }
 
     @objc private func handleTextTap(_ gesture: UITapGestureRecognizer) {
