@@ -52,6 +52,7 @@ struct ReadingView: View {
     @State private var pendingReplaceRule: ReplaceRule?
     @State private var pendingResumeLocalBodyIndex: Int?
     @State private var pendingResumeLocalChapterIndex: Int?
+    @State private var pendingResumeLocalPageIndex: Int?
     @State private var initialServerChapterIndex: Int?
     
     // Pagination State
@@ -91,6 +92,7 @@ struct ReadingView: View {
         _pendingResumePos = State(initialValue: book.durChapterPos)
         _pendingResumeLocalBodyIndex = State(initialValue: localProgress?.bodyCharIndex)
         _pendingResumeLocalChapterIndex = State(initialValue: localProgress?.chapterIndex)
+        _pendingResumeLocalPageIndex = State(initialValue: localProgress?.pageIndex)
         _initialServerChapterIndex = State(initialValue: serverIndex)
     }
 
@@ -520,6 +522,12 @@ struct ReadingView: View {
             chapterPrefixLen: newPrefixLen,
             isFullyPaginated: isFully
         )
+        if let localPage = pendingResumeLocalPageIndex,
+           pendingResumeLocalChapterIndex == currentChapterIndex,
+           pages.indices.contains(localPage) {
+            currentPageIndex = localPage
+            pendingResumeLocalPageIndex = nil
+        }
         if resumeCharIndex != nil {
             pendingResumeCharIndex = nil
         }
@@ -1203,6 +1211,7 @@ struct ReadingView: View {
                 preferences.saveReadingProgress(
                     bookUrl: bookUrl,
                     chapterIndex: currentChapterIndex,
+                    pageIndex: currentPageIndex,
                     bodyCharIndex: bodyIndex
                 )
             }
@@ -1653,6 +1662,9 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
         tap.delaysTouchesBegan = false
         tap.delaysTouchesEnded = false
         tap.delegate = self
+        if let longPress = textView.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) {
+            tap.require(toFail: longPress)
+        }
         textView.addGestureRecognizer(tap)
     }
 
