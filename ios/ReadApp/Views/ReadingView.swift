@@ -1215,7 +1215,9 @@ struct ReadingView: View {
     private func currentProgressBodyCharIndex() -> Int? {
         if preferences.readingMode == .horizontal {
             guard let range = pageRange(for: currentPageIndex) else { return nil }
-            return max(0, range.location - currentCache.chapterPrefixLen)
+            let offset = max(0, min(range.length - 1, range.length / 2))
+            let bodyLocation = range.location - currentCache.chapterPrefixLen + offset
+            return max(0, bodyLocation)
         }
         let sentenceIndex = currentVisibleSentenceIndex ?? lastTTSSentenceIndex ?? 0
         let paragraphStarts = TextKitPaginator.paragraphStartIndices(sentences: contentSentences)
@@ -1648,6 +1650,20 @@ class ReadContentViewController: UIViewController {
             textView.leadingAnchor.constraint(equalTo: view.leadingAnchor), // No extra padding here
             textView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+        ensureTapWaitsForSelection()
+    }
+
+    private func ensureTapWaitsForSelection() {
+        guard let longPress = textView.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) else { return }
+        var node: UIView? = view
+        while let current = node {
+            if let taps = current.gestureRecognizers?.compactMap({ $0 as? UITapGestureRecognizer }) {
+                for tap in taps {
+                    tap.require(toFail: longPress)
+                }
+            }
+            node = current.superview
+        }
     }
 }
 
