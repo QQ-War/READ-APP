@@ -1732,17 +1732,11 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        if (gestureRecognizer is UITapGestureRecognizer && otherGestureRecognizer is UILongPressGestureRecognizer) ||
-           (otherGestureRecognizer is UITapGestureRecognizer && gestureRecognizer is UILongPressGestureRecognizer) {
-            return false
-        }
         return true
     }
 
     @objc private func handleTextTap(_ gesture: UITapGestureRecognizer) {
         if textView.selectedRange.length > 0 {
-            textView.selectedRange = NSRange(location: textView.selectedRange.location, length: 0)
-            textView.resignFirstResponder()
             return
         }
         let x = gesture.location(in: textView).x
