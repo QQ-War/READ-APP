@@ -54,6 +54,8 @@ struct ReadingView: View {
     @State private var pendingResumeLocalChapterIndex: Int?
     @State private var pendingResumeLocalPageIndex: Int?
     @State private var initialServerChapterIndex: Int?
+    @State private var isRepaginateQueued = false
+    @State private var lastPaginationKey: PaginationKey?
     
     // Pagination State
     @State private var currentPageIndex: Int = 0
@@ -94,6 +96,18 @@ struct ReadingView: View {
         _pendingResumeLocalChapterIndex = State(initialValue: localProgress?.chapterIndex)
         _pendingResumeLocalPageIndex = State(initialValue: localProgress?.pageIndex)
         _initialServerChapterIndex = State(initialValue: serverIndex)
+    }
+
+    private struct PaginationKey: Hashable {
+        let width: Int
+        let height: Int
+        let fontSize: Int
+        let lineSpacing: Int
+        let margin: Int
+        let sentenceCount: Int
+        let chapterIndex: Int
+        let resumeCharIndex: Int
+        let resumePageIndex: Int
     }
 
     var body: some View {
@@ -279,38 +293,32 @@ struct ReadingView: View {
             )
             .onAppear {
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: contentSentences) { _ in
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: preferences.fontSize) { _ in
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: preferences.lineSpacing) { _ in
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: preferences.pageHorizontalMargin) { _ in
                 if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: geometry.size) { _ in
                  if contentSize.width > 0 && contentSize.height > 0 {
-                    pageSize = contentSize
-                    repaginateContent(in: contentSize)
+                    scheduleRepaginate(in: contentSize)
                 }
             }
             .onChange(of: currentPageIndex) { newIndex in
@@ -678,6 +686,33 @@ struct ReadingView: View {
         }
     }
 
+    private func scheduleRepaginate(in size: CGSize) {
+        pageSize = size
+        let key = PaginationKey(
+            width: Int((size.width * 100).rounded()),
+            height: Int((size.height * 100).rounded()),
+            fontSize: Int((preferences.fontSize * 10).rounded()),
+            lineSpacing: Int((preferences.lineSpacing * 10).rounded()),
+            margin: Int((preferences.pageHorizontalMargin * 10).rounded()),
+            sentenceCount: contentSentences.count,
+            chapterIndex: currentChapterIndex,
+            resumeCharIndex: pendingResumeCharIndex ?? -1,
+            resumePageIndex: pendingResumeLocalPageIndex ?? -1
+        )
+        if key == lastPaginationKey {
+            return
+        }
+        lastPaginationKey = key
+        if isRepaginateQueued {
+            return
+        }
+        isRepaginateQueued = true
+        DispatchQueue.main.async {
+            repaginateContent(in: size)
+            isRepaginateQueued = false
+        }
+    }
+
     private func pageIndexForSentence(_ index: Int) -> Int? {
         guard !currentCache.pages.isEmpty else { return nil }
         for i in 0..<currentCache.pages.count {
@@ -951,6 +986,7 @@ struct ReadingView: View {
             bodyIndex = localIndex
             pendingResumeLocalBodyIndex = nil
             pendingResumeLocalChapterIndex = nil
+            pendingResumeLocalPageIndex = nil
         } else {
             let ratio = min(max(pos, 0.0), 1.0)
             bodyIndex = Int(Double(bodyLength) * ratio)
@@ -1664,8 +1700,22 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
         tap.delegate = self
         if let longPress = textView.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) {
             tap.require(toFail: longPress)
+            bindPageScrollToFail(longPress)
         }
         textView.addGestureRecognizer(tap)
+    }
+
+    private func bindPageScrollToFail(_ longPress: UILongPressGestureRecognizer) {
+        var node: UIView? = view
+        while let current = node {
+            if let scroll = current as? UIScrollView {
+                scroll.panGestureRecognizer.require(toFail: longPress)
+                scroll.delaysContentTouches = false
+                scroll.canCancelContentTouches = false
+                break
+            }
+            node = current.superview
+        }
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
