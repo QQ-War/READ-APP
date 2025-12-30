@@ -1219,7 +1219,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
 
     class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
         var parent: ReadPageViewController
-        private var isAnimating = false
+        var isAnimating = false
         private var snapshot: PageSnapshot?
         private var pendingSnapshot: PageSnapshot?
         weak var pageViewController: UIPageViewController?
