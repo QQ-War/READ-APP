@@ -83,6 +83,7 @@ struct ReadingView: View {
     private let verticalPadding: CGFloat = 40
     private let initialPageBatch: Int = 12
     private let prefetchPageBatch: Int = 8
+    private let bufferedPageBatch: Int = 6
 
     init(book: Book) {
         self.book = book
@@ -928,17 +929,26 @@ struct ReadingView: View {
             isFully = result.reachedEnd
         }
 
+        func appendUntilBuffer(_ target: Int) {
+            while pages.count < target && !isFully {
+                appendPages(prefetchPageBatch)
+            }
+        }
+
+        let bufferGoal = max(bufferedPageBatch, initialPageBatch)
+
         if forGate {
             if fromEnd {
-                // TextKit can't paginate backward; run forward to the end to keep layout stable.
                 while !isFully {
                     appendPages(max(prefetchPageBatch * 2, 16))
                 }
             } else {
                 appendPages(initialPageBatch)
+                appendUntilBuffer(bufferGoal)
             }
         } else {
             appendPages(initialPageBatch)
+            appendUntilBuffer(bufferGoal)
         }
 
         return ChapterCache(
