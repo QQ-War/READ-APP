@@ -6,7 +6,7 @@ private struct ChapterCache {
     let pages: [PaginatedPage]
     let store: TextKitRenderStore?
     let tk2Store: TextKit2RenderStore? // Added for TextKit 2
-    let pageInfos: [TextKit2Paginator.PageInfo]? // Added for TextKit 2
+    let pageInfos: [TK2PageInfo]? // Added for TextKit 2
     let contentSentences: [String]
     let attributedText: NSAttributedString
     let paragraphStarts: [Int]
@@ -1979,6 +1979,7 @@ final class SelectableTextView: UITextView {
 }
 
 // MARK: - Content View Controller
+// MARK: - Content View Controller
 class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     let pageIndex: Int
     let renderStore: Any // Changed to Any
@@ -2005,36 +2006,6 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
         view.backgroundColor = UIColor.systemBackground
         
         if #available(iOS 15.0, *), let store = renderStore as? TextKit2RenderStore {
-             // TK2 Path
-             let v = ReadContent2View(frame: view.bounds)
-             v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-             v.renderStore = store
-             // We need to fetch pageInfo from somewhere. Wait. 
-             // The VC init doesn't pass PageInfo, only index.
-             // But renderStore doesn't have page info list (it's in Cache).
-             // DESIGN FLAW in my plan: renderStore in TK2 is just content. Pagination result is separate.
-             // In TK1, renderStore contained containers, so store.containers[index] worked.
-             // In TK2, store doesn't know about pages.
-             
-             // Correction: I must pass PageInfo to VC or let VC access it.
-             // But VC is generic.
-             // Solution: Pass a closure or specific Page Object? 
-             // Or, inject the PageInfo into VC.
-             // But makeContentViewController in ReadingView constructs it.
-             // ReadingView has 'cache'.
-             
-             // I will hack it: I will assume the caller configures the view after init or pass it in constructor?
-             // No, constructor signature is fixed by my previous step.
-             // Wait, I can change constructor signature, but I need to update ReadingView call sites.
-             // Let's check makeContentViewController in ReadingView.
-             
-             // Actually, I can pass the pageInfo in init if I change the signature.
-             // Or, better:
-             // Let's look at `makeContentViewController`. It accesses `cache`.
-             // I can pass `cache.pageInfos?[pageIndex]` to the VC.
-             // But I need to update VC init.
-             
-             // For now, let's implement the TK1 logic here and come back to fix Init.
              setupTK2View(store: store)
         } else if let store = renderStore as? TextKitRenderStore {
             // TK1 Path
@@ -2069,7 +2040,6 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     }
     
     private func setupTK2View(store: Any) {
-         // Placeholder. Will be configured by property injection.
          if #available(iOS 15.0, *), let store = store as? TextKit2RenderStore {
              let v = ReadContent2View(frame: view.bounds)
              v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -2081,9 +2051,9 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
          }
     }
     
-    // Helper to inject PageInfo for TK2
-    func configureTK2Page(info: TextKit2Paginator.PageInfo) {
-        if #available(iOS 15.0, *), let v = tk2View as? ReadContent2View {
+    @available(iOS 15.0, *)
+    func configureTK2Page(info: TK2PageInfo) {
+        if let v = tk2View as? ReadContent2View {
             v.pageInfo = info
             v.setNeedsDisplay()
         }
@@ -2100,9 +2070,6 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
         }
         view.addGestureRecognizer(tap)
     }
-    
-    // ... (rest of the methods: bindPageScrollToFail, gestureRecognizer, handleTextTap) ...
-
 
     private func bindPageScrollToFail(_ longPress: UILongPressGestureRecognizer) {
         var node: UIView? = view
@@ -2122,20 +2089,21 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     }
 
     @objc private func handleTextTap(_ gesture: UITapGestureRecognizer) {
-        if textView.selectedRange.length > 0 {
+        if let tv = textView, tv.selectedRange.length > 0 {
             return
         }
-        let x = gesture.location(in: textView).x
-        let w = textView.bounds.width
+        let location = gesture.location(in: view)
+        let w = view.bounds.width
         guard w > 0 else { return }
-        if x < w / 3 {
+        if location.x < w / 3 {
             onTapLocation?(.left)
-        } else if x > w * 2 / 3 {
+        } else if location.x > w * 2 / 3 {
             onTapLocation?(.right)
         } else {
             onTapLocation?(.middle)
         }
     }
+}
 }
 
 // MARK: - TextKit Paginator
@@ -2561,6 +2529,13 @@ struct FontSizeSheet: View {
 
 // MARK: - TextKit 2 Implementation
 
+struct TK2PageInfo {
+    let range: NSRange
+    let yOffset: CGFloat
+    let height: CGFloat
+    let startSentenceIndex: Int
+}
+
 @available(iOS 15.0, *)
 final class TextKit2RenderStore {
     let contentStorage: NSTextContentStorage
@@ -2586,16 +2561,9 @@ final class TextKit2RenderStore {
 @available(iOS 15.0, *)
 struct TextKit2Paginator {
     
-    struct PageInfo {
-        let range: NSRange
-        let yOffset: CGFloat
-        let height: CGFloat
-        let startSentenceIndex: Int
-    }
-    
     struct PaginationResult {
         let pages: [PaginatedPage] // We keep PaginatedPage struct but extend its usage
-        let pageInfos: [PageInfo]
+        let pageInfos: [TK2PageInfo]
         let reachedEnd: Bool
     }
     
@@ -2617,7 +2585,7 @@ struct TextKit2Paginator {
         layoutManager.ensureLayout(for: documentRange)
         
         var pages: [PaginatedPage] = []
-        var pageInfos: [PageInfo] = []
+        var pageInfos: [TK2PageInfo] = []
         
         var currentPageStartY: CGFloat = 0
         var pageCount = 0
@@ -2646,7 +2614,7 @@ struct TextKit2Paginator {
                      let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
                      
                      pages.append(PaginatedPage(globalRange: nsRange, startSentenceIndex: startIdx))
-                     pageInfos.append(PageInfo(range: nsRange, yOffset: currentPageStartY, height: pageSize.height, startSentenceIndex: startIdx))
+                     pageInfos.append(TK2PageInfo(range: nsRange, yOffset: currentPageStartY, height: pageSize.height, startSentenceIndex: startIdx))
                 }
                 
                 pageCount += 1
@@ -2671,7 +2639,7 @@ struct TextKit2Paginator {
                      let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
                      
                      pages.append(PaginatedPage(globalRange: nsRange, startSentenceIndex: startIdx))
-                     pageInfos.append(PageInfo(range: nsRange, yOffset: currentPageStartY, height: pageSize.height, startSentenceIndex: startIdx))
+                     pageInfos.append(TK2PageInfo(range: nsRange, yOffset: currentPageStartY, height: pageSize.height, startSentenceIndex: startIdx))
                  }
              }
         }
@@ -2693,7 +2661,7 @@ struct TextKit2Paginator {
 @available(iOS 15.0, *)
 class ReadContent2View: UIView {
     var renderStore: TextKit2RenderStore?
-    var pageInfo: TextKit2Paginator.PageInfo?
+    var pageInfo: TK2PageInfo?
     var onTapLocation: ((ReaderTapLocation) -> Void)?
     var onAddReplaceRule: ((String) -> Void)?
     
