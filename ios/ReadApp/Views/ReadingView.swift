@@ -114,6 +114,7 @@ struct ReadingView: View {
     @StateObject private var contentControllerCache = ReadContentViewControllerCache()
     @State private var pendingBufferPageIndex: Int?
     @State private var lastHandledPageIndex: Int?
+    @State private var skipNextPageChangeTTSRestart: Bool = false
 
     // Unified Insets for consistency
     private let horizontalPadding: CGFloat = 20
@@ -742,7 +743,9 @@ struct ReadingView: View {
             triggerAdjacentPrefetchIfNeeded()
         }
 
-        if ttsManager.isPlaying && !ttsManager.isPaused && !isAutoFlipping {
+        if skipNextPageChangeTTSRestart {
+            skipNextPageChangeTTSRestart = false
+        } else if ttsManager.isPlaying && !ttsManager.isPaused && !isAutoFlipping {
             if !preferences.lockPageOnTTS {
                 ttsManager.stop()
                 startTTS(pageIndexOverride: newIndex, showControls: false)
@@ -1220,7 +1223,7 @@ struct ReadingView: View {
                 let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: currentChapterIndex)
                 await MainActor.run {
                     let cleanedContent = removeHTMLAndSVG(content)
-                    resetPaginationState()
+                    let previousPageIndex = resetPaginationState()
                     rawContent = cleanedContent
                     updateProcessedContent(from: cleanedContent)
                     isLoading = false
@@ -1231,7 +1234,8 @@ struct ReadingView: View {
                         }
                     }
                     prepareAdjacentChapters(for: currentChapterIndex)
-                    if shouldContinuePlayingSameBook {
+                    if shouldContinuePlayingSameBook && previousPageIndex != currentPageIndex {
+                        skipNextPageChangeTTSRestart = true
                         ttsManager.stop()
                         lastTTSSentenceIndex = 0
                         startTTS(pageIndexOverride: currentPageIndex, showControls: false)
@@ -1246,7 +1250,8 @@ struct ReadingView: View {
         }
     }
 
-    private func resetPaginationState() {
+    private func resetPaginationState() -> Int {
+        let previousPageIndex = currentPageIndex
         currentCache = .empty
         prevCache = .empty
         nextCache = .empty
@@ -1254,6 +1259,7 @@ struct ReadingView: View {
         lastAdjacentPrepareAt = 0
         pendingBufferPageIndex = nil
         lastHandledPageIndex = nil
+        return previousPageIndex
     }
     
     private func previousChapter() {
