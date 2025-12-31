@@ -745,7 +745,7 @@ struct ReadingView: View {
         if ttsManager.isPlaying && !ttsManager.isPaused && !isAutoFlipping {
             if !preferences.lockPageOnTTS {
                 ttsManager.stop()
-                startTTS(pageIndexOverride: newIndex)
+                startTTS(pageIndexOverride: newIndex, showControls: false)
             }
         }
         if ttsManager.isPlaying && ttsManager.isPaused {
@@ -1288,8 +1288,10 @@ struct ReadingView: View {
         }
     }
     
-    private func startTTS(pageIndexOverride: Int? = nil) {
-        showUIControls = true
+    private func startTTS(pageIndexOverride: Int? = nil, showControls: Bool = true) {
+        if showControls {
+            showUIControls = true
+        }
         suppressTTSSync = true
         needsTTSRestartAfterPause = false
         let fallbackIndex = lastTTSSentenceIndex ?? 0
