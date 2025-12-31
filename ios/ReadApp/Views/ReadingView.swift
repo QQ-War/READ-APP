@@ -1589,6 +1589,8 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                         onTapLocation: parent.onTapLocation
                     )
                 }
+                // Avoid setting view controllers if we are mid-animation or just finished
+                // Logic: If isAnimating is true, we usually defer. If we are here, isAnimating is likely false.
                 pvc.setViewControllers([vc], direction: .forward, animated: false)
             }
         }
@@ -1761,7 +1763,9 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             if completed, let visibleVC = pvc.viewControllers?.first as? ReadContentViewController {
                 // If we are still in current chapter (offset 0), update index
                 if visibleVC.chapterOffset == 0 {
-                    parent.currentPageIndex = visibleVC.pageIndex
+                    if parent.currentPageIndex != visibleVC.pageIndex {
+                        parent.currentPageIndex = visibleVC.pageIndex
+                    }
                 } 
                 // If we successfully switched to Next/Prev chapter
                 else {
