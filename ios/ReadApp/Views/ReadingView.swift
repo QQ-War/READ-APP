@@ -10,7 +10,8 @@ private struct PaginatedPage {
 private struct TK2PageInfo {
     let range: NSRange
     let yOffset: CGFloat
-    let height: CGFloat
+    let pageHeight: CGFloat // Allocated page height (e.g., pageSize.height)
+    let actualContentHeight: CGFloat // Actual height used by content on this page
     let startSentenceIndex: Int
 }
 
@@ -1531,52 +1532,81 @@ private struct TextKit2Paginator {
         guard !documentRange.isEmpty else {
             return PaginationResult(pages: [], pageInfos: [], reachedEnd: true)
         }
-        
+
         layoutManager.ensureLayout(for: documentRange)
-        
+
         var pages: [PaginatedPage] = []
         var pageInfos: [TK2PageInfo] = []
         var pageCount = 0
-        let totalLength = renderStore.attributedString.length
-
-        func appendPage(range: NSRange, yOffset: CGFloat) -> Bool {
-            guard range.length > 0 || (range.location == 0 && range.length == 0 && totalLength == 0) else { return true }
-            let adjustedLocation = max(0, range.location - prefixLen)
-            let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
-            pages.append(PaginatedPage(globalRange: range, startSentenceIndex: startIdx))
-            pageInfos.append(TK2PageInfo(range: range, yOffset: yOffset, height: pageSize.height, startSentenceIndex: startIdx))
-            pageCount += 1
-            return pageCount < maxPages
-        }
         
+        var currentContentLocation: NSTextLocation = documentRange.location
         var currentY: CGFloat = 0
-        let totalHeight = layoutManager.usageBounds(for: renderStore.textContainer).height
-        var currentLocation = 0
 
-        while currentY < totalHeight && currentLocation < totalLength {
+        while let currentLocation = currentContentLocation as? NSTextContentManager.Location,
+              currentLocation < documentRange.endLocation,
+              pageCount < maxPages {
+
+            var pageFragmentMinY: CGFloat?
+            var pageFragmentMaxY: CGFloat?
+            var pageEndLocation: NSTextLocation = currentLocation
+            
             let pageRect = CGRect(x: 0, y: currentY, width: pageSize.width, height: pageSize.height)
-            var endLocation = currentLocation
             
-            layoutManager.enumerateTextLayoutFragments(from: renderStore.contentStorage.location(documentRange.location, offsetBy: currentLocation), options: [.ensuresLayout]) { fragment in
+            layoutManager.enumerateTextLayoutFragments(from: currentLocation, options: [.ensuresLayout, .ensuresExtraLineFragment]) { fragment in
                 let fragmentFrame = fragment.layoutFragmentFrame
-                if fragmentFrame.minY < pageRect.maxY {
-                    let range = rangeFromTextRange(fragment.rangeInElement, in: contentStorage)
-                    endLocation = NSMaxRange(range ?? NSRange(location: endLocation, length: 0))
-                    return true
-                } else {
-                    return false
-                }
-            }
+                
+                // Check if the fragment is fully or partially within the current page's vertical bounds.
+                if fragmentFrame.maxY > pageRect.minY && fragmentFrame.minY < pageRect.maxY {
+                    
+                    if fragment.textLayoutManager.textLayoutFragment(for: fragmentFrame.origin)?.rangeInElement.location != fragment.rangeInElement.location && fragmentFrame.minY >= pageRect.maxY {
+                        return false
+                    }
 
-            let pageRange = NSRange(location: currentLocation, length: endLocation - currentLocation)
-            if !appendPage(range: pageRange, yOffset: currentY) { break }
+                    if pageFragmentMinY == nil {
+                        pageFragmentMinY = fragmentFrame.minY
+                    }
+                    pageFragmentMaxY = fragmentFrame.maxY
+                    pageEndLocation = fragment.rangeInElement.endLocation
+                    
+                    return fragmentFrame.maxY < pageRect.maxY
+                }
+                
+                return fragmentFrame.minY < pageRect.maxY
+            }
             
-            currentLocation = endLocation
-            currentY += pageSize.height
+            guard let startOffset = contentStorage.offset(from: contentStorage.documentRange.location, to: currentLocation) as Int?,
+                  let endOffset = contentStorage.offset(from: contentStorage.documentRange.location, to: pageEndLocation) as Int?,
+                  endOffset > startOffset else {
+                currentContentLocation = pageEndLocation
+                if let nextLoc = layoutManager.location(pageEndLocation, offsetBy: 1) {
+                    currentContentLocation = nextLoc
+                } else {
+                    break
+                }
+                continue
+            }
+            
+            let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
+            
+            let actualContentHeight = (pageFragmentMaxY ?? currentY) - (pageFragmentMinY ?? currentY)
+
+            let adjustedLocation = max(0, pageRange.location - prefixLen)
+            let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
+            
+            pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
+            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageSize.height, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx))
+            
+            pageCount += 1
+            currentContentLocation = pageEndLocation
+            
+            if let nextFragment = layoutManager.textLayoutFragment(for: pageEndLocation) {
+                currentY = nextFragment.layoutFragmentFrame.minY
+            } else if let loc = currentContentLocation as? NSTextContentManager.Location, loc < documentRange.endLocation {
+                currentY += pageSize.height + 1
+            }
         }
-        
-        let reachedEnd = (pages.last?.globalRange.upperBound ?? 0) >= renderStore.attributedString.length
-        
+
+        let reachedEnd = (currentContentLocation as? NSTextContentManager.Location) == documentRange.endLocation
         return PaginationResult(pages: pages, pageInfos: pageInfos, reachedEnd: reachedEnd)
     }
 
@@ -1616,9 +1646,11 @@ private class ReadContent2View: UIView {
         
         store.layoutManager.enumerateTextLayoutFragments(from: store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location), options: [.ensuresLayout]) { fragment in
             
-            if fragment.layoutFragmentFrame.minY >= info.yOffset + info.height { return false }
+            if fragment.layoutFragmentFrame.minY >= info.yOffset + info.pageHeight { return false }
             
-            fragment.draw(at: .zero, in: context!)
+            if fragment.layoutFragmentFrame.maxY > info.yOffset {
+                 fragment.draw(at: .zero, in: context!)
+            }
             return true
         }
         
