@@ -52,7 +52,6 @@ final class ReadContentViewControllerCache: ObservableObject {
         }
         controllers = controllers.filter { activeIDs.contains($0.key.storeID) }
     }
-}
 
 // MARK: - ReadingView
 enum ReaderTapLocation {
@@ -2633,14 +2632,21 @@ struct TextKit2Paginator {
             
             // Allow a small tolerance or check if it's the FIRST fragment on page
             if fragmentBottomOnPage > pageSize.height && frame.minY > currentPageStartY {
-                let glyphRange = fragment.layoutFragmentRange
-                let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
-                let pageRange = NSRange(location: currentPageStartLocation, length: max(0, charRange.location - currentPageStartLocation))
+                var startLocation = currentPageStartLocation
+                if let fragmentRange = fragment.textElement?.elementRange,
+                   let nsRange = rangeFromTextRange(fragmentRange, in: contentStorage) {
+                    startLocation = nsRange.location
+                } else {
+                    let glyphRange = layoutManager.glyphRange(forBoundingRect: frame, in: renderStore.textContainer)
+                    let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+                    startLocation = charRange.location
+                }
+                let pageRange = NSRange(location: currentPageStartLocation, length: max(0, startLocation - currentPageStartLocation))
                 if !appendPage(range: pageRange, yOffset: currentPageStartY) {
                     return false
                 }
                 currentPageStartY = frame.minY
-                currentPageStartLocation = charRange.location
+                currentPageStartLocation = startLocation
             }
             return true
         }
