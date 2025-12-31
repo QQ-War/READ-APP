@@ -405,6 +405,12 @@ class TTSManager: NSObject, ObservableObject {
             speakNextSentence()
         }
     }
+
+    func interruptForChapterSwitch() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+        isPaused = false
+    }
     
     // MARK: - 涓婁竴娈?
     func previousSentence() {
@@ -1380,7 +1386,6 @@ extension TTSManager: AVAudioPlayerDelegate {
         speakNextSentence()
     }
 }
-
 
 
 

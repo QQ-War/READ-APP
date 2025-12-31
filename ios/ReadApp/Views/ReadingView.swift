@@ -619,6 +619,7 @@ struct ReadingView: View {
 
     private func scheduleManualTTSRestart(pageIndex: Int?) {
         skipNextPageChangeTTSRestart = true
+        ttsManager.interruptForChapterSwitch()
         lastTTSSentenceIndex = 0
         pendingManualRestartChapter = currentChapterIndex
         pendingManualRestartPageIndex = pageIndex
