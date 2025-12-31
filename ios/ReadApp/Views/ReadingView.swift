@@ -639,6 +639,7 @@ struct ReadingView: View {
         let pageIndex = pendingManualRestartPageIndex ?? currentPageIndex
         pendingManualRestartChapter = nil
         pendingManualRestartPageIndex = nil
+        skipNextPageChangeTTSRestart = true
         startTTS(pageIndexOverride: pageIndex, showControls: false)
     }
 
