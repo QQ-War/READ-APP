@@ -16,6 +16,7 @@ private struct ChapterCache {
     static var empty: ChapterCache {
         ChapterCache(pages: [], store: nil, tk2Store: nil, pageInfos: nil, contentSentences: [], attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false)
     }
+
 }
 
 final class ReadContentViewControllerCache: ObservableObject {
@@ -413,16 +414,16 @@ struct ReadingView: View {
                     }
                 
                 if availableSize.width > 0 && availableSize.height > 0 {
-                        ZStack(alignment: .bottomTrailing) {
-                            cacheRefresher
-                            let currentVC = makeContentViewController(cache: currentCache, pageIndex: currentPageIndex, chapterOffset: 0)
+                    ZStack(alignment: .bottomTrailing) {
+                        cacheRefresher
+                        let currentVC = makeContentViewController(cache: currentCache, pageIndex: currentPageIndex, chapterOffset: 0)
                         let prevVC = makeContentViewController(cache: prevCache, pageIndex: max(0, prevCache.pages.count - 1), chapterOffset: -1)
                         let nextVC = makeContentViewController(cache: nextCache, pageIndex: 0, chapterOffset: 1)
 
                         ReadPageViewController(
-                            snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store, tk2Store: currentCache.tk2Store),
-                            prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store, tk2Store: prevCache.tk2Store),
-                            nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store, tk2Store: nextCache.tk2Store),
+                            snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store, tk2Store: currentCache.tk2Store, pageInfos: currentCache.pageInfos),
+                            prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store, tk2Store: prevCache.tk2Store, pageInfos: prevCache.pageInfos),
+                            nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store, tk2Store: nextCache.tk2Store, pageInfos: nextCache.pageInfos),
                             currentPageIndex: $currentPageIndex,
                             pageSpacing: preferences.pageInterSpacing,
                             isAtChapterStart: currentPageIndex == 0,
@@ -434,27 +435,27 @@ struct ReadingView: View {
                             onTapLocation: { location in
                                 handleReaderTap(location: location)
                             },
-                onChapterChange: { offset in
-                    isAutoFlipping = true
-                    handleChapterSwitch(offset: offset)
-                },
-                onAdjacentPrefetch: { offset in
-                    if offset > 0 {
-                        if nextCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
-                    } else if offset < 0 {
-                        if prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
-                    }
-                },
-                onAddReplaceRule: { selectedText in
-                    presentReplaceRuleEditor(selectedText: selectedText)
-                },
-                currentContentViewController: currentVC,
-                prevContentViewController: prevVC,
-                nextContentViewController: nextVC
-            )
-                            .id(preferences.pageInterSpacing)
-                            .frame(width: contentSize.width, height: contentSize.height)
-                        
+                            onChapterChange: { offset in
+                                isAutoFlipping = true
+                                handleChapterSwitch(offset: offset)
+                            },
+                            onAdjacentPrefetch: { offset in
+                                if offset > 0 {
+                                    if nextCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                                } else if offset < 0 {
+                                    if prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                                }
+                            },
+                            onAddReplaceRule: { selectedText in
+                                presentReplaceRuleEditor(selectedText: selectedText)
+                            },
+                            currentContentViewController: currentVC,
+                            prevContentViewController: prevVC,
+                            nextContentViewController: nextVC
+                        )
+                        .id(preferences.pageInterSpacing)
+                        .frame(width: contentSize.width, height: contentSize.height)
+
                         if !showUIControls && currentCache.pages.count > 0 {
                             let displayCurrent = currentPageIndex + 1
                             Group {
@@ -681,6 +682,8 @@ struct ReadingView: View {
         currentCache = ChapterCache(
             pages: pages,
             store: store,
+            tk2Store: currentCache.tk2Store,
+            pageInfos: currentCache.pageInfos,
             contentSentences: currentCache.contentSentences,
             attributedText: currentCache.attributedText,
             paragraphStarts: currentCache.paragraphStarts,
@@ -718,6 +721,8 @@ struct ReadingView: View {
             currentCache = ChapterCache(
                 pages: pages,
                 store: store,
+                tk2Store: currentCache.tk2Store,
+                pageInfos: currentCache.pageInfos,
                 contentSentences: currentCache.contentSentences,
                 attributedText: currentCache.attributedText,
                 paragraphStarts: currentCache.paragraphStarts,
@@ -1603,6 +1608,7 @@ struct PageSnapshot {
     let pages: [PaginatedPage]
     let renderStore: TextKitRenderStore?
     let tk2Store: TextKit2RenderStore? // Added
+    let pageInfos: [TK2PageInfo]?
 }
 
 struct ReadPageViewController: UIViewControllerRepresentable {
@@ -1667,6 +1673,20 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         
         init(_ parent: ReadPageViewController) { self.parent = parent }
         
+        private func pageCountForChapterOffset(_ offset: Int) -> Int {
+            let active = snapshot ?? parent.snapshot
+            switch offset {
+            case 0:
+                return active.pages.count
+            case -1:
+                return parent.prevSnapshot?.pages.count ?? 0
+            case 1:
+                return parent.nextSnapshot?.pages.count ?? 0
+            default:
+                return 0
+            }
+        }
+
         func updateSnapshotIfNeeded(_ newSnapshot: PageSnapshot, currentPageIndex: Int) {
             let hasTK1 = newSnapshot.renderStore != nil
             let hasTK2 = newSnapshot.tk2Store != nil
@@ -1858,7 +1878,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             // Logic for Current Chapter
             if vc.chapterOffset == 0 {
                 let index = vc.pageIndex
-                let pageCount = vc.renderStore.containers.count
+                let pageCount = pageCountForChapterOffset(vc.chapterOffset)
                 if index < pageCount - 1 {
                     return ReadContentViewController(
                         pageIndex: index + 1,
@@ -1888,7 +1908,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             // Logic for Next Chapter (user is scrolling deeper into next chapter)
             else if vc.chapterOffset == 1 {
                 let index = vc.pageIndex
-                let pageCount = vc.renderStore.containers.count
+                let pageCount = pageCountForChapterOffset(vc.chapterOffset)
                 if index < pageCount - 1 {
                     return ReadContentViewController(
                         pageIndex: index + 1,
@@ -1902,7 +1922,7 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             // Logic for Previous Chapter (user scrolled forward from prev to current)
             else if vc.chapterOffset == -1 {
                 let index = vc.pageIndex
-                let pageCount = vc.renderStore.containers.count
+                let pageCount = pageCountForChapterOffset(vc.chapterOffset)
                 if index < pageCount - 1 {
                     return ReadContentViewController(
                         pageIndex: index + 1,
@@ -2576,8 +2596,8 @@ struct TextKit2Paginator {
     ) -> PaginationResult {
         let layoutManager = renderStore.layoutManager
         let contentStorage = renderStore.contentStorage
-        
-        guard let documentRange = contentStorage.documentRange, !documentRange.isEmpty else {
+        let documentRange = contentStorage.documentRange
+        guard !documentRange.isEmpty else {
             return PaginationResult(pages: [], pageInfos: [], reachedEnd: true)
         }
         
@@ -2589,8 +2609,18 @@ struct TextKit2Paginator {
         
         var currentPageStartY: CGFloat = 0
         var pageCount = 0
-        
-        var currentPageStartLocation = documentRange.location
+        var currentPageStartLocation = 0
+        let totalLength = renderStore.attributedString.length
+
+        func appendPage(range: NSRange, yOffset: CGFloat) -> Bool {
+            guard range.length > 0 else { return true }
+            let adjustedLocation = max(0, range.location - prefixLen)
+            let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
+            pages.append(PaginatedPage(globalRange: range, startSentenceIndex: startIdx))
+            pageInfos.append(TK2PageInfo(range: range, yOffset: yOffset, height: pageSize.height, startSentenceIndex: startIdx))
+            pageCount += 1
+            return pageCount < maxPages
+        }
         
         // We scan through fragments to find page breaks
         layoutManager.enumerateTextLayoutFragments(from: documentRange.location, options: [.ensuresLayout, .estimatesSize]) { fragment in
@@ -2603,45 +2633,22 @@ struct TextKit2Paginator {
             
             // Allow a small tolerance or check if it's the FIRST fragment on page
             if fragmentBottomOnPage > pageSize.height && frame.minY > currentPageStartY {
-                // Break page BEFORE this fragment
-                
-                // 1. Finalize current page
-                let rangeEndLocation = fragment.rangeLocation
-                let pageRange = NSTextRange(location: currentPageStartLocation, end: rangeEndLocation)
-                
-                if let nsRange = rangeFromTextRange(pageRange, in: contentStorage) {
-                     let adjustedLocation = max(0, nsRange.location - prefixLen)
-                     let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
-                     
-                     pages.append(PaginatedPage(globalRange: nsRange, startSentenceIndex: startIdx))
-                     pageInfos.append(TK2PageInfo(range: nsRange, yOffset: currentPageStartY, height: pageSize.height, startSentenceIndex: startIdx))
+                let glyphRange = fragment.layoutFragmentRange
+                let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+                let pageRange = NSRange(location: currentPageStartLocation, length: max(0, charRange.location - currentPageStartLocation))
+                if !appendPage(range: pageRange, yOffset: currentPageStartY) {
+                    return false
                 }
-                
-                pageCount += 1
-                if pageCount >= maxPages {
-                    return false // Stop enumeration
-                }
-                
-                // 2. Start new page
-                currentPageStartY = frame.minY // The new page starts exactly where this fragment begins
-                currentPageStartLocation = fragment.rangeLocation
+                currentPageStartY = frame.minY
+                currentPageStartLocation = charRange.location
             }
             return true
         }
         
         // Handle the last page (if we didn't hit maxPages limit)
-        if pageCount < maxPages {
-             let endDoc = documentRange.endLocation
-             if currentPageStartLocation.compare(endDoc) == .orderedAscending {
-                 let pageRange = NSTextRange(location: currentPageStartLocation, end: endDoc)
-                 if let nsRange = rangeFromTextRange(pageRange, in: contentStorage) {
-                     let adjustedLocation = max(0, nsRange.location - prefixLen)
-                     let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
-                     
-                     pages.append(PaginatedPage(globalRange: nsRange, startSentenceIndex: startIdx))
-                     pageInfos.append(TK2PageInfo(range: nsRange, yOffset: currentPageStartY, height: pageSize.height, startSentenceIndex: startIdx))
-                 }
-             }
+        if pageCount < maxPages && currentPageStartLocation < totalLength {
+             let pageRange = NSRange(location: currentPageStartLocation, length: max(0, totalLength - currentPageStartLocation))
+             _ = appendPage(range: pageRange, yOffset: currentPageStartY)
         }
         
         let reachedEnd = (pages.last?.globalRange.upperBound ?? 0) >= renderStore.attributedString.length
