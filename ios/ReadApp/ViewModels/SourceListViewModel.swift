@@ -6,6 +6,7 @@ class SourceListViewModel: ObservableObject {
     @Published var sources: [BookSource] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var failedSources: [String] = []
 
     // Global Search State
     @Published var searchText: String = ""
@@ -97,6 +98,7 @@ class SourceListViewModel: ObservableObject {
         
         isSearching = true
         searchResults = []
+        failedSources = []
         
         Task {
             await withTaskGroup(of: (BookSource, [Book]).self) { group in
@@ -106,7 +108,10 @@ class SourceListViewModel: ObservableObject {
                             let books = try await APIService.shared.searchBook(keyword: self.searchText, bookSourceUrl: source.bookSourceUrl)
                             return (source, books)
                         } catch {
-                            // Return empty array on failure for this source
+                            // Capture failed source and return empty array
+                            await MainActor.run {
+                                self.failedSources.append(source.bookSourceName)
+                            }
                             return (source, [])
                         }
                     }

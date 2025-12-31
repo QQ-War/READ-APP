@@ -12,7 +12,7 @@ class TTSManager: NSObject, ObservableObject {
     @Published var currentSentenceIndex = 0
     @Published var totalSentences = 0
     @Published var isLoading = false
-    @Published var preloadedIndices: Set<Int> = []  // 宸查杞芥垚鍔熺殑娈佃惤绱㈠紩
+    @Published var preloadedIndices: Set<Int> = []  // Indices of successfully preloaded sentences
     @Published var currentSentenceDuration: TimeInterval = 0
     
     private var audioPlayer: AVAudioPlayer?
@@ -27,15 +27,15 @@ class TTSManager: NSObject, ObservableObject {
     private var onChapterChange: ((Int) -> Void)?
     private var currentSentenceObserver: Any?
     
-    // 棰勮浇缂撳瓨
-    private var audioCache: [Int: Data] = [:]  // 绱㈠紩 -> 闊抽鏁版嵁锛堢储寮?1涓虹珷鑺傚悕锛?~n涓烘鏂囨钀斤級
-    private var preloadQueue: [Int] = []       // 绛夊緟棰勮浇鐨勯槦鍒?
-    private var isPreloading = false           // 鏄惁姝ｅ湪鎵ц棰勮浇浠诲姟
-    private let maxPreloadRetries = 3          // 鏈€澶ч噸璇曟鏁?
-    private let maxConcurrentDownloads = 6     // 鏈€澶у苟鍙戜笅杞芥暟
+    // Preload Cache
+    private var audioCache: [Int: Data] = [:]  // Index -> audio data (index -1 for chapter title, 0~n for main text paragraphs)
+    private var preloadQueue: [Int] = []       // Queue of indices waiting for preload
+    private var isPreloading = false           // Whether a preload task is currently executing
+    private let maxPreloadRetries = 3          // Maximum retry attempts
+    private let maxConcurrentDownloads = 6     // Maximum concurrent downloads
     private let preloadStateQueue = DispatchQueue(label: "com.readapp.tts.preloadStateQueue")
     
-    // 涓嬩竴绔犻杞?
+    // Next Chapter Preload
     private var nextChapterSentences: [String] = []  // 涓嬩竴绔犵殑娈佃惤
     private var nextChapterCache: [Int: Data] = [:]  // 涓嬩竴绔犵殑闊抽缂撳瓨锛堢储寮?1涓虹珷鑺傚悕锛?
     
