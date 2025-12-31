@@ -113,7 +113,7 @@ class SourceListViewModel: ObservableObject {
                 }
                 
                 for await (source, books) in group {
-                    let booksWithSource = books.map { book -> Book in
+                    let booksWithSource = books.map { [source] book -> Book in
                         var mutableBook = book
                         mutableBook.sourceDisplayName = source.bookSourceName
                         mutableBook.origin = source.bookSourceUrl
