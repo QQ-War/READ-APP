@@ -2123,7 +2123,6 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
         }
     }
 }
-}
 
 // MARK: - TextKit Paginator
 struct PaginatedPage { let globalRange: NSRange; let startSentenceIndex: Int }
