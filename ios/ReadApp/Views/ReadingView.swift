@@ -16,6 +16,40 @@ private struct ChapterCache {
     }
 }
 
+final class ReadContentViewControllerCache: ObservableObject {
+    struct Key: Hashable {
+        let storeID: ObjectIdentifier
+        let pageIndex: Int
+        let chapterOffset: Int
+    }
+
+    private var controllers: [Key: ReadContentViewController] = [:]
+
+    func controller(
+        for store: TextKitRenderStore,
+        pageIndex: Int,
+        chapterOffset: Int,
+        builder: () -> ReadContentViewController
+    ) -> ReadContentViewController {
+        let key = Key(storeID: ObjectIdentifier(store), pageIndex: pageIndex, chapterOffset: chapterOffset)
+        if let cached = controllers[key], cached.renderStore === store {
+            return cached
+        }
+        let controller = builder()
+        controllers[key] = controller
+        return controller
+    }
+
+    func retainActive(stores: [TextKitRenderStore?]) {
+        let activeIDs = Set(stores.compactMap { $0.map { ObjectIdentifier($0) } })
+        if activeIDs.isEmpty {
+            controllers.removeAll()
+            return
+        }
+        controllers = controllers.filter { activeIDs.contains($0.key.storeID) }
+    }
+}
+
 // MARK: - ReadingView
 enum ReaderTapLocation {
     case left
@@ -77,12 +111,16 @@ struct ReadingView: View {
     
     // Pagination Cache for seamless transition
     @State private var isAutoFlipping: Bool = false
+    @StateObject private var contentControllerCache = ReadContentViewControllerCache()
+    @State private var pendingBufferPageIndex: Int?
+    @State private var lastHandledPageIndex: Int?
 
     // Unified Insets for consistency
     private let horizontalPadding: CGFloat = 20
     private let verticalPadding: CGFloat = 40
     private let initialPageBatch: Int = 12
     private let prefetchPageBatch: Int = 8
+    private let bufferedPageBatch: Int = 6
 
     init(book: Book) {
         self.book = book
@@ -347,27 +385,8 @@ struct ReadingView: View {
                     }
                     return
                 }
-                if ttsManager.isPlaying && !ttsManager.isPaused && !isAutoFlipping {
-                    if !preferences.lockPageOnTTS {
-                        ttsManager.stop()
-                        startTTS(pageIndexOverride: newIndex)
-                    }
-                }
-                if ttsManager.isPlaying && ttsManager.isPaused {
-                    needsTTSRestartAfterPause = true
-                }
-                isAutoFlipping = false // Reset flag after use
 
-                if let startIndex = pageStartSentenceIndex(for: newIndex) {
-                    lastTTSSentenceIndex = startIndex
-                }
-                if isPageTransitioning {
-                    return
-                }
-                ensurePageBuffer(around: newIndex)
-                if newIndex <= 1 || newIndex >= max(0, currentCache.pages.count - 2) {
-                    triggerAdjacentPrefetchIfNeeded()
-                }
+                handlePageIndexChange(newIndex)
             }
         }
     }
@@ -391,37 +410,45 @@ struct ReadingView: View {
                     }
                 
                 if availableSize.width > 0 && availableSize.height > 0 {
-                    ZStack(alignment: .bottomTrailing) {
-                            ReadPageViewController(
-                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
-                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
-                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
-                                currentPageIndex: $currentPageIndex,
-                                pageSpacing: preferences.pageInterSpacing,
-                                isAtChapterStart: currentPageIndex == 0,
-                                isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
-                                isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
-                                onTransitioningChanged: { transitioning in
-                                    isPageTransitioning = transitioning
-                                },
-                                onTapLocation: { location in
-                                    handleReaderTap(location: location)
-                                },
-                                onChapterChange: { offset in
-                                    isAutoFlipping = true
-                                    handleChapterSwitch(offset: offset)
-                                },
-                                onAdjacentPrefetch: { offset in
-                                    if offset > 0 {
-                                        if nextCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
-                                    } else if offset < 0 {
-                                        if prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
-                                    }
-                                },
-                                onAddReplaceRule: { selectedText in
-                                    presentReplaceRuleEditor(selectedText: selectedText)
-                                }
-                            )
+                        ZStack(alignment: .bottomTrailing) {
+                            cacheRefresher
+                            let currentVC = makeContentViewController(cache: currentCache, pageIndex: currentPageIndex, chapterOffset: 0)
+                        let prevVC = makeContentViewController(cache: prevCache, pageIndex: max(0, prevCache.pages.count - 1), chapterOffset: -1)
+                        let nextVC = makeContentViewController(cache: nextCache, pageIndex: 0, chapterOffset: 1)
+
+                        ReadPageViewController(
+                            snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
+                            prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
+                            nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
+                            currentPageIndex: $currentPageIndex,
+                            pageSpacing: preferences.pageInterSpacing,
+                            isAtChapterStart: currentPageIndex == 0,
+                            isAtChapterEnd: currentCache.isFullyPaginated && currentPageIndex >= max(0, currentCache.pages.count - 1),
+                            isScrollEnabled: !(ttsManager.isPlaying && preferences.lockPageOnTTS),
+                            onTransitioningChanged: { transitioning in
+                                pageTransitionChanged(isTransitioning: transitioning)
+                            },
+                            onTapLocation: { location in
+                                handleReaderTap(location: location)
+                            },
+                onChapterChange: { offset in
+                    isAutoFlipping = true
+                    handleChapterSwitch(offset: offset)
+                },
+                onAdjacentPrefetch: { offset in
+                    if offset > 0 {
+                        if nextCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                    } else if offset < 0 {
+                        if prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) }
+                    }
+                },
+                onAddReplaceRule: { selectedText in
+                    presentReplaceRuleEditor(selectedText: selectedText)
+                },
+                currentContentViewController: currentVC,
+                prevContentViewController: prevVC,
+                nextContentViewController: nextVC
+            )
                             .id(preferences.pageInterSpacing)
                             .frame(width: contentSize.width, height: contentSize.height)
                         
@@ -696,6 +723,79 @@ struct ReadingView: View {
         }
     }
 
+    private func handlePageIndexChange(_ newIndex: Int) {
+        pendingBufferPageIndex = newIndex
+        processPendingPageChangeIfReady()
+    }
+
+    private func processPendingPageChangeIfReady() {
+        guard !isPageTransitioning else { return }
+        guard let newIndex = pendingBufferPageIndex else { return }
+        if lastHandledPageIndex == newIndex {
+            return
+        }
+        pendingBufferPageIndex = nil
+        lastHandledPageIndex = newIndex
+
+        ensurePageBuffer(around: newIndex)
+        if newIndex <= 1 || newIndex >= max(0, currentCache.pages.count - 2) {
+            triggerAdjacentPrefetchIfNeeded()
+        }
+
+        if ttsManager.isPlaying && !ttsManager.isPaused && !isAutoFlipping {
+            if !preferences.lockPageOnTTS {
+                ttsManager.stop()
+                startTTS(pageIndexOverride: newIndex, showControls: false)
+            }
+        }
+        if ttsManager.isPlaying && ttsManager.isPaused {
+            needsTTSRestartAfterPause = true
+        }
+        isAutoFlipping = false
+
+        if let startIndex = pageStartSentenceIndex(for: newIndex) {
+            lastTTSSentenceIndex = startIndex
+        }
+    }
+
+    private func pageTransitionChanged(isTransitioning: Bool) {
+        isPageTransitioning = isTransitioning
+        if !isTransitioning {
+            processPendingPageChangeIfReady()
+        }
+    }
+
+    private func makeContentViewController(cache: ChapterCache, pageIndex: Int, chapterOffset: Int) -> ReadContentViewController? {
+        guard let store = cache.store else { return nil }
+        guard pageIndex >= 0, pageIndex < store.containers.count else { return nil }
+        return contentControllerCache.controller(
+            for: store,
+            pageIndex: pageIndex,
+            chapterOffset: chapterOffset
+        ) {
+            ReadContentViewController(
+                pageIndex: pageIndex,
+                renderStore: store,
+                chapterOffset: chapterOffset,
+                onAddReplaceRule: { selectedText in
+                    presentReplaceRuleEditor(selectedText: selectedText)
+                },
+                onTapLocation: { location in
+                    handleReaderTap(location: location)
+                }
+            )
+        }
+    }
+
+    private func refreshContentControllerCache() {
+        contentControllerCache.retainActive(stores: [currentCache.store, prevCache.store, nextCache.store])
+    }
+
+    private var cacheRefresher: some View {
+        refreshContentControllerCache()
+        return EmptyView()
+    }
+
     private func scheduleRepaginate(in size: CGSize) {
         pageSize = size
         let key = PaginationKey(
@@ -928,17 +1028,26 @@ struct ReadingView: View {
             isFully = result.reachedEnd
         }
 
+        func appendUntilBuffer(_ target: Int) {
+            while pages.count < target && !isFully {
+                appendPages(prefetchPageBatch)
+            }
+        }
+
+        let bufferGoal = max(bufferedPageBatch, initialPageBatch)
+
         if forGate {
             if fromEnd {
-                // TextKit can't paginate backward; run forward to the end to keep layout stable.
                 while !isFully {
                     appendPages(max(prefetchPageBatch * 2, 16))
                 }
             } else {
                 appendPages(initialPageBatch)
+                appendUntilBuffer(bufferGoal)
             }
         } else {
             appendPages(initialPageBatch)
+            appendUntilBuffer(bufferGoal)
         }
 
         return ChapterCache(
@@ -956,8 +1065,12 @@ struct ReadingView: View {
     
     private func updateProcessedContent(from rawText: String) {
         let processedContent = applyReplaceRules(to: rawText)
-        currentContent = processedContent.isEmpty ? "章节内容为空" : processedContent
-        contentSentences = splitIntoParagraphs(currentContent)
+        let trimmedContent = processedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isEffectivelyEmpty = trimmedContent.isEmpty
+        let timestamp = String(format: "%.2f", Date().timeIntervalSince1970)
+        let content = isEffectivelyEmpty ? "章节内容为空\n\(timestamp)" : processedContent
+        currentContent = content
+        contentSentences = splitIntoParagraphs(content)
         applyResumeProgressIfNeeded(sentences: contentSentences)
     }
 
@@ -1100,6 +1213,7 @@ struct ReadingView: View {
     
     private func loadChapterContent() {
         guard currentChapterIndex < chapters.count else { return }
+        let shouldContinuePlayingSameBook = ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl
         isLoading = true
         Task {
             do {
@@ -1117,6 +1231,10 @@ struct ReadingView: View {
                         }
                     }
                     prepareAdjacentChapters(for: currentChapterIndex)
+                    if shouldContinuePlayingSameBook {
+                        ttsManager.stop()
+                        startTTS(pageIndexOverride: currentPageIndex, showControls: false)
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -1133,6 +1251,8 @@ struct ReadingView: View {
         nextCache = .empty
         currentPageIndex = 0
         lastAdjacentPrepareAt = 0
+        pendingBufferPageIndex = nil
+        lastHandledPageIndex = nil
     }
     
     private func previousChapter() {
@@ -1173,8 +1293,10 @@ struct ReadingView: View {
         }
     }
     
-    private func startTTS(pageIndexOverride: Int? = nil) {
-        showUIControls = true
+    private func startTTS(pageIndexOverride: Int? = nil, showControls: Bool = true) {
+        if showControls {
+            showUIControls = true
+        }
         suppressTTSSync = true
         needsTTSRestartAfterPause = false
         let fallbackIndex = lastTTSSentenceIndex ?? 0
@@ -1372,6 +1494,9 @@ struct ReadPageViewController: UIViewControllerRepresentable {
     var onChapterChange: (Int) -> Void // offset: -1 or 1
     var onAdjacentPrefetch: (Int) -> Void // offset: -1 or 1
     var onAddReplaceRule: (String) -> Void
+    var currentContentViewController: ReadContentViewController?
+    var prevContentViewController: ReadContentViewController?
+    var nextContentViewController: ReadContentViewController?
 
     func makeUIViewController(context: Context) -> UIPageViewController {
         let pvc = UIPageViewController(
@@ -1389,7 +1514,10 @@ struct ReadPageViewController: UIViewControllerRepresentable {
 
     func updateUIViewController(_ pvc: UIPageViewController, context: Context) {
         context.coordinator.parent = self
-        
+        context.coordinator.currentContentViewController = currentContentViewController
+        context.coordinator.prevContentViewController = prevContentViewController
+        context.coordinator.nextContentViewController = nextContentViewController
+
         // Dynamically enable/disable swipe
         if isScrollEnabled {
             pvc.dataSource = context.coordinator
@@ -1407,6 +1535,9 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         private var snapshot: PageSnapshot?
         private var pendingSnapshot: PageSnapshot?
         weak var pageViewController: UIPageViewController?
+        var currentContentViewController: ReadContentViewController?
+        var prevContentViewController: ReadContentViewController?
+        var nextContentViewController: ReadContentViewController?
         
         init(_ parent: ReadPageViewController) { self.parent = parent }
         
@@ -1443,13 +1574,21 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             // Set new VC
             let pageCount = activeSnapshot.renderStore?.containers.count ?? activeSnapshot.pages.count
             if currentPageIndex < pageCount {
-                let vc = ReadContentViewController(
-                    pageIndex: currentPageIndex,
-                    renderStore: store,
-                    chapterOffset: 0,
-                    onAddReplaceRule: parent.onAddReplaceRule,
-                    onTapLocation: parent.onTapLocation
-                )
+                let vc: ReadContentViewController
+                if let custom = currentContentViewController,
+                   custom.chapterOffset == 0,
+                   custom.pageIndex == currentPageIndex,
+                   custom.renderStore === store {
+                    vc = custom
+                } else {
+                    vc = ReadContentViewController(
+                        pageIndex: currentPageIndex,
+                        renderStore: store,
+                        chapterOffset: 0,
+                        onAddReplaceRule: parent.onAddReplaceRule,
+                        onTapLocation: parent.onTapLocation
+                    )
+                }
                 pvc.setViewControllers([vc], direction: .forward, animated: false)
             }
         }
@@ -1477,6 +1616,10 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                     )
                 } else {
                     // Reached start of current chapter -> Try to fetch Previous Chapter
+                    if let prevVC = parent.prevContentViewController,
+                       prevVC.chapterOffset == -1 {
+                        return prevVC
+                    }
                     if let prev = parent.prevSnapshot, let store = prev.renderStore, !prev.pages.isEmpty {
                         let lastIndex = prev.pages.count - 1
                         return ReadContentViewController(
@@ -1550,15 +1693,19 @@ struct ReadPageViewController: UIViewControllerRepresentable {
                     )
                 } else {
                     // Reached end of current chapter -> Try to fetch Next Chapter
-                    if let next = parent.nextSnapshot, let store = next.renderStore, !next.pages.isEmpty {
-                        return ReadContentViewController(
-                            pageIndex: 0,
-                            renderStore: store,
-                            chapterOffset: 1,
-                            onAddReplaceRule: parent.onAddReplaceRule,
-                            onTapLocation: parent.onTapLocation
-                        )
-                    }
+                        if let nextVC = parent.nextContentViewController,
+                           nextVC.chapterOffset == 1 {
+                            return nextVC
+                        }
+                        if let next = parent.nextSnapshot, let store = next.renderStore, !next.pages.isEmpty {
+                            return ReadContentViewController(
+                                pageIndex: 0,
+                                renderStore: store,
+                                chapterOffset: 1,
+                                onAddReplaceRule: parent.onAddReplaceRule,
+                                onTapLocation: parent.onTapLocation
+                            )
+                        }
                     parent.onAdjacentPrefetch(1)
                 }
             }
