@@ -126,6 +126,8 @@ struct ReadingView: View {
     @State private var chapterChangeIntent: ChapterChangeIntent = .none
     @State private var pendingManualRestartChapter: Int?
     @State private var pendingManualRestartPageIndex: Int?
+    @State private var forceChapterStartForTTS: Bool = false
+    @State private var suppressTTSSyncUntilChapterStart: Bool = false
 
     // Unified Insets for consistency
     private let horizontalPadding: CGFloat = 20
@@ -264,6 +266,9 @@ struct ReadingView: View {
         }
         .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
             if preferences.readingMode == .horizontal && ttsManager.isPlaying {
+                if suppressTTSSyncUntilChapterStart {
+                    return
+                }
                 if !suppressTTSSync {
                     syncPageForSentenceIndex(newIndex)
                 }
@@ -591,6 +596,9 @@ struct ReadingView: View {
         }
         ensurePageBuffer(around: currentPageIndex)
         triggerAdjacentPrefetchIfNeeded(force: true)
+        if suppressTTSSyncUntilChapterStart && currentPageIndex == 0 {
+            suppressTTSSyncUntilChapterStart = false
+        }
         tryPerformPendingManualTTSRestart()
     }
 
@@ -1122,6 +1130,21 @@ struct ReadingView: View {
     }
 
     private func applyResumeProgressIfNeeded(sentences: [String]) {
+        if forceChapterStartForTTS
+            && ttsManager.isPlaying
+            && ttsManager.bookUrl == book.bookUrl
+            && currentChapterIndex == ttsManager.currentChapterIndex {
+            let chapterTitle = chapters.indices.contains(currentChapterIndex)
+                ? chapters[currentChapterIndex].title
+                : nil
+            let prefixLen = (chapterTitle?.isEmpty ?? true) ? 0 : (chapterTitle! + "\n").utf16.count
+            pendingResumeCharIndex = prefixLen
+            lastTTSSentenceIndex = 0
+            pendingScrollToSentenceIndex = 0
+            didApplyResumePos = true
+            forceChapterStartForTTS = false
+            return
+        }
         if ttsManager.isPlaying
             && ttsManager.bookUrl == book.bookUrl
             && currentChapterIndex == ttsManager.currentChapterIndex {
@@ -1440,6 +1463,8 @@ struct ReadingView: View {
                 chapterChangeIntent = .ttsDriven
                 pendingJumpToFirstPage = true
                 pendingJumpToLastPage = false
+                forceChapterStartForTTS = true
+                suppressTTSSyncUntilChapterStart = true
                 currentChapterIndex = newIndex
                 loadChapterContent()
                 saveProgress()
