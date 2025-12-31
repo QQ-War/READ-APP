@@ -29,6 +29,34 @@ private struct ChapterCache {
     }
 }
 
+extension View {
+    func onChangeCompat<Value: Equatable>(of value: Value, perform action: @escaping (Value) -> Void) -> some View {
+        modifier(OnChangeCompatModifier(value: value, action: action))
+    }
+}
+
+private struct OnChangeCompatModifier<Value: Equatable>: ViewModifier {
+    let value: Value
+    let action: (Value) -> Void
+    @State private var previousValue: Value?
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: value) {
+                if let previous = previousValue {
+                    if previous != value {
+                        previousValue = value
+                        await MainActor.run {
+                            action(value)
+                        }
+                    }
+                } else {
+                    previousValue = value
+                }
+            }
+    }
+}
+
 private final class ReadContentViewControllerCache: ObservableObject {
     struct Key: Hashable {
         let storeID: ObjectIdentifier
@@ -86,6 +114,7 @@ struct ReadingView: View {
     @State private var chapters: [BookChapter] = []
     @State private var currentChapterIndex: Int
     @State private var rawContent = ""
+    @State private var currentContent = ""
     @State private var contentSentences: [String] = []
     
     // UI State
@@ -211,18 +240,18 @@ struct ReadingView: View {
         } }
         .sheet(isPresented: $showFontSettings) { FontSizeSheet(preferences: preferences) }
         .sheet(isPresented: $showAddReplaceRule) { ReplaceRuleEditView(viewModel: replaceRuleViewModel, rule: pendingReplaceRule) }
-        .onChange(of: showAddReplaceRule) { if !$0 { pendingReplaceRule = nil } }
+        .onChangeCompat(of: showAddReplaceRule) { if !$0 { pendingReplaceRule = nil } }
         .task { await loadChapters(); await replaceRuleViewModel.fetchRules() }
-        .onChange(of: replaceRuleViewModel.rules) { _ in updateProcessedContent(from: rawContent) }
-        .onChange(of: pendingScrollToSentenceIndex) { handlePendingScroll() }
+        .onChangeCompat(of: replaceRuleViewModel.rules) { _ in updateProcessedContent(from: rawContent) }
+        .onChangeCompat(of: pendingScrollToSentenceIndex) { handlePendingScroll() }
         .alert("错误", isPresented: .constant(errorMessage != nil)) { Button("确定") { errorMessage = nil } } message: {
             if let error = errorMessage { Text(error) }
         }
         .onDisappear { saveProgress() }
-        .onChange(of: ttsManager.isPlaying) { handleTTSPlayStateChange($0) }
-        .onChange(of: ttsManager.isPaused) { handleTTSPauseStateChange($0) }
-        .onChange(of: ttsManager.currentSentenceIndex) { handleTTSSentenceChange() }
-        .onChange(of: ttsManager.currentSentenceDuration) { handleTTSSentenceChange() }
+        .onChangeCompat(of: ttsManager.isPlaying) { handleTTSPlayStateChange($0) }
+        .onChangeCompat(of: ttsManager.isPaused) { handleTTSPauseStateChange($0) }
+        .onChangeCompat(of: ttsManager.currentSentenceIndex) { handleTTSSentenceChange() }
+        .onChangeCompat(of: ttsManager.currentSentenceDuration) { handleTTSSentenceChange() }
     }
 
     // MARK: - UI Components
@@ -260,7 +289,7 @@ struct ReadingView: View {
                 .coordinateSpace(name: "scroll")
                 .contentShape(Rectangle())
                 .onTapGesture { handleReaderTap(location: .middle) }
-                .onChange(of: ttsManager.currentSentenceIndex) { if ttsManager.isPlaying, !contentSentences.isEmpty { withAnimation { proxy.scrollTo($0, anchor: .center) } } }
+                .onChangeCompat(of: ttsManager.currentSentenceIndex) { if ttsManager.isPlaying, !contentSentences.isEmpty { withAnimation { proxy.scrollTo($0, anchor: .center) } } }
                 .onPreferenceChange(SentenceFramePreferenceKey.self) { updateVisibleSentenceIndex(frames: $0, viewportHeight: geometry.size.height) }
                 .onAppear {
                     scrollProxy = proxy
@@ -284,12 +313,12 @@ struct ReadingView: View {
             let contentSize = availableSize
             horizontalReaderBody(geometry: geometry, safeArea: safeArea, availableSize: availableSize, contentSize: contentSize)
             .onAppear { if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: contentSentences) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: preferences.fontSize) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: preferences.lineSpacing) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: preferences.pageHorizontalMargin) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: geometry.size) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: currentPageIndex) { newIndex in
+            .onChangeCompat(of: contentSentences) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
+            .onChangeCompat(of: preferences.fontSize) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
+            .onChangeCompat(of: preferences.lineSpacing) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
+            .onChangeCompat(of: preferences.pageHorizontalMargin) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
+            .onChangeCompat(of: geometry.size) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
+            .onChangeCompat(of: currentPageIndex) { newIndex in
                 if isTTSSyncingPage {
                     isTTSSyncingPage = false
                     if let startIndex = pageStartSentenceIndex(for: newIndex) { lastTTSSentenceIndex = startIndex }
@@ -609,6 +638,11 @@ struct ReadingView: View {
         return currentCache.paragraphStarts[index] + currentCache.chapterPrefixLen
     }
 
+    private func pageIndexForSentence(_ index: Int) -> Int? {
+        guard let charIndex = globalCharIndexForSentence(index) else { return nil }
+        return currentCache.pages.firstIndex { NSLocationInRange(charIndex, $0.globalRange) }
+    }
+
     private func syncPageForSentenceIndex(_ index: Int) {
         guard index >= 0, preferences.readingMode == .horizontal else { return }
         let realIndex = index + ttsBaseIndex
@@ -757,6 +791,7 @@ struct ReadingView: View {
         pendingResumeCharIndex = clampedBodyIndex + prefixLen
         lastTTSSentenceIndex = paragraphStarts.lastIndex(where: { $0 <= clampedBodyIndex }) ?? 0
         pendingScrollToSentenceIndex = lastTTSSentenceIndex
+        handlePendingScroll()
         didApplyResumePos = true
     }
 
@@ -939,10 +974,10 @@ struct ReadingView: View {
 }
 
 // MARK: - UIPageViewController Wrapper
-private struct ReadPageViewController: UIViewControllerRepresentable {
-    var snapshot: ReadingView.PageSnapshot
-    var prevSnapshot: ReadingView.PageSnapshot?
-    var nextSnapshot: ReadingView.PageSnapshot?
+	private struct ReadPageViewController: UIViewControllerRepresentable {
+	    var snapshot: PageSnapshot
+	    var prevSnapshot: PageSnapshot?
+	    var nextSnapshot: PageSnapshot?
     
     @Binding var currentPageIndex: Int
     var pageSpacing: CGFloat
@@ -980,8 +1015,8 @@ private struct ReadPageViewController: UIViewControllerRepresentable {
     class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
         var parent: ReadPageViewController
         var isAnimating = false
-        private var snapshot: ReadingView.PageSnapshot?
-        private var pendingSnapshot: ReadingView.PageSnapshot?
+	        private var snapshot: PageSnapshot?
+	        private var pendingSnapshot: PageSnapshot?
         weak var pageViewController: UIPageViewController? 
         var currentContentViewController: ReadContentViewController?
         var prevContentViewController: ReadContentViewController?
@@ -999,7 +1034,7 @@ private struct ReadPageViewController: UIViewControllerRepresentable {
             }
         }
 
-        func updateSnapshotIfNeeded(_ newSnapshot: ReadingView.PageSnapshot, currentPageIndex: Int) {
+        func updateSnapshotIfNeeded(_ newSnapshot: PageSnapshot, currentPageIndex: Int) {
             guard newSnapshot.renderStore != nil, !newSnapshot.pages.isEmpty else { return }
             
             if shouldReplaceSnapshot(with: newSnapshot) {
@@ -1020,7 +1055,7 @@ private struct ReadPageViewController: UIViewControllerRepresentable {
             }
         }
         
-        private func shouldReplaceSnapshot(with newSnapshot: ReadingView.PageSnapshot) -> Bool {
+        private func shouldReplaceSnapshot(with newSnapshot: PageSnapshot) -> Bool {
             guard let current = snapshot else { return true }
             if let t2 = current.renderStore, let nt2 = newSnapshot.renderStore { if t2 !== nt2 { return true } } else if current.renderStore != nil || newSnapshot.renderStore != nil { return true }
             if newSnapshot.pages.count < current.pages.count { return true }
@@ -1418,19 +1453,19 @@ private struct FontSizeSheet: View {
         NavigationView {
             VStack(spacing: 24) {
                 VStack(spacing: 8) {
-                    Text("字体大小: \(String(format: \"%.0f\", preferences.fontSize))")
+                    Text("字体大小: \(String(format: "%.0f", preferences.fontSize))")
                         .font(.headline)
                     Slider(value: $preferences.fontSize, in: 12...30, step: 1)
                 }
                 
                 VStack(spacing: 8) {
-                    Text("左右边距: \(String(format: \"%.0f\", preferences.pageHorizontalMargin))")
+                    Text("左右边距: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
                         .font(.headline)
                     Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
                 }
 
                 VStack(spacing: 8) {
-                    Text("翻页间距: \(String(format: \"%.0f\", preferences.pageInterSpacing))")
+                    Text("翻页间距: \(String(format: "%.0f", preferences.pageInterSpacing))")
                         .font(.headline)
                     Slider(value: $preferences.pageInterSpacing, in: 0...30, step: 1)
                 }
@@ -1586,9 +1621,9 @@ private class ReadContent2View: UIView {
         let point = gesture.location(in: self)
         let adjustedPoint = CGPoint(x: point.x, y: point.y + info.yOffset)
         
-        if let fragment = store.layoutManager.textLayoutFragment(for: adjustedPoint) {
-            let range = fragment.rangeInElement
-            let nsRange = NSRange(range, in: store.attributedString)
+        if let fragment = store.layoutManager.textLayoutFragment(for: adjustedPoint),
+           let textElement = fragment.textElement,
+           let nsRange = TextKit2Paginator.rangeFromTextRange(textElement.elementRange, in: store.contentStorage) {
             let text = (store.attributedString.string as NSString).substring(with: nsRange)
             becomeFirstResponder()
             let menu = UIMenuController.shared
