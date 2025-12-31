@@ -240,18 +240,18 @@ struct ReadingView: View {
         } }
         .sheet(isPresented: $showFontSettings) { FontSizeSheet(preferences: preferences) }
         .sheet(isPresented: $showAddReplaceRule) { ReplaceRuleEditView(viewModel: replaceRuleViewModel, rule: pendingReplaceRule) }
-        .onChangeCompat(of: showAddReplaceRule) { if !$0 { pendingReplaceRule = nil } }
+        .onChangeCompat(of: showAddReplaceRule) { value in if !value { pendingReplaceRule = nil } }
         .task { await loadChapters(); await replaceRuleViewModel.fetchRules() }
         .onChangeCompat(of: replaceRuleViewModel.rules) { _ in updateProcessedContent(from: rawContent) }
-        .onChangeCompat(of: pendingScrollToSentenceIndex) { handlePendingScroll() }
+        .onChangeCompat(of: pendingScrollToSentenceIndex) { _ in handlePendingScroll() }
         .alert("错误", isPresented: .constant(errorMessage != nil)) { Button("确定") { errorMessage = nil } } message: {
             if let error = errorMessage { Text(error) }
         }
         .onDisappear { saveProgress() }
         .onChangeCompat(of: ttsManager.isPlaying) { handleTTSPlayStateChange($0) }
         .onChangeCompat(of: ttsManager.isPaused) { handleTTSPauseStateChange($0) }
-        .onChangeCompat(of: ttsManager.currentSentenceIndex) { handleTTSSentenceChange() }
-        .onChangeCompat(of: ttsManager.currentSentenceDuration) { handleTTSSentenceChange() }
+        .onChangeCompat(of: ttsManager.currentSentenceIndex) { _ in handleTTSSentenceChange() }
+        .onChangeCompat(of: ttsManager.currentSentenceDuration) { _ in handleTTSSentenceChange() }
     }
 
     // MARK: - UI Components
@@ -289,7 +289,11 @@ struct ReadingView: View {
                 .coordinateSpace(name: "scroll")
                 .contentShape(Rectangle())
                 .onTapGesture { handleReaderTap(location: .middle) }
-                .onChangeCompat(of: ttsManager.currentSentenceIndex) { if ttsManager.isPlaying, !contentSentences.isEmpty { withAnimation { proxy.scrollTo($0, anchor: .center) } } }
+                .onChangeCompat(of: ttsManager.currentSentenceIndex) { newIndex in
+                    if ttsManager.isPlaying, !contentSentences.isEmpty {
+                        withAnimation { proxy.scrollTo(newIndex, anchor: .center) }
+                    }
+                }
                 .onPreferenceChange(SentenceFramePreferenceKey.self) { updateVisibleSentenceIndex(frames: $0, viewportHeight: geometry.size.height) }
                 .onAppear {
                     scrollProxy = proxy
@@ -338,9 +342,9 @@ struct ReadingView: View {
                 if availableSize.width > 0 {
                     ZStack(alignment: .bottomTrailing) {
                         cacheRefresher
-                        let currentVC = makeContentViewController(cache: currentCache, pageIndex: currentPageIndex, chapterOffset: 0)
-                        let prevVC = makeContentViewController(cache: prevCache, pageIndex: max(0, prevCache.pages.count - 1), chapterOffset: -1)
-                        let nextVC = makeContentViewController(cache: nextCache, pageIndex: 0, chapterOffset: 1)
+                        let currentVC = makeContentViewController(snapshot: snapshot(from: currentCache), pageIndex: currentPageIndex, chapterOffset: 0)
+                        let prevVC = makeContentViewController(snapshot: snapshot(from: prevCache), pageIndex: max(0, prevCache.pages.count - 1), chapterOffset: -1)
+                        let nextVC = makeContentViewController(snapshot: snapshot(from: nextCache), pageIndex: 0, chapterOffset: 1)
 
                         ReadPageViewController(
                             snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.renderStore, pageInfos: currentCache.pageInfos),
@@ -351,7 +355,10 @@ struct ReadingView: View {
                             onTransitioningChanged: { self.isPageTransitioning = $0 },
                             onTapLocation: handleReaderTap,
                             onChapterChange: { offset in self.isAutoFlipping = true; self.handleChapterSwitch(offset: offset) },
-                            onAdjacentPrefetch: { if $0 > 0 ? nextCache.pages.isEmpty : prevCache.pages.isEmpty { prepareAdjacentChapters(for: currentChapterIndex) } },
+                            onAdjacentPrefetch: { offset in
+                                let needsPrepare = offset > 0 ? nextCache.pages.isEmpty : prevCache.pages.isEmpty
+                                if needsPrepare { prepareAdjacentChapters(for: currentChapterIndex) }
+                            },
                             onAddReplaceRule: presentReplaceRuleEditor,
                             currentContentViewController: currentVC,
                             prevContentViewController: prevVC,
@@ -594,8 +601,8 @@ struct ReadingView: View {
         }
     }
 
-    private func makeContentViewController(cache: ChapterCache, pageIndex: Int, chapterOffset: Int) -> ReadContentViewController? {
-        guard let store = cache.renderStore, let infos = cache.pageInfos, pageIndex >= 0, pageIndex < infos.count else { return nil }
+    private func makeContentViewController(snapshot: PageSnapshot, pageIndex: Int, chapterOffset: Int) -> ReadContentViewController? {
+        guard let store = snapshot.renderStore, let infos = snapshot.pageInfos, pageIndex >= 0, pageIndex < infos.count else { return nil }
 
         let vc = contentControllerCache.controller(for: store, pageIndex: pageIndex, chapterOffset: chapterOffset) {
             ReadContentViewController(
@@ -606,6 +613,10 @@ struct ReadingView: View {
         }
         vc.configureTK2Page(info: infos[pageIndex])
         return vc
+    }
+
+    private func snapshot(from cache: ChapterCache) -> PageSnapshot {
+        PageSnapshot(pages: cache.pages, renderStore: cache.store, pageInfos: cache.pageInfos)
     }
 
     private func scheduleRepaginate(in size: CGSize) {
@@ -760,7 +771,7 @@ struct ReadingView: View {
 
     private func applyReplaceRules(to content: String) -> String {
         var processedContent = content
-        for rule in replaceRuleViewModel.rules where rule.isEnabled {
+        for rule in replaceRuleViewModel.rules where rule.isEnabled == true {
             if let regex = try? NSRegularExpression(pattern: rule.pattern, options: .caseInsensitive) {
                 processedContent = regex.stringByReplacingMatches(in: processedContent, range: NSRange(location: 0, length: processedContent.utf16.count), withTemplate: rule.replacement)
             }
@@ -989,7 +1000,7 @@ struct ReadingView: View {
     var currentContentViewController: ReadContentViewController?
     var prevContentViewController: ReadContentViewController?
     var nextContentViewController: ReadContentViewController?
-    var makeViewController: (ChapterCache, Int, Int) -> ReadContentViewController?
+    var makeViewController: (PageSnapshot, Int, Int) -> ReadContentViewController?
 
     func makeUIViewController(context: Context) -> UIPageViewController {
         let pvc = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: [UIPageViewController.OptionsKey.interPageSpacing: pageSpacing])
@@ -1568,6 +1579,13 @@ private struct TextKit2Paginator {
         let reachedEnd = (pages.last?.globalRange.upperBound ?? 0) >= renderStore.attributedString.length
         
         return PaginationResult(pages: pages, pageInfos: pageInfos, reachedEnd: reachedEnd)
+    }
+
+    static func rangeFromTextRange(_ textRange: NSTextRange?, in content: NSTextContentStorage) -> NSRange? {
+        guard let textRange = textRange else { return nil }
+        let location = content.offset(from: content.documentRange.location, to: textRange.location)
+        let length = content.offset(from: textRange.location, to: textRange.endLocation)
+        return NSRange(location: location, length: length)
     }
 }
 
