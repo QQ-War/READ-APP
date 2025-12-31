@@ -50,6 +50,14 @@ final class ReadContentViewControllerCache: ObservableObject {
     }
 }
 
+// MARK: - Chapter Change Intent
+private enum ChapterChangeIntent {
+    case none
+    case ttsDriven
+    case manualNext
+    case manualPrev
+}
+
 // MARK: - ReadingView
 enum ReaderTapLocation {
     case left
@@ -115,6 +123,9 @@ struct ReadingView: View {
     @State private var pendingBufferPageIndex: Int?
     @State private var lastHandledPageIndex: Int?
     @State private var skipNextPageChangeTTSRestart: Bool = false
+    @State private var chapterChangeIntent: ChapterChangeIntent = .none
+    @State private var pendingManualRestartChapter: Int?
+    @State private var pendingManualRestartPageIndex: Int?
 
     // Unified Insets for consistency
     private let horizontalPadding: CGFloat = 20
@@ -194,6 +205,7 @@ struct ReadingView: View {
                 onSelectChapter: { index in
                     currentChapterIndex = index
                     pendingJumpToFirstPage = true
+                    chapterChangeIntent = .manualNext
                     loadChapterContent()
                     showChapterList = false
                 }
@@ -579,6 +591,7 @@ struct ReadingView: View {
         }
         ensurePageBuffer(around: currentPageIndex)
         triggerAdjacentPrefetchIfNeeded(force: true)
+        tryPerformPendingManualTTSRestart()
     }
 
     private func pageIndexForChar(_ index: Int, in pages: [PaginatedPage]) -> Int? {
@@ -602,6 +615,22 @@ struct ReadingView: View {
         guard needsPrev || needsNext else { return }
         lastAdjacentPrepareAt = now
         prepareAdjacentChapters(for: currentChapterIndex)
+    }
+
+    private func scheduleManualTTSRestart(pageIndex: Int?) {
+        skipNextPageChangeTTSRestart = true
+        lastTTSSentenceIndex = 0
+        pendingManualRestartChapter = currentChapterIndex
+        pendingManualRestartPageIndex = pageIndex
+    }
+
+    private func tryPerformPendingManualTTSRestart() {
+        guard let chapter = pendingManualRestartChapter, chapter == currentChapterIndex else { return }
+        guard !currentCache.pages.isEmpty, currentCache.store != nil else { return }
+        let pageIndex = pendingManualRestartPageIndex ?? currentPageIndex
+        pendingManualRestartChapter = nil
+        pendingManualRestartPageIndex = nil
+        startTTS(pageIndexOverride: pageIndex, showControls: false)
     }
 
     private func ensurePages(upTo index: Int) {
@@ -971,6 +1000,7 @@ struct ReadingView: View {
             nextCache = .empty
             currentPageIndex = 0
             pendingJumpToFirstPage = true
+            chapterChangeIntent = .manualNext
             
         } else if offset == -1 { // Switched to Prev Chapter
             guard !prevCache.pages.isEmpty else { return }
@@ -980,6 +1010,7 @@ struct ReadingView: View {
             prevCache = .empty
             currentPageIndex = currentCache.pages.count - 1
             pendingJumpToLastPage = true
+            chapterChangeIntent = .manualPrev
         }
 
         // Trigger full layout load for the new current chapter & preload for new adjacent chapters
@@ -1090,6 +1121,26 @@ struct ReadingView: View {
     }
 
     private func applyResumeProgressIfNeeded(sentences: [String]) {
+        if ttsManager.isPlaying
+            && ttsManager.bookUrl == book.bookUrl
+            && currentChapterIndex == ttsManager.currentChapterIndex {
+            let sentenceIndex = ttsManager.currentSentenceIndex + ttsBaseIndex
+            lastTTSSentenceIndex = sentenceIndex
+            pendingScrollToSentenceIndex = sentenceIndex
+            let paragraphStarts = TextKitPaginator.paragraphStartIndices(sentences: sentences)
+            if sentenceIndex < paragraphStarts.count {
+                let chapterTitle = chapters.indices.contains(currentChapterIndex)
+                    ? chapters[currentChapterIndex].title
+                    : nil
+                let prefixLen = (chapterTitle?.isEmpty ?? true) ? 0 : (chapterTitle! + "\n").utf16.count
+                pendingResumeCharIndex = paragraphStarts[sentenceIndex] + prefixLen
+            }
+            didApplyResumePos = true
+            return
+        }
+        if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
+            return
+        }
         guard !didApplyResumePos else { return }
         let hasLocalResume = pendingResumeLocalBodyIndex != nil
             && pendingResumeLocalChapterIndex == currentChapterIndex
@@ -1199,6 +1250,10 @@ struct ReadingView: View {
         isLoading = true
         do {
             chapters = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
+            if ttsManager.isPlaying, ttsManager.bookUrl == book.bookUrl {
+                currentChapterIndex = ttsManager.currentChapterIndex
+                chapterChangeIntent = .ttsDriven
+            }
             if currentChapterIndex < 0 || currentChapterIndex >= chapters.count {
                 currentChapterIndex = max(0, chapters.count - 1)
                 pendingResumeLocalBodyIndex = nil
@@ -1217,41 +1272,51 @@ struct ReadingView: View {
     private func loadChapterContent() {
         guard currentChapterIndex < chapters.count else { return }
         let shouldContinuePlayingSameBook = ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl
+        let intent = chapterChangeIntent
         isLoading = true
         Task {
             do {
                 let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: currentChapterIndex)
                 await MainActor.run {
                     let cleanedContent = removeHTMLAndSVG(content)
-                    let previousPageIndex = resetPaginationState()
+                    if intent == .ttsDriven {
+                        skipNextPageChangeTTSRestart = true
+                    }
+                    resetPaginationState()
                     rawContent = cleanedContent
                     updateProcessedContent(from: cleanedContent)
                     isLoading = false
                     ttsBaseIndex = 0
                     if ttsManager.isPlaying {
-                        if ttsManager.bookUrl != book.bookUrl || ttsManager.currentChapterIndex != currentChapterIndex {
+                        let sameBook = ttsManager.bookUrl == book.bookUrl
+                        let sameChapter = ttsManager.currentChapterIndex == currentChapterIndex
+                        if !sameBook {
+                            ttsManager.stop()
+                        } else if !sameChapter && intent == .none {
                             ttsManager.stop()
                         }
                     }
                     prepareAdjacentChapters(for: currentChapterIndex)
-                    if shouldContinuePlayingSameBook && previousPageIndex != currentPageIndex {
-                        skipNextPageChangeTTSRestart = true
-                        ttsManager.stop()
-                        lastTTSSentenceIndex = 0
-                        startTTS(pageIndexOverride: currentPageIndex, showControls: false)
+                    if shouldContinuePlayingSameBook && intent == .manualNext {
+                        scheduleManualTTSRestart(pageIndex: 0)
+                    } else if shouldContinuePlayingSameBook && intent == .manualPrev {
+                        scheduleManualTTSRestart(pageIndex: nil)
                     }
+                    chapterChangeIntent = .none
                 }
             } catch {
                 await MainActor.run {
                     errorMessage = "加载章节失败：\(error.localizedDescription)"
                     isLoading = false
+                    chapterChangeIntent = .none
+                    pendingManualRestartChapter = nil
+                    pendingManualRestartPageIndex = nil
                 }
             }
         }
     }
 
-    private func resetPaginationState() -> Int {
-        let previousPageIndex = currentPageIndex
+    private func resetPaginationState() {
         currentCache = .empty
         prevCache = .empty
         nextCache = .empty
@@ -1259,12 +1324,13 @@ struct ReadingView: View {
         lastAdjacentPrepareAt = 0
         pendingBufferPageIndex = nil
         lastHandledPageIndex = nil
-        return previousPageIndex
     }
     
     private func previousChapter() {
         guard currentChapterIndex > 0 else { return }
         currentChapterIndex -= 1
+        pendingJumpToLastPage = true
+        chapterChangeIntent = .manualPrev
         loadChapterContent()
         saveProgress()
     }
@@ -1272,6 +1338,8 @@ struct ReadingView: View {
     private func nextChapter() {
         guard currentChapterIndex < chapters.count - 1 else { return }
         currentChapterIndex += 1
+        pendingJumpToFirstPage = true
+        chapterChangeIntent = .manualNext
         loadChapterContent()
         saveProgress()
     }
@@ -1368,6 +1436,9 @@ struct ReadingView: View {
             bookTitle: book.name ?? "\u{9605}\u{8BFB}",
             coverUrl: book.displayCoverUrl,
             onChapterChange: { newIndex in
+                chapterChangeIntent = .ttsDriven
+                pendingJumpToFirstPage = true
+                pendingJumpToLastPage = false
                 currentChapterIndex = newIndex
                 loadChapterContent()
                 saveProgress()

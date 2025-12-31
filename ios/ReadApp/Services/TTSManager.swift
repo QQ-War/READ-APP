@@ -346,6 +346,9 @@ class TTSManager: NSObject, ObservableObject {
         logger.log("寮€濮嬫湕璇?- 涔﹀悕: \(bookTitle), 绔犺妭: \(currentIndex)/\(chapters.count)", category: "TTS")
         logger.log("鍐呭闀垮害: \(text.count) 瀛楃", category: "TTS")
         
+        audioPlayer?.stop()
+        audioPlayer = nil
+        
         self.chapters = chapters
         self.currentChapterIndex = currentIndex
         self.bookUrl = bookUrl
@@ -1377,7 +1380,6 @@ extension TTSManager: AVAudioPlayerDelegate {
         speakNextSentence()
     }
 }
-
 
 
 
