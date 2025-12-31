@@ -1213,6 +1213,7 @@ struct ReadingView: View {
     
     private func loadChapterContent() {
         guard currentChapterIndex < chapters.count else { return }
+        let shouldContinuePlayingSameBook = ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl
         isLoading = true
         Task {
             do {
@@ -1230,6 +1231,10 @@ struct ReadingView: View {
                         }
                     }
                     prepareAdjacentChapters(for: currentChapterIndex)
+                    if shouldContinuePlayingSameBook {
+                        ttsManager.stop()
+                        startTTS(pageIndexOverride: currentPageIndex, showControls: false)
+                    }
                 }
             } catch {
                 await MainActor.run {
