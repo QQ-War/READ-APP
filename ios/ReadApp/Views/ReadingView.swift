@@ -616,7 +616,7 @@ struct ReadingView: View {
     }
 
     private func snapshot(from cache: ChapterCache) -> PageSnapshot {
-        PageSnapshot(pages: cache.pages, renderStore: cache.store, pageInfos: cache.pageInfos)
+        PageSnapshot(pages: cache.pages, renderStore: cache.renderStore, pageInfos: cache.pageInfos)
     }
 
     private func scheduleRepaginate(in size: CGSize) {
