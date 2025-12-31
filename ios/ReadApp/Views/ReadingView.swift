@@ -1539,10 +1539,7 @@ private struct TextKit2Paginator {
         
         var pages: [PaginatedPage] = []
         var pageInfos: [TK2PageInfo] = []
-        
-        var currentPageStartY: CGFloat = 0
         var pageCount = 0
-        var currentPageStartLocation = 0
         let totalLength = renderStore.attributedString.length
 
         func appendPage(range: NSRange, yOffset: CGFloat) -> Bool {
@@ -1555,25 +1552,30 @@ private struct TextKit2Paginator {
             return pageCount < maxPages
         }
         
-        layoutManager.enumerateTextLayoutFragments(from: documentRange.location, options: [.ensuresLayout, .estimatesSize]) { fragment in
-            let frame = fragment.layoutFragmentFrame
-            let fragmentBottomOnPage = frame.maxY - currentPageStartY
+        var currentY: CGFloat = 0
+        let totalHeight = layoutManager.usageBounds(for: renderStore.textContainer).height
+        var currentLocation = 0
+
+        while currentY < totalHeight && currentLocation < totalLength {
+            let pageRect = CGRect(x: 0, y: currentY, width: pageSize.width, height: pageSize.height)
+            var endLocation = currentLocation
             
-            if fragmentBottomOnPage > pageSize.height && frame.minY > currentPageStartY {
-                let textElementRange = fragment.textElement?.elementRange ?? documentRange
-                let startLocation = renderStore.contentStorage.offset(from: renderStore.contentStorage.documentRange.location, to: textElementRange.location)
-                
-                let pageRange = NSRange(location: currentPageStartLocation, length: max(0, startLocation - currentPageStartLocation))
-                if !appendPage(range: pageRange, yOffset: currentPageStartY) { return false }
-                currentPageStartY = frame.minY
-                currentPageStartLocation = startLocation
+            layoutManager.enumerateTextLayoutFragments(from: renderStore.contentStorage.location(documentRange.location, offsetBy: currentLocation), options: [.ensuresLayout]) { fragment in
+                let fragmentFrame = fragment.layoutFragmentFrame
+                if fragmentFrame.minY < pageRect.maxY {
+                    let range = rangeFromTextRange(fragment.rangeInElement, in: contentStorage)
+                    endLocation = NSMaxRange(range ?? NSRange(location: endLocation, length: 0))
+                    return true
+                } else {
+                    return false
+                }
             }
-            return true
-        }
-        
-        if pageCount < maxPages && currentPageStartLocation < totalLength {
-             let pageRange = NSRange(location: currentPageStartLocation, length: max(0, totalLength - currentPageStartLocation))
-             _ = appendPage(range: pageRange, yOffset: currentPageStartY)
+
+            let pageRange = NSRange(location: currentLocation, length: endLocation - currentLocation)
+            if !appendPage(range: pageRange, yOffset: currentY) { break }
+            
+            currentLocation = endLocation
+            currentY += pageSize.height
         }
         
         let reachedEnd = (pages.last?.globalRange.upperBound ?? 0) >= renderStore.attributedString.length
