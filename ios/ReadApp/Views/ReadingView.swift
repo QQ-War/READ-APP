@@ -5,6 +5,8 @@ import UIKit
 private struct ChapterCache {
     let pages: [PaginatedPage]
     let store: TextKitRenderStore?
+    let tk2Store: TextKit2RenderStore? // Added for TextKit 2
+    let pageInfos: [TextKit2Paginator.PageInfo]? // Added for TextKit 2
     let contentSentences: [String]
     let attributedText: NSAttributedString
     let paragraphStarts: [Int]
@@ -12,7 +14,7 @@ private struct ChapterCache {
     let isFullyPaginated: Bool
     
     static var empty: ChapterCache {
-        ChapterCache(pages: [], store: nil, contentSentences: [], attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false)
+        ChapterCache(pages: [], store: nil, tk2Store: nil, pageInfos: nil, contentSentences: [], attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false)
     }
 }
 
@@ -26,13 +28,14 @@ final class ReadContentViewControllerCache: ObservableObject {
     private var controllers: [Key: ReadContentViewController] = [:]
 
     func controller(
-        for store: TextKitRenderStore,
+        for store: Any, // Changed to Any to support both TK1 and TK2 stores
         pageIndex: Int,
         chapterOffset: Int,
         builder: () -> ReadContentViewController
     ) -> ReadContentViewController {
-        let key = Key(storeID: ObjectIdentifier(store), pageIndex: pageIndex, chapterOffset: chapterOffset)
-        if let cached = controllers[key], cached.renderStore === store {
+        let key = Key(storeID: ObjectIdentifier(store as AnyObject), pageIndex: pageIndex, chapterOffset: chapterOffset)
+        // Note: For TK2, the 'renderStore' property of the cached VC might need update or check
+        if let cached = controllers[key] {
             return cached
         }
         let controller = builder()
@@ -40,8 +43,8 @@ final class ReadContentViewControllerCache: ObservableObject {
         return controller
     }
 
-    func retainActive(stores: [TextKitRenderStore?]) {
-        let activeIDs = Set(stores.compactMap { $0.map { ObjectIdentifier($0) } })
+    func retainActive(stores: [Any?]) {
+        let activeIDs = Set(stores.compactMap { $0.map { ObjectIdentifier($0 as AnyObject) } })
         if activeIDs.isEmpty {
             controllers.removeAll()
             return
@@ -417,9 +420,9 @@ struct ReadingView: View {
                         let nextVC = makeContentViewController(cache: nextCache, pageIndex: 0, chapterOffset: 1)
 
                         ReadPageViewController(
-                            snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store),
-                            prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store),
-                            nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store),
+                            snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.store, tk2Store: currentCache.tk2Store),
+                            prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.store, tk2Store: prevCache.tk2Store),
+                            nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.store, tk2Store: nextCache.tk2Store),
                             currentPageIndex: $currentPageIndex,
                             pageSpacing: preferences.pageInterSpacing,
                             isAtChapterStart: currentPageIndex == 0,
@@ -515,68 +518,114 @@ struct ReadingView: View {
             ? currentCache.pages[currentPageIndex].globalRange.location
             : resumeCharIndex
 
-        let renderStore = TextKitPaginator.createRenderStore(fullText: newAttrText, size: size)
-        var pages: [PaginatedPage] = []
-        var isFully = false
-
-        func appendPages(_ count: Int) {
-            let result = TextKitPaginator.appendPages(
-                renderStore: renderStore,
+        if #available(iOS 15.0, *) {
+            // TextKit 2 Path
+            let tk2Store = TextKit2RenderStore(attributedString: newAttrText, layoutWidth: size.width)
+            let result = TextKit2Paginator.paginate(
+                renderStore: tk2Store,
+                pageSize: size,
                 paragraphStarts: newPStarts,
-                prefixLen: newPrefixLen,
-                maxPages: count
+                prefixLen: newPrefixLen
             )
-            pages.append(contentsOf: result.pages)
-            isFully = result.reachedEnd
-        }
-
-        if pendingJumpToLastPage {
-            while !isFully {
-                appendPages(max(prefetchPageBatch * 2, 16))
-            }
-            currentPageIndex = max(0, pages.count - 1)
-            pendingJumpToLastPage = false
-            pendingJumpToFirstPage = false
-        } else {
-            appendPages(initialPageBatch)
+            
+            // Restore position
             if let targetCharIndex = focusCharIndex {
-                while pageIndexForChar(targetCharIndex, in: pages) == nil && !isFully {
-                    appendPages(prefetchPageBatch)
-                }
-                if let pageIndex = pageIndexForChar(targetCharIndex, in: pages) {
+                if let pageIndex = pageIndexForChar(targetCharIndex, in: result.pages) {
                     currentPageIndex = pageIndex
                 }
             } else if pendingJumpToFirstPage || currentCache.pages.isEmpty {
                 currentPageIndex = 0
+            } else if pendingJumpToLastPage {
+                 currentPageIndex = max(0, result.pages.count - 1)
             }
+            pendingJumpToLastPage = false
             pendingJumpToFirstPage = false
-        }
+            
+            if result.pages.isEmpty { currentPageIndex = 0 }
+            else if currentPageIndex >= result.pages.count { currentPageIndex = result.pages.count - 1 }
+            
+            currentCache = ChapterCache(
+                pages: result.pages,
+                store: nil,
+                tk2Store: tk2Store,
+                pageInfos: result.pageInfos,
+                contentSentences: sentences,
+                attributedText: newAttrText,
+                paragraphStarts: newPStarts,
+                chapterPrefixLen: newPrefixLen,
+                isFullyPaginated: true // TK2 paginator does linear full scan for now
+            )
+        } else {
+            // TextKit 1 Legacy Path
+            let renderStore = TextKitPaginator.createRenderStore(fullText: newAttrText, size: size)
+            var pages: [PaginatedPage] = []
+            var isFully = false
 
-        if pages.isEmpty {
-            currentPageIndex = 0
-        } else if currentPageIndex >= pages.count {
-            currentPageIndex = pages.count - 1
-        }
+            func appendPages(_ count: Int) {
+                let result = TextKitPaginator.appendPages(
+                    renderStore: renderStore,
+                    paragraphStarts: newPStarts,
+                    prefixLen: newPrefixLen,
+                    maxPages: count
+                )
+                pages.append(contentsOf: result.pages)
+                isFully = result.reachedEnd
+            }
 
-        currentCache = ChapterCache(
-            pages: pages,
-            store: renderStore,
-            contentSentences: sentences,
-            attributedText: newAttrText,
-            paragraphStarts: newPStarts,
-            chapterPrefixLen: newPrefixLen,
-            isFullyPaginated: isFully
-        )
+            if pendingJumpToLastPage {
+                while !isFully {
+                    appendPages(max(prefetchPageBatch * 2, 16))
+                }
+                currentPageIndex = max(0, pages.count - 1)
+                pendingJumpToLastPage = false
+                pendingJumpToFirstPage = false
+            } else {
+                appendPages(initialPageBatch)
+                if let targetCharIndex = focusCharIndex {
+                    while pageIndexForChar(targetCharIndex, in: pages) == nil && !isFully {
+                        appendPages(prefetchPageBatch)
+                    }
+                    if let pageIndex = pageIndexForChar(targetCharIndex, in: pages) {
+                        currentPageIndex = pageIndex
+                    }
+                } else if pendingJumpToFirstPage || currentCache.pages.isEmpty {
+                    currentPageIndex = 0
+                }
+                pendingJumpToFirstPage = false
+            }
+
+            if pages.isEmpty {
+                currentPageIndex = 0
+            } else if currentPageIndex >= pages.count {
+                currentPageIndex = pages.count - 1
+            }
+
+            currentCache = ChapterCache(
+                pages: pages,
+                store: renderStore,
+                tk2Store: nil,
+                pageInfos: nil,
+                contentSentences: sentences,
+                attributedText: newAttrText,
+                paragraphStarts: newPStarts,
+                chapterPrefixLen: newPrefixLen,
+                isFullyPaginated: isFully
+            )
+        }
+        
         if let localPage = pendingResumeLocalPageIndex,
            pendingResumeLocalChapterIndex == currentChapterIndex,
-           pages.indices.contains(localPage) {
+           currentCache.pages.indices.contains(localPage) {
             currentPageIndex = localPage
             pendingResumeLocalPageIndex = nil
         }
         if resumeCharIndex != nil {
             pendingResumeCharIndex = nil
         }
-        ensurePageBuffer(around: currentPageIndex)
+        // TK2 is always full, so buffer check is less critical but harmless
+        if currentCache.tk2Store == nil {
+             ensurePageBuffer(around: currentPageIndex)
+        }
         triggerAdjacentPrefetchIfNeeded(force: true)
     }
 
@@ -766,9 +815,26 @@ struct ReadingView: View {
     }
 
     private func makeContentViewController(cache: ChapterCache, pageIndex: Int, chapterOffset: Int) -> ReadContentViewController? {
-        guard let store = cache.store else { return nil }
-        guard pageIndex >= 0, pageIndex < store.containers.count else { return nil }
-        return contentControllerCache.controller(
+        // Support TK2 or TK1
+        let store: Any
+        if #available(iOS 15.0, *), let tk2 = cache.tk2Store {
+            store = tk2
+        } else if let tk1 = cache.store {
+            store = tk1
+        } else {
+            return nil
+        }
+        
+        // TK1 Check
+        if let tk1 = store as? TextKitRenderStore {
+             guard pageIndex >= 0, pageIndex < tk1.containers.count else { return nil }
+        }
+        // TK2 Check
+        if #available(iOS 15.0, *), store is TextKit2RenderStore {
+            guard let infos = cache.pageInfos, pageIndex >= 0, pageIndex < infos.count else { return nil }
+        }
+
+        let vc = contentControllerCache.controller(
             for: store,
             pageIndex: pageIndex,
             chapterOffset: chapterOffset
@@ -785,10 +851,22 @@ struct ReadingView: View {
                 }
             )
         }
+        
+        if #available(iOS 15.0, *), let infos = cache.pageInfos, pageIndex < infos.count {
+            vc.configureTK2Page(info: infos[pageIndex])
+        }
+        
+        return vc
     }
 
     private func refreshContentControllerCache() {
-        contentControllerCache.retainActive(stores: [currentCache.store, prevCache.store, nextCache.store])
+        var stores: [Any?] = []
+        if #available(iOS 15.0, *) {
+             stores = [currentCache.tk2Store, prevCache.tk2Store, nextCache.tk2Store, currentCache.store, prevCache.store, nextCache.store]
+        } else {
+             stores = [currentCache.store, prevCache.store, nextCache.store]
+        }
+        contentControllerCache.retainActive(stores: stores)
     }
 
     private var cacheRefresher: some View {
@@ -1013,52 +1091,84 @@ struct ReadingView: View {
         let pStarts = TextKitPaginator.paragraphStartIndices(sentences: sentences)
         let prefixLen = (title.isEmpty) ? 0 : (title + "\n").utf16.count
 
-        let renderStore = TextKitPaginator.createRenderStore(fullText: attrText, size: pageSize)
-        var pages: [PaginatedPage] = []
-        var isFully = false
-
-        func appendPages(_ count: Int) {
-            let result = TextKitPaginator.appendPages(
-                renderStore: renderStore,
+        if #available(iOS 15.0, *) {
+            // TextKit 2
+            let tk2Store = TextKit2RenderStore(attributedString: attrText, layoutWidth: pageSize.width)
+            // If for gate, we only need a few pages. Unless fromEnd (TK2 backward pagination is hard without full layout)
+            // For fromEnd in TK2, we might need full layout OR estimate.
+            // TextKit 2 is fast, let's try full layout if fromEnd, else partial.
+            let limit = (forGate && !fromEnd) ? initialPageBatch : Int.max
+            
+            let result = TextKit2Paginator.paginate(
+                renderStore: tk2Store,
+                pageSize: pageSize,
                 paragraphStarts: pStarts,
                 prefixLen: prefixLen,
-                maxPages: count
+                maxPages: limit
             )
-            pages.append(contentsOf: result.pages)
-            isFully = result.reachedEnd
-        }
+            
+            return ChapterCache(
+                pages: result.pages,
+                store: nil,
+                tk2Store: tk2Store,
+                pageInfos: result.pageInfos,
+                contentSentences: sentences,
+                attributedText: attrText,
+                paragraphStarts: pStarts,
+                chapterPrefixLen: prefixLen,
+                isFullyPaginated: result.reachedEnd
+            )
+        } else {
+            // TextKit 1
+            let renderStore = TextKitPaginator.createRenderStore(fullText: attrText, size: pageSize)
+            var pages: [PaginatedPage] = []
+            var isFully = false
 
-        func appendUntilBuffer(_ target: Int) {
-            while pages.count < target && !isFully {
-                appendPages(prefetchPageBatch)
+            func appendPages(_ count: Int) {
+                let result = TextKitPaginator.appendPages(
+                    renderStore: renderStore,
+                    paragraphStarts: pStarts,
+                    prefixLen: prefixLen,
+                    maxPages: count
+                )
+                pages.append(contentsOf: result.pages)
+                isFully = result.reachedEnd
             }
-        }
 
-        let bufferGoal = max(bufferedPageBatch, initialPageBatch)
+            func appendUntilBuffer(_ target: Int) {
+                while pages.count < target && !isFully {
+                    appendPages(prefetchPageBatch)
+                }
+            }
 
-        if forGate {
-            if fromEnd {
-                while !isFully {
-                    appendPages(max(prefetchPageBatch * 2, 16))
+            let bufferGoal = max(bufferedPageBatch, initialPageBatch)
+
+            if forGate {
+                if fromEnd {
+                    while !isFully {
+                        appendPages(max(prefetchPageBatch * 2, 16))
+                    }
+                } else {
+                    appendPages(initialPageBatch)
+                    appendUntilBuffer(bufferGoal)
                 }
             } else {
                 appendPages(initialPageBatch)
                 appendUntilBuffer(bufferGoal)
             }
-        } else {
-            appendPages(initialPageBatch)
-            appendUntilBuffer(bufferGoal)
-        }
 
-        return ChapterCache(
-            pages: pages,
-            store: renderStore,
-            contentSentences: sentences,
-            attributedText: attrText,
-            paragraphStarts: pStarts,
-            chapterPrefixLen: prefixLen,
-            isFullyPaginated: isFully
-        )
+            return ChapterCache(
+                pages: pages,
+                store: renderStore,
+                tk2Store: nil,
+                pageInfos: nil,
+                contentSentences: sentences,
+                attributedText: attrText,
+                paragraphStarts: pStarts,
+                chapterPrefixLen: prefixLen,
+                isFullyPaginated: isFully
+            )
+        }
     }
 
     // MARK: - Logic & Actions (Loading, Saving, etc.)
@@ -1214,15 +1324,29 @@ struct ReadingView: View {
     private func loadChapterContent() {
         guard currentChapterIndex < chapters.count else { return }
         let shouldContinuePlayingSameBook = ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl
-        isLoading = true
+        
+        // Optimization: Don't show loading if we have valid pages for current chapter (e.g. from preload gate)
+        let hasValidCache = !currentCache.pages.isEmpty
+        if !hasValidCache {
+            isLoading = true
+        }
+        
         Task {
             do {
                 let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: currentChapterIndex)
                 await MainActor.run {
                     let cleanedContent = removeHTMLAndSVG(content)
-                    resetPaginationState()
-                    rawContent = cleanedContent
-                    updateProcessedContent(from: cleanedContent)
+                    
+                    // Smooth Transition Logic
+                    if hasValidCache {
+                         rawContent = cleanedContent
+                         updateProcessedContent(from: cleanedContent)
+                    } else {
+                        resetPaginationState()
+                        rawContent = cleanedContent
+                        updateProcessedContent(from: cleanedContent)
+                    }
+                    
                     isLoading = false
                     ttsBaseIndex = 0
                     if ttsManager.isPlaying {
@@ -1478,6 +1602,7 @@ struct ReadingView: View {
 struct PageSnapshot {
     let pages: [PaginatedPage]
     let renderStore: TextKitRenderStore?
+    let tk2Store: TextKit2RenderStore? // Added
 }
 
 struct ReadPageViewController: UIViewControllerRepresentable {
@@ -1543,7 +1668,10 @@ struct ReadPageViewController: UIViewControllerRepresentable {
         init(_ parent: ReadPageViewController) { self.parent = parent }
         
         func updateSnapshotIfNeeded(_ newSnapshot: PageSnapshot, currentPageIndex: Int) {
-            guard let store = newSnapshot.renderStore, !newSnapshot.pages.isEmpty else { return }
+            let hasTK1 = newSnapshot.renderStore != nil
+            let hasTK2 = newSnapshot.tk2Store != nil
+            guard (hasTK1 || hasTK2), !newSnapshot.pages.isEmpty else { return }
+            
             // Only update if store changed or page count changed drastically (re-pagination)
             // Or if we need to force reset
             if shouldReplaceSnapshot(with: newSnapshot) {
@@ -1565,40 +1693,85 @@ struct ReadPageViewController: UIViewControllerRepresentable {
             guard let pvc = pageViewController else { return }
             
             // Check current visible VC
+            // Match TK1 or TK2
+            let activeStore: Any? = activeSnapshot.tk2Store ?? activeSnapshot.renderStore
+            
             if let currentVC = pvc.viewControllers?.first as? ReadContentViewController,
                currentVC.chapterOffset == 0,
-               currentVC.pageIndex == currentPageIndex,
-               currentVC.renderStore === store {
-                return
+               currentVC.pageIndex == currentPageIndex {
+                // Identity check for store
+                let currentVCStore = currentVC.renderStore as AnyObject
+                let activeStoreObj = activeStore as AnyObject
+                if currentVCStore === activeStoreObj {
+                     return
+                }
             }
             
             // Set new VC
-            let pageCount = activeSnapshot.renderStore?.containers.count ?? activeSnapshot.pages.count
+            // For TK2, page count is from pages array. For TK1, containers.
+            var pageCount = activeSnapshot.pages.count
+            if let tk1 = activeSnapshot.renderStore {
+                pageCount = tk1.containers.count
+            }
+            
             if currentPageIndex < pageCount {
                 let vc: ReadContentViewController
+                // Try reuse custom VC
                 if let custom = currentContentViewController,
                    custom.chapterOffset == 0,
-                   custom.pageIndex == currentPageIndex,
-                   custom.renderStore === store {
-                    vc = custom
+                   custom.pageIndex == currentPageIndex {
+                       let customStore = custom.renderStore as AnyObject
+                       let activeObj = activeStore as AnyObject
+                       if customStore === activeObj {
+                           vc = custom
+                       } else {
+                           // Fallback create
+                           // But makeContentViewController in parent creates it.
+                           // We can't call parent.makeContentViewController directly?
+                           // Actually we don't. We rely on updateUIViewController to have updated currentContentViewController
+                           // If parent updated currentContentViewController, we use it.
+                           if let parentVC = currentContentViewController,
+                              parentVC.renderStore as AnyObject === activeObj {
+                               vc = parentVC
+                           } else {
+                               // Fallback if parent didn't update yet? Should not happen if flow is correct.
+                               // But we need 'store'.
+                               // We can't create it here easily without 'onAddReplaceRule' etc.
+                               // But wait, updateUIViewController sets `currentContentViewController`.
+                               // So we should just use that if valid.
+                               if let updatedVC = currentContentViewController {
+                                   vc = updatedVC
+                               } else {
+                                   return // Should not happen
+                               }
+                           }
+                       }
                 } else {
-                    vc = ReadContentViewController(
-                        pageIndex: currentPageIndex,
-                        renderStore: store,
-                        chapterOffset: 0,
-                        onAddReplaceRule: parent.onAddReplaceRule,
-                        onTapLocation: parent.onTapLocation
-                    )
+                     if let updatedVC = currentContentViewController {
+                         vc = updatedVC
+                     } else {
+                         return
+                     }
                 }
-                // Avoid setting view controllers if we are mid-animation or just finished
-                // Logic: If isAnimating is true, we usually defer. If we are here, isAnimating is likely false.
                 pvc.setViewControllers([vc], direction: .forward, animated: false)
             }
         }
         
         private func shouldReplaceSnapshot(with newSnapshot: PageSnapshot) -> Bool {
             guard let current = snapshot else { return true }
-            if current.renderStore !== newSnapshot.renderStore { return true }
+            
+            if let t1 = current.renderStore, let nt1 = newSnapshot.renderStore {
+                if t1 !== nt1 { return true }
+            } else if current.renderStore != nil || newSnapshot.renderStore != nil {
+                return true // One is nil, one is not
+            }
+            
+            if let t2 = current.tk2Store, let nt2 = newSnapshot.tk2Store {
+                if t2 !== nt2 { return true }
+            } else if current.tk2Store != nil || newSnapshot.tk2Store != nil {
+                return true
+            }
+            
             if newSnapshot.pages.count < current.pages.count { return true }
             return false
         }
@@ -1808,29 +1981,17 @@ final class SelectableTextView: UITextView {
 // MARK: - Content View Controller
 class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     let pageIndex: Int
-    let renderStore: TextKitRenderStore
-    let textContainer: NSTextContainer
+    let renderStore: Any // Changed to Any
     let chapterOffset: Int // 0: Current, -1: Prev, 1: Next
     let onAddReplaceRule: ((String) -> Void)?
     let onTapLocation: ((ReaderTapLocation) -> Void)?
     
-    private lazy var textView: SelectableTextView = {
-        let tv = SelectableTextView(frame: CGRect(origin: .zero, size: renderStore.size), textContainer: textContainer)
-        tv.isEditable = false
-        tv.isScrollEnabled = false
-        tv.isSelectable = true
-        tv.textContainerInset = .zero
-        tv.textContainer.lineFragmentPadding = 0
-        tv.backgroundColor = .clear
-        tv.translatesAutoresizingMaskIntoConstraints = false
-        tv.onAddRule = onAddReplaceRule
-        return tv
-    }()
+    private var textView: SelectableTextView? // TK1
+    private var tk2View: UIView? // TK2
     
-    init(pageIndex: Int, renderStore: TextKitRenderStore, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
+    init(pageIndex: Int, renderStore: Any, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
         self.pageIndex = pageIndex
         self.renderStore = renderStore
-        self.textContainer = renderStore.containers[pageIndex]
         self.chapterOffset = chapterOffset
         self.onAddReplaceRule = onAddReplaceRule
         self.onTapLocation = onTapLocation
@@ -1842,33 +2003,106 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor.systemBackground
-        let item = UIMenuItem(title: "加入净化规则", action: #selector(SelectableTextView.addToReplaceRule))
-        if !(UIMenuController.shared.menuItems?.contains(where: { $0.action == item.action }) ?? false) {
-            var items = UIMenuController.shared.menuItems ?? []
-            items.append(item)
-            UIMenuController.shared.menuItems = items
+        
+        if #available(iOS 15.0, *), let store = renderStore as? TextKit2RenderStore {
+             // TK2 Path
+             let v = ReadContent2View(frame: view.bounds)
+             v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+             v.renderStore = store
+             // We need to fetch pageInfo from somewhere. Wait. 
+             // The VC init doesn't pass PageInfo, only index.
+             // But renderStore doesn't have page info list (it's in Cache).
+             // DESIGN FLAW in my plan: renderStore in TK2 is just content. Pagination result is separate.
+             // In TK1, renderStore contained containers, so store.containers[index] worked.
+             // In TK2, store doesn't know about pages.
+             
+             // Correction: I must pass PageInfo to VC or let VC access it.
+             // But VC is generic.
+             // Solution: Pass a closure or specific Page Object? 
+             // Or, inject the PageInfo into VC.
+             // But makeContentViewController in ReadingView constructs it.
+             // ReadingView has 'cache'.
+             
+             // I will hack it: I will assume the caller configures the view after init or pass it in constructor?
+             // No, constructor signature is fixed by my previous step.
+             // Wait, I can change constructor signature, but I need to update ReadingView call sites.
+             // Let's check makeContentViewController in ReadingView.
+             
+             // Actually, I can pass the pageInfo in init if I change the signature.
+             // Or, better:
+             // Let's look at `makeContentViewController`. It accesses `cache`.
+             // I can pass `cache.pageInfos?[pageIndex]` to the VC.
+             // But I need to update VC init.
+             
+             // For now, let's implement the TK1 logic here and come back to fix Init.
+             setupTK2View(store: store)
+        } else if let store = renderStore as? TextKitRenderStore {
+            // TK1 Path
+            let textContainer = store.containers[pageIndex]
+            let tv = SelectableTextView(frame: CGRect(origin: .zero, size: store.size), textContainer: textContainer)
+            tv.isEditable = false
+            tv.isScrollEnabled = false
+            tv.isSelectable = true
+            tv.textContainerInset = .zero
+            tv.textContainer.lineFragmentPadding = 0
+            tv.backgroundColor = .clear
+            tv.translatesAutoresizingMaskIntoConstraints = false
+            tv.onAddRule = onAddReplaceRule
+            self.textView = tv
+            
+            view.addSubview(tv)
+            NSLayoutConstraint.activate([
+                tv.topAnchor.constraint(equalTo: view.topAnchor),
+                tv.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                tv.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                tv.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            ])
+            attachTextTap(to: tv)
+            
+            let item = UIMenuItem(title: "加入净化规则", action: #selector(SelectableTextView.addToReplaceRule))
+            if !(UIMenuController.shared.menuItems?.contains(where: { $0.action == item.action }) ?? false) {
+                var items = UIMenuController.shared.menuItems ?? []
+                items.append(item)
+                UIMenuController.shared.menuItems = items
+            }
         }
-        view.addSubview(textView)
-        NSLayoutConstraint.activate([
-            textView.topAnchor.constraint(equalTo: view.topAnchor),
-            textView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor), // No extra padding here
-            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-        attachTextTap()
+    }
+    
+    private func setupTK2View(store: Any) {
+         // Placeholder. Will be configured by property injection.
+         if #available(iOS 15.0, *), let store = store as? TextKit2RenderStore {
+             let v = ReadContent2View(frame: view.bounds)
+             v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+             v.renderStore = store
+             v.onTapLocation = onTapLocation
+             v.onAddReplaceRule = onAddReplaceRule
+             view.addSubview(v)
+             self.tk2View = v
+         }
+    }
+    
+    // Helper to inject PageInfo for TK2
+    func configureTK2Page(info: TextKit2Paginator.PageInfo) {
+        if #available(iOS 15.0, *), let v = tk2View as? ReadContent2View {
+            v.pageInfo = info
+            v.setNeedsDisplay()
+        }
     }
 
-    private func attachTextTap() {
+    private func attachTextTap(to view: UIView) {
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTextTap(_:)))
         tap.cancelsTouchesInView = false
         tap.delaysTouchesBegan = false
         tap.delaysTouchesEnded = false
         tap.delegate = self
-        if let longPress = textView.gestureRecognizers?.compactMap({ $0 as? UILongPressGestureRecognizer }).first {
+        if let longPress = view.gestureRecognizers?.compactMap({ $0 as? UILongPressGestureRecognizer }).first {
             bindPageScrollToFail(longPress)
         }
-        textView.addGestureRecognizer(tap)
+        view.addGestureRecognizer(tap)
     }
+    
+    // ... (rest of the methods: bindPageScrollToFail, gestureRecognizer, handleTextTap) ...
+
 
     private func bindPageScrollToFail(_ longPress: UILongPressGestureRecognizer) {
         var node: UIView? = view
@@ -2317,18 +2551,233 @@ struct FontSizeSheet: View {
 
                 Toggle("播放时锁定翻页", isOn: $preferences.lockPageOnTTS)
                     .padding(.top)
-
+                
                 Spacer()
             }
-            .padding(20)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("\u{5B8C}\u{6210}") { 
-                        dismiss() 
-                    }
+            .padding()
+        }
+    }
+}
+
+// MARK: - TextKit 2 Implementation
+
+@available(iOS 15.0, *)
+final class TextKit2RenderStore {
+    let contentStorage: NSTextContentStorage
+    let layoutManager: NSTextLayoutManager
+    let textContainer: NSTextContainer
+    let attributedString: NSAttributedString
+    
+    init(attributedString: NSAttributedString, layoutWidth: CGFloat) {
+        self.attributedString = attributedString
+        
+        contentStorage = NSTextContentStorage()
+        contentStorage.textStorage = NSTextStorage(attributedString: attributedString)
+        
+        layoutManager = NSTextLayoutManager()
+        contentStorage.addTextLayoutManager(layoutManager)
+        
+        textContainer = NSTextContainer(size: CGSize(width: layoutWidth, height: 0)) // 0 means infinite height in logic or auto-grow
+        textContainer.lineFragmentPadding = 0
+        layoutManager.textContainer = textContainer
+    }
+}
+
+@available(iOS 15.0, *)
+struct TextKit2Paginator {
+    
+    struct PageInfo {
+        let range: NSRange
+        let yOffset: CGFloat
+        let height: CGFloat
+        let startSentenceIndex: Int
+    }
+    
+    struct PaginationResult {
+        let pages: [PaginatedPage] // We keep PaginatedPage struct but extend its usage
+        let pageInfos: [PageInfo]
+        let reachedEnd: Bool
+    }
+    
+    static func paginate(
+        renderStore: TextKit2RenderStore,
+        pageSize: CGSize,
+        paragraphStarts: [Int],
+        prefixLen: Int,
+        maxPages: Int = Int.max
+    ) -> PaginationResult {
+        let layoutManager = renderStore.layoutManager
+        let contentStorage = renderStore.contentStorage
+        
+        guard let documentRange = contentStorage.documentRange, !documentRange.isEmpty else {
+            return PaginationResult(pages: [], pageInfos: [], reachedEnd: true)
+        }
+        
+        // Ensure layout for the whole document
+        layoutManager.ensureLayout(for: documentRange)
+        
+        var pages: [PaginatedPage] = []
+        var pageInfos: [PageInfo] = []
+        
+        var currentPageStartY: CGFloat = 0
+        var pageCount = 0
+        
+        var currentPageStartLocation = documentRange.location
+        
+        // We scan through fragments to find page breaks
+        layoutManager.enumerateTextLayoutFragments(from: documentRange.location, options: [.ensuresLayout, .estimatesSize]) { fragment in
+            let frame = fragment.layoutFragmentFrame
+            // frame.origin.y is relative to the textContainer
+            
+            // Check if this fragment roughly fits in the current page
+            // The fragment "bottom" relative to the current page top
+            let fragmentBottomOnPage = frame.maxY - currentPageStartY
+            
+            // Allow a small tolerance or check if it's the FIRST fragment on page
+            if fragmentBottomOnPage > pageSize.height && frame.minY > currentPageStartY {
+                // Break page BEFORE this fragment
+                
+                // 1. Finalize current page
+                let rangeEndLocation = fragment.rangeLocation
+                let pageRange = NSTextRange(location: currentPageStartLocation, end: rangeEndLocation)
+                
+                if let nsRange = rangeFromTextRange(pageRange, in: contentStorage) {
+                     let adjustedLocation = max(0, nsRange.location - prefixLen)
+                     let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
+                     
+                     pages.append(PaginatedPage(globalRange: nsRange, startSentenceIndex: startIdx))
+                     pageInfos.append(PageInfo(range: nsRange, yOffset: currentPageStartY, height: pageSize.height, startSentenceIndex: startIdx))
                 }
+                
+                pageCount += 1
+                if pageCount >= maxPages {
+                    return false // Stop enumeration
+                }
+                
+                // 2. Start new page
+                currentPageStartY = frame.minY // The new page starts exactly where this fragment begins
+                currentPageStartLocation = fragment.rangeLocation
             }
+            return true
+        }
+        
+        // Handle the last page (if we didn't hit maxPages limit)
+        if pageCount < maxPages {
+             let endDoc = documentRange.endLocation
+             if currentPageStartLocation.compare(endDoc) == .orderedAscending {
+                 let pageRange = NSTextRange(location: currentPageStartLocation, end: endDoc)
+                 if let nsRange = rangeFromTextRange(pageRange, in: contentStorage) {
+                     let adjustedLocation = max(0, nsRange.location - prefixLen)
+                     let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
+                     
+                     pages.append(PaginatedPage(globalRange: nsRange, startSentenceIndex: startIdx))
+                     pageInfos.append(PageInfo(range: nsRange, yOffset: currentPageStartY, height: pageSize.height, startSentenceIndex: startIdx))
+                 }
+             }
+        }
+        
+        let reachedEnd = (pages.last?.globalRange.upperBound ?? 0) >= renderStore.attributedString.length
+        
+        return PaginationResult(pages: pages, pageInfos: pageInfos, reachedEnd: reachedEnd)
+    }
+    
+    static func rangeFromTextRange(_ textRange: NSTextRange?, in content: NSTextContentStorage) -> NSRange? {
+        guard let textRange = textRange else { return nil }
+        let location = content.offset(from: content.documentRange.location, to: textRange.location)
+        let length = content.offset(from: textRange.location, to: textRange.endLocation)
+        return NSRange(location: location, length: length)
+    }
+}
+
+// Custom View for rendering TextKit 2 content
+@available(iOS 15.0, *)
+class ReadContent2View: UIView {
+    var renderStore: TextKit2RenderStore?
+    var pageInfo: TextKit2Paginator.PageInfo?
+    var onTapLocation: ((ReaderTapLocation) -> Void)?
+    var onAddReplaceRule: ((String) -> Void)?
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.backgroundColor = .clear
+        
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
+        self.addGestureRecognizer(tap)
+        
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        self.addGestureRecognizer(longPress)
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
+    
+    override func draw(_ rect: CGRect) {
+        guard let store = renderStore, let info = pageInfo else { return }
+        
+        let context = UIGraphicsGetCurrentContext()
+        context?.saveGState()
+        
+        // TK2 renders relative to the text container origin.
+        // We need to translate the context so that the page's slice (starting at yOffset)
+        // is drawn at bounds.minY
+        
+        context?.translateBy(x: 0, y: -info.yOffset)
+        
+        // We only draw fragments that intersect our page range
+        store.layoutManager.enumerateTextLayoutFragments(from: store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location), options: [.ensuresLayout]) { fragment in
+            
+            // Optimization: Stop if we are past the page
+            if fragment.layoutFragmentFrame.minY >= info.yOffset + info.height {
+                return false
+            }
+            
+            // Draw
+            fragment.draw(at: .zero, in: context!)
+            return true
+        }
+        
+        context?.restoreGState()
+    }
+    
+    @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
+        let x = gesture.location(in: self).x
+        let w = bounds.width
+        if x < w / 3 {
+            onTapLocation?(.left)
+        } else if x > w * 2 / 3 {
+            onTapLocation?(.right)
+        } else {
+            onTapLocation?(.middle)
+        }
+    }
+    
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, let store = renderStore, let info = pageInfo else { return }
+        let point = gesture.location(in: self)
+        let adjustedPoint = CGPoint(x: point.x, y: point.y + info.yOffset)
+        
+        if let fragment = store.layoutManager.textLayoutFragment(for: adjustedPoint) {
+             if let range = fragment.textElement?.elementRange,
+                let nsRange = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
+                 let text = (store.attributedString.string as NSString).substring(with: nsRange)
+                 becomeFirstResponder()
+                 let menu = UIMenuController.shared
+                 menu.showMenu(from: self, rect: CGRect(origin: point, size: .zero))
+                 self.pendingSelectedText = text
+             }
+        }
+    }
+    
+    private var pendingSelectedText: String?
+    
+    override var canBecomeFirstResponder: Bool { true }
+    
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        return action == #selector(addToReplaceRule)
+    }
+    
+    @objc func addToReplaceRule() {
+        if let text = pendingSelectedText {
+            onAddReplaceRule?(text)
         }
     }
 }
