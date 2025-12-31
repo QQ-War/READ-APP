@@ -1233,6 +1233,7 @@ struct ReadingView: View {
                     prepareAdjacentChapters(for: currentChapterIndex)
                     if shouldContinuePlayingSameBook {
                         ttsManager.stop()
+                        lastTTSSentenceIndex = 0
                         startTTS(pageIndexOverride: currentPageIndex, showControls: false)
                     }
                 }
