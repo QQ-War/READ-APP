@@ -20,6 +20,10 @@ ReadApp 是一个轻量的 iOS/Android 阅读应用，支持书源管理与 TTS�
 - iOS: open `ios/ReadApp.xcodeproj` in Xcode | iOS：用 Xcode 打开 `ios/ReadApp.xcodeproj`
 - Android: open `android/` in Android Studio | Android：用 Android Studio 打开 `android/`
 
+## Branches | 分支说明
+- `main`: Primary branch (TK2 refactor, active development) | 主分支（TK2 重构版，主要开发）
+- `TK1`: Snapshot of the previous main before TK2 refactor | 旧主分支快照（TK2 重构前的版本）
+
 ## Android signing (debug) | Android 签名（Debug）
 - Debug keystore: `android/keystore/readapp-debug.p12` | Debug keystore：`android/keystore/readapp-debug.p12`
 - alias: `readappdebug` | alias：`readappdebug`

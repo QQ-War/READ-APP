@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - test
+      - TK1
     paths:
       - "ios/**"
       - ".github/workflows/ios.yml"
@@ -30,21 +30,22 @@ jobs:
       - name: Prepare IPA artifact
         run: |
           set -e
-          cp ios/build/ReadApp_unsigned.ipa ios/build/ReadApp-unsigned.ipa
+          cp ios/build/ReadApp_unsigned.ipa "ios/build/ReadApp-unsigned-${{ github.ref_name }}.ipa"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ReadApp-unsigned-ipa
-          path: ios/build/ReadApp-unsigned.ipa
+          name: ReadApp-unsigned-ipa-${{ github.ref_name }}
+          path: ios/build/ReadApp-unsigned-${{ github.ref_name }}.ipa
 
       - name: Delete existing release assets
         uses: actions/github-script@v7
         with:
           script: |
-            const tag = 'ci-build';
+            const branch = context.ref.replace('refs/heads/', '');
+            const tag = `ci-build-${branch}`;
             const assetNames = [
-              'ReadApp-unsigned.ipa',
+              `ReadApp-unsigned-${branch}.ipa`,
             ];
             try {
               const release = await github.rest.repos.getReleaseByTag({
@@ -68,8 +69,8 @@ jobs:
       - name: Upload IPA to Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ci-build
-          name: CI Build
+          tag_name: ci-build-${{ github.ref_name }}
+          name: CI Build (${{ github.ref_name }})
           prerelease: true
           files: |
-            ios/build/ReadApp-unsigned.ipa
+            ios/build/ReadApp-unsigned-${{ github.ref_name }}.ipa
