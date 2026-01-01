@@ -499,10 +499,12 @@ struct ReadingView: View {
         
         if shouldJumpToLast {
             currentPageIndex = max(0, result.pages.count - 1)
-        } else if shouldJumpToFirst || currentCache.pages.isEmpty {
+        } else if shouldJumpToFirst {
             currentPageIndex = 0
         } else if let targetCharIndex = focusCharIndex, let pageIndex = pageIndexForChar(targetCharIndex, in: result.pages) {
             currentPageIndex = pageIndex
+        } else if currentCache.pages.isEmpty {
+            currentPageIndex = 0
         }
         pendingJumpToLastPage = false
         pendingJumpToFirstPage = false
@@ -512,7 +514,7 @@ struct ReadingView: View {
         
         currentCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: rawContent, attributedText: newAttrText, paragraphStarts: newPStarts, chapterPrefixLen: newPrefixLen, isFullyPaginated: true)
         
-        if let localPage = pendingResumeLocalPageIndex, pendingResumeLocalChapterIndex == currentChapterIndex, currentCache.pages.indices.contains(localPage) {
+        if let localPage = pendingResumeLocalPageIndex, pendingResumeLocalChapterIndex == currentChapterIndex, result.pages.indices.contains(localPage) {
             currentPageIndex = localPage
             pendingResumeLocalPageIndex = nil
         }
