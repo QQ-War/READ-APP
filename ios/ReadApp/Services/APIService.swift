@@ -163,24 +163,43 @@ class APIService: ObservableObject {
         if let bookSourceUrl = bookSourceUrl {
             queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
         }
-        let (data, httpResponse) = try await requestWithFailback(endpoint: "getChapterList", queryItems: queryItems)
-        guard httpResponse.statusCode == 200 else {
-            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
-        }
-        let apiResponse = try JSONDecoder().decode(APIResponse<[BookChapter]>.self, from: data)
-        if apiResponse.isSuccess, let chapters = apiResponse.data {
-            return chapters
-        } else {
-            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节列表失败"])
+        
+        do {
+            let (data, httpResponse) = try await requestWithFailback(endpoint: "getChapterList", queryItems: queryItems)
+            guard httpResponse.statusCode == 200 else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
+            }
+            let apiResponse = try JSONDecoder().decode(APIResponse<[BookChapter]>.self, from: data)
+            if apiResponse.isSuccess, let chapters = apiResponse.data {
+                // 保存目录到本地缓存
+                LocalCacheManager.shared.saveChapterList(bookUrl: bookUrl, chapters: chapters)
+                return chapters
+            } else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节列表失败"])
+            }
+        } catch {
+            // 如果网络失败，尝试从本地缓存读取
+            if let cachedChapters = LocalCacheManager.shared.loadChapterList(bookUrl: bookUrl) {
+                return cachedChapters
+            }
+            throw error
         }
     }
     
     // MARK: - 获取章节内容
     func fetchChapterContent(bookUrl: String, bookSourceUrl: String?, index: Int) async throws -> String {
+        // 1. 优先尝试从本地磁盘缓存读取
+        if let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
+            return cachedContent
+        }
+        
+        // 2. 尝试从内存缓存读取
         let cacheKey = "\(bookUrl)_\(index)"
         if let cachedContent = contentCache[cacheKey] {
             return cachedContent
         }
+        
+        // 3. 网络请求
         var queryItems = [
             URLQueryItem(name: "accessToken", value: accessToken),
             URLQueryItem(name: "url", value: bookUrl),
@@ -190,13 +209,17 @@ class APIService: ObservableObject {
         if let bookSourceUrl = bookSourceUrl {
             queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
         }
+        
         let (data, httpResponse) = try await requestWithFailback(endpoint: "getBookContent", queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
         }
         let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
         if apiResponse.isSuccess, let content = apiResponse.data {
+            // 存入内存缓存
             contentCache[cacheKey] = content
+            // 同步存入磁盘缓存
+            LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
             return content
         } else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节内容失败"])
