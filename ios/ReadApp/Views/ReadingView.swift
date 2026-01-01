@@ -1164,6 +1164,7 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
     let onTapLocation: ((ReaderTapLocation) -> Void)?
     
     private var tk2View: ReadContent2View?
+    private var pendingPageInfo: TK2PageInfo?
     
     init(pageIndex: Int, renderStore: TextKit2RenderStore, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
         self.pageIndex = pageIndex
@@ -1190,9 +1191,14 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
          v.onAddReplaceRule = onAddReplaceRule
          view.addSubview(v)
          self.tk2View = v
+         if let pendingPageInfo {
+             v.pageInfo = pendingPageInfo
+             v.setNeedsDisplay()
+         }
     }
     
     func configureTK2Page(info: TK2PageInfo) {
+        pendingPageInfo = info
         tk2View?.pageInfo = info
         tk2View?.setNeedsDisplay()
     }
