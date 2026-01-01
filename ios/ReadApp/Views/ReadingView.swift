@@ -109,6 +109,9 @@ struct ReadingView: View {
     @State private var pendingResumeLocalPageIndex: Int?
     @State private var didApplyResumePos = false
     @State private var initialServerChapterIndex: Int?
+    @State private var didEnterReadingSession = false
+    @State private var shouldApplyResumeAfterLoad = false
+    @State private var shouldSyncPageToTTSAfterLoad = false
 
     // Vertical (Scrolling) Reader State
     @State private var scrollProxy: ScrollViewProxy?
@@ -221,27 +224,9 @@ struct ReadingView: View {
         .sheet(isPresented: $showAddReplaceRule) { ReplaceRuleEditView(viewModel: replaceRuleViewModel, rule: pendingReplaceRule) }
         .onChange(of: showAddReplaceRule) { value in if !value { pendingReplaceRule = nil } }
         .task {
-            // If TTS is already playing this book (e.g., returning from background), sync UI to TTS progress
-            if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
-                currentChapterIndex = ttsManager.currentChapterIndex
-                lastTTSSentenceIndex = ttsManager.currentSentenceIndex
-                didApplyResumePos = true // Prevent local/server resume from overriding TTS position
-                
-                // If we already have content (e.g. view was just hidden), sync page immediately
-                if !contentSentences.isEmpty {
-                    syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
-                } else {
-                    // Otherwise, set it up so that once content loads, it finds the right page
-                    pendingResumeLocalBodyIndex = nil
-                    pendingResumeLocalChapterIndex = nil
-                    pendingResumeLocalPageIndex = nil
-                    pendingResumePos = nil
-                    // lastTTSSentenceIndex is already set, updateProcessedContent will use it
-                }
-            }
-            
             await loadChapters()
             await replaceRuleViewModel.fetchRules()
+            enterReadingSessionIfNeeded()
         }
         .onChange(of: replaceRuleViewModel.rules) { _ in updateProcessedContent(from: rawContent) }
         .onChange(of: pendingScrollToSentenceIndex) { _ in handlePendingScroll() }
@@ -992,10 +977,34 @@ struct ReadingView: View {
                     currentChapterIndex = fallback
                 }
             }
-            loadChapterContent()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func enterReadingSessionIfNeeded() {
+        guard !didEnterReadingSession else { return }
+        didEnterReadingSession = true
+
+        if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
+            currentChapterIndex = ttsManager.currentChapterIndex
+            lastTTSSentenceIndex = ttsManager.currentSentenceIndex
+            didApplyResumePos = true // Prevent local/server resume from overriding TTS position
+            pendingResumeLocalBodyIndex = nil
+            pendingResumeLocalChapterIndex = nil
+            pendingResumeLocalPageIndex = nil
+            pendingResumePos = nil
+            if !contentSentences.isEmpty {
+                syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
+            } else {
+                shouldSyncPageToTTSAfterLoad = true
+            }
+            shouldApplyResumeAfterLoad = false
+        } else {
+            shouldApplyResumeAfterLoad = true
+        }
+
+        loadChapterContent()
     }
     
     private func loadChapterContent() {
@@ -1018,8 +1027,13 @@ struct ReadingView: View {
                     
                     rawContent = cleanedContent
                     updateProcessedContent(from: cleanedContent)
-                    if !didApplyResumePos {
+                    if shouldApplyResumeAfterLoad {
                         applyResumeProgressIfNeeded(sentences: contentSentences)
+                        shouldApplyResumeAfterLoad = false
+                    }
+                    if shouldSyncPageToTTSAfterLoad {
+                        syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
+                        shouldSyncPageToTTSAfterLoad = false
                     }
                     
                     isLoading = false
