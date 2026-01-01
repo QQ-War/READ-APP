@@ -1633,10 +1633,13 @@ private struct TextKit2Paginator {
             
             // 1. Determine the start Y for this page based on the current content location
             // This ensures we align exactly to the top of the next line, ignoring previous page's bottom gaps.
-            let pageStartY = findLineTopY(at: currentContentLocation) ?? 0
+            let rawPageStartY = findLineTopY(at: currentContentLocation) ?? 0
+            let pixel = max(1.0 / UIScreen.main.scale, 0.5)
+            let pageStartY = floor(rawPageStartY / pixel) * pixel
             
             let pageRect = CGRect(x: 0, y: pageStartY, width: pageSize.width, height: pageContentHeight)
-            let lineEdgeInset = max(0.5, contentInset * 0.05)
+            let lineEdgeInset = max(0.25, contentInset * 0.02)
+            let lineEdgeSlack = pixel
             
             var pageFragmentMaxY: CGFloat?
             var pageEndLocation: NSTextLocation = currentContentLocation
@@ -1683,7 +1686,7 @@ private struct TextKit2Paginator {
 
                         let lineFrame = line.typographicBounds.offsetBy(dx: fragmentFrame.origin.x, dy: fragmentFrame.origin.y)
 
-                        if lineFrame.maxY <= pageRect.maxY - lineEdgeInset {
+                        if lineFrame.maxY <= pageRect.maxY - lineEdgeInset + lineEdgeSlack {
                             if let loc = contentStorage.location(documentRange.location, offsetBy: lineEndGlobalOffset) {
                                 pageEndLocation = loc
                                 pageFragmentMaxY = lineFrame.maxY
