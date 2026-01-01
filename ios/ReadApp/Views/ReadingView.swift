@@ -1554,16 +1554,12 @@ private struct TextKit2Paginator {
             layoutManager.enumerateTextLayoutFragments(from: currentContentLocation, options: [.ensuresLayout, .ensuresExtraLineFragment]) { fragment in
                 let fragmentFrame = fragment.layoutFragmentFrame
                 
+                // If this fragment starts before our current page, but ends within or after it, we include it
                 if fragmentFrame.maxY > pageRect.minY && fragmentFrame.minY < pageRect.maxY {
-                    if let layoutManager = fragment.textLayoutManager,
-                       let fragOrigin = layoutManager.textLayoutFragment(for: fragmentFrame.origin) {
-                        
-                        let fragOriginOffset = contentStorage.offset(from: documentRange.location, to: fragOrigin.rangeInElement.location)
-                        let currentFragOffset = contentStorage.offset(from: documentRange.location, to: fragment.rangeInElement.location)
-
-                        if fragOriginOffset != currentFragOffset && fragmentFrame.minY >= pageRect.maxY {
-                             return false
-                        }
+                    
+                    // Check if we should stop at this fragment (if it's a new fragment starting strictly after the page)
+                    if fragmentFrame.minY >= pageRect.maxY {
+                        return false
                     }
 
                     if pageFragmentMinY == nil {
@@ -1572,16 +1568,18 @@ private struct TextKit2Paginator {
                     pageFragmentMaxY = fragmentFrame.maxY
                     pageEndLocation = fragment.rangeInElement.endLocation
                     
+                    // Continue as long as this fragment's bottom hasn't exceeded the page bottom
                     return fragmentFrame.maxY < pageRect.maxY
                 }
                 
+                // If we haven't reached the page yet, continue
                 return fragmentFrame.minY < pageRect.maxY
             }
             
             let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
             let endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
+            
             guard endOffset > startOffset else {
-                
                 if let nextLoc = layoutManager.location(pageEndLocation, offsetBy: 1) {
                     currentContentLocation = nextLoc
                 } else {
@@ -1591,7 +1589,11 @@ private struct TextKit2Paginator {
             }
             
             let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
+            
+            // Use currentY as the offset for this page. 
+            // The drawing code will translate context by -yOffset.
             let actualContentHeight = (pageFragmentMaxY ?? currentY) - (pageFragmentMinY ?? currentY)
+
             let adjustedLocation = max(0, pageRange.location - prefixLen)
             let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
             
@@ -1601,10 +1603,11 @@ private struct TextKit2Paginator {
             pageCount += 1
             currentContentLocation = pageEndLocation
             
+            // Update currentY for the NEXT page.
             if let nextFragment = layoutManager.textLayoutFragment(for: pageEndLocation) {
                 currentY = nextFragment.layoutFragmentFrame.minY
             } else if layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation) > 0 {
-                currentY += pageSize.height + 1
+                currentY += pageSize.height
             }
         }
 
@@ -1644,14 +1647,21 @@ private class ReadContent2View: UIView {
         
         let context = UIGraphicsGetCurrentContext()
         context?.saveGState()
+        
+        // Translate context to start drawing from the current page's yOffset
         context?.translateBy(x: 0, y: -info.yOffset)
         
-        store.layoutManager.enumerateTextLayoutFragments(from: store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location), options: [.ensuresLayout]) { fragment in
+        let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location)
+        
+        store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
+            let frame = fragment.layoutFragmentFrame
             
-            if fragment.layoutFragmentFrame.minY >= info.yOffset + info.pageHeight { return false }
+            // Stop if we've gone past the current page
+            if frame.minY >= info.yOffset + info.pageHeight { return false }
             
-            if fragment.layoutFragmentFrame.maxY > info.yOffset {
-                 fragment.draw(at: .zero, in: context!)
+            // Draw if the fragment is visible on the current page
+            if frame.maxY > info.yOffset {
+                fragment.draw(at: frame.origin, in: context!)
             }
             return true
         }

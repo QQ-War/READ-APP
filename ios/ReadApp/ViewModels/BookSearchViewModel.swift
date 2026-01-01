@@ -64,7 +64,7 @@ class BookSearchViewModel: ObservableObject {
         do {
             try await apiService.saveBook(book: book, useReplaceRule: 0)
             // Optionally, update the book object in searchResults to indicate it's added
-            if let index = searchResults.firstIndex(where: { $0.id == book.id }) {
+            if searchResults.firstIndex(where: { $0.id == book.id }) != nil {
                 // Since Book is a struct, we might need to recreate it if we wanted to change a property directly,
                 // but for now, we just indicate success.
                 // Or if there was an 'isAddedToBookshelf' property on Book, we'd update it here.
