@@ -479,7 +479,8 @@ struct ReadingView: View {
             tk2Store = TextKit2RenderStore(attributedString: newAttrText, layoutWidth: size.width)
         }
         
-        let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: size, paragraphStarts: newPStarts, prefixLen: newPrefixLen)
+        let inset = max(8, min(18, preferences.fontSize * 0.6))
+        let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: size, paragraphStarts: newPStarts, prefixLen: newPrefixLen, contentInset: inset)
         
         if shouldJumpToLast {
             currentPageIndex = max(0, result.pages.count - 1)
@@ -750,7 +751,8 @@ struct ReadingView: View {
         // If we are coming from the end (previous chapter prefetch), we MUST paginate fully to find the last page.
         let limit = (forGate && !fromEnd) ? 12 : Int.max
         
-        let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: pageSize, paragraphStarts: pStarts, prefixLen: prefixLen, maxPages: limit)
+        let inset = max(8, min(18, preferences.fontSize * 0.6))
+        let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: pageSize, paragraphStarts: pStarts, prefixLen: prefixLen, contentInset: inset, maxPages: limit)
         
         return ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, attributedText: attrText, paragraphStarts: pStarts, chapterPrefixLen: prefixLen, isFullyPaginated: result.reachedEnd)
     }
@@ -1568,7 +1570,6 @@ private final class TextKit2RenderStore {
 }
 
 private struct TextKit2Paginator {
-    private static let pageVerticalInset: CGFloat = 8
     
     struct PaginationResult {
         let pages: [PaginatedPage]
@@ -1581,6 +1582,7 @@ private struct TextKit2Paginator {
         pageSize: CGSize,
         paragraphStarts: [Int],
         prefixLen: Int,
+        contentInset: CGFloat,
         maxPages: Int = Int.max
     ) -> PaginationResult {
         let layoutManager = renderStore.layoutManager
@@ -1596,7 +1598,7 @@ private struct TextKit2Paginator {
         var pages: [PaginatedPage] = []
         var pageInfos: [TK2PageInfo] = []
         var pageCount = 0
-        let pageContentHeight = max(1, pageSize.height - pageVerticalInset * 2)
+        let pageContentHeight = max(1, pageSize.height - contentInset * 2)
         
         var currentContentLocation: NSTextLocation = documentRange.location
         var currentY: CGFloat = 0
@@ -1704,7 +1706,7 @@ private struct TextKit2Paginator {
             let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
             
             pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
-            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: pageVerticalInset))
+            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
             
             pageCount += 1
             currentContentLocation = pageEndLocation
