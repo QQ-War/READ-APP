@@ -21,13 +21,14 @@ private struct ChapterCache {
     let renderStore: TextKit2RenderStore?
     let pageInfos: [TK2PageInfo]?
     let contentSentences: [String]
+    let rawContent: String
     let attributedText: NSAttributedString
     let paragraphStarts: [Int]
     let chapterPrefixLen: Int
     let isFullyPaginated: Bool
     
     static var empty: ChapterCache {
-        ChapterCache(pages: [], renderStore: nil, pageInfos: nil, contentSentences: [], attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false)
+        ChapterCache(pages: [], renderStore: nil, pageInfos: nil, contentSentences: [], rawContent: "", attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false)
     }
 }
 
@@ -130,6 +131,7 @@ struct ReadingView: View {
     // Repagination Control
     @State private var isRepaginateQueued = false
     @State private var lastPaginationKey: PaginationKey?
+    @State private var suppressRepaginateOnce = false
     
     // TTS State
     @State private var lastTTSSentenceIndex: Int?
@@ -495,7 +497,7 @@ struct ReadingView: View {
         if result.pages.isEmpty { currentPageIndex = 0 }
         else if currentPageIndex >= result.pages.count { currentPageIndex = result.pages.count - 1 }
         
-        currentCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, attributedText: newAttrText, paragraphStarts: newPStarts, chapterPrefixLen: newPrefixLen, isFullyPaginated: true)
+        currentCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: rawContent, attributedText: newAttrText, paragraphStarts: newPStarts, chapterPrefixLen: newPrefixLen, isFullyPaginated: true)
         
         if let localPage = pendingResumeLocalPageIndex, pendingResumeLocalChapterIndex == currentChapterIndex, currentCache.pages.indices.contains(localPage) {
             currentPageIndex = localPage
@@ -609,6 +611,10 @@ struct ReadingView: View {
 
     private func scheduleRepaginate(in size: CGSize) {
         pageSize = size
+        if suppressRepaginateOnce {
+            suppressRepaginateOnce = false
+            return
+        }
         let key = PaginationKey(width: Int(size.width * 100), height: Int(size.height * 100), fontSize: Int(preferences.fontSize * 10), lineSpacing: Int(preferences.lineSpacing * 10), margin: Int(preferences.pageHorizontalMargin * 10), sentenceCount: contentSentences.count, chapterIndex: currentChapterIndex, resumeCharIndex: pendingResumeCharIndex ?? -1, resumePageIndex: pendingResumeLocalPageIndex ?? -1)
         if key == lastPaginationKey { return }
         lastPaginationKey = key
@@ -700,26 +706,129 @@ struct ReadingView: View {
         } else { prevCache = .empty }
     }
 
+    private func prepareAdjacentChaptersIfNeeded(for chapterIndex: Int) {
+        guard pageSize.width > 0, pageSize.height > 0 else { return }
+        
+        let nextIndex = chapterIndex + 1
+        if nextIndex < chapters.count, nextCache.pages.isEmpty {
+            Task { if let cache = await paginateChapter(at: nextIndex, forGate: true) { await MainActor.run { self.nextCache = cache } } }
+        }
+        
+        let prevIndex = chapterIndex - 1
+        if prevIndex >= 0, prevCache.pages.isEmpty {
+            Task { if let cache = await paginateChapter(at: prevIndex, forGate: true, fromEnd: true) { await MainActor.run { self.prevCache = cache } } }
+        }
+    }
+
+    private func applyCachedChapter(_ cache: ChapterCache, chapterIndex: Int, jumpToFirst: Bool, jumpToLast: Bool) {
+        suppressRepaginateOnce = true
+        currentChapterIndex = chapterIndex
+        currentCache = cache
+        rawContent = cache.rawContent
+        currentContent = cache.contentSentences.joined(separator: "\n")
+        contentSentences = cache.contentSentences
+        if jumpToLast {
+            currentPageIndex = max(0, cache.pages.count - 1)
+        } else if jumpToFirst {
+            currentPageIndex = 0
+        }
+        if cache.pages.isEmpty { currentPageIndex = 0 }
+        pendingJumpToFirstPage = false
+        pendingJumpToLastPage = false
+    }
+
+    private func continuePaginatingCurrentChapterIfNeeded() {
+        guard !currentCache.isFullyPaginated,
+              let store = currentCache.renderStore,
+              let lastPage = currentCache.pages.last,
+              pageSize.width > 0, pageSize.height > 0 else { return }
+        
+        let startOffset = NSMaxRange(lastPage.globalRange)
+        let inset = currentCache.pageInfos?.first?.contentInset ?? max(8, min(18, preferences.fontSize * 0.6))
+        let result = TextKit2Paginator.paginate(
+            renderStore: store,
+            pageSize: pageSize,
+            paragraphStarts: currentCache.paragraphStarts,
+            prefixLen: currentCache.chapterPrefixLen,
+            contentInset: inset,
+            maxPages: Int.max,
+            startOffset: startOffset
+        )
+        
+        if result.pages.isEmpty {
+            currentCache = ChapterCache(
+                pages: currentCache.pages,
+                renderStore: store,
+                pageInfos: currentCache.pageInfos,
+                contentSentences: currentCache.contentSentences,
+                rawContent: currentCache.rawContent,
+                attributedText: currentCache.attributedText,
+                paragraphStarts: currentCache.paragraphStarts,
+                chapterPrefixLen: currentCache.chapterPrefixLen,
+                isFullyPaginated: result.reachedEnd
+            )
+            return
+        }
+        
+        let newPages = currentCache.pages + result.pages
+        let newInfos = (currentCache.pageInfos ?? []) + result.pageInfos
+        currentCache = ChapterCache(
+            pages: newPages,
+            renderStore: store,
+            pageInfos: newInfos,
+            contentSentences: currentCache.contentSentences,
+            rawContent: currentCache.rawContent,
+            attributedText: currentCache.attributedText,
+            paragraphStarts: currentCache.paragraphStarts,
+            chapterPrefixLen: currentCache.chapterPrefixLen,
+            isFullyPaginated: result.reachedEnd
+        )
+    }
+
     private func handleChapterSwitch(offset: Int) {
         pendingFlipId = UUID()
         didApplyResumePos = true // Mark as true to prevent auto-resuming from server/local storage
+        let shouldContinuePlaying = ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl
         
         if offset == 1 {
-            guard !nextCache.pages.isEmpty else { return }
-            currentChapterIndex += 1
+            guard !nextCache.pages.isEmpty else {
+                currentChapterIndex += 1
+                loadChapterContent()
+                return
+            }
+            let cached = nextCache
+            let nextIndex = currentChapterIndex + 1
             prevCache = currentCache
-            currentCache = nextCache
             nextCache = .empty
-            currentPageIndex = 0
-            pendingJumpToFirstPage = true
+            applyCachedChapter(cached, chapterIndex: nextIndex, jumpToFirst: true, jumpToLast: false)
+            ttsBaseIndex = 0
+            prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
+            if !cached.isFullyPaginated { continuePaginatingCurrentChapterIfNeeded() }
+            if shouldContinuePlaying {
+                ttsManager.stop()
+                lastTTSSentenceIndex = 0
+                startTTS(pageIndexOverride: currentPageIndex, showControls: false)
+            }
+            return
         } else if offset == -1 {
-            guard !prevCache.pages.isEmpty else { return }
-            currentChapterIndex -= 1
+            guard !prevCache.pages.isEmpty else {
+                currentChapterIndex -= 1
+                loadChapterContent()
+                return
+            }
+            let cached = prevCache
+            let prevIndex = currentChapterIndex - 1
             nextCache = currentCache
-            currentCache = prevCache
             prevCache = .empty
-            currentPageIndex = max(0, currentCache.pages.count - 1)
-            pendingJumpToLastPage = true
+            applyCachedChapter(cached, chapterIndex: prevIndex, jumpToFirst: false, jumpToLast: true)
+            ttsBaseIndex = 0
+            prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
+            if shouldContinuePlaying {
+                ttsManager.stop()
+                lastTTSSentenceIndex = max(0, currentCache.paragraphStarts.count - 1)
+                startTTS(pageIndexOverride: currentPageIndex, showControls: false)
+            }
+            return
         }
         loadChapterContent()
     }
@@ -754,7 +863,7 @@ struct ReadingView: View {
         let inset = max(8, min(18, preferences.fontSize * 0.6))
         let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: pageSize, paragraphStarts: pStarts, prefixLen: prefixLen, contentInset: inset, maxPages: limit)
         
-        return ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, attributedText: attrText, paragraphStarts: pStarts, chapterPrefixLen: prefixLen, isFullyPaginated: result.reachedEnd)
+        return ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: cleaned, attributedText: attrText, paragraphStarts: pStarts, chapterPrefixLen: prefixLen, isFullyPaginated: result.reachedEnd)
     }
 
     // MARK: - Logic & Actions
@@ -1583,7 +1692,8 @@ private struct TextKit2Paginator {
         paragraphStarts: [Int],
         prefixLen: Int,
         contentInset: CGFloat,
-        maxPages: Int = Int.max
+        maxPages: Int = Int.max,
+        startOffset: Int = 0
     ) -> PaginationResult {
         let layoutManager = renderStore.layoutManager
         let contentStorage = renderStore.contentStorage
@@ -1601,6 +1711,9 @@ private struct TextKit2Paginator {
         let pageContentHeight = max(1, pageSize.height - contentInset * 2)
         
         var currentContentLocation: NSTextLocation = documentRange.location
+        if startOffset > 0, let startLoc = contentStorage.location(documentRange.location, offsetBy: startOffset) {
+            currentContentLocation = startLoc
+        }
         
         // Helper to find the visual top Y of the line containing a specific location
         func findLineTopY(at location: NSTextLocation) -> CGFloat? {
