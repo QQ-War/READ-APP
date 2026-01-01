@@ -1014,12 +1014,38 @@ struct ReadingView: View {
     
     private func previousChapter() {
         guard currentChapterIndex > 0 else { return }
-        currentChapterIndex -= 1; loadChapterContent(); saveProgress()
+        let targetIndex = currentChapterIndex - 1
+        if !prevCache.pages.isEmpty {
+            let cached = prevCache
+            nextCache = currentCache
+            prevCache = .empty
+            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: false, jumpToLast: true)
+            ttsBaseIndex = 0
+            prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
+            saveProgress()
+            return
+        }
+        currentChapterIndex = targetIndex
+        loadChapterContent()
+        saveProgress()
     }
     
     private func nextChapter() {
         guard currentChapterIndex < chapters.count - 1 else { return }
-        currentChapterIndex += 1; loadChapterContent(); saveProgress()
+        let targetIndex = currentChapterIndex + 1
+        if !nextCache.pages.isEmpty {
+            let cached = nextCache
+            prevCache = currentCache
+            nextCache = .empty
+            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: true, jumpToLast: false)
+            ttsBaseIndex = 0
+            prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
+            saveProgress()
+            return
+        }
+        currentChapterIndex = targetIndex
+        loadChapterContent()
+        saveProgress()
     }
     
     private func toggleTTS() {
