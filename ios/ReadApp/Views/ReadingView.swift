@@ -110,6 +110,7 @@ struct ReadingView: View {
     @State private var didApplyResumePos = false
     @State private var initialServerChapterIndex: Int?
     @State private var didEnterReadingSession = false
+    @State private var shouldApplyResumeOnce = false
 
     // Vertical (Scrolling) Reader State
     @State private var scrollProxy: ScrollViewProxy?
@@ -918,6 +919,11 @@ struct ReadingView: View {
         let content = isEffectivelyEmpty ? "章节内容为空" : processedContent
         currentContent = content
         contentSentences = splitIntoParagraphs(content)
+        
+        if shouldApplyResumeOnce && !didApplyResumePos {
+            applyResumeProgressIfNeeded(sentences: contentSentences)
+            shouldApplyResumeOnce = false
+        }
     }
 
     private func applyReplaceRules(to content: String) -> String {
@@ -1012,9 +1018,8 @@ struct ReadingView: View {
             return
         }
 
-        loadChapterContent(onLoaded: {
-            applyResumeProgressIfNeeded(sentences: contentSentences)
-        })
+        shouldApplyResumeOnce = true
+        loadChapterContent()
     }
     
     private func loadChapterContent(onLoaded: (() -> Void)? = nil) {
