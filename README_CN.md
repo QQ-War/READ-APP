@@ -21,6 +21,35 @@ English README: `README.md`
 - iOS：用 Xcode 打开 `ios/ReadApp.xcodeproj`
 - Android：用 Android Studio 打开 `android/`
 
+## 快速开始
+项目包含 iOS 与 Android 两个客户端，均依赖轻阅读后端 API（`/api/5`）。
+
+### 后端准备
+- 部署轻阅读后端：https://github.com/autobcb/read
+- 在后端配置至少一个 TTS 引擎
+
+### iOS
+1. 打开 Xcode 项目：
+   ```bash
+   cd ios
+   open ReadApp.xcodeproj
+   ```
+2. 选择设备并运行（真机更适合验证后台播放）。
+3. 首次启动在设置页配置：
+   - 服务端地址（示例：`http://127.0.0.1:8080/api/5`）
+   - 访问令牌（accessToken）
+   - TTS 引擎
+
+### Android
+1. 用 Android Studio 打开 `android/` 目录。
+2. 首次同步依赖完成后直接运行（Debug）。
+3. 首次启动在登录页填写：
+   - 服务端地址（示例：`http://127.0.0.1:8080/api/5`）
+   - 公网地址（可选，用于内外网回退）
+   - 访问令牌（accessToken）
+
+更多 Android 细节见 `android/README.md`。
+
 ## 分支说明
 - `main`：主分支（TK2 重构版，主要开发）
 - `TK1`：旧主分支快照（TK2 重构前的版本）
@@ -35,3 +64,4 @@ English README: `README.md`
 - 修复翻到上一章时落到章节开头的问题。
 - 修复分页后 TTS 起读位置偶尔从页面中间开始的问题。
 - 修复 TTS 暂停期间翻页后继续播放不从新页开始的问题。
+- 修复分页裁切/重复行问题，并稳定跨章缓存分页。

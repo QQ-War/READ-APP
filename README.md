@@ -21,6 +21,35 @@ Chinese README: `README_CN.md`
 - iOS: open `ios/ReadApp.xcodeproj` in Xcode
 - Android: open `android/` in Android Studio
 
+## Quick Start
+This project includes both iOS and Android clients. Both rely on the Read backend API (`/api/5`).
+
+### Backend
+- Deploy the Read backend: https://github.com/autobcb/read
+- Configure at least one TTS engine
+
+### iOS
+1. Open the Xcode project:
+   ```bash
+   cd ios
+   open ReadApp.xcodeproj
+   ```
+2. Select a device and run (a real device is better for background audio tests).
+3. On first launch, configure in Settings:
+   - Server base URL (example: `http://127.0.0.1:8080/api/5`)
+   - Access token
+   - TTS engine
+
+### Android
+1. Open `android/` in Android Studio.
+2. Sync dependencies, then run (Debug).
+3. On first launch, configure on the Login screen:
+   - Server base URL (example: `http://127.0.0.1:8080/api/5`)
+   - Public base URL (optional, for LAN/WAN fallback)
+   - Access token
+
+More Android details: `android/README.md`.
+
 ## Branches
 - `main`: Primary branch (TK2 refactor, active development)
 - `TK1`: Snapshot of the previous main before TK2 refactor
@@ -35,3 +64,4 @@ Chinese README: `README_CN.md`
 - Fixed page flip to previous chapter incorrectly landing on chapter start.
 - Fixed TTS start position sometimes beginning mid-page after pagination changes.
 - Fixed TTS resume behavior: if page changes while paused, restart from the new page.
+- Fixed pagination clipping/duplicate lines and stabilized cross-chapter cache paging.
