@@ -921,11 +921,6 @@ struct ReadingView: View {
         let content = isEffectivelyEmpty ? "章节内容为空" : processedContent
         currentContent = content
         contentSentences = splitIntoParagraphs(content)
-        
-        // Only apply resume logic if we are NOT in a manual chapter switch
-        if !didApplyResumePos {
-            applyResumeProgressIfNeeded(sentences: contentSentences)
-        }
     }
 
     private func applyReplaceRules(to content: String) -> String {
@@ -1023,6 +1018,9 @@ struct ReadingView: View {
                     
                     rawContent = cleanedContent
                     updateProcessedContent(from: cleanedContent)
+                    if !didApplyResumePos {
+                        applyResumeProgressIfNeeded(sentences: contentSentences)
+                    }
                     
                     isLoading = false
                     ttsBaseIndex = 0
@@ -1060,6 +1058,7 @@ struct ReadingView: View {
     
     private func previousChapter() {
         guard currentChapterIndex > 0 else { return }
+        didApplyResumePos = true
         let targetIndex = currentChapterIndex - 1
         if !prevCache.pages.isEmpty {
             let cached = prevCache
@@ -1078,6 +1077,7 @@ struct ReadingView: View {
     
     private func nextChapter() {
         guard currentChapterIndex < chapters.count - 1 else { return }
+        didApplyResumePos = true
         let targetIndex = currentChapterIndex + 1
         if !nextCache.pages.isEmpty {
             let cached = nextCache
@@ -1156,6 +1156,7 @@ struct ReadingView: View {
                 return
             }
             self.isTTSAutoChapterChange = true
+            self.didApplyResumePos = true
             self.currentChapterIndex = newIndex
             self.loadChapterContent()
             self.saveProgress()
