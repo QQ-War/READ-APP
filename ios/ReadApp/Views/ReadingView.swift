@@ -1578,9 +1578,9 @@ private struct TextKit2Paginator {
                 return fragmentFrame.minY < pageRect.maxY
             }
             
-            guard let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation),
-                  let endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation),
-                  endOffset > startOffset else {
+            let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
+            let endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
+            guard endOffset > startOffset else {
                 
                 if let nextLoc = layoutManager.location(pageEndLocation, offsetBy: 1) {
                     currentContentLocation = nextLoc
