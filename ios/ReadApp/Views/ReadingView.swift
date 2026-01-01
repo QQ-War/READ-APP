@@ -1601,19 +1601,42 @@ private struct TextKit2Paginator {
         let pageContentHeight = max(1, pageSize.height - contentInset * 2)
         
         var currentContentLocation: NSTextLocation = documentRange.location
-        var currentY: CGFloat = 0
+        
+        // Helper to find the visual top Y of the line containing a specific location
+        func findLineTopY(at location: NSTextLocation) -> CGFloat? {
+            guard let fragment = layoutManager.textLayoutFragment(for: location) else { return nil }
+            let fragFrame = fragment.layoutFragmentFrame
+            let offsetInFrag = contentStorage.offset(from: fragment.rangeInElement.location, to: location)
+            
+            // If location is at start of fragment, return fragment minY (or first line minY)
+            if offsetInFrag == 0 {
+                if let firstLine = fragment.textLineFragments.first {
+                    return firstLine.typographicBounds.minY + fragFrame.minY
+                }
+                return fragFrame.minY
+            }
+            
+            // Otherwise find the specific line
+            for line in fragment.textLineFragments {
+                let lineRange = line.characterRange
+                if lineRange.contains(offsetInFrag) || lineRange.upperBound == offsetInFrag {
+                     return line.typographicBounds.minY + fragFrame.minY
+                }
+            }
+            // Fallback to fragment bottom if not found (shouldn't happen for valid loc)
+            return fragFrame.maxY
+        }
 
         while pageCount < maxPages {
             let remainingOffset = layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation)
             guard remainingOffset > 0 else { break }
             
-            if let startFrag = layoutManager.textLayoutFragment(for: currentContentLocation) {
-                currentY = max(currentY, startFrag.layoutFragmentFrame.minY)
-            }
+            // 1. Determine the start Y for this page based on the current content location
+            // This ensures we align exactly to the top of the next line, ignoring previous page's bottom gaps.
+            let pageStartY = findLineTopY(at: currentContentLocation) ?? 0
             
-            let pageRect = CGRect(x: 0, y: currentY, width: pageSize.width, height: pageContentHeight)
+            let pageRect = CGRect(x: 0, y: pageStartY, width: pageSize.width, height: pageContentHeight)
             
-            var pageFragmentMinY: CGFloat?
             var pageFragmentMaxY: CGFloat?
             var pageEndLocation: NSTextLocation = currentContentLocation
             
@@ -1622,11 +1645,14 @@ private struct TextKit2Paginator {
                 let fragmentRange = TextKit2Paginator.rangeFromTextRange(fragment.rangeInElement, in: contentStorage)
                 
                 if fragmentFrame.minY >= pageRect.maxY { return false }
-                if fragmentFrame.maxY <= currentY { return true }
+                
+                // If fragment is completely above (shouldn't happen with correct startY), skip
+                if fragmentFrame.maxY <= pageStartY { return true }
 
-                if pageFragmentMinY == nil { pageFragmentMinY = max(currentY, fragmentFrame.minY) }
+                if pageFragmentMaxY == nil { pageFragmentMaxY = max(pageStartY, fragmentFrame.minY) }
                 
                 if fragmentFrame.maxY <= pageRect.maxY {
+                    // Fragment fits entirely
                     pageFragmentMaxY = fragmentFrame.maxY
                     if let fragmentRange = fragmentRange,
                        let loc = contentStorage.location(documentRange.location, offsetBy: NSMaxRange(fragmentRange)) {
@@ -1636,27 +1662,28 @@ private struct TextKit2Paginator {
                     }
                     return true
                 } else {
+                    // Fragment splits across page boundary
                     let currentStartOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
                     var foundVisibleLine = false
                     
                     for line in fragment.textLineFragments {
                         let lineRange = line.characterRange
+                        // Calculate global offset for this line end
+                        let lineEndGlobalOffset: Int
                         if let fragmentRange = fragmentRange {
-                            let lineEndOffset = fragmentRange.location + lineRange.upperBound
-                            if lineEndOffset <= currentStartOffset { continue }
+                             lineEndGlobalOffset = fragmentRange.location + lineRange.upperBound
+                        } else {
+                             // Fallback approximation (unsafe but rare)
+                             lineEndGlobalOffset = currentStartOffset + lineRange.upperBound
                         }
                         
+                        // Skip lines before our start point
+                        if lineEndGlobalOffset <= currentStartOffset { continue }
+
                         let lineFrame = line.typographicBounds.offsetBy(dx: fragmentFrame.origin.x, dy: fragmentFrame.origin.y)
 
                         if lineFrame.maxY <= pageRect.maxY {
-                            if let fragmentRange = fragmentRange {
-                                let lineEndOffset = fragmentRange.location + lineRange.upperBound
-                                if let loc = contentStorage.location(documentRange.location, offsetBy: lineEndOffset) {
-                                    pageEndLocation = loc
-                                    pageFragmentMaxY = lineFrame.maxY
-                                    foundVisibleLine = true
-                                }
-                            } else if let loc = contentStorage.location(documentRange.location, offsetBy: lineRange.upperBound) {
+                            if let loc = contentStorage.location(documentRange.location, offsetBy: lineEndGlobalOffset) {
                                 pageEndLocation = loc
                                 pageFragmentMaxY = lineFrame.maxY
                                 foundVisibleLine = true
@@ -1666,23 +1693,25 @@ private struct TextKit2Paginator {
                         }
                     }
                     
+                    // If no lines fit (e.g. huge line or top of page), force at least one line if it's the first item
                     if !foundVisibleLine {
+                         // Find the first line that effectively starts after our current location
                          if let firstLine = fragment.textLineFragments.first(where: { line in
-                            if let fragmentRange = fragmentRange {
-                                return fragmentRange.location + line.characterRange.upperBound > currentStartOffset
-                            }
-                            return line.characterRange.upperBound > currentStartOffset
+                            let endOff = (fragmentRange?.location ?? 0) + line.characterRange.upperBound
+                            return endOff > currentStartOffset
                          }) {
-                            let endOffset = firstLine.characterRange.upperBound
-                            if let fragmentRange = fragmentRange {
-                                let globalEndOffset = fragmentRange.location + endOffset
+                             // If this is the VERY first line of the page and it doesn't fit, we must include it to avoid infinite loop
+                             // Check if we haven't advanced pageEndLocation yet
+                             let isAtPageStart = contentStorage.offset(from: currentContentLocation, to: pageEndLocation) == 0
+                             
+                             if isAtPageStart {
+                                let endOffset = firstLine.characterRange.upperBound
+                                let globalEndOffset = (fragmentRange?.location ?? 0) + endOffset
                                 pageEndLocation = contentStorage.location(documentRange.location, offsetBy: globalEndOffset) ?? pageEndLocation
-                            } else {
-                                pageEndLocation = contentStorage.location(documentRange.location, offsetBy: endOffset) ?? pageEndLocation
-                            }
-                            let lineFrame = firstLine.typographicBounds.offsetBy(dx: fragmentFrame.origin.x, dy: fragmentFrame.origin.y)
-                            pageFragmentMaxY = lineFrame.maxY
-                        }
+                                let lineFrame = firstLine.typographicBounds.offsetBy(dx: fragmentFrame.origin.x, dy: fragmentFrame.origin.y)
+                                pageFragmentMaxY = lineFrame.maxY
+                             }
+                         }
                     }
                     return false
                 }
@@ -1691,6 +1720,7 @@ private struct TextKit2Paginator {
             let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
             var endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
             
+            // Failsafe: Ensure progress
             if endOffset <= startOffset {
                 if let forced = layoutManager.location(currentContentLocation, offsetBy: 1) {
                     pageEndLocation = forced
@@ -1701,16 +1731,15 @@ private struct TextKit2Paginator {
             }
 
             let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
-            let actualContentHeight = (pageFragmentMaxY ?? (currentY + pageContentHeight)) - currentY
+            let actualContentHeight = (pageFragmentMaxY ?? (pageStartY + pageContentHeight)) - pageStartY
             let adjustedLocation = max(0, pageRange.location - prefixLen)
             let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
             
             pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
-            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
+            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
             
             pageCount += 1
             currentContentLocation = pageEndLocation
-            currentY = pageFragmentMaxY ?? (currentY + pageContentHeight)
         }
 
         let reachedEnd = layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation) == 0
@@ -1751,6 +1780,9 @@ private class ReadContent2View: UIView {
         let context = UIGraphicsGetCurrentContext()
         context?.saveGState()
         
+        // Strict clipping to bounds to avoid any overflow
+        context?.clip(to: bounds)
+        
         // Translate context to start drawing from the current page's yOffset with vertical inset
         context?.translateBy(x: 0, y: -(info.yOffset - info.contentInset))
         
@@ -1759,6 +1791,7 @@ private class ReadContent2View: UIView {
         store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
             
+            // Only draw fragments that are visible within the vertical bounds of this page's content
             if frame.minY >= info.yOffset + info.pageHeight { return false }
             
             if frame.maxY > info.yOffset {
