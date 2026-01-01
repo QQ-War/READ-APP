@@ -220,7 +220,29 @@ struct ReadingView: View {
         .sheet(isPresented: $showFontSettings) { FontSizeSheet(preferences: preferences) }
         .sheet(isPresented: $showAddReplaceRule) { ReplaceRuleEditView(viewModel: replaceRuleViewModel, rule: pendingReplaceRule) }
         .onChange(of: showAddReplaceRule) { value in if !value { pendingReplaceRule = nil } }
-        .task { await loadChapters(); await replaceRuleViewModel.fetchRules() }
+        .task {
+            // If TTS is already playing this book (e.g., returning from background), sync UI to TTS progress
+            if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
+                currentChapterIndex = ttsManager.currentChapterIndex
+                lastTTSSentenceIndex = ttsManager.currentSentenceIndex
+                didApplyResumePos = true // Prevent local/server resume from overriding TTS position
+                
+                // If we already have content (e.g. view was just hidden), sync page immediately
+                if !contentSentences.isEmpty {
+                    syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
+                } else {
+                    // Otherwise, set it up so that once content loads, it finds the right page
+                    pendingResumeLocalBodyIndex = nil
+                    pendingResumeLocalChapterIndex = nil
+                    pendingResumeLocalPageIndex = nil
+                    pendingResumePos = nil
+                    // lastTTSSentenceIndex is already set, updateProcessedContent will use it
+                }
+            }
+            
+            await loadChapters()
+            await replaceRuleViewModel.fetchRules()
+        }
         .onChange(of: replaceRuleViewModel.rules) { _ in updateProcessedContent(from: rawContent) }
         .onChange(of: pendingScrollToSentenceIndex) { _ in handlePendingScroll() }
         .alert("错误", isPresented: .constant(errorMessage != nil)) { Button("确定") { errorMessage = nil } } message: {
