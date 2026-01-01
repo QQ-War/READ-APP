@@ -1830,9 +1830,9 @@ private class ReadContent2View: UIView {
                     shouldStop = true
                     break
                 }
-                
+                let lineDrawRect = CGRect(x: 0, y: lineFrame.minY, width: bounds.width, height: lineFrame.height)
                 context?.saveGState()
-                context?.clip(to: lineFrame)
+                context?.clip(to: lineDrawRect)
                 fragment.draw(at: frame.origin, in: context!)
                 context?.restoreGState()
             }
