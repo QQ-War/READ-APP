@@ -111,6 +111,7 @@ struct ReadingView: View {
     @State private var initialServerChapterIndex: Int?
     @State private var didEnterReadingSession = false
     @State private var shouldApplyResumeOnce = false
+    @State private var shouldSyncPageAfterPagination = false
 
     // Vertical (Scrolling) Reader State
     @State private var scrollProxy: ScrollViewProxy?
@@ -1009,11 +1010,13 @@ struct ReadingView: View {
         if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
             currentChapterIndex = ttsManager.currentChapterIndex
             lastTTSSentenceIndex = ttsManager.currentSentenceIndex
+            ttsBaseIndex = ttsManager.currentBaseSentenceIndex
             didApplyResumePos = true // Prevent local/server resume from overriding TTS position
             pendingResumeLocalBodyIndex = nil
             pendingResumeLocalChapterIndex = nil
             pendingResumeLocalPageIndex = nil
             pendingResumePos = nil
+            shouldSyncPageAfterPagination = true
             loadChapterContent(onLoaded: {
                 syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
             })
@@ -1115,6 +1118,10 @@ struct ReadingView: View {
                     }
                     
                     onLoaded?()
+                    if self.shouldSyncPageAfterPagination {
+                        self.syncPageForSentenceIndex(self.ttsManager.currentSentenceIndex)
+                        self.shouldSyncPageAfterPagination = false
+                    }
                     self.isLoading = false
                     self.shouldApplyResumeOnce = false
                     self.pendingJumpToFirstPage = false
@@ -1247,6 +1254,7 @@ struct ReadingView: View {
 
         guard !textForTTS.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         lastTTSSentenceIndex = ttsBaseIndex + startIndex
+        ttsManager.currentBaseSentenceIndex = ttsBaseIndex
 
         let speakTitle = preferences.readingMode == .horizontal && pageIndex == 0 && currentCache.chapterPrefixLen > 0
         ttsManager.startReading(text: textForTTS, chapters: chapters, currentIndex: currentChapterIndex, bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, bookTitle: book.name ?? "阅读", coverUrl: book.displayCoverUrl, onChapterChange: { newIndex in

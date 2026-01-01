@@ -14,6 +14,7 @@ class TTSManager: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var preloadedIndices: Set<Int> = []  // Indices of successfully preloaded sentences
     @Published var currentSentenceDuration: TimeInterval = 0
+    var currentBaseSentenceIndex: Int = 0
     
     private var audioPlayer: AVAudioPlayer?
     private var sentences: [String] = []
@@ -1194,6 +1195,7 @@ class TTSManager: NSObject, ObservableObject {
         isPlaying = false
         isPaused = false
         currentSentenceIndex = 0
+        currentBaseSentenceIndex = 0
         sentences = []
         isLoading = false
         // 娓呯悊缂撳瓨
@@ -1377,7 +1379,6 @@ extension TTSManager: AVAudioPlayerDelegate {
         speakNextSentence()
     }
 }
-
 
 
 
