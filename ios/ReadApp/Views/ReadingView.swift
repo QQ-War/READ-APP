@@ -1604,22 +1604,43 @@ private struct TextKit2Paginator {
                         pageEndLocation = fragment.rangeInElement.endLocation
                         return true
                     } else {
-                        // Fragment is split. Find the exact character location at the bottom of the page.
-                        // We use a point slightly inside the page boundary to get the correct location.
-                        let breakPoint = CGPoint(x: pageSize.width, y: pageRect.maxY - 0.1)
-                        let foundLocation = layoutManager.location(at: breakPoint, in: renderStore.textContainer)
+                        // Fragment is split. We must find the line where it cuts.
+                        var lastVisibleLineEnd: NSTextLocation?
+                        var lastLineMaxY: CGFloat = fragmentFrame.minY
                         
-                        if let loc = foundLocation, layoutManager.offset(from: currentContentLocation, to: loc) > 0 {
-                            pageEndLocation = loc
-                            pageFragmentMaxY = pageRect.maxY
-                        } else {
-                            // If we can't find a split point or it's not moving forward,
-                            // we'll have to take the whole fragment to avoid an infinite loop,
-                            // or at least its end location.
-                            pageEndLocation = fragment.rangeInElement.endLocation
-                            pageFragmentMaxY = fragmentFrame.maxY
+                        var currentLineYWithinFragment = fragmentFrame.minY
+                        for line in fragment.textLineFragments {
+                            let lineHeight = line.typographicBounds.height
+                            let lineMaxY = currentLineYWithinFragment + lineHeight
+                            
+                            if lineMaxY <= pageRect.maxY {
+                                // In UIKit, NSTextLineFragment has characterRange: NSRange
+                                let lineEndOffset = line.characterRange.location + line.characterRange.length
+                                if let loc = contentStorage.location(documentRange.location, offsetBy: lineEndOffset) {
+                                    lastVisibleLineEnd = loc
+                                }
+                                lastLineMaxY = lineMaxY
+                                currentLineYWithinFragment += lineHeight
+                            } else {
+                                break // This line is out of bounds
+                            }
                         }
-                        return false // Stop enumerating, page is full
+                        
+                        if let lineEnd = lastVisibleLineEnd {
+                            pageEndLocation = lineEnd
+                            pageFragmentMaxY = lastLineMaxY
+                        } else {
+                            // Not even the first line fits? We must take at least one line to avoid infinite loop
+                            if let firstLine = fragment.textLineFragments.first {
+                                let lineEndOffset = firstLine.characterRange.location + firstLine.characterRange.length
+                                pageEndLocation = contentStorage.location(documentRange.location, offsetBy: lineEndOffset) ?? fragment.rangeInElement.endLocation
+                                pageFragmentMaxY = fragmentFrame.minY + firstLine.typographicBounds.height
+                            } else {
+                                pageEndLocation = fragment.rangeInElement.endLocation
+                                pageFragmentMaxY = fragmentFrame.maxY
+                            }
+                        }
+                        return false // Stop enumerating fragments, page is full
                     }
                 }
                 return true
