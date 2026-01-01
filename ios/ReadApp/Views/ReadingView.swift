@@ -142,6 +142,7 @@ struct ReadingView: View {
     @State private var pendingFlipId: UUID = UUID()
     @State private var isTTSSyncingPage = false
     @State private var suppressTTSSync = false
+    @State private var suppressPageIndexChangeOnce = false
     @State private var isAutoFlipping: Bool = false
     @State private var isTTSAutoChapterChange = false
     @State private var pausedChapterIndex: Int?
@@ -576,6 +577,10 @@ struct ReadingView: View {
     }
 
     private func handlePageIndexChange(_ newIndex: Int) {
+        if suppressPageIndexChangeOnce {
+            suppressPageIndexChangeOnce = false
+            return
+        }
         pendingBufferPageIndex = newIndex
         processPendingPageChangeIfReady()
     }
@@ -1108,6 +1113,9 @@ struct ReadingView: View {
                     if let cache = initialCache {
                         self.contentSentences = sentences
                         self.currentContent = processed
+                        if self.shouldSyncPageAfterPagination {
+                            self.suppressPageIndexChangeOnce = true
+                        }
                         self.currentCache = cache
                         self.currentPageIndex = targetPageIndex
                         self.didApplyResumePos = true // Mark as finished with initial resume
