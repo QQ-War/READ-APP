@@ -140,6 +140,7 @@ struct ReadingView: View {
     @State private var isTTSSyncingPage = false
     @State private var suppressTTSSync = false
     @State private var isAutoFlipping: Bool = false
+    @State private var isTTSAutoChapterChange = false
     @State private var pausedChapterIndex: Int?
     @State private var pausedPageIndex: Int?
     @State private var needsTTSRestartAfterPause = false
@@ -723,6 +724,28 @@ struct ReadingView: View {
         }
     }
 
+    private func switchChapterUsingCacheIfAvailable(targetIndex: Int, jumpToFirst: Bool, jumpToLast: Bool) -> Bool {
+        if targetIndex == currentChapterIndex + 1, !nextCache.pages.isEmpty {
+            let cached = nextCache
+            prevCache = currentCache
+            nextCache = .empty
+            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: jumpToFirst, jumpToLast: jumpToLast)
+            ttsBaseIndex = 0
+            prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
+            return true
+        }
+        if targetIndex == currentChapterIndex - 1, !prevCache.pages.isEmpty {
+            let cached = prevCache
+            nextCache = currentCache
+            prevCache = .empty
+            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: jumpToFirst, jumpToLast: jumpToLast)
+            ttsBaseIndex = 0
+            prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
+            return true
+        }
+        return false
+    }
+
     private func applyCachedChapter(_ cache: ChapterCache, chapterIndex: Int, jumpToFirst: Bool, jumpToLast: Bool) {
         suppressRepaginateOnce = true
         currentChapterIndex = chapterIndex
@@ -988,11 +1011,12 @@ struct ReadingView: View {
                     
                     prepareAdjacentChapters(for: currentChapterIndex)
                     
-                    if shouldContinuePlaying {
+                    if shouldContinuePlaying && !isTTSAutoChapterChange {
                         ttsManager.stop()
                         lastTTSSentenceIndex = 0
                         startTTS(pageIndexOverride: currentPageIndex, showControls: false)
                     }
+                    if isTTSAutoChapterChange { isTTSAutoChapterChange = false }
                     
                     // After the first load/switch is complete, allow future resume logic if needed
                     // (though usually we stay in the same book session)
@@ -1103,7 +1127,16 @@ struct ReadingView: View {
 
         let speakTitle = preferences.readingMode == .horizontal && pageIndex == 0 && currentCache.chapterPrefixLen > 0
         ttsManager.startReading(text: textForTTS, chapters: chapters, currentIndex: currentChapterIndex, bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, bookTitle: book.name ?? "阅读", coverUrl: book.displayCoverUrl, onChapterChange: { newIndex in
-            self.currentChapterIndex = newIndex; self.loadChapterContent(); self.saveProgress()
+            self.isAutoFlipping = true
+            if self.switchChapterUsingCacheIfAvailable(targetIndex: newIndex, jumpToFirst: true, jumpToLast: false) {
+                self.lastTTSSentenceIndex = 0
+                self.saveProgress()
+                return
+            }
+            self.isTTSAutoChapterChange = true
+            self.currentChapterIndex = newIndex
+            self.loadChapterContent()
+            self.saveProgress()
         }, startAtSentenceIndex: startIndex, shouldSpeakChapterTitle: speakTitle)
     }
     
