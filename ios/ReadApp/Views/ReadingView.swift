@@ -760,6 +760,8 @@ struct ReadingView: View {
         rawContent = cache.rawContent
         currentContent = cache.contentSentences.joined(separator: "\n")
         contentSentences = cache.contentSentences
+        currentVisibleSentenceIndex = nil
+        pendingScrollToSentenceIndex = nil
         if jumpToLast {
             currentPageIndex = max(0, cache.pages.count - 1)
         } else if jumpToFirst {
@@ -1073,6 +1075,7 @@ struct ReadingView: View {
     private func previousChapter() {
         guard currentChapterIndex > 0 else { return }
         didApplyResumePos = true
+        currentVisibleSentenceIndex = nil
         let targetIndex = currentChapterIndex - 1
         if !prevCache.pages.isEmpty {
             let cached = prevCache
@@ -1092,6 +1095,7 @@ struct ReadingView: View {
     private func nextChapter() {
         guard currentChapterIndex < chapters.count - 1 else { return }
         didApplyResumePos = true
+        currentVisibleSentenceIndex = nil
         let targetIndex = currentChapterIndex + 1
         if !nextCache.pages.isEmpty {
             let cached = nextCache
@@ -1171,6 +1175,7 @@ struct ReadingView: View {
             }
             self.isTTSAutoChapterChange = true
             self.didApplyResumePos = true
+            self.currentVisibleSentenceIndex = nil
             self.currentChapterIndex = newIndex
             self.loadChapterContent()
             self.saveProgress()
