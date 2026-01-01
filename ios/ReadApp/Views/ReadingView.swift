@@ -611,11 +611,14 @@ struct ReadingView: View {
 
     private func scheduleRepaginate(in size: CGSize) {
         pageSize = size
+        let key = PaginationKey(width: Int(size.width * 100), height: Int(size.height * 100), fontSize: Int(preferences.fontSize * 10), lineSpacing: Int(preferences.lineSpacing * 10), margin: Int(preferences.pageHorizontalMargin * 10), sentenceCount: contentSentences.count, chapterIndex: currentChapterIndex, resumeCharIndex: pendingResumeCharIndex ?? -1, resumePageIndex: pendingResumeLocalPageIndex ?? -1)
+
         if suppressRepaginateOnce {
             suppressRepaginateOnce = false
+            lastPaginationKey = key
             return
         }
-        let key = PaginationKey(width: Int(size.width * 100), height: Int(size.height * 100), fontSize: Int(preferences.fontSize * 10), lineSpacing: Int(preferences.lineSpacing * 10), margin: Int(preferences.pageHorizontalMargin * 10), sentenceCount: contentSentences.count, chapterIndex: currentChapterIndex, resumeCharIndex: pendingResumeCharIndex ?? -1, resumePageIndex: pendingResumeLocalPageIndex ?? -1)
+        
         if key == lastPaginationKey { return }
         lastPaginationKey = key
         if isRepaginateQueued { return }
