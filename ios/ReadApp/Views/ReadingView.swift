@@ -1298,8 +1298,18 @@ struct ReadingView: View {
             if let index = bodyIndex {
                 preferences.saveReadingProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, pageIndex: currentPageIndex, bodyCharIndex: index)
             }
-            try? await apiService.saveBookProgress(bookUrl: bookUrl, index: currentChapterIndex, pos: Double(bodyIndex ?? 0), title: title)
+            let pos = progressRatio(for: bodyIndex)
+            try? await apiService.saveBookProgress(bookUrl: bookUrl, index: currentChapterIndex, pos: pos, title: title)
         }
+    }
+
+    private func progressRatio(for bodyIndex: Int?) -> Double {
+        guard let bodyIndex = bodyIndex else { return 0 }
+        let pStarts = TextKitPaginator.paragraphStartIndices(sentences: contentSentences)
+        let bodyLength = (pStarts.last ?? 0) + (contentSentences.last?.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count ?? 0)
+        guard bodyLength > 0 else { return 0 }
+        let clamped = max(0, min(bodyIndex, max(0, bodyLength - 1)))
+        return Double(clamped) / Double(bodyLength)
     }
 
     private func currentProgressBodyCharIndex() -> Int? {
