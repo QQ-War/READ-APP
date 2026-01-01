@@ -110,8 +110,6 @@ struct ReadingView: View {
     @State private var didApplyResumePos = false
     @State private var initialServerChapterIndex: Int?
     @State private var didEnterReadingSession = false
-    @State private var shouldApplyResumeAfterLoad = false
-    @State private var shouldSyncPageToTTSAfterLoad = false
 
     // Vertical (Scrolling) Reader State
     @State private var scrollProxy: ScrollViewProxy?
@@ -1008,20 +1006,18 @@ struct ReadingView: View {
             pendingResumeLocalChapterIndex = nil
             pendingResumeLocalPageIndex = nil
             pendingResumePos = nil
-            if !contentSentences.isEmpty {
+            loadChapterContent(onLoaded: {
                 syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
-            } else {
-                shouldSyncPageToTTSAfterLoad = true
-            }
-            shouldApplyResumeAfterLoad = false
-        } else {
-            shouldApplyResumeAfterLoad = true
+            })
+            return
         }
 
-        loadChapterContent()
+        loadChapterContent(onLoaded: {
+            applyResumeProgressIfNeeded(sentences: contentSentences)
+        })
     }
     
-    private func loadChapterContent() {
+    private func loadChapterContent(onLoaded: (() -> Void)? = nil) {
         guard chapters.indices.contains(currentChapterIndex) else { return }
         let isManualSwitch = didApplyResumePos // If true, we just came from handleChapterSwitch
         
@@ -1040,14 +1036,7 @@ struct ReadingView: View {
                     
                     rawContent = cleanedContent
                     updateProcessedContent(from: cleanedContent)
-                    if shouldApplyResumeAfterLoad {
-                        applyResumeProgressIfNeeded(sentences: contentSentences)
-                        shouldApplyResumeAfterLoad = false
-                    }
-                    if shouldSyncPageToTTSAfterLoad {
-                        syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
-                        shouldSyncPageToTTSAfterLoad = false
-                    }
+                    onLoaded?()
                     
                     isLoading = false
                     
