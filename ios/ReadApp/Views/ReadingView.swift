@@ -148,6 +148,7 @@ struct ReadingView: View {
     @State private var pausedPageIndex: Int?
     @State private var needsTTSRestartAfterPause = false
     @State private var lastAdjacentPrepareAt: TimeInterval = 0
+    @State private var pendingTTSRequest: TTSPlayRequest?
     
     // Replace Rule State
     @State private var showAddReplaceRule = false
@@ -163,6 +164,11 @@ struct ReadingView: View {
         let chapterIndex: Int
         let resumeCharIndex: Int
         let resumePageIndex: Int
+    }
+    
+    private struct TTSPlayRequest {
+        let pageIndexOverride: Int?
+        let showControls: Bool
     }
 
     init(book: Book) {
@@ -585,8 +591,7 @@ struct ReadingView: View {
 
         if ttsManager.isPlaying && !ttsManager.isPaused && !isAutoFlipping {
             if !preferences.lockPageOnTTS {
-                ttsManager.stop()
-                startTTS(pageIndexOverride: newIndex, showControls: false)
+                requestTTSPlayback(pageIndexOverride: newIndex, showControls: false)
             }
         }
         if ttsManager.isPlaying && ttsManager.isPaused {
@@ -597,6 +602,15 @@ struct ReadingView: View {
         if let startIndex = pageStartSentenceIndex(for: newIndex) {
             lastTTSSentenceIndex = startIndex
         }
+    }
+
+    private func requestTTSPlayback(pageIndexOverride: Int?, showControls: Bool) {
+        if contentSentences.isEmpty {
+            pendingTTSRequest = TTSPlayRequest(pageIndexOverride: pageIndexOverride, showControls: showControls)
+            return
+        }
+        ttsManager.stop()
+        startTTS(pageIndexOverride: pageIndexOverride, showControls: showControls)
     }
 
     private func makeContentViewController(snapshot: PageSnapshot, pageIndex: Int, chapterOffset: Int) -> ReadContentViewController? {
@@ -839,9 +853,8 @@ struct ReadingView: View {
             ttsBaseIndex = 0
             prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
             if shouldContinuePlaying {
-                ttsManager.stop()
                 lastTTSSentenceIndex = 0
-                startTTS(pageIndexOverride: currentPageIndex, showControls: false)
+                requestTTSPlayback(pageIndexOverride: currentPageIndex, showControls: false)
             }
             return
         } else if offset == -1 {
@@ -858,9 +871,8 @@ struct ReadingView: View {
             ttsBaseIndex = 0
             prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
             if shouldContinuePlaying {
-                ttsManager.stop()
                 lastTTSSentenceIndex = max(0, currentCache.paragraphStarts.count - 1)
-                startTTS(pageIndexOverride: currentPageIndex, showControls: false)
+                requestTTSPlayback(pageIndexOverride: currentPageIndex, showControls: false)
             }
             return
         }
@@ -1011,7 +1023,6 @@ struct ReadingView: View {
     
     private func loadChapterContent() {
         guard chapters.indices.contains(currentChapterIndex) else { return }
-        let shouldContinuePlaying = ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl
         let isManualSwitch = didApplyResumePos // If true, we just came from handleChapterSwitch
         
         if currentCache.pages.isEmpty { isLoading = true }
@@ -1039,18 +1050,12 @@ struct ReadingView: View {
                     }
                     
                     isLoading = false
-                    ttsBaseIndex = 0
-                    
-                    if ttsManager.isPlaying && ttsManager.currentChapterIndex != currentChapterIndex {
-                        ttsManager.stop()
-                    }
                     
                     prepareAdjacentChapters(for: currentChapterIndex)
                     
-                    if shouldContinuePlaying && !isTTSAutoChapterChange {
-                        ttsManager.stop()
-                        lastTTSSentenceIndex = 0
-                        startTTS(pageIndexOverride: currentPageIndex, showControls: false)
+                    if let request = pendingTTSRequest {
+                        pendingTTSRequest = nil
+                        requestTTSPlayback(pageIndexOverride: request.pageIndexOverride, showControls: request.showControls)
                     }
                     if isTTSAutoChapterChange { isTTSAutoChapterChange = false }
                     
@@ -1084,6 +1089,10 @@ struct ReadingView: View {
             applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: false, jumpToLast: true)
             ttsBaseIndex = 0
             prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
+            if ttsManager.isPlaying && !ttsManager.isPaused {
+                lastTTSSentenceIndex = max(0, currentCache.paragraphStarts.count - 1)
+                requestTTSPlayback(pageIndexOverride: currentPageIndex, showControls: false)
+            }
             saveProgress()
             return
         }
@@ -1104,6 +1113,10 @@ struct ReadingView: View {
             applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: true, jumpToLast: false)
             ttsBaseIndex = 0
             prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
+            if ttsManager.isPlaying && !ttsManager.isPaused {
+                lastTTSSentenceIndex = 0
+                requestTTSPlayback(pageIndexOverride: currentPageIndex, showControls: false)
+            }
             saveProgress()
             return
         }
@@ -1177,6 +1190,7 @@ struct ReadingView: View {
             self.didApplyResumePos = true
             self.currentVisibleSentenceIndex = nil
             self.currentChapterIndex = newIndex
+            self.pendingTTSRequest = nil
             self.loadChapterContent()
             self.saveProgress()
         }, startAtSentenceIndex: startIndex, shouldSpeakChapterTitle: speakTitle)
