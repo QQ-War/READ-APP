@@ -1042,6 +1042,7 @@ struct ReadingView: View {
         let resumeLocalBodyIndex = pendingResumeLocalBodyIndex
         let resumeLocalChapterIndex = pendingResumeLocalChapterIndex
         let resumeLocalPageIndex = pendingResumeLocalPageIndex
+        let capturedTTSIndex = lastTTSSentenceIndex
         let jumpFirst = pendingJumpToFirstPage
         let jumpLast = pendingJumpToLastPage
         let shouldResume = shouldApplyResumeOnce
@@ -1076,6 +1077,10 @@ struct ReadingView: View {
                         targetPageIndex = max(0, result.pages.count - 1)
                     } else if jumpFirst {
                         targetPageIndex = 0
+                    } else if let ttsIdx = capturedTTSIndex, ttsIdx < pStarts.count {
+                        // High Priority: Align with TTS progress if available
+                        let charOffset = pStarts[ttsIdx] + prefixLen
+                        targetPageIndex = result.pages.firstIndex(where: { NSLocationInRange(charOffset, $0.globalRange) }) ?? 0
                     } else if shouldResume {
                         let bodyLength = (pStarts.last ?? 0) + (sentences.last?.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count ?? 0)
                         let bodyIndex: Int
