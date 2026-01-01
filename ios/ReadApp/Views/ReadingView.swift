@@ -1077,8 +1077,19 @@ struct ReadingView: View {
                 return
             }
             
-            if currentPageIndex < activeSnapshot.pages.count, let vc = currentContentViewController {
-                pvc.setViewControllers([vc], direction: .forward, animated: false)
+            if currentPageIndex < activeSnapshot.pages.count {
+                let vc: ReadContentViewController?
+                if let cached = currentContentViewController,
+                   cached.chapterOffset == 0,
+                   cached.pageIndex == currentPageIndex,
+                   cached.renderStore === activeStore {
+                    vc = cached
+                } else {
+                    vc = parent.makeViewController(activeSnapshot, currentPageIndex, 0)
+                }
+                if let vc {
+                    pvc.setViewControllers([vc], direction: .forward, animated: false)
+                }
             }
         }
         
