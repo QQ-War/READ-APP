@@ -464,7 +464,11 @@ struct ReadingView: View {
         }
 
         let resumeCharIndex = pendingResumeCharIndex
-        let focusCharIndex: Int? = currentCache.pages.indices.contains(currentPageIndex) ? currentCache.pages[currentPageIndex].globalRange.location : resumeCharIndex
+        let shouldJumpToFirst = pendingJumpToFirstPage
+        let shouldJumpToLast = pendingJumpToLastPage
+        let focusCharIndex: Int? = (shouldJumpToFirst || shouldJumpToLast)
+            ? nil
+            : (currentCache.pages.indices.contains(currentPageIndex) ? currentCache.pages[currentPageIndex].globalRange.location : resumeCharIndex)
 
         let tk2Store: TextKit2RenderStore
         if let existingStore = currentCache.renderStore, existingStore.layoutWidth == size.width {
@@ -476,12 +480,12 @@ struct ReadingView: View {
         
         let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: size, paragraphStarts: newPStarts, prefixLen: newPrefixLen)
         
-        if let targetCharIndex = focusCharIndex, let pageIndex = pageIndexForChar(targetCharIndex, in: result.pages) {
-            currentPageIndex = pageIndex
-        } else if pendingJumpToFirstPage || currentCache.pages.isEmpty {
-            currentPageIndex = 0
-        } else if pendingJumpToLastPage {
+        if shouldJumpToLast {
             currentPageIndex = max(0, result.pages.count - 1)
+        } else if shouldJumpToFirst || currentCache.pages.isEmpty {
+            currentPageIndex = 0
+        } else if let targetCharIndex = focusCharIndex, let pageIndex = pageIndexForChar(targetCharIndex, in: result.pages) {
+            currentPageIndex = pageIndex
         }
         pendingJumpToLastPage = false
         pendingJumpToFirstPage = false
