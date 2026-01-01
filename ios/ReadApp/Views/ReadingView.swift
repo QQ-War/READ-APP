@@ -13,6 +13,7 @@ private struct TK2PageInfo {
     let pageHeight: CGFloat // Allocated page height (e.g., pageSize.height)
     let actualContentHeight: CGFloat // Actual height used by content on this page
     let startSentenceIndex: Int
+    let contentInset: CGFloat
 }
 
 private struct ChapterCache {
@@ -1567,6 +1568,7 @@ private final class TextKit2RenderStore {
 }
 
 private struct TextKit2Paginator {
+    private static let pageVerticalInset: CGFloat = 8
     
     struct PaginationResult {
         let pages: [PaginatedPage]
@@ -1594,6 +1596,7 @@ private struct TextKit2Paginator {
         var pages: [PaginatedPage] = []
         var pageInfos: [TK2PageInfo] = []
         var pageCount = 0
+        let pageContentHeight = max(1, pageSize.height - pageVerticalInset * 2)
         
         var currentContentLocation: NSTextLocation = documentRange.location
         var currentY: CGFloat = 0
@@ -1606,7 +1609,7 @@ private struct TextKit2Paginator {
                 currentY = max(currentY, startFrag.layoutFragmentFrame.minY)
             }
             
-            let pageRect = CGRect(x: 0, y: currentY, width: pageSize.width, height: pageSize.height)
+            let pageRect = CGRect(x: 0, y: currentY, width: pageSize.width, height: pageContentHeight)
             
             var pageFragmentMinY: CGFloat?
             var pageFragmentMaxY: CGFloat?
@@ -1696,16 +1699,16 @@ private struct TextKit2Paginator {
             }
 
             let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
-            let actualContentHeight = (pageFragmentMaxY ?? (currentY + pageSize.height)) - currentY
+            let actualContentHeight = (pageFragmentMaxY ?? (currentY + pageContentHeight)) - currentY
             let adjustedLocation = max(0, pageRange.location - prefixLen)
             let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
             
             pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
-            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageSize.height, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx))
+            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: pageVerticalInset))
             
             pageCount += 1
             currentContentLocation = pageEndLocation
-            currentY = pageFragmentMaxY ?? (currentY + pageSize.height)
+            currentY = pageFragmentMaxY ?? (currentY + pageContentHeight)
         }
 
         let reachedEnd = layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation) == 0
@@ -1745,8 +1748,8 @@ private class ReadContent2View: UIView {
         let context = UIGraphicsGetCurrentContext()
         context?.saveGState()
         
-        // Translate context to start drawing from the current page's yOffset
-        context?.translateBy(x: 0, y: -info.yOffset)
+        // Translate context to start drawing from the current page's yOffset with vertical inset
+        context?.translateBy(x: 0, y: -(info.yOffset - info.contentInset))
         
         let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location)
         
@@ -1775,7 +1778,7 @@ private class ReadContent2View: UIView {
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began, let store = renderStore, let info = pageInfo else { return }
         let point = gesture.location(in: self)
-        let adjustedPoint = CGPoint(x: point.x, y: point.y + info.yOffset)
+        let adjustedPoint = CGPoint(x: point.x, y: point.y + info.yOffset - info.contentInset)
         
         if let fragment = store.layoutManager.textLayoutFragment(for: adjustedPoint),
            let textElement = fragment.textElement,
