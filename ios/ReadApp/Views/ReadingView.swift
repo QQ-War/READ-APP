@@ -1608,15 +1608,17 @@ private struct TextKit2Paginator {
                         var lastVisibleLineEnd: NSTextLocation?
                         var lastLineMaxY: CGFloat = fragmentFrame.minY
                         
-                        fragment.enumerateTextLineFragments { line, lineOrigin in
-                            let lineFrame = line.typographicBounds.offsetBy(dx: fragmentFrame.origin.x + lineOrigin.x, dy: fragmentFrame.origin.y + lineOrigin.y)
+                        var currentLineYWithinFragment = fragmentFrame.minY
+                        for line in fragment.textLineFragments {
+                            let lineHeight = line.typographicBounds.height
+                            let lineMaxY = currentLineYWithinFragment + lineHeight
                             
-                            if lineFrame.maxY <= pageRect.maxY {
+                            if lineMaxY <= pageRect.maxY {
                                 lastVisibleLineEnd = line.textRange.endLocation
-                                lastLineMaxY = lineFrame.maxY
-                                return true
+                                lastLineMaxY = lineMaxY
+                                currentLineYWithinFragment += lineHeight
                             } else {
-                                return false // Stop
+                                break // This line is out of bounds
                             }
                         }
                         
@@ -1625,17 +1627,13 @@ private struct TextKit2Paginator {
                             pageFragmentMaxY = lastLineMaxY
                         } else {
                             // Not even the first line fits? We must take at least one line to avoid infinite loop
-                            var firstLineEnd: NSTextLocation?
-                            var firstLineMaxY: CGFloat = fragmentFrame.minY
-                            
-                            fragment.enumerateTextLineFragments { line, lineOrigin in
-                                firstLineEnd = line.textRange.endLocation
-                                firstLineMaxY = line.typographicBounds.offsetBy(dx: fragmentFrame.origin.x + lineOrigin.x, dy: fragmentFrame.origin.y + lineOrigin.y).maxY
-                                return false // Stop after first
+                            if let firstLine = fragment.textLineFragments.first {
+                                pageEndLocation = firstLine.textRange.endLocation
+                                pageFragmentMaxY = fragmentFrame.minY + firstLine.typographicBounds.height
+                            } else {
+                                pageEndLocation = fragment.rangeInElement.endLocation
+                                pageFragmentMaxY = fragmentFrame.maxY
                             }
-                            
-                            pageEndLocation = firstLineEnd ?? fragment.rangeInElement.endLocation
-                            pageFragmentMaxY = firstLineMaxY
                         }
                         return false // Stop enumerating fragments, page is full
                     }
