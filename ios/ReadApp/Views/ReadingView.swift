@@ -1026,37 +1026,111 @@ struct ReadingView: View {
     
     private func loadChapterContent(onLoaded: (() -> Void)? = nil) {
         guard chapters.indices.contains(currentChapterIndex) else { return }
-        let isManualSwitch = didApplyResumePos // If true, we just came from handleChapterSwitch
+        
+        let chapterIndex = currentChapterIndex
+        let chapterTitle = chapters[chapterIndex].title
+        let targetPageSize = pageSize
+        let fontSize = preferences.fontSize
+        let lineSpacing = preferences.lineSpacing
+        let margin = preferences.pageHorizontalMargin
+        
+        // Capture all necessary resume state
+        let resumePos = pendingResumePos
+        let resumeLocalBodyIndex = pendingResumeLocalBodyIndex
+        let resumeLocalChapterIndex = pendingResumeLocalChapterIndex
+        let resumeLocalPageIndex = pendingResumeLocalPageIndex
+        let jumpFirst = pendingJumpToFirstPage
+        let jumpLast = pendingJumpToLastPage
+        let shouldResume = shouldApplyResumeOnce
         
         if currentCache.pages.isEmpty { isLoading = true }
         
         Task {
             do {
-                let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: currentChapterIndex)
-                await MainActor.run {
-                    let cleanedContent = removeHTMLAndSVG(content)
+                let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapterIndex)
+                
+                // 1. Heavy processing on background thread
+                let cleaned = removeHTMLAndSVG(content)
+                let processed = applyReplaceRules(to: cleaned)
+                let sentences = splitIntoParagraphs(processed)
+                
+                var initialCache: ChapterCache? = nil
+                var targetPageIndex = 0
+                
+                // 2. Pre-paginate on background thread if size is known
+                if targetPageSize.width > 0 {
+                    let attrText = TextKitPaginator.createAttributedText(sentences: sentences, fontSize: fontSize, lineSpacing: lineSpacing, chapterTitle: chapterTitle)
+                    let pStarts = TextKitPaginator.paragraphStartIndices(sentences: sentences)
+                    let prefixLen = (chapterTitle.isEmpty) ? 0 : (chapterTitle + "\n").utf16.count
+                    let tk2Store = TextKit2RenderStore(attributedString: attrText, layoutWidth: targetPageSize.width)
+                    let inset = max(8, min(18, fontSize * 0.6))
+                    let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: targetPageSize, paragraphStarts: pStarts, prefixLen: prefixLen, contentInset: inset)
                     
-                    // If we don't have pages yet and it's not a manual switch from cache, reset.
-                    if currentCache.pages.isEmpty && !isManualSwitch {
-                        resetPaginationState()
+                    initialCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: cleaned, attributedText: attrText, paragraphStarts: pStarts, chapterPrefixLen: prefixLen, isFullyPaginated: result.reachedEnd)
+                    
+                    // Determine where to land
+                    if jumpLast {
+                        targetPageIndex = max(0, result.pages.count - 1)
+                    } else if jumpFirst {
+                        targetPageIndex = 0
+                    } else if shouldResume {
+                        let bodyLength = (pStarts.last ?? 0) + (sentences.last?.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count ?? 0)
+                        let bodyIndex: Int
+                        if let localIndex = resumeLocalBodyIndex, resumeLocalChapterIndex == chapterIndex {
+                            bodyIndex = localIndex
+                        } else if let pos = resumePos, pos > 0 {
+                            bodyIndex = pos > 1.0 ? Int(pos) : Int(Double(bodyLength) * min(max(pos, 0.0), 1.0))
+                        } else {
+                            bodyIndex = 0
+                        }
+                        let clampedBodyIndex = max(0, min(bodyIndex, max(0, bodyLength - 1)))
+                        let charIndex = clampedBodyIndex + prefixLen
+                        
+                        if let pageIdx = result.pages.firstIndex(where: { NSLocationInRange(charIndex, $0.globalRange) }) {
+                            targetPageIndex = pageIdx
+                        } else if let localPage = resumeLocalPageIndex, resumeLocalChapterIndex == chapterIndex, result.pages.indices.contains(localPage) {
+                            targetPageIndex = localPage
+                        }
+                    }
+                }
+
+                await MainActor.run {
+                    guard self.currentChapterIndex == chapterIndex else { return }
+                    
+                    // Synchronously update everything to avoid intermediate blank states
+                    self.rawContent = cleaned
+                    self.contentSentences = sentences
+                    self.currentContent = processed
+                    
+                    if let cache = initialCache {
+                        self.currentCache = cache
+                        self.currentPageIndex = targetPageIndex
+                        self.didApplyResumePos = true // Mark as finished with initial resume
+                        
+                        // Set the pagination key to current state to prevent immediate redundant re-pagination
+                        self.lastPaginationKey = PaginationKey(width: Int(targetPageSize.width * 100), height: Int(targetPageSize.height * 100), fontSize: Int(fontSize * 10), lineSpacing: Int(lineSpacing * 10), margin: Int(margin * 10), sentenceCount: sentences.count, chapterIndex: chapterIndex, resumeCharIndex: -1, resumePageIndex: -1)
+                    } else {
+                        // Fallback if size was 0, though unlikely here
+                        updateProcessedContent(from: cleaned)
                     }
                     
-                    rawContent = cleanedContent
-                    updateProcessedContent(from: cleanedContent)
                     onLoaded?()
+                    self.isLoading = false
+                    self.shouldApplyResumeOnce = false
+                    self.pendingJumpToFirstPage = false
+                    self.pendingJumpToLastPage = false
+                    self.pendingResumeLocalBodyIndex = nil
+                    self.pendingResumeLocalChapterIndex = nil
+                    self.pendingResumeLocalPageIndex = nil
+                    self.pendingResumePos = nil
                     
-                    isLoading = false
-                    
-                    prepareAdjacentChapters(for: currentChapterIndex)
+                    prepareAdjacentChapters(for: chapterIndex)
                     
                     if let request = pendingTTSRequest {
                         pendingTTSRequest = nil
                         requestTTSPlayback(pageIndexOverride: request.pageIndexOverride, showControls: request.showControls)
                     }
                     if isTTSAutoChapterChange { isTTSAutoChapterChange = false }
-                    
-                    // After the first load/switch is complete, allow future resume logic if needed
-                    // (though usually we stay in the same book session)
                 }
             } catch {
                 await MainActor.run {
