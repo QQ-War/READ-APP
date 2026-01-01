@@ -803,7 +803,6 @@ struct ReadingView: View {
             applyCachedChapter(cached, chapterIndex: nextIndex, jumpToFirst: true, jumpToLast: false)
             ttsBaseIndex = 0
             prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
-            if !cached.isFullyPaginated { continuePaginatingCurrentChapterIfNeeded() }
             if shouldContinuePlaying {
                 ttsManager.stop()
                 lastTTSSentenceIndex = 0
@@ -857,8 +856,7 @@ struct ReadingView: View {
         let prefixLen = (title.isEmpty) ? 0 : (title + "\n").utf16.count
 
         let tk2Store = TextKit2RenderStore(attributedString: attrText, layoutWidth: pageSize.width)
-        // If we are coming from the end (previous chapter prefetch), we MUST paginate fully to find the last page.
-        let limit = (forGate && !fromEnd) ? 12 : Int.max
+        let limit = Int.max
         
         let inset = max(8, min(18, preferences.fontSize * 0.6))
         let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: pageSize, paragraphStarts: pStarts, prefixLen: prefixLen, contentInset: inset, maxPages: limit)
