@@ -130,6 +130,7 @@ struct ReadingView: View {
     @State private var pendingBufferPageIndex: Int?
     @State private var lastHandledPageIndex: Int?
     @StateObject private var contentControllerCache = ReadContentViewControllerCache()
+    @State private var hasInitialPagination = false
     
     // Repagination Control
     @State private var isRepaginateQueued = false
@@ -333,52 +334,56 @@ struct ReadingView: View {
                 Color.clear.frame(width: safeArea.leading + preferences.pageHorizontalMargin).contentShape(Rectangle()).onTapGesture { handleReaderTap(location: .left) }
                 
                 if availableSize.width > 0 {
-                    ZStack(alignment: .bottomTrailing) {
-                        cacheRefresher
-                        let currentVC = makeContentViewController(snapshot: snapshot(from: currentCache), pageIndex: currentPageIndex, chapterOffset: 0)
-                        let prevVC = makeContentViewController(snapshot: snapshot(from: prevCache), pageIndex: max(0, prevCache.pages.count - 1), chapterOffset: -1)
-                        let nextVC = makeContentViewController(snapshot: snapshot(from: nextCache), pageIndex: 0, chapterOffset: 1)
+                    if hasInitialPagination {
+                        ZStack(alignment: .bottomTrailing) {
+                            cacheRefresher
+                            let currentVC = makeContentViewController(snapshot: snapshot(from: currentCache), pageIndex: currentPageIndex, chapterOffset: 0)
+                            let prevVC = makeContentViewController(snapshot: snapshot(from: prevCache), pageIndex: max(0, prevCache.pages.count - 1), chapterOffset: -1)
+                            let nextVC = makeContentViewController(snapshot: snapshot(from: nextCache), pageIndex: 0, chapterOffset: 1)
 
-                        ReadPageViewController(
-                            snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.renderStore, pageInfos: currentCache.pageInfos),
-                            prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.renderStore, pageInfos: prevCache.pageInfos),
-                            nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.renderStore, pageInfos: nextCache.pageInfos),
-                            currentPageIndex: $currentPageIndex,
-                            pageSpacing: preferences.pageInterSpacing,
-                            onTransitioningChanged: { self.isPageTransitioning = $0 },
-                            onTapLocation: handleReaderTap,
-                            onChapterChange: { offset in self.isAutoFlipping = true; self.handleChapterSwitch(offset: offset) },
-                            onAdjacentPrefetch: { offset in
-                                let needsPrepare = offset > 0 ? nextCache.pages.isEmpty : prevCache.pages.isEmpty
-                                if needsPrepare { prepareAdjacentChapters(for: currentChapterIndex) }
-                            },
-                            onAddReplaceRule: presentReplaceRuleEditor,
-                            currentContentViewController: currentVC,
-                            prevContentViewController: prevVC,
-                            nextContentViewController: nextVC,
-                            makeViewController: makeContentViewController
-                        )
-                        .id(preferences.pageInterSpacing)
-                        .frame(width: contentSize.width, height: contentSize.height)
+                            ReadPageViewController(
+                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.renderStore, pageInfos: currentCache.pageInfos),
+                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.renderStore, pageInfos: prevCache.pageInfos),
+                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.renderStore, pageInfos: nextCache.pageInfos),
+                                currentPageIndex: $currentPageIndex,
+                                pageSpacing: preferences.pageInterSpacing,
+                                onTransitioningChanged: { self.isPageTransitioning = $0 },
+                                onTapLocation: handleReaderTap,
+                                onChapterChange: { offset in self.isAutoFlipping = true; self.handleChapterSwitch(offset: offset) },
+                                onAdjacentPrefetch: { offset in
+                                    let needsPrepare = offset > 0 ? nextCache.pages.isEmpty : prevCache.pages.isEmpty
+                                    if needsPrepare { prepareAdjacentChapters(for: currentChapterIndex) }
+                                },
+                                onAddReplaceRule: presentReplaceRuleEditor,
+                                currentContentViewController: currentVC,
+                                prevContentViewController: prevVC,
+                                nextContentViewController: nextVC,
+                                makeViewController: makeContentViewController
+                            )
+                            .id(preferences.pageInterSpacing)
+                            .frame(width: contentSize.width, height: contentSize.height)
 
-                        if !showUIControls && currentCache.pages.count > 0 {
-                            let displayCurrent = currentPageIndex + 1
-                            Group {
-                                if currentCache.isFullyPaginated {
-                                    let total = max(currentCache.pages.count, displayCurrent)
-                                    Text("\(displayCurrent)/\(total) (\(Int((Double(displayCurrent) / Double(total)) * 100))%)")
-                                } else if let range = pageRange(for: currentPageIndex), currentCache.attributedText.length > 0 {
-                                    let progress = Double(NSMaxRange(range)) / Double(currentCache.attributedText.length)
-                                    Text("\(displayCurrent)/\(currentCache.pages.count)+ (\(Int(progress * 100))%)")
-                                } else {
-                                    Text("\(displayCurrent)/\(currentCache.pages.count)+")
+                            if !showUIControls && currentCache.pages.count > 0 {
+                                let displayCurrent = currentPageIndex + 1
+                                Group {
+                                    if currentCache.isFullyPaginated {
+                                        let total = max(currentCache.pages.count, displayCurrent)
+                                        Text("\(displayCurrent)/\(total) (\(Int((Double(displayCurrent) / Double(total)) * 100))%)")
+                                    } else if let range = pageRange(for: currentPageIndex), currentCache.attributedText.length > 0 {
+                                        let progress = Double(NSMaxRange(range)) / Double(currentCache.attributedText.length)
+                                        Text("\(displayCurrent)/\(currentCache.pages.count)+ (\(Int(progress * 100))%)")
+                                    } else {
+                                        Text("\(displayCurrent)/\(currentCache.pages.count)+")
+                                    }
                                 }
+                                .font(.caption2).foregroundColor(.secondary).padding(.trailing, 8).padding(.bottom, 2)
+                                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                             }
-                            .font(.caption2).foregroundColor(.secondary).padding(.trailing, 8).padding(.bottom, 2)
-                            .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                         }
+                        .frame(width: availableSize.width, height: availableSize.height)
+                    } else {
+                        Color.clear.frame(width: contentSize.width, height: contentSize.height)
                     }
-                    .frame(width: availableSize.width, height: availableSize.height)
                 } else {
                     Rectangle().fill(Color.clear)
                 }
@@ -515,6 +520,7 @@ struct ReadingView: View {
         else if currentPageIndex >= result.pages.count { currentPageIndex = result.pages.count - 1 }
         
         currentCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: rawContent, attributedText: newAttrText, paragraphStarts: newPStarts, chapterPrefixLen: newPrefixLen, isFullyPaginated: true)
+        if !hasInitialPagination, !result.pages.isEmpty { hasInitialPagination = true }
         
         if let localPage = pendingResumeLocalPageIndex, pendingResumeLocalChapterIndex == currentChapterIndex, result.pages.indices.contains(localPage) {
             currentPageIndex = localPage
@@ -1119,6 +1125,7 @@ struct ReadingView: View {
                         self.currentCache = cache
                         self.currentPageIndex = targetPageIndex
                         self.didApplyResumePos = true // Mark as finished with initial resume
+                        if !self.hasInitialPagination, !cache.pages.isEmpty { self.hasInitialPagination = true }
                         
                         // Set the pagination key to current state to prevent immediate redundant re-pagination
                         self.lastPaginationKey = PaginationKey(width: Int(targetPageSize.width * 100), height: Int(targetPageSize.height * 100), fontSize: Int(fontSize * 10), lineSpacing: Int(lineSpacing * 10), margin: Int(margin * 10), sentenceCount: sentences.count, chapterIndex: chapterIndex, resumeCharIndex: -1, resumePageIndex: -1)
