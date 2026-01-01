@@ -82,6 +82,7 @@ enum ReaderTapLocation {
 struct ReadingView: View {
     let book: Book
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var apiService: APIService
     @StateObject private var ttsManager = TTSManager.shared
     @StateObject private var preferences = UserPreferences.shared
@@ -246,6 +247,7 @@ struct ReadingView: View {
         .onChange(of: ttsManager.isPaused) { handleTTSPauseStateChange($0) }
         .onChange(of: ttsManager.currentSentenceIndex) { _ in handleTTSSentenceChange() }
         .onChange(of: ttsManager.currentSentenceDuration) { _ in handleTTSSentenceChange() }
+        .onChange(of: scenePhase) { handleScenePhaseChange($0) }
     }
 
     // MARK: - UI Components
@@ -460,6 +462,36 @@ struct ReadingView: View {
             if !suppressTTSSync { syncPageForSentenceIndex(ttsManager.currentSentenceIndex) }
             scheduleAutoFlip(duration: ttsManager.currentSentenceDuration)
             suppressTTSSync = false
+        }
+    }
+
+    private func handleScenePhaseChange(_ phase: ScenePhase) {
+        if phase == .active {
+            syncUIToTTSProgressIfNeeded()
+        }
+    }
+
+    private func syncUIToTTSProgressIfNeeded() {
+        guard ttsManager.isPlaying, ttsManager.bookUrl == book.bookUrl else { return }
+        ttsBaseIndex = ttsManager.currentBaseSentenceIndex
+        let targetChapter = ttsManager.currentChapterIndex
+
+        if targetChapter != currentChapterIndex {
+            if switchChapterUsingCacheIfAvailable(targetIndex: targetChapter, jumpToFirst: false, jumpToLast: false) {
+                syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
+            } else {
+                currentChapterIndex = targetChapter
+                shouldSyncPageAfterPagination = true
+                loadChapterContent()
+            }
+            return
+        }
+
+        if preferences.readingMode == .horizontal {
+            syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
+        } else {
+            pendingScrollToSentenceIndex = ttsManager.currentSentenceIndex
+            handlePendingScroll()
         }
     }
     
@@ -850,7 +882,7 @@ struct ReadingView: View {
     private func handleChapterSwitch(offset: Int) {
         pendingFlipId = UUID()
         didApplyResumePos = true // Mark as true to prevent auto-resuming from server/local storage
-        let shouldContinuePlaying = ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl
+        let shouldContinuePlaying = ttsManager.isPlaying && !ttsManager.isPaused && ttsManager.bookUrl == book.bookUrl
         
         if offset == 1 {
             guard !nextCache.pages.isEmpty else {
