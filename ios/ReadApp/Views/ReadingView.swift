@@ -696,13 +696,24 @@ struct ReadingView: View {
 
     private func handleChapterSwitch(offset: Int) {
         pendingFlipId = UUID()
+        didApplyResumePos = true // Mark as true to prevent auto-resuming from server/local storage
         
         if offset == 1 {
             guard !nextCache.pages.isEmpty else { return }
-            currentChapterIndex += 1; prevCache = currentCache; currentCache = nextCache; nextCache = .empty; currentPageIndex = 0; pendingJumpToFirstPage = true
+            currentChapterIndex += 1
+            prevCache = currentCache
+            currentCache = nextCache
+            nextCache = .empty
+            currentPageIndex = 0
+            pendingJumpToFirstPage = true
         } else if offset == -1 {
             guard !prevCache.pages.isEmpty else { return }
-            currentChapterIndex -= 1; nextCache = currentCache; currentCache = prevCache; prevCache = .empty; currentPageIndex = currentCache.pages.count - 1; pendingJumpToLastPage = true
+            currentChapterIndex -= 1
+            nextCache = currentCache
+            currentCache = prevCache
+            prevCache = .empty
+            currentPageIndex = max(0, currentCache.pages.count - 1)
+            pendingJumpToLastPage = true
         }
         loadChapterContent()
     }
@@ -731,6 +742,7 @@ struct ReadingView: View {
         let prefixLen = (title.isEmpty) ? 0 : (title + "\n").utf16.count
 
         let tk2Store = TextKit2RenderStore(attributedString: attrText, layoutWidth: pageSize.width)
+        // If we are coming from the end (previous chapter prefetch), we MUST paginate fully to find the last page.
         let limit = (forGate && !fromEnd) ? 12 : Int.max
         
         let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: pageSize, paragraphStarts: pStarts, prefixLen: prefixLen, maxPages: limit)
@@ -747,7 +759,11 @@ struct ReadingView: View {
         let content = isEffectivelyEmpty ? "章节内容为空" : processedContent
         currentContent = content
         contentSentences = splitIntoParagraphs(content)
-        applyResumeProgressIfNeeded(sentences: contentSentences)
+        
+        // Only apply resume logic if we are NOT in a manual chapter switch
+        if !didApplyResumePos {
+            applyResumeProgressIfNeeded(sentences: contentSentences)
+        }
     }
 
     private func applyReplaceRules(to content: String) -> String {
@@ -828,26 +844,41 @@ struct ReadingView: View {
     private func loadChapterContent() {
         guard chapters.indices.contains(currentChapterIndex) else { return }
         let shouldContinuePlaying = ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl
-        if !currentCache.pages.isEmpty { isLoading = true }
+        let isManualSwitch = didApplyResumePos // If true, we just came from handleChapterSwitch
+        
+        if currentCache.pages.isEmpty { isLoading = true }
         
         Task {
             do {
                 let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: currentChapterIndex)
                 await MainActor.run {
                     let cleanedContent = removeHTMLAndSVG(content)
-                    if currentCache.pages.isEmpty { resetPaginationState() }
+                    
+                    // If we don't have pages yet and it's not a manual switch from cache, reset.
+                    if currentCache.pages.isEmpty && !isManualSwitch {
+                        resetPaginationState()
+                    }
+                    
                     rawContent = cleanedContent
                     updateProcessedContent(from: cleanedContent)
                     
                     isLoading = false
                     ttsBaseIndex = 0
-                    if ttsManager.isPlaying && ttsManager.currentChapterIndex != currentChapterIndex { ttsManager.stop() }
+                    
+                    if ttsManager.isPlaying && ttsManager.currentChapterIndex != currentChapterIndex {
+                        ttsManager.stop()
+                    }
+                    
                     prepareAdjacentChapters(for: currentChapterIndex)
+                    
                     if shouldContinuePlaying {
                         ttsManager.stop()
                         lastTTSSentenceIndex = 0
                         startTTS(pageIndexOverride: currentPageIndex, showControls: false)
                     }
+                    
+                    // After the first load/switch is complete, allow future resume logic if needed
+                    // (though usually we stay in the same book session)
                 }
             } catch {
                 await MainActor.run {
@@ -1554,26 +1585,53 @@ private struct TextKit2Paginator {
             layoutManager.enumerateTextLayoutFragments(from: currentContentLocation, options: [.ensuresLayout, .ensuresExtraLineFragment]) { fragment in
                 let fragmentFrame = fragment.layoutFragmentFrame
                 
-                // If this fragment starts before our current page, but ends within or after it, we include it
-                if fragmentFrame.maxY > pageRect.minY && fragmentFrame.minY < pageRect.maxY {
+                // If this fragment starts before our current page, but ends within or after it
+                if fragmentFrame.maxY > pageRect.minY {
                     
-                    // Check if we should stop at this fragment (if it's a new fragment starting strictly after the page)
+                    // If the fragment starts strictly after the current page, stop.
                     if fragmentFrame.minY >= pageRect.maxY {
                         return false
                     }
 
+                    // This fragment is at least partially on the page.
                     if pageFragmentMinY == nil {
                         pageFragmentMinY = fragmentFrame.minY
                     }
-                    pageFragmentMaxY = fragmentFrame.maxY
-                    pageEndLocation = fragment.rangeInElement.endLocation
                     
-                    // Continue as long as this fragment's bottom hasn't exceeded the page bottom
-                    return fragmentFrame.maxY < pageRect.maxY
+                    // If the whole fragment fits, we take it all.
+                    if fragmentFrame.maxY <= pageRect.maxY {
+                        pageFragmentMaxY = fragmentFrame.maxY
+                        pageEndLocation = fragment.rangeInElement.endLocation
+                        return true
+                    } else {
+                        // Fragment is split. We must find the line where it cuts.
+                        var lastVisibleLineEnd: NSTextLocation?
+                        var lastLineMaxY: CGFloat = fragmentFrame.minY
+                        
+                        for line in fragment.textLineFragments {
+                            let lineFrame = line.typographicBounds.offsetBy(dx: fragmentFrame.origin.x + line.origin.x, dy: fragmentFrame.origin.y + line.origin.y)
+                            
+                            if lineFrame.maxY <= pageRect.maxY {
+                                lastVisibleLineEnd = line.textRange.endLocation
+                                lastLineMaxY = lineFrame.maxY
+                            } else {
+                                break // This line is out of bounds
+                            }
+                        }
+                        
+                        if let lineEnd = lastVisibleLineEnd {
+                            pageEndLocation = lineEnd
+                            pageFragmentMaxY = lastLineMaxY
+                        } else {
+                            // Not even the first line fits? We must take at least one line to avoid infinite loop, 
+                            // or if it's really the case, the fragment starts after pageRect.maxY (handled above).
+                            pageEndLocation = fragment.textLineFragments.first?.textRange.endLocation ?? fragment.rangeInElement.endLocation
+                            pageFragmentMaxY = fragmentFrame.minY + (fragment.textLineFragments.first?.typographicBounds.height ?? 0)
+                        }
+                        return false // Stop enumerating, page is full
+                    }
                 }
-                
-                // If we haven't reached the page yet, continue
-                return fragmentFrame.minY < pageRect.maxY
+                return true
             }
             
             let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
@@ -1589,11 +1647,7 @@ private struct TextKit2Paginator {
             }
             
             let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
-            
-            // Use currentY as the offset for this page. 
-            // The drawing code will translate context by -yOffset.
             let actualContentHeight = (pageFragmentMaxY ?? currentY) - (pageFragmentMinY ?? currentY)
-
             let adjustedLocation = max(0, pageRange.location - prefixLen)
             let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
             
@@ -1603,12 +1657,9 @@ private struct TextKit2Paginator {
             pageCount += 1
             currentContentLocation = pageEndLocation
             
-            // Update currentY for the NEXT page.
-            if let nextFragment = layoutManager.textLayoutFragment(for: pageEndLocation) {
-                currentY = nextFragment.layoutFragmentFrame.minY
-            } else if layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation) > 0 {
-                currentY += pageSize.height
-            }
+            // For the next page, we start exactly where we left off.
+            // In TK2, the y position of the next content is the maxY of the last content.
+            currentY = pageFragmentMaxY ?? (currentY + pageSize.height)
         }
 
         let reachedEnd = layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation) == 0
@@ -1656,10 +1707,8 @@ private class ReadContent2View: UIView {
         store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
             
-            // Stop if we've gone past the current page
             if frame.minY >= info.yOffset + info.pageHeight { return false }
             
-            // Draw if the fragment is visible on the current page
             if frame.maxY > info.yOffset {
                 fragment.draw(at: frame.origin, in: context!)
             }
