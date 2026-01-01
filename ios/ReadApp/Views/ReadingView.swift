@@ -1604,38 +1604,22 @@ private struct TextKit2Paginator {
                         pageEndLocation = fragment.rangeInElement.endLocation
                         return true
                     } else {
-                        // Fragment is split. We must find the line where it cuts.
-                        var lastVisibleLineEnd: NSTextLocation?
-                        var lastLineMaxY: CGFloat = fragmentFrame.minY
+                        // Fragment is split. Find the exact character location at the bottom of the page.
+                        // We use a point slightly inside the page boundary to get the correct location.
+                        let breakPoint = CGPoint(x: pageSize.width, y: pageRect.maxY - 0.1)
+                        let foundLocation = layoutManager.location(at: breakPoint, in: renderStore.textContainer)
                         
-                        var currentLineYWithinFragment = fragmentFrame.minY
-                        for line in fragment.textLineFragments {
-                            let lineHeight = line.typographicBounds.height
-                            let lineMaxY = currentLineYWithinFragment + lineHeight
-                            
-                            if lineMaxY <= pageRect.maxY {
-                                lastVisibleLineEnd = line.textRange.endLocation
-                                lastLineMaxY = lineMaxY
-                                currentLineYWithinFragment += lineHeight
-                            } else {
-                                break // This line is out of bounds
-                            }
-                        }
-                        
-                        if let lineEnd = lastVisibleLineEnd {
-                            pageEndLocation = lineEnd
-                            pageFragmentMaxY = lastLineMaxY
+                        if let loc = foundLocation, layoutManager.offset(from: currentContentLocation, to: loc) > 0 {
+                            pageEndLocation = loc
+                            pageFragmentMaxY = pageRect.maxY
                         } else {
-                            // Not even the first line fits? We must take at least one line to avoid infinite loop
-                            if let firstLine = fragment.textLineFragments.first {
-                                pageEndLocation = firstLine.textRange.endLocation
-                                pageFragmentMaxY = fragmentFrame.minY + firstLine.typographicBounds.height
-                            } else {
-                                pageEndLocation = fragment.rangeInElement.endLocation
-                                pageFragmentMaxY = fragmentFrame.maxY
-                            }
+                            // If we can't find a split point or it's not moving forward,
+                            // we'll have to take the whole fragment to avoid an infinite loop,
+                            // or at least its end location.
+                            pageEndLocation = fragment.rangeInElement.endLocation
+                            pageFragmentMaxY = fragmentFrame.maxY
                         }
-                        return false // Stop enumerating fragments, page is full
+                        return false // Stop enumerating, page is full
                     }
                 }
                 return true
@@ -1654,7 +1638,7 @@ private struct TextKit2Paginator {
             }
             
             let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
-            let actualContentHeight = (pageFragmentMaxY ?? currentY) - (pageFragmentMinY ?? currentY)
+            let actualContentHeight = (pageFragmentMaxY ?? (currentY + pageSize.height)) - currentY
             let adjustedLocation = max(0, pageRange.location - prefixLen)
             let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
             
@@ -1664,8 +1648,7 @@ private struct TextKit2Paginator {
             pageCount += 1
             currentContentLocation = pageEndLocation
             
-            // For the next page, we start exactly where we left off.
-            // In TK2, the y position of the next content is the maxY of the last content.
+            // Set currentY for the next page to exactly where this one ended.
             currentY = pageFragmentMaxY ?? (currentY + pageSize.height)
         }
 
