@@ -1619,8 +1619,8 @@ private struct TextKit2Paginator {
             // Otherwise find the specific line
             for line in fragment.textLineFragments {
                 let lineRange = line.characterRange
-                if lineRange.contains(offsetInFrag) || lineRange.upperBound == offsetInFrag {
-                     return line.typographicBounds.minY + fragFrame.minY
+                if offsetInFrag < lineRange.upperBound {
+                    return line.typographicBounds.minY + fragFrame.minY
                 }
             }
             // Fallback to fragment bottom if not found (shouldn't happen for valid loc)
@@ -1636,6 +1636,7 @@ private struct TextKit2Paginator {
             let pageStartY = findLineTopY(at: currentContentLocation) ?? 0
             
             let pageRect = CGRect(x: 0, y: pageStartY, width: pageSize.width, height: pageContentHeight)
+            let lineEdgeInset = max(0.5, contentInset * 0.05)
             
             var pageFragmentMaxY: CGFloat?
             var pageEndLocation: NSTextLocation = currentContentLocation
@@ -1682,7 +1683,7 @@ private struct TextKit2Paginator {
 
                         let lineFrame = line.typographicBounds.offsetBy(dx: fragmentFrame.origin.x, dy: fragmentFrame.origin.y)
 
-                        if lineFrame.maxY <= pageRect.maxY {
+                        if lineFrame.maxY <= pageRect.maxY - lineEdgeInset {
                             if let loc = contentStorage.location(documentRange.location, offsetBy: lineEndGlobalOffset) {
                                 pageEndLocation = loc
                                 pageFragmentMaxY = lineFrame.maxY
@@ -1780,24 +1781,63 @@ private class ReadContent2View: UIView {
         let context = UIGraphicsGetCurrentContext()
         context?.saveGState()
         
-        // Strict clipping to bounds to avoid any overflow
-        context?.clip(to: bounds)
+        // Clip to content area (exclude top/bottom insets) to avoid edge bleed
+        let contentClip = CGRect(x: 0, y: info.contentInset, width: bounds.width, height: info.pageHeight)
+        context?.clip(to: contentClip)
         
         // Translate context to start drawing from the current page's yOffset with vertical inset
         context?.translateBy(x: 0, y: -(info.yOffset - info.contentInset))
         
         let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location)
         
+        let contentStorage = store.contentStorage
+        let pageStartOffset = info.range.location
+        let pageEndOffset = NSMaxRange(info.range)
+        var shouldStop = false
+        
         store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
+            if shouldStop { return false }
             let frame = fragment.layoutFragmentFrame
             
-            // Only draw fragments that are visible within the vertical bounds of this page's content
             if frame.minY >= info.yOffset + info.pageHeight { return false }
             
-            if frame.maxY > info.yOffset {
-                fragment.draw(at: frame.origin, in: context!)
+            guard let fragmentRange = TextKit2Paginator.rangeFromTextRange(fragment.rangeInElement, in: contentStorage) else {
+                if frame.maxY > info.yOffset {
+                    fragment.draw(at: frame.origin, in: context!)
+                }
+                return true
             }
-            return true
+            
+            let fragmentStart = fragmentRange.location
+            let fragmentEnd = NSMaxRange(fragmentRange)
+            
+            if fragmentEnd <= pageStartOffset { return true }
+            if fragmentStart >= pageEndOffset { return false }
+            
+            for line in fragment.textLineFragments {
+                let lineStart = fragmentStart + line.characterRange.location
+                let lineEnd = fragmentStart + line.characterRange.upperBound
+                
+                if lineEnd <= pageStartOffset { continue }
+                if lineStart >= pageEndOffset {
+                    shouldStop = true
+                    break
+                }
+                
+                let lineFrame = line.typographicBounds.offsetBy(dx: frame.origin.x, dy: frame.origin.y)
+                if lineFrame.maxY <= info.yOffset { continue }
+                if lineFrame.minY >= info.yOffset + info.pageHeight {
+                    shouldStop = true
+                    break
+                }
+                
+                context?.saveGState()
+                context?.clip(to: lineFrame)
+                fragment.draw(at: frame.origin, in: context!)
+                context?.restoreGState()
+            }
+            
+            return !shouldStop
         }
         
         context?.restoreGState()
