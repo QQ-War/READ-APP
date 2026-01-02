@@ -159,6 +159,10 @@ struct SettingsView: View {
                     Text(mode.localizedName).tag(mode)
                 }
             }
+            
+            NavigationLink(destination: CacheManagementView().environmentObject(apiService)) {
+                Text("离线缓存管理")
+            }
         }
     }
 

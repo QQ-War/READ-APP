@@ -18,12 +18,36 @@ struct BookDetailView: View {
     @State private var downloadMessage: String = ""
     @State private var cachedChapters: Set<Int> = []
     @State private var isReading = false
+    @State private var showingSourceSwitch = false
+    @State private var showingClearCacheAlert = false
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 // 头部信息
                 headerSection
+                
+                // 操作按钮区
+                HStack(spacing: 16) {
+                    Button(action: { showingSourceSwitch = true }) {
+                        Label("换源阅读", systemImage: "arrow.2.squarepath")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.orange.opacity(0.1))
+                            .foregroundColor(.orange)
+                            .cornerRadius(8)
+                    }
+                    
+                    Button(action: { showingClearCacheAlert = true }) {
+                        Label("清除缓存", systemImage: "trash")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .cornerRadius(8)
+                    }
+                }
+                .padding(.horizontal)
                 
                 // 下载控制区
                 VStack(alignment: .leading, spacing: 12) {
@@ -163,172 +187,41 @@ struct BookDetailView: View {
         } message: {
             if let error = errorMessage { Text(error) }
         }
+        .alert("清除缓存", isPresented: $showingClearCacheAlert) {
+            Button("取消", role: .cancel) { }
+            Button("清除", role: .destructive) { clearBookCache() }
+        } message: {
+            Text("确定要删除本书所有的离线缓存内容吗？")
+        }
+        .sheet(isPresented: $showingSourceSwitch) {
+            SourceSwitchView(bookName: book.name ?? "", currentSource: book.origin ?? "") { newBook in
+                updateBookSource(with: newBook)
+            }
+        }
     }
     
-    // ... (其他方法)
+    // MARK: - Actions
     
-    private func startDownload(start: Int?, end: Int?) {
-        guard let start = start, let end = end, start > 0, end >= start, end <= chapters.count else {
-            errorMessage = "请输入有效的章节范围 (1-\(chapters.count))"
-            return
-        }
-        
-        let targetRange = chapters.filter { $0.index >= (start - 1) && $0.index <= (end - 1) }
-        guard !targetRange.isEmpty else { return }
-        
-        showCustomRange = false
-        isDownloading = true
-        downloadProgress = 0
-        downloadMessage = "准备下载..."
-        
+    private func clearBookCache() {
+        LocalCacheManager.shared.clearCache(for: book.bookUrl ?? "")
+        refreshCachedStatus()
+    }
+    
+    private func updateBookSource(with newBook: Book) {
+        // 实现逻辑：更新书籍信息并刷新详情
         Task {
-            var successCount = 0
-            for (i, chapter) in targetRange.enumerated() {
-                guard isDownloading else { break }
-                
-                await MainActor.run {
-                    downloadMessage = "正在下载: \(chapter.title) (\(i+1)/\(targetRange.count))"
-                    downloadProgress = Double(i + 1) / Double(targetRange.count)
-                }
-                
-                do {
-                    _ = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapter.index)
-                    successCount += 1
-                    await MainActor.run { 
-                        _ = self.cachedChapters.insert(chapter.index) 
-                    }
-                } catch {
-                    print("下载失败: \(chapter.title) - \(error.localizedDescription)")
-                }
-                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms 间隔
-            }
-            
-            await MainActor.run {
-                isDownloading = false
-                downloadMessage = successCount == targetRange.count ? "下载完成！" : "下载结束，成功 \(successCount)/\(targetRange.count) 章"
+            do {
+                // 这里需要 APIService 支持保存书籍更新，或者简单处理
+                // 暂时假设我们只是想用这个新 book 对象重新进入阅读
+                try await apiService.saveBook(book: newBook)
+                await loadData()
+            } catch {
+                errorMessage = "换源失败: \(error.localizedDescription)"
             }
         }
     }
     
-    private var headerSection: some View {
-        HStack(alignment: .top, spacing: 16) {
-            if let coverUrl = book.displayCoverUrl {
-                AsyncImage(url: URL(string: coverUrl)) { image in
-                    image.resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Color.gray.opacity(0.3)
-                }
-                .frame(width: 100, height: 140)
-                .cornerRadius(8)
-                .shadow(radius: 4)
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text(book.name ?? "未知书名")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Text(book.author ?? "未知作者")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                
-                Text(book.originName ?? "未知来源")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.blue.opacity(0.1))
-                    .foregroundColor(.blue)
-                    .cornerRadius(4)
-                
-                Spacer()
-                
-                Button(action: { isReading = true }) {
-                    Text("开始阅读")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
-                }
-                .fullScreenCover(isPresented: $isReading) {
-                    ReadingView(book: book).environmentObject(apiService)
-                }
-            }
-        }
-        .padding(.horizontal)
-        .padding(.top)
-    }
-    
-    private var downloadSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("离线缓存").font(.headline)
-            
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("开始章节").font(.caption).foregroundColor(.secondary)
-                    TextField("1", text: $startChapter)
-                        .keyboardType(.numberPad)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("结束章节").font(.caption).foregroundColor(.secondary)
-                    TextField("\(chapters.count)", text: $endChapter)
-                        .keyboardType(.numberPad)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                }
-                
-                Button(action: startDownload) {
-                    if isDownloading {
-                        ProgressView()
-                    } else {
-                        Text("开始缓存")
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(8)
-                    }
-                }
-                .disabled(isDownloading || chapters.isEmpty)
-            }
-            
-            if isDownloading || !downloadMessage.isEmpty {
-                VStack(spacing: 4) {
-                    ProgressView(value: downloadProgress, total: 1.0)
-                    Text(downloadMessage)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        .padding()
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(12)
-        .padding(.horizontal)
-    }
-    
-    private func chapterRow(_ chapter: BookChapter) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(chapter.title)
-                    .font(.subheadline)
-                    .lineLimit(1)
-                Spacer()
-                if cachedChapters.contains(chapter.index) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.caption)
-                }
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal)
-            
-            Divider().padding(.leading)
-        }
-    }
+    // MARK: - Helpers
     
     // MARK: - Logic
     
@@ -394,6 +287,93 @@ struct BookDetailView: View {
             isDownloading = false
             downloadMessage = "下载完成，成功 \(successCount) 章"
         }
+    }
+}
+
+// MARK: - Source Switch View
+struct SourceSwitchView: View {
+    let bookName: String
+    let currentSource: String
+    let onSelect: (Book) -> Void
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var apiService: APIService
+    
+    @State private var searchResults: [Book] = []
+    @State private var isSearching = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        NavigationView {
+            List {
+                if isSearching {
+                    HStack {
+                        Spacer()
+                        ProgressView("正在全网搜索来源...")
+                        Spacer()
+                    }
+                } else if searchResults.isEmpty {
+                    Text("未找到其他可用来源").foregroundColor(.secondary)
+                } else {
+                    ForEach(searchResults) { book in
+                        Button(action: {
+                            onSelect(book)
+                            dismiss()
+                        }) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(book.originName ?? "未知源")
+                                        .font(.headline)
+                                    Spacer()
+                                    if book.origin == currentSource {
+                                        Text("当前源").font(.caption).foregroundColor(.blue)
+                                    }
+                                }
+                                Text(book.author ?? "未知作者").font(.subheadline).foregroundColor(.secondary)
+                                if let latest = book.latestChapterTitle {
+                                    Text("最新: \(latest)").font(.caption2).foregroundColor(.gray)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("更换来源")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+            .task {
+                await performSearch()
+            }
+        }
+    }
+    
+    private func performSearch() async {
+        isSearching = true
+        searchResults = []
+        // 并发搜索所有可用源
+        // 实际上 APIService.searchBook 接收一个源，所以我们需要遍历
+        let sources = (try? await apiService.fetchBookSources()) ?? []
+        let enabledSources = sources.filter { $0.enabled }
+        
+        await withTaskGroup(of: [Book]?.self) { group in
+            for source in enabledSources {
+                group.addTask {
+                    try? await apiService.searchBook(keyword: bookName, bookSourceUrl: source.bookSourceUrl)
+                }
+            }
+            
+            for await result in group {
+                if let books = result {
+                    await MainActor.run {
+                        self.searchResults.append(contentsOf: books)
+                    }
+                }
+            }
+        }
+        isSearching = false
     }
 }
 

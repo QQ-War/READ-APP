@@ -73,4 +73,27 @@ class LocalCacheManager {
         }
         return count
     }
+    
+    func getCacheSize(for bookUrl: String) -> Int64 {
+        let dir = bookDir(for: bookUrl)
+        let files = (try? fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        var totalSize: Int64 = 0
+        for file in files {
+            let resourceValues = try? file.resourceValues(forKeys: [.fileSizeKey])
+            totalSize += Int64(resourceValues?.fileSize ?? 0)
+        }
+        return totalSize
+    }
+    
+    func getAllCachedBookIds() -> [String] {
+        let contents = (try? fileManager.contentsOfDirectory(at: baseDir, includingPropertiesForKeys: nil)) ?? []
+        return contents.map { $0.lastPathComponent }
+    }
+    
+    func formatSize(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useKB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
 }

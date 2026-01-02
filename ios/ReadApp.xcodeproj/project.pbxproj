@@ -32,6 +32,7 @@
 		1A000040000000000000003 /* SourceEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00003F000000000000003 /* SourceEditView.swift */; };
 		1A000042000000000000004 /* BookDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000041000000000000004 /* BookDetailView.swift */; };
 		1A000044000000000000004 /* LocalCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000043000000000000004 /* LocalCacheManager.swift */; };
+		1A000046000000000000005 /* CacheManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000045000000000000005 /* CacheManagementView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +61,7 @@
 		1A00003F000000000000003 /* SourceEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceEditView.swift; sourceTree = "<group>"; };
 		1A000041000000000000004 /* BookDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailView.swift; sourceTree = "<group>"; };
 		1A000043000000000000004 /* LocalCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCacheManager.swift; sourceTree = "<group>"; };
+		1A000045000000000000005 /* CacheManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheManagementView.swift; sourceTree = "<group>"; };
 		1A000020000000000000001 /* ReadApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000021000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -109,6 +111,7 @@
 		1A000026000000000000001 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				1A000045000000000000005 /* CacheManagementView.swift */,
 				1A000041000000000000004 /* BookDetailView.swift */,
 				1A000012000000000000001 /* BookListView.swift */,
 				1A00003D000000000000003 /* SourceListView.swift */,
@@ -249,6 +252,7 @@
 				72FDB17ADA4241E9BF6A5BB9 /* BookSearchViewModel.swift in Sources */,
 				1A000042000000000000004 /* BookDetailView.swift in Sources */,
 				1A000044000000000000004 /* LocalCacheManager.swift in Sources */,
+				1A000046000000000000005 /* CacheManagementView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
