@@ -45,45 +45,7 @@ struct BookListView: View {
         Group {
             List {
                 ForEach(filteredAndSortedBooks) { book in
-                    HStack(spacing: 0) {
-                        // 左侧封面：点击进入详情页
-                        NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
-                            BookCoverImage(url: book.displayCoverUrl)
-                        }
-                        .frame(width: 60, height: 80)
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        // 右侧信息：点击直接进入阅读器
-                        Button(action: { selectedBook = book }) {
-                            BookInfoArea(book: book)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            bookToDelete = book
-                            showingDeleteBookAlert = true
-                        } label: {
-                            Label("移出书架", systemImage: "trash")
-                        }
-                    }
-                    .contextMenu {
-                        Button { selectedBook = book } label: {
-                            Label("开始阅读", systemImage: "book")
-                        }
-                        NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
-                            Label("书籍详情", systemImage: "info.circle")
-                        }
-                        Divider()
-                        Button(role: .destructive) {
-                            bookToDelete = book
-                            showingDeleteBookAlert = true
-                        } label: {
-                            Label("移出书架", systemImage: "trash")
-                        }
-                    }
+                    bookRowView(for: book)
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: isReversed)
@@ -127,6 +89,49 @@ struct BookListView: View {
             }
         } message: {
             Text("确定要将《\(bookToDelete?.name ?? "未知书名")》从书架移除吗？")
+        }
+    }
+
+    @ViewBuilder
+    private func bookRowView(for book: Book) -> some View {
+        HStack(spacing: 0) {
+            // 左侧封面：点击进入详情页
+            NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                BookCoverImage(url: book.displayCoverUrl)
+            }
+            .frame(width: 60, height: 80)
+            .buttonStyle(PlainButtonStyle())
+            
+            // 右侧信息：点击直接进入阅读器
+            Button(action: { selectedBook = book }) {
+                BookInfoArea(book: book)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                bookToDelete = book
+                showingDeleteBookAlert = true
+            } label: {
+                Label("移出书架", systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            Button { selectedBook = book } label: {
+                Label("开始阅读", systemImage: "book")
+            }
+            NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                Label("书籍详情", systemImage: "info.circle")
+            }
+            Divider()
+            Button(role: .destructive) {
+                bookToDelete = book
+                showingDeleteBookAlert = true
+            } label: {
+                Label("移出书架", systemImage: "trash")
+            }
         }
     }
 
