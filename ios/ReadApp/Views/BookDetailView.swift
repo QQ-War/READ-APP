@@ -390,7 +390,13 @@ extension View {
         if #available(iOS 16.0, *) {
             self.toolbar(.hidden, for: .tabBar)
         } else {
-            self // For iOS 15, we accept the TabBar or use Introspection (omitted for stability)
+            self
+                .onAppear {
+                    UITabBar.appearance().isHidden = true
+                }
+                .onDisappear {
+                    UITabBar.appearance().isHidden = false
+                }
         }
     }
 }
