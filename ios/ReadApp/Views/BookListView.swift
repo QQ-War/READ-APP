@@ -51,14 +51,7 @@ struct BookListView: View {
             .animation(.easeInOut(duration: 0.3), value: isReversed)
             .navigationTitle("书架")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    listToolbarLeadingItems
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    listToolbarTrailingItems
-                }
-            }
+            .toolbar(content: listToolbarContent)
         }
         .searchable(text: $searchText, prompt: "搜索书名或作者")
         .refreshable { await loadBooks() }
@@ -154,6 +147,16 @@ struct BookListView: View {
             NavigationLink(destination: SettingsView()) { 
                 Image(systemName: "gearshape") 
             }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func listToolbarContent() -> some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            listToolbarLeadingItems
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            listToolbarTrailingItems
         }
     }
     
