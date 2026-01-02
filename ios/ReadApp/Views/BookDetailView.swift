@@ -121,7 +121,13 @@ struct BookDetailView: View {
         }
         .navigationTitle(book.name ?? "书籍详情")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
+        .onAppear {
+            if #available(iOS 16.0, *) {
+                // SwiftUI Native way for iOS 16+
+            }
+        }
+        // Use custom background logic if necessary for older versions
+        .ifAvailableHideTabBar()
         .confirmationDialog("选择缓存范围", isPresented: $showingDownloadOptions, titleVisibility: .visible) {
             Button("缓存全文") { startDownload(start: 1, end: chapters.count) }
             Button("缓存后续 50 章") { 
@@ -373,6 +379,17 @@ struct BookDetailView: View {
             
             isDownloading = false
             downloadMessage = "下载完成，成功 \(successCount) 章"
+        }
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func ifAvailableHideTabBar() -> some View {
+        if #available(iOS 16.0, *) {
+            self.toolbar(.hidden, for: .tabBar)
+        } else {
+            self // For iOS 15, we accept the TabBar or use Introspection (omitted for stability)
         }
     }
 }

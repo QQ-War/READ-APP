@@ -91,7 +91,7 @@ struct BookListView: View {
         .searchable(text: $searchText, prompt: "搜索书名或作者")
         .refreshable { await loadBooks() }
         .toolbar {
-            ToolbarItemGroup(placement: .navigationBarLeading) {
+            ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: { withAnimation { isReversed.toggle() } }) {
                     HStack(spacing: 4) {
                         Image(systemName: isReversed ? "arrow.up" : "arrow.down")
@@ -99,9 +99,11 @@ struct BookListView: View {
                     }.font(.caption)
                 }
             }
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Button(action: { showingDocumentPicker = true }) { Image(systemName: "plus") }
-                NavigationLink(destination: SettingsView()) { Image(systemName: "gearshape") }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack {
+                    Button(action: { showingDocumentPicker = true }) { Image(systemName: "plus") }
+                    NavigationLink(destination: SettingsView()) { Image(systemName: "gearshape") }
+                }
             }
         }
         .sheet(isPresented: $showingDocumentPicker) {
