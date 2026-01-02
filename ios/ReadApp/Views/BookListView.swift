@@ -91,7 +91,12 @@ struct BookListView: View {
         .searchable(text: $searchText, prompt: "搜索书名或作者")
         .refreshable { await loadBooks() }
         .toolbar {
-            listToolbarContent
+            ToolbarItem(placement: .navigationBarLeading) {
+                listToolbarLeadingItems
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                listToolbarTrailingItems
+            }
         }
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker { url in Task { await importBook(from: url) } }
@@ -123,22 +128,22 @@ struct BookListView: View {
         }
     }
 
-    @ToolbarContentBuilder
-    private var listToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
-            Button(action: { withAnimation { isReversed.toggle() } }) {
-                HStack(spacing: 4) {
-                    Image(systemName: isReversed ? "arrow.up" : "arrow.down")
-                    Text(isReversed ? "倒序" : "正序")
-                }.font(.caption)
-            }
+    @ViewBuilder
+    private var listToolbarLeadingItems: some View {
+        Button(action: { withAnimation { isReversed.toggle() } }) {
+            HStack(spacing: 4) {
+                Image(systemName: isReversed ? "arrow.up" : "arrow.down")
+                Text(isReversed ? "倒序" : "正序")
+            }.font(.caption)
         }
-        ToolbarItem(placement: .navigationBarTrailing) {
+    }
+
+    @ViewBuilder
+    private var listToolbarTrailingItems: some View {
+        HStack(spacing: 16) {
             Button(action: { showingDocumentPicker = true }) { 
                 Image(systemName: "plus") 
             }
-        }
-        ToolbarItem(placement: .navigationBarTrailing) {
             NavigationLink(destination: SettingsView()) { 
                 Image(systemName: "gearshape") 
             }
