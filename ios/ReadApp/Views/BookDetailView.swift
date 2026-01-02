@@ -17,6 +17,7 @@ struct BookDetailView: View {
     @State private var downloadProgress: Double = 0
     @State private var downloadMessage: String = ""
     @State private var cachedChapters: Set<Int> = []
+    @State private var isReading = false
     
     var body: some View {
         ScrollView {
@@ -221,7 +222,7 @@ struct BookDetailView: View {
                 
                 Spacer()
                 
-                NavigationLink(destination: ReadingView(book: book).environmentObject(apiService)) {
+                Button(action: { isReading = true }) {
                     Text("开始阅读")
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
@@ -229,6 +230,9 @@ struct BookDetailView: View {
                         .background(Color.blue)
                         .foregroundColor(.white)
                         .cornerRadius(8)
+                }
+                .fullScreenCover(isPresented: $isReading) {
+                    ReadingView(book: book).environmentObject(apiService)
                 }
             }
         }
