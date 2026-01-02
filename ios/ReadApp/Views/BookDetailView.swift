@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct BookDetailView: View {
     let book: Book
@@ -195,7 +196,8 @@ struct BookDetailView: View {
                         Button("开始缓存") {
                             withAnimation { showCustomRange = false }
                             startDownload(start: Int(startChapter), end: Int(endChapter))
-                        }.fontWeight(.bold)
+                        }
+                        .font(.system(size: 16, weight: .bold))
                     }
                 }
                 .padding(.vertical, 8).transition(.move(edge: .top).combined(with: .opacity))
@@ -355,9 +357,36 @@ extension View {
         if #available(iOS 16.0, *) {
             self.toolbar(.hidden, for: .tabBar)
         } else {
-            self
-                .onAppear { UITabBar.appearance().isHidden = true }
-                .onDisappear { UITabBar.appearance().isHidden = false }
+            self.modifier(HideTabBarModifier())
+        }
+    }
+}
+
+struct HideTabBarModifier: ViewModifier {
+    @State private var isHidden = true
+
+    func body(content: Content) -> some View {
+        content
+            .background(TabBarAccessor { tabBarController in
+                tabBarController.tabBar.isHidden = isHidden
+            })
+            .onAppear { isHidden = true }
+            .onDisappear { isHidden = false }
+    }
+}
+
+struct TabBarAccessor: UIViewControllerRepresentable {
+    let callback: (UITabBarController) -> Void
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        UIViewController()
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            if let tabBarController = uiViewController.tabBarController {
+                callback(tabBarController)
+            }
         }
     }
 }
