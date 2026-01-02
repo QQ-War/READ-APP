@@ -12,6 +12,8 @@ struct BookDetailView: View {
     @State private var startChapter: String = "1"
     @State private var endChapter: String = ""
     @State private var isDownloading = false
+    @State private var showCustomRange = false
+    @State private var showingDownloadOptions = false
     @State private var downloadProgress: Double = 0
     @State private var downloadMessage: String = ""
     @State private var cachedChapters: Set<Int> = []
@@ -23,7 +25,61 @@ struct BookDetailView: View {
                 headerSection
                 
                 // 下载控制区
-                downloadSection
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("离线缓存").font(.headline)
+                        Spacer()
+                        if !isDownloading {
+                            Button(action: { showingDownloadOptions = true }) {
+                                HStack {
+                                    Image(systemName: "arrow.down.circle")
+                                    Text("选择范围")
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(16)
+                            }
+                        }
+                    }
+                    
+                    if showCustomRange && !isDownloading {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("从第几章").font(.caption).foregroundColor(.secondary)
+                                TextField("1", text: $startChapter)
+                                    .keyboardType(.numberPad)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("到第几章").font(.caption).foregroundColor(.secondary)
+                                TextField("\(chapters.count)", text: $endChapter)
+                                    .keyboardType(.numberPad)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                            }
+                            Button("开始") {
+                                startDownload(start: Int(startChapter), end: Int(endChapter))
+                            }
+                            .padding(.top, 18)
+                        }
+                        .padding(.bottom, 8)
+                    }
+                    
+                    if isDownloading || !downloadMessage.isEmpty {
+                        VStack(spacing: 8) {
+                            ProgressView(value: downloadProgress, total: 1.0)
+                                .tint(.blue)
+                            Text(downloadMessage)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                .padding()
+                .background(Color.gray.opacity(0.05))
+                .cornerRadius(12)
+                .padding(.horizontal)
                 
                 // 简介区
                 if let intro = book.intro, !intro.isEmpty {
@@ -54,7 +110,7 @@ struct BookDetailView: View {
                         }.padding()
                     } else {
                         LazyVStack(spacing: 0) {
-                            ForEach(chapters.prefix(10000)) { chapter in // 限制预览数量防止卡顿
+                            ForEach(chapters) { chapter in
                                 chapterRow(chapter)
                             }
                         }
@@ -64,21 +120,71 @@ struct BookDetailView: View {
         }
         .navigationTitle(book.name ?? "书籍详情")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .confirmationDialog("选择缓存范围", isPresented: $showingDownloadOptions, titleVisibility: .visible) {
+            Button("缓存全文") { startDownload(start: 1, end: chapters.count) }
+            Button("缓存后续 50 章") { 
+                let current = (book.durChapterIndex ?? 0) + 1
+                startDownload(start: current, end: min(current + 50, chapters.count)) 
+            }
+            Button("自定义范围") { withAnimation { showCustomRange = true } }
+            Button("取消", role: .cancel) { }
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(isDownloading ? "停止下载" : "") {
-                    isDownloading = false
+                if isDownloading {
+                    Button("停止", role: .destructive) { isDownloading = false }
                 }
-                .foregroundColor(.red)
             }
         }
-        .task {
-            await loadData()
-        }
+        .task { await loadData() }
         .alert("提示", isPresented: .constant(errorMessage != nil)) {
             Button("确定") { errorMessage = nil }
         } message: {
             if let error = errorMessage { Text(error) }
+        }
+    }
+    
+    // ... (其他方法)
+    
+    private func startDownload(start: Int?, end: Int?) {
+        guard let start = start, let end = end, start > 0, end >= start, end <= chapters.count else {
+            errorMessage = "请输入有效的章节范围 (1-\(chapters.count))"
+            return
+        }
+        
+        let targetRange = chapters.filter { $0.index >= (start - 1) && $0.index <= (end - 1) }
+        guard !targetRange.isEmpty else { return }
+        
+        showCustomRange = false
+        isDownloading = true
+        downloadProgress = 0
+        downloadMessage = "准备下载..."
+        
+        Task {
+            var successCount = 0
+            for (i, chapter) in targetRange.enumerated() {
+                guard isDownloading else { break }
+                
+                await MainActor.run {
+                    downloadMessage = "正在下载: \(chapter.title) (\(i+1)/\(targetRange.count))"
+                    downloadProgress = Double(i + 1) / Double(targetRange.count)
+                }
+                
+                do {
+                    _ = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapter.index)
+                    successCount += 1
+                    await MainActor.run { cachedChapters.insert(chapter.index) }
+                } catch {
+                    print("下载失败: \(chapter.title) - \(error.localizedDescription)")
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms 间隔
+            }
+            
+            await MainActor.run {
+                isDownloading = false
+                downloadMessage = successCount == targetRange.count ? "下载完成！" : "下载结束，成功 \(successCount)/\(targetRange.count) 章"
+            }
         }
     }
     

@@ -8,11 +8,13 @@ struct BookListView: View {
     @State private var isReversed = false
     @State private var showingActionSheet = false  // 显示操作菜单
     @State private var showingDocumentPicker = false
+    @State private var selectedBook: Book?
     @State private var showingDeleteBookAlert = false
     @State private var bookToDelete: Book?
     
     // 过滤和排序后的书籍列表
     var filteredAndSortedBooks: [Book] {
+        // ... (保持原有排序逻辑不变)
         let filtered: [Book]
         if searchText.isEmpty {
             filtered = apiService.books
@@ -23,44 +25,41 @@ struct BookListView: View {
             }
         }
         
-        // 根据设置决定排序方式
         let sorted: [Book]
         if preferences.bookshelfSortByRecent {
-            // 按最后阅读时间排序（使用后端提供的durChapterTime）
             sorted = filtered.sorted { book1, book2 in
                 let time1 = book1.durChapterTime ?? 0
                 let time2 = book2.durChapterTime ?? 0
-                
-                // 如果都没有阅读记录，保持原顺序
-                if time1 == 0 && time2 == 0 {
-                    return false
-                }
-                // 如果只有一个有阅读记录，有记录的排前面
-                if time1 == 0 {
-                    return false
-                }
-                if time2 == 0 {
-                    return true
-                }
-                // 都有阅读记录时，按时间降序（最近阅读的在前）
+                if time1 == 0 && time2 == 0 { return false }
+                if time1 == 0 { return false }
+                if time2 == 0 { return true }
                 return time1 > time2
             }
         } else {
-            // 按后端顺序（加入书架时间）
             sorted = filtered
         }
-        
-        // 支持倒序
         return isReversed ? sorted.reversed() : sorted
     }
     
     var body: some View {
         List {
             ForEach(filteredAndSortedBooks) { book in
-                NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
-                    BookRow(book: book)
+                HStack(spacing: 0) {
+                    // 左侧封面：点击进入详情页
+                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                        BookCoverImage(url: book.displayCoverUrl)
+                    }
+                    .frame(width: 60, height: 80)
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // 右侧信息：点击直接进入阅读器
+                    Button(action: { selectedBook = book }) {
+                        BookInfoArea(book: book)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
+                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
                         bookToDelete = book
@@ -70,16 +69,18 @@ struct BookListView: View {
                     }
                 }
                 .contextMenu {
+                    Button { selectedBook = book } label: {
+                        Label("开始阅读", systemImage: "book")
+                    }
+                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                        Label("书籍详情", systemImage: "info.circle")
+                    }
+                    Divider()
                     Button(role: .destructive) {
                         bookToDelete = book
                         showingDeleteBookAlert = true
                     } label: {
                         Label("移出书架", systemImage: "trash")
-                    }
-                    Button(role: .destructive) {
-                        showingActionSheet = true
-                    } label: {
-                        Label("清除所有远程缓存", systemImage: "trash")
                     }
                 }
             }
@@ -88,91 +89,44 @@ struct BookListView: View {
         .navigationTitle("书架")
         .navigationBarTitleDisplayMode(.large)
         .searchable(text: $searchText, prompt: "搜索书名或作者")
-        .refreshable {
-            await loadBooks()
-        }
+        .refreshable { await loadBooks() }
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
-                Button(action: {
-                    withAnimation {
-                        isReversed.toggle()
-                    }
-                }) {
+                Button(action: { withAnimation { isReversed.toggle() } }) {
                     HStack(spacing: 4) {
                         Image(systemName: isReversed ? "arrow.up" : "arrow.down")
                         Text(isReversed ? "倒序" : "正序")
-                    }
-                    .font(.caption)
+                    }.font(.caption)
                 }
             }
-            
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Button(action: {
-                    showingDocumentPicker = true
-                }) {
-                    Image(systemName: "plus")
-                }
-                
-                NavigationLink(destination: SettingsView()) {
-                    Image(systemName: "gearshape")
-                }
+                Button(action: { showingDocumentPicker = true }) { Image(systemName: "plus") }
+                NavigationLink(destination: SettingsView()) { Image(systemName: "gearshape") }
             }
         }
         .sheet(isPresented: $showingDocumentPicker) {
-            DocumentPicker { url in
-                Task {
-                    await importBook(from: url)
-                }
-            }
+            DocumentPicker { url in Task { await importBook(from: url) } }
         }
-        .task {
-            if apiService.books.isEmpty {
-                await loadBooks()
-            }
+        .fullScreenCover(item: $selectedBook) { book in
+            ReadingView(book: book).environmentObject(apiService)
         }
+        .task { if apiService.books.isEmpty { await loadBooks() } }
         .overlay {
             if isRefreshing {
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                    Text("加载中...")
-                        .foregroundColor(.secondary)
-                }
+                ProgressView("加载中...")
             } else if filteredAndSortedBooks.isEmpty && !apiService.books.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 48))
-                        .foregroundColor(.gray)
-                    Text("未找到匹配的书籍")
-                        .foregroundColor(.secondary)
-                }
+                ContentUnavailableView("未找到匹配的书籍", systemImage: "magnifyingglass")
             }
         }
         .alert("错误", isPresented: .constant(apiService.errorMessage != nil)) {
-            Button("确定") {
-                apiService.errorMessage = nil
-            }
+            Button("确定") { apiService.errorMessage = nil }
         } message: {
-            if let error = apiService.errorMessage {
-                Text(error)
-            }
-        }
-        .alert("清除所有远程缓存", isPresented: $showingActionSheet) {
-            Button("取消", role: .cancel) {}
-            Button("清除", role: .destructive) {
-                clearAllRemoteCache()
-            }
-        } message: {
-            Text("确定要清除所有书籍的远程缓存吗？\n\n这将清除服务器上缓存的所有章节内容。")
+            if let error = apiService.errorMessage { Text(error) }
         }
         .alert("移出书架", isPresented: $showingDeleteBookAlert) {
-            Button("取消", role: .cancel) {
-                bookToDelete = nil
-            }
+            Button("取消", role: .cancel) { bookToDelete = nil }
             Button("移出", role: .destructive) {
-                if let book = bookToDelete {
-                    deleteBookFromShelf(book)
-                }
+                if let book = bookToDelete { deleteBookFromShelf(book) }
                 bookToDelete = nil
             }
         } message: {
@@ -231,62 +185,42 @@ struct BookListView: View {
     }
 }
 
-struct BookRow: View {
-    let book: Book
-    
+// 辅助子视图：封面
+struct BookCoverImage: View {
+    let url: String?
     var body: some View {
-        HStack(spacing: 12) {
-            // 封面图
-            AsyncImage(url: URL(string: book.displayCoverUrl ?? "")) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .overlay(
-                        Image(systemName: "book.fill")
-                            .foregroundColor(.gray)
-                    )
+        AsyncImage(url: URL(string: url ?? "")) { image in
+            image.resizable().aspectRatio(contentMode: .fill)
+        } placeholder: {
+            Rectangle().fill(Color.gray.opacity(0.3))
+                .overlay(Image(systemName: "book.fill").foregroundColor(.gray))
+        }
+        .frame(width: 60, height: 80)
+        .cornerRadius(4)
+        .clipped()
+    }
+}
+
+// 辅助子视图：信息区域
+struct BookInfoArea: View {
+    let book: Book
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(book.name ?? "未知书名").font(.headline).lineLimit(1)
+            Text(book.author ?? "未知作者").font(.subheadline).foregroundColor(.secondary).lineLimit(1)
+            if let latest = book.latestChapterTitle {
+                Text("最新: \(latest)").font(.caption).foregroundColor(.secondary).lineLimit(1)
             }
-            .frame(width: 60, height: 80)
-            .cornerRadius(4)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(book.name ?? "未知书名")
-                    .font(.headline)
-                    .lineLimit(1)
-                
-                Text(book.author ?? "未知作者")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                
-                if let latestChapter = book.latestChapterTitle {
-                    Text("最新: \(latestChapter)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+            HStack {
+                if let dur = book.durChapterTitle {
+                    Text("读至: \(dur)").font(.caption2).foregroundColor(.blue).lineLimit(1)
                 }
-                
-                HStack {
-                    if let durChapter = book.durChapterTitle {
-                        Text("读至: \(durChapter)")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                            .lineLimit(1)
-                    }
-                    
-                    Spacer()
-                    
-                    if let total = book.totalChapterNum {
-                        Text("\(total)章")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
+                Spacer()
+                if let total = book.totalChapterNum {
+                    Text("\(total)章").font(.caption2).foregroundColor(.secondary)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.leading, 8)
     }
 }

@@ -243,6 +243,7 @@ struct ReadingView: View {
             if let error = errorMessage { Text(error) }
         }
         .onDisappear { saveProgress() }
+        .toolbar(.hidden, for: .tabBar)
         .onChange(of: ttsManager.isPlaying) { handleTTSPlayStateChange($0) }
         .onChange(of: ttsManager.isPaused) { handleTTSPauseStateChange($0) }
         .onChange(of: ttsManager.currentSentenceIndex) { _ in handleTTSSentenceChange() }
