@@ -91,22 +91,7 @@ struct BookListView: View {
         .searchable(text: $searchText, prompt: "搜索书名或作者")
         .refreshable { await loadBooks() }
         .toolbar {
-            ToolbarItemGroup(placement: .navigationBarLeading) {
-                Button(action: { withAnimation { isReversed.toggle() } }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: isReversed ? "arrow.up" : "arrow.down")
-                        Text(isReversed ? "倒序" : "正序")
-                    }.font(.caption)
-                }
-            }
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Button(action: { showingDocumentPicker = true }) { 
-                    Image(systemName: "plus") 
-                }
-                NavigationLink(destination: SettingsView()) { 
-                    Image(systemName: "gearshape") 
-                }
-            }
+            listToolbarContent
         }
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker { url in Task { await importBook(from: url) } }
@@ -135,6 +120,28 @@ struct BookListView: View {
             }
         } message: {
             Text("确定要将《\(bookToDelete?.name ?? "未知书名")》从书架移除吗？")
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var listToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button(action: { withAnimation { isReversed.toggle() } }) {
+                HStack(spacing: 4) {
+                    Image(systemName: isReversed ? "arrow.up" : "arrow.down")
+                    Text(isReversed ? "倒序" : "正序")
+                }.font(.caption)
+            }
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button(action: { showingDocumentPicker = true }) { 
+                Image(systemName: "plus") 
+            }
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            NavigationLink(destination: SettingsView()) { 
+                Image(systemName: "gearshape") 
+            }
         }
     }
     
