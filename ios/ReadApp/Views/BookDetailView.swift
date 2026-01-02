@@ -181,7 +181,9 @@ struct BookDetailView: View {
                 do {
                     _ = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapter.index)
                     successCount += 1
-                    await MainActor.run { cachedChapters.insert(chapter.index) }
+                    await MainActor.run { 
+                        _ = cachedChapters.insert(chapter.index) 
+                    }
                 } catch {
                     print("下载失败: \(chapter.title) - \(error.localizedDescription)")
                 }
@@ -363,11 +365,10 @@ struct BookDetailView: View {
                 downloadProgress = Double(i + 1) / Double(targetRange.count)
                 
                 do {
-                    // APIService 内部会自动处理缓存存储
                     _ = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapter.index)
                     successCount += 1
-                    await MainActor.run {
-                        cachedChapters.insert(chapter.index)
+                    await MainActor.run { 
+                        _ = cachedChapters.insert(chapter.index) 
                     }
                 } catch {
                     print("下载失败: \(chapter.title) - \(error.localizedDescription)")

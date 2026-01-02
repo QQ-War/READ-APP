@@ -100,9 +100,13 @@ struct BookListView: View {
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                HStack {
-                    Button(action: { showingDocumentPicker = true }) { Image(systemName: "plus") }
-                    NavigationLink(destination: SettingsView()) { Image(systemName: "gearshape") }
+                Button(action: { showingDocumentPicker = true }) { 
+                    Image(systemName: "plus") 
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: SettingsView()) { 
+                    Image(systemName: "gearshape") 
                 }
             }
         }
