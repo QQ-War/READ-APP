@@ -30,6 +30,8 @@
 		1A00003C000000000000003 /* SourceListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00003B000000000000003 /* SourceListViewModel.swift */; };
 		1A00003E000000000000003 /* SourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00003D000000000000003 /* SourceListView.swift */; };
 		1A000040000000000000003 /* SourceEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00003F000000000000003 /* SourceEditView.swift */; };
+		1A000042000000000000004 /* BookDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000041000000000000004 /* BookDetailView.swift */; };
+		1A000044000000000000004 /* LocalCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000043000000000000004 /* LocalCacheManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +58,8 @@
 		1A00003B000000000000003 /* SourceListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceListViewModel.swift; sourceTree = "<group>"; };
 		1A00003D000000000000003 /* SourceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceListView.swift; sourceTree = "<group>"; };
 		1A00003F000000000000003 /* SourceEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceEditView.swift; sourceTree = "<group>"; };
+		1A000041000000000000004 /* BookDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailView.swift; sourceTree = "<group>"; };
+		1A000043000000000000004 /* LocalCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCacheManager.swift; sourceTree = "<group>"; };
 		1A000020000000000000001 /* ReadApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000021000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -105,6 +109,7 @@
 		1A000026000000000000001 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				1A000041000000000000004 /* BookDetailView.swift */,
 				1A000012000000000000001 /* BookListView.swift */,
 				1A00003D000000000000003 /* SourceListView.swift */,
 				1A00003F000000000000003 /* SourceEditView.swift */,
@@ -134,6 +139,7 @@
 		1A000027000000000000001 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				1A000043000000000000004 /* LocalCacheManager.swift */,
 				1A000008000000000000001 /* APIService.swift */,
 				1A000016000000000000001 /* TTSManager.swift */,
 				1A000024000000000000002 /* LogManager.swift */,
@@ -241,6 +247,8 @@
 				1A00003C000000000000003 /* SourceListViewModel.swift in Sources */,
 				2A83F7C979DC464A96CE4D4C /* BookSearchView.swift in Sources */,
 				72FDB17ADA4241E9BF6A5BB9 /* BookSearchViewModel.swift in Sources */,
+				1A000042000000000000004 /* BookDetailView.swift in Sources */,
+				1A000044000000000000004 /* LocalCacheManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
