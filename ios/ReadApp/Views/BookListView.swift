@@ -42,62 +42,64 @@ struct BookListView: View {
     }
     
     var body: some View {
-        List {
-            ForEach(filteredAndSortedBooks) { book in
-                HStack(spacing: 0) {
-                    // 左侧封面：点击进入详情页
-                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
-                        BookCoverImage(url: book.displayCoverUrl)
+        Group {
+            List {
+                ForEach(filteredAndSortedBooks) { book in
+                    HStack(spacing: 0) {
+                        // 左侧封面：点击进入详情页
+                        NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                            BookCoverImage(url: book.displayCoverUrl)
+                        }
+                        .frame(width: 60, height: 80)
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        // 右侧信息：点击直接进入阅读器
+                        Button(action: { selectedBook = book }) {
+                            BookInfoArea(book: book)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .frame(width: 60, height: 80)
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // 右侧信息：点击直接进入阅读器
-                    Button(action: { selectedBook = book }) {
-                        BookInfoArea(book: book)
-                            .contentShape(Rectangle())
+                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            bookToDelete = book
+                            showingDeleteBookAlert = true
+                        } label: {
+                            Label("移出书架", systemImage: "trash")
+                        }
                     }
-                    .buttonStyle(PlainButtonStyle())
-                }
-                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button(role: .destructive) {
-                        bookToDelete = book
-                        showingDeleteBookAlert = true
-                    } label: {
-                        Label("移出书架", systemImage: "trash")
-                    }
-                }
-                .contextMenu {
-                    Button { selectedBook = book } label: {
-                        Label("开始阅读", systemImage: "book")
-                    }
-                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
-                        Label("书籍详情", systemImage: "info.circle")
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        bookToDelete = book
-                        showingDeleteBookAlert = true
-                    } label: {
-                        Label("移出书架", systemImage: "trash")
+                    .contextMenu {
+                        Button { selectedBook = book } label: {
+                            Label("开始阅读", systemImage: "book")
+                        }
+                        NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                            Label("书籍详情", systemImage: "info.circle")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            bookToDelete = book
+                            showingDeleteBookAlert = true
+                        } label: {
+                            Label("移出书架", systemImage: "trash")
+                        }
                     }
                 }
             }
+            .animation(.easeInOut(duration: 0.3), value: isReversed)
+            .navigationTitle("书架")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    listToolbarLeadingItems
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    listToolbarTrailingItems
+                }
+            }
         }
-        .animation(.easeInOut(duration: 0.3), value: isReversed)
-        .navigationTitle("书架")
-        .navigationBarTitleDisplayMode(.large)
         .searchable(text: $searchText, prompt: "搜索书名或作者")
         .refreshable { await loadBooks() }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                listToolbarLeadingItems
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                listToolbarTrailingItems
-            }
-        }
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker { url in Task { await importBook(from: url) } }
         }
