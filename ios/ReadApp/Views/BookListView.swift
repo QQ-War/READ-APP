@@ -66,7 +66,17 @@ struct BookListView: View {
             if isRefreshing {
                 ProgressView("加载中...")
             } else if filteredAndSortedBooks.isEmpty && !apiService.books.isEmpty {
-                ContentUnavailableView("未找到匹配的书籍", systemImage: "magnifyingglass")
+                if #available(iOS 17.0, *) {
+                    ContentUnavailableView("未找到匹配的书籍", systemImage: "magnifyingglass")
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.title2)
+                        Text("未找到匹配的书籍")
+                            .font(.subheadline)
+                    }
+                    .foregroundColor(.secondary)
+                }
             }
         }
         .alert("错误", isPresented: .constant(apiService.errorMessage != nil)) {
