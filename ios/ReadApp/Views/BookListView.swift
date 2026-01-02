@@ -76,6 +76,7 @@ struct BookListView: View {
                             .font(.subheadline)
                     }
                     .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
