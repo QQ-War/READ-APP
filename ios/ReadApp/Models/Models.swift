@@ -348,7 +348,7 @@ class UserPreferences: ObservableObject {
         self.lockPageOnTTS = UserDefaults.standard.bool(forKey: "lockPageOnTTS")
         
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
-        self.speechRate = savedSpeechRate == 0 ? 10.0 : savedSpeechRate
+        self.speechRate = savedSpeechRate == 0 ? 100.0 : savedSpeechRate
         
         self.serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? ""
         self.publicServerURL = UserDefaults.standard.string(forKey: "publicServerURL") ?? ""
