@@ -45,25 +45,38 @@ struct BookDetailView: View {
                     }
                     
                     if showCustomRange && !isDownloading {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("从第几章").font(.caption).foregroundColor(.secondary)
-                                TextField("1", text: $startChapter)
-                                    .keyboardType(.numberPad)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                        VStack(spacing: 12) {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("从第几章").font(.caption).foregroundColor(.secondary)
+                                    TextField("1", text: $startChapter)
+                                        .keyboardType(.numberPad)
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("到第几章").font(.caption).foregroundColor(.secondary)
+                                    TextField("\(chapters.count)", text: $endChapter)
+                                        .keyboardType(.numberPad)
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                }
                             }
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("到第几章").font(.caption).foregroundColor(.secondary)
-                                TextField("\(chapters.count)", text: $endChapter)
-                                    .keyboardType(.numberPad)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                            
+                            HStack(spacing: 20) {
+                                Button(action: { withAnimation { showCustomRange = false } }) {
+                                    Text("取消").foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Button("开始缓存") {
+                                    withAnimation { showCustomRange = false }
+                                    startDownload(start: Int(startChapter), end: Int(endChapter))
+                                }
+                                .fontWeight(.bold)
                             }
-                            Button("开始") {
-                                startDownload(start: Int(startChapter), end: Int(endChapter))
-                            }
-                            .padding(.top, 18)
                         }
-                        .padding(.bottom, 8)
+                        .padding(.vertical, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     
                     if isDownloading || !downloadMessage.isEmpty {
