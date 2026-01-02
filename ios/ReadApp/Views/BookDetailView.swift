@@ -182,7 +182,7 @@ struct BookDetailView: View {
                     _ = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapter.index)
                     successCount += 1
                     await MainActor.run { 
-                        _ = cachedChapters.insert(chapter.index) 
+                        _ = self.cachedChapters.insert(chapter.index) 
                     }
                 } catch {
                     print("下载失败: \(chapter.title) - \(error.localizedDescription)")
@@ -368,7 +368,7 @@ struct BookDetailView: View {
                     _ = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapter.index)
                     successCount += 1
                     await MainActor.run { 
-                        _ = cachedChapters.insert(chapter.index) 
+                        _ = self.cachedChapters.insert(chapter.index) 
                     }
                 } catch {
                     print("下载失败: \(chapter.title) - \(error.localizedDescription)")
