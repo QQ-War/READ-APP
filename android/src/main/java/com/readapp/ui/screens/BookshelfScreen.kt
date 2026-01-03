@@ -90,13 +90,6 @@ fun BookshelfScreen(
                             contentDescription = "导入书籍"
                         )
                     }
-                    IconButton(onClick = { mainNavController.navigate(Screen.Settings.route) }) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "设置",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -161,7 +154,7 @@ fun BookshelfScreen(
                             book = book,
                             onClick = { 
                                 bookViewModel.selectBook(book)
-                                mainNavController.navigate(Screen.Reading.route)
+                                mainNavController.navigate(Screen.BookDetail.route)
                             }
                         )
                     }

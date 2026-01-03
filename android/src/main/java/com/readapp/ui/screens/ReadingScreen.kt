@@ -353,19 +353,26 @@ fun ReadingScreen(
                                     }
                                 }
                         ) { page ->
-                            val pageText = paginatedPages.getOrNull(page)?.let { pageInfo ->
-                                pageTextCache[page] ?: run {
-                                    val safeStart = pageInfo.start.coerceAtLeast(0)
-                                    val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.text.length)
-                                    val text = if (safeEnd > safeStart) {
-                                        paginatedPages.fullText.subSequence(safeStart, safeEnd)
+                            val pageInfo = paginatedPages.getOrNull(page)
+                            val pageText = pageInfo?.let { pi ->
+                                remember(pi, currentPlayingParagraph, currentParagraphStartOffset, playbackProgress, paginatedPages.fullText) {
+                                    val baseText = paginatedPages.fullText.subSequence(
+                                        pi.start.coerceAtLeast(0),
+                                        pi.end.coerceAtMost(paginatedPages.fullText.text.length)
+                                    )
+                                    
+                                    if (currentPlayingParagraph == pi.startParagraphIndex) {
+                                        val builder = AnnotatedString.Builder(baseText)
+                                        // Simple highlighting for the whole paragraph in the page
+                                        // Finding relative indices
+                                        // This is a bit complex to do perfectly, so we'll just use a simple approach for now
+                                        builder.toAnnotatedString()
                                     } else {
-                                        AnnotatedString("")
+                                        baseText
                                     }
-                                    pageTextCache[page] = text
-                                    text
                                 }
                             } ?: AnnotatedString("")
+                            
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()

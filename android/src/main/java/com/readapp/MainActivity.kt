@@ -108,6 +108,31 @@ fun ReadAppMain() {
                 )
             }
 
+            composable(Screen.BookDetail.route) {
+                val selectedBook by bookViewModel.selectedBook.collectAsState()
+                val chapters by bookViewModel.chapters.collectAsState()
+                val isChaptersLoading by bookViewModel.isChapterListLoading.collectAsState()
+                
+                selectedBook?.let { book ->
+                    BookDetailScreen(
+                        book = book,
+                        chapters = chapters,
+                        isChaptersLoading = isChaptersLoading,
+                        onNavigateBack = { navController.popBackStack() },
+                        onStartReading = {
+                            navController.navigate(Screen.Reading.route)
+                        },
+                        onChapterClick = { index ->
+                            bookViewModel.setCurrentChapter(index)
+                            navController.navigate(Screen.Reading.route)
+                        },
+                        onDownloadChapters = {
+                            bookViewModel.downloadAllChapters()
+                        }
+                    )
+                }
+            }
+
             // 阅读页面（集成听书功能）
             composable(Screen.Reading.route) {
                 val selectedBook by bookViewModel.selectedBook.collectAsState()
@@ -232,6 +257,7 @@ fun ReadAppMain() {
                     onFontSizeChange = bookViewModel::updateReadingFontSize,
                     onHorizontalPaddingChange = bookViewModel::updateReadingHorizontalPadding,
                     onClearCache = { bookViewModel.clearCache() },
+                    onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -308,6 +334,13 @@ fun ReadAppMain() {
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
+            composable(Screen.SettingsCache.route) {
+                CacheManagementScreen(
+                    bookViewModel = bookViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
             
             // 净化规则管理页面
             composable(Screen.ReplaceRules.route) {
@@ -365,6 +398,7 @@ fun ReadAppMain() {
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Bookshelf : Screen("bookshelf")
+    object BookDetail : Screen("book_detail")
     object Reading : Screen("reading")
     object Settings : Screen("settings")
     object SettingsAccount : Screen("settings_account")
@@ -372,6 +406,7 @@ sealed class Screen(val route: String) {
     object SettingsTts : Screen("settings_tts")
     object SettingsContent : Screen("settings_content")
     object SettingsDebug : Screen("settings_debug")
+    object SettingsCache : Screen("settings_cache")
     object ReplaceRules : Screen("replace_rules")
     object BookSource : Screen("book_source")
     object SourceEdit : Screen("source_edit?id={id}") {

@@ -79,6 +79,7 @@ fun ReadingSettingsScreen(
     onFontSizeChange: (Float) -> Unit,
     onHorizontalPaddingChange: (Float) -> Unit,
     onClearCache: () -> Unit,
+    onNavigateToCache: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     Scaffold(
@@ -125,8 +126,12 @@ fun ReadingSettingsScreen(
                 }
             }
 
-            Button(onClick = onClearCache, modifier = Modifier.fillMaxWidth()) {
-                Text("清除本地缓存")
+            Button(onClick = onNavigateToCache, modifier = Modifier.fillMaxWidth()) {
+                Text("离线缓存管理")
+            }
+
+            Button(onClick = onClearCache, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)) {
+                Text("强制清除所有缓存")
             }
         }
     }

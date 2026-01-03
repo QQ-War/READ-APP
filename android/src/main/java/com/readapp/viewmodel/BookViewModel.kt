@@ -41,6 +41,7 @@ import okhttp3.Request
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
+import android.widget.Toast
 
 class BookViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -61,6 +62,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appContext = getApplication<Application>()
     val preferences = UserPreferences(appContext)
+    private val localCache = LocalCacheManager(appContext)
     val repository = ReadRepository { endpoint ->
         ReadApiService.create(endpoint) { accessToken.value }
     }
@@ -371,12 +373,24 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
             ReadAudioService.startService(appContext) // Ensure service is running
             _isPaused.value = false
-            speakParagraph(_currentParagraphIndex.value)
+            
+            if (normalizedStart == 0 && normalizedOffset == 0) {
+                speakChapterTitle()
+            } else {
+                isReadingChapterTitle = false
+                speakParagraph(normalizedStart)
+            }
+            
             observeProgress()
         }
     }
 
     private fun playNextSeamlessly() {
+        if (isReadingChapterTitle) {
+            isReadingChapterTitle = false
+            speakParagraph(0)
+            return
+        }
         val nextIndex = _currentParagraphIndex.value + 1
         speakParagraph(nextIndex)
     }
@@ -483,6 +497,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun preloadNextParagraphs() {
+        if (_useSystemTts.value) return
+        
         preloadJob?.cancel()
         preloadJob = viewModelScope.launch(Dispatchers.IO) {
             val preloadCount = _preloadCount.value
@@ -709,6 +725,36 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun stopTts() { stopPlayback("user") }
     
+    private fun speakChapterTitle() {
+        viewModelScope.launch {
+            isReadingChapterTitle = true
+            _currentParagraphIndex.value = -1
+            val title = currentChapterTitle
+            if (title.isBlank()) {
+                playNextSeamlessly()
+                return@launch
+            }
+            
+            if (_useSystemTts.value) {
+                speakWithSystemTts(title)
+            } else {
+                val audioUrl = buildTtsAudioUrl(title, isChapterTitle = true)
+                if (audioUrl == null) {
+                    playNextSeamlessly()
+                    return@launch
+                }
+                val data = fetchAudioBytes(audioUrl)
+                if (data == null) {
+                    playNextSeamlessly()
+                    return@launch
+                }
+                val key = "title_${_selectedBook.value?.bookUrl}_${_currentChapterIndex.value}"
+                AudioCache.put(key, data)
+                playFromService(key)
+            }
+        }
+    }
+
     private fun observeProgress() {
         viewModelScope.launch {
             while (_keepPlaying.value) {
@@ -912,6 +958,33 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { loadChapterContent(_currentChapterIndex.value) }
     }
 
+    fun downloadAllChapters() {
+        val book = _selectedBook.value ?: return
+        val chapters = _chapters.value
+        if (chapters.isEmpty()) return
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            chapters.forEachIndexed { index, chapter ->
+                if (!localCache.isChapterCached(book.bookUrl ?: "", index)) {
+                    repository.fetchChapterContent(
+                        currentServerEndpoint(),
+                        _publicServerAddress.value.ifBlank { null },
+                        _accessToken.value,
+                        book.bookUrl ?: "",
+                        book.origin,
+                        chapter.index
+                    ).onSuccess { content ->
+                        val cleaned = cleanChapterContent(content.orEmpty())
+                        localCache.saveChapter(book.bookUrl ?: "", index, cleaned)
+                    }
+                }
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(appContext, "下载完成", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private suspend fun loadChapters(book: Book) {
         val bookUrl = book.bookUrl ?: return
         _isChapterListLoading.value = true
@@ -943,11 +1016,21 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val book = _selectedBook.value ?: return null
         val chapter = _chapters.value.getOrNull(index) ?: return null
         val bookUrl = book.bookUrl ?: return null
+        
+        // 1. Check Memory Cache
         val cachedInMemory = chapterContentCache[index]
         if (!cachedInMemory.isNullOrBlank()) {
             updateChapterContent(index, cachedInMemory)
             return cachedInMemory
         }
+
+        // 2. Check Disk Cache
+        val cachedOnDisk = localCache.loadChapter(bookUrl, index)
+        if (!cachedOnDisk.isNullOrBlank()) {
+            updateChapterContent(index, cachedOnDisk)
+            return cachedOnDisk
+        }
+
         if (_isChapterContentLoading.value) {
             return _currentChapterContent.value.ifBlank { null }
         }
@@ -959,17 +1042,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 val resolved = when {
                     cleaned.isNotBlank() -> cleaned
                     content.orEmpty().isNotBlank() -> content.orEmpty().trim()
-                    else -> "绔犺妭鍐呭涓虹┖"
+                    else -> "章节内容为空"
                 }
+                // Save to disk cache
+                localCache.saveChapter(bookUrl, index, resolved)
                 updateChapterContent(index, resolved)
             }.onFailure { error ->
                 _errorMessage.value = "加载失败: ${error.message}"
-                Log.e(TAG, "鍔犺浇绔犺妭鍐呭澶辫触", error)
+                Log.e(TAG, "加载章节内容失败", error)
             }
             _currentChapterContent.value
         } catch (e: Exception) {
             _errorMessage.value = "系统异常: ${e.localizedMessage}"
-            Log.e(TAG, "鍔犺浇绔犺妭鍐呭寮傚父", e)
+            Log.e(TAG, "加载章节内容异常", e)
             null
         } finally {
             _isChapterContentLoading.value = false
