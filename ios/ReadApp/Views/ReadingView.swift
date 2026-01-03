@@ -9,6 +9,21 @@ private struct PageTurnRequest: Equatable {
     let targetSnapshot: PageSnapshot? = nil // 跨章节时携带目标快照
     let targetChapterIndex: Int? = nil     // 目标章节索引
     let timestamp: TimeInterval = Date().timeIntervalSince1970
+
+    init(
+        direction: UIPageViewController.NavigationDirection,
+        animated: Bool,
+        targetIndex: Int,
+        targetSnapshot: PageSnapshot? = nil,
+        targetChapterIndex: Int? = nil
+    ) {
+        self.direction = direction
+        self.animated = animated
+        self.targetIndex = targetIndex
+        self.targetSnapshot = targetSnapshot
+        self.targetChapterIndex = targetChapterIndex
+        self.timestamp = Date().timeIntervalSince1970
+    }
     
     static func == (lhs: PageTurnRequest, rhs: PageTurnRequest) -> Bool {
         lhs.timestamp == rhs.timestamp
