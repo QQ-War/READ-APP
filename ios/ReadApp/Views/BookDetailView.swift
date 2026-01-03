@@ -437,20 +437,44 @@ struct SourceSwitchView: View {
                 if isSearching {
                     HStack { Spacer(); ProgressView("正在全网匹配来源..."); Spacer() }
                 } else if searchResults.isEmpty {
-                    Text("未找到匹配的书籍，请尝试检查书名或作者").foregroundColor(.secondary).padding()
+                    VStack(spacing: 12) {
+                        Text("未找到书名完全一致的备选源").foregroundColor(.secondary)
+                        Text("建议：检查书源是否启用或书籍是否更名").font(.caption2).foregroundColor(.gray)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
                 } else {
-                    Section(header: Text("匹配结果（优先匹配书名+作者）")) {
+                    Section(header: Text("完全匹配的结果 (\(searchResults.count))")) {
                         ForEach(searchResults) { book in
+                            let isAuthorMatch = book.author == author
                             Button(action: { onSelect(book); dismiss() }) {
                                 VStack(alignment: .leading, spacing: 6) {
                                     HStack {
                                         Text(book.originName ?? "未知源").font(.headline)
                                         Spacer()
+                                        if isAuthorMatch {
+                                            Text("推荐")
+                                                .font(.caption2).bold()
+                                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                                .background(Color.green.opacity(0.1))
+                                                .foregroundColor(.green).cornerRadius(4)
+                                        }
                                         if book.origin == currentSource { 
-                                            Text("当前源").font(.caption).padding(.horizontal, 6).padding(.vertical, 2).background(Color.blue.opacity(0.1)).foregroundColor(.blue).cornerRadius(4)
+                                            Text("当前").font(.caption2)
+                                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                                .background(Color.blue.opacity(0.1))
+                                                .foregroundColor(.blue).cornerRadius(4)
                                         }
                                     }
-                                    Text("\(book.name ?? "") • \(book.author ?? "未知作者")").font(.subheadline)
+                                    
+                                    HStack {
+                                        Text(book.name ?? "").font(.subheadline)
+                                        Text("•")
+                                        Text(book.author ?? "未知作者")
+                                            .foregroundColor(isAuthorMatch ? .primary : .secondary)
+                                    }
+                                    .font(.subheadline)
+                                    
                                     if let latest = book.latestChapterTitle { 
                                         Text("最新: \(latest)").font(.caption2).foregroundColor(.secondary).lineLimit(1) 
                                     }
@@ -472,31 +496,33 @@ struct SourceSwitchView: View {
         let sources = (try? await apiService.fetchBookSources()) ?? []
         let enabledSources = sources.filter { $0.enabled }
         
+        var allMatches: [Book] = []
+        
         await withTaskGroup(of: [Book]?.self) { group in
             for source in enabledSources { 
                 group.addTask { 
-                    // 先尝试带作者搜索
-                    let query = author.isEmpty ? bookName : "\(bookName) \(author)"
-                    return try? await apiService.searchBook(keyword: query, bookSourceUrl: source.bookSourceUrl) 
+                    // 仅使用书名搜索，确保搜得到
+                    return try? await apiService.searchBook(keyword: bookName, bookSourceUrl: source.bookSourceUrl) 
                 } 
             }
             for await result in group {
                 if let books = result {
-                    await MainActor.run { 
-                        // 将结果加入列表，并按照书名和作者匹配度排序
-                        self.searchResults.append(contentsOf: books) 
-                    }
+                    // 本地进行严格书名过滤
+                    let exactMatches = books.filter { $0.name == bookName }
+                    allMatches.append(contentsOf: exactMatches)
                 }
             }
         }
         
-        // 简单排序：完全匹配作者的排在前面
+        // 排序逻辑：作者一致的排最前面
+        allMatches.sort { b1, b2 in
+            let match1 = (b1.author == author) ? 1 : 0
+            let match2 = (b2.author == author) ? 1 : 0
+            return match1 > match2
+        }
+        
         await MainActor.run {
-            self.searchResults.sort { b1, b2 in
-                let match1 = (b1.author == author) ? 1 : 0
-                let match2 = (b2.author == author) ? 1 : 0
-                return match1 > match2
-            }
+            self.searchResults = allMatches
             isSearching = false
         }
     }

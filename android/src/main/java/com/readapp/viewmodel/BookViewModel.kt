@@ -1076,11 +1076,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val allResults = mutableListOf<Book>()
         
         sources.forEach { source ->
-            val query = if (author.isBlank()) bookName else "$bookName $author"
-            repository.searchBook(baseUrl, publicUrl, token, query, source.bookSourceUrl, 1)
+            // 仅使用书名搜索
+            repository.searchBook(baseUrl, publicUrl, token, bookName, source.bookSourceUrl, 1)
                 .onSuccess { books ->
-                    allResults.addAll(books.map { it.copy(sourceDisplayName = source.bookSourceName) })
-                    // Sort by author match
+                    // 本地精滤：书名必须完全一致
+                    val exactMatches = books.filter { it.name == bookName }
+                    allResults.addAll(exactMatches.map { it.copy(sourceDisplayName = source.bookSourceName) })
+                    
+                    // 排序逻辑：作者一致的排最前面
                     allResults.sortByDescending { it.author == author }
                     emit(allResults.toList())
                 }

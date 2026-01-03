@@ -289,21 +289,38 @@ fun SourceSwitchDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("换源阅读") },
+        title = { Text("更换来源 (书名完全一致)") },
         text = {
             if (results.isEmpty()) {
                 Box(Modifier.fillMaxWidth().height(100.dp), Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(24.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(Modifier.size(24.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Text("正在搜索书名一致的源...", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             } else {
                 LazyColumn(Modifier.heightIn(max = 400.dp)) {
                     items(results) { resBook ->
+                        val isAuthorMatch = resBook.author == author
                         ListItem(
-                            headlineContent = { Text(resBook.sourceDisplayName ?: "未知源") },
+                            headlineContent = { 
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(resBook.sourceDisplayName ?: "未知源")
+                                    if (isAuthorMatch) {
+                                        Spacer(Modifier.width(8.dp))
+                                        Surface(color = Color(0xFFE8F5E9), shape = RoundedCornerShape(4.dp)) {
+                                            Text("推荐", color = Color(0xFF2E7D32), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 4.dp))
+                                        }
+                                    }
+                                }
+                            },
                             supportingContent = { Text("${resBook.name} • ${resBook.author}") },
                             trailingContent = {
                                 if (resBook.origin == currentSource) {
-                                    Text("当前", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                                    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(4.dp)) {
+                                        Text("当前", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 4.dp))
+                                    }
                                 }
                             },
                             modifier = Modifier.clickable { onSelect(resBook) }
