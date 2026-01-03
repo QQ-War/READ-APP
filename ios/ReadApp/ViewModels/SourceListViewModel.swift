@@ -8,10 +8,19 @@ class SourceListViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var failedSources: [String] = []
 
-    // Global Search State
     @Published var searchText: String = ""
-    @Published var searchResults: [Book] = []
-    @Published var isSearching: Bool = false
+    
+    var filteredSources: [BookSource] {
+        if searchText.isEmpty {
+            return sources
+        } else {
+            return sources.filter {
+                $0.bookSourceName.localizedCaseInsensitiveContains(searchText) ||
+                $0.bookSourceUrl.localizedCaseInsensitiveContains(searchText) ||
+                ($0.bookSourceGroup?.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
+        }
+    }
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -26,22 +35,6 @@ class SourceListViewModel: ObservableObject {
         Task { @MainActor in
             self.fetchSources()
         }
-
-        $searchText
-            .debounce(for: .milliseconds(800), scheduler: RunLoop.main)
-            .removeDuplicates()
-            .sink { [weak self] searchText in
-                guard let self else { return }
-                if searchText.isEmpty {
-                    self.searchResults = []
-                    self.isSearching = false
-                } else {
-                    Task { @MainActor in
-                        self.performGlobalSearch()
-                    }
-                }
-            }
-            .store(in: &cancellables)
     }
 
     @MainActor

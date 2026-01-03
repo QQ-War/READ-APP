@@ -292,18 +292,21 @@ fun TtsSettingsScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContentSettingsScreen(
     bookshelfSortByRecent: Boolean,
+    searchOnlineEnabled: Boolean,
+    preferredSourcesCount: Int,
     onBookshelfSortByRecentChange: (Boolean) -> Unit,
+    onSearchOnlineEnabledChange: (Boolean) -> Unit,
+    onNavigateToPreferredSources: () -> Unit,
     onNavigateToReplaceRules: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("内容设置") },
+                title = { Text("内容与搜索设置") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "返回")
@@ -313,6 +316,25 @@ fun ContentSettingsScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            SectionHeader("搜索设置")
+            SettingsToggleItem(
+                title = "书架搜索包含书源",
+                subtitle = "在搜索书架书籍时同步搜索全网",
+                icon = Icons.Default.Search,
+                checked = searchOnlineEnabled,
+                onCheckedChange = onSearchOnlineEnabledChange
+            )
+            
+            if (searchOnlineEnabled) {
+                SettingsItem(
+                    title = "指定搜索源",
+                    subtitle = if (preferredSourcesCount == 0) "全部启用源" else "已选 $preferredSourcesCount 个",
+                    icon = Icons.Default.Tune,
+                    onClick = onNavigateToPreferredSources
+                )
+            }
+
+            SectionHeader("内容设置")
             SettingsItem(title = "净化规则管理", subtitle = "自定义规则清理书籍内容", icon = Icons.Default.CleaningServices, onClick = onNavigateToReplaceRules)
             SettingsToggleItem(title = "最近阅读排序", subtitle = "按最后阅读时间排序", icon = Icons.Default.Sort, checked = bookshelfSortByRecent, onCheckedChange = onBookshelfSortByRecentChange)
         }
@@ -466,6 +488,61 @@ private fun TtsEngineEditDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PreferredSourcesScreen(
+    availableSources: List<com.readapp.data.model.BookSource>,
+    preferredUrls: Set<String>,
+    onToggleSource: (String) -> Unit,
+    onClearAll: () -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("指定搜索源") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, "返回")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
+            item {
+                Text(
+                    "未选择任何书源时，将默认搜索所有已启用的书源。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            
+            item {
+                ListItem(
+                    headlineContent = { Text(if (preferredUrls.isEmpty()) "✓ 全部启用源" else "使用全部启用源") },
+                    modifier = Modifier.clickable { onClearAll() }
+                )
+                Divider()
+            }
+            
+            items(availableSources.filter { it.enabled }) { source ->
+                ListItem(
+                    headlineContent = { Text(source.bookSourceName) },
+                    trailingContent = {
+                        if (preferredUrls.contains(source.bookSourceUrl)) {
+                            Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    },
+                    modifier = Modifier.clickable { onToggleSource(source.bookSourceUrl) }
+                )
+                Divider()
+            }
+        }
+    }
 }
 
 @Composable

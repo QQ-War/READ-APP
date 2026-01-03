@@ -222,10 +222,27 @@ struct TTSSettingsView: View {
 }
 
 struct ContentSettingsView: View {
+    @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
 
     var body: some View {
         Form {
+            Section(header: Text("搜索设置")) {
+                Toggle("书架搜索包含书源", isOn: $preferences.searchSourcesFromBookshelf)
+                
+                if preferences.searchSourcesFromBookshelf {
+                    NavigationLink(destination: PreferredSourcesView().environmentObject(apiService)) {
+                        HStack {
+                            Text("指定搜索源")
+                            Spacer()
+                            Text(preferences.preferredSearchSourceUrls.isEmpty ? "全部启用源" : "已选 \(preferences.preferredSearchSourceUrls.count) 个")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                    }
+                }
+            }
+
             Section(header: Text("内容净化")) {
                 NavigationLink(destination: ReplaceRuleListView()) {
                     Text("净化规则管理")
@@ -324,3 +341,48 @@ struct DebugSettingsView: View {
         }
     }
 }
+
+struct PreferredSourcesView: View {
+    @EnvironmentObject var apiService: APIService
+    @StateObject private var preferences = UserPreferences.shared
+    
+    var body: some View {
+        List {
+            Section(footer: Text("未选择任何书源时，将默认搜索所有已启用的书源。")) {
+                Button(preferences.preferredSearchSourceUrls.isEmpty ? "✓ 全部启用源" : "全部启用源") {
+                    preferences.preferredSearchSourceUrls = []
+                }
+                
+                ForEach(apiService.availableSources.filter { $0.enabled }) { source in
+                    Button(action: { togglePreferredSource(source.bookSourceUrl) }) {
+                        HStack {
+                            Text(source.bookSourceName)
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if preferences.preferredSearchSourceUrls.contains(source.bookSourceUrl) {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("指定搜索源")
+        .ifAvailableHideTabBar()
+        .task {
+            if apiService.availableSources.isEmpty {
+                _ = try? await apiService.fetchBookSources()
+            }
+        }
+    }
+    
+    private func togglePreferredSource(_ url: String) {
+        if preferences.preferredSearchSourceUrls.contains(url) {
+            preferences.preferredSearchSourceUrls.removeAll { $0 == url }
+        } else {
+            preferences.preferredSearchSourceUrls.append(url)
+        }
+    }
+}
+

@@ -167,6 +167,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val _availableTtsEngines = MutableStateFlow<List<HttpTTS>>(emptyList())
     val availableTtsEngines: StateFlow<List<HttpTTS>> = _availableTtsEngines.asStateFlow()
     
+    private val _availableBookSources = MutableStateFlow<List<com.readapp.data.model.BookSource>>(emptyList())
+    val availableBookSources: StateFlow<List<com.readapp.data.model.BookSource>> = _availableBookSources.asStateFlow()
+
     private val _availableSystemVoices = MutableStateFlow<List<Voice>>(emptyList())
     val availableSystemVoices: StateFlow<List<Voice>> = _availableSystemVoices.asStateFlow()
 
@@ -182,6 +185,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val loggingEnabled: StateFlow<Boolean> = _loggingEnabled.asStateFlow()
     private val _bookshelfSortByRecent = MutableStateFlow(false)
     val bookshelfSortByRecent: StateFlow<Boolean> = _bookshelfSortByRecent.asStateFlow()
+    private val _searchSourcesFromBookshelf = MutableStateFlow(false)
+    val searchSourcesFromBookshelf: StateFlow<Boolean> = _searchSourcesFromBookshelf.asStateFlow()
+    private val _preferredSearchSourceUrls = MutableStateFlow<Set<String>>(emptySet())
+    val preferredSearchSourceUrls: StateFlow<Set<String>> = _preferredSearchSourceUrls.asStateFlow()
     private val _readingMode = MutableStateFlow(com.readapp.data.ReadingMode.Vertical)
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = _readingMode.asStateFlow()
     private val _lockPageOnTTS = MutableStateFlow(false)
@@ -198,6 +205,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _onlineSearchResults = MutableStateFlow<List<Book>>(emptyList())
+    val onlineSearchResults: StateFlow<List<Book>> = _onlineSearchResults.asStateFlow()
+    private val _isOnlineSearching = MutableStateFlow(false)
+    val isOnlineSearching: StateFlow<Boolean> = _isOnlineSearching.asStateFlow()
     private val _isChapterListLoading = MutableStateFlow(false)
     val isChapterListLoading: StateFlow<Boolean> = _isChapterListLoading.asStateFlow()
     private val _isChapterContentLoading = MutableStateFlow(false)
@@ -228,6 +239,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _readingHorizontalPadding.value = preferences.readingHorizontalPadding.first()
             _loggingEnabled.value = preferences.loggingEnabled.first()
             _bookshelfSortByRecent.value = preferences.bookshelfSortByRecent.first()
+            _searchSourcesFromBookshelf.value = preferences.searchSourcesFromBookshelf.first()
+            val urls = preferences.preferredSearchSourceUrls.first()
+            _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
             _readingMode.value = preferences.readingMode.first()
             _lockPageOnTTS.value = preferences.lockPageOnTTS.first()
 
@@ -235,6 +249,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _isLoading.value = true
                 try {
                     loadTtsEnginesInternal()
+                    loadBookSources()
                     refreshBooksInternal(showLoading = true)
                     loadReplaceRules()
                 } finally {
@@ -912,6 +927,61 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun searchBooks(query: String) {
         currentSearchQuery = query
         applyBooksFilterAndSort()
+        
+        if (query.isNotBlank() && _searchSourcesFromBookshelf.value) {
+            performOnlineSearch(query)
+        } else {
+            _onlineSearchResults.value = emptyList()
+            _isOnlineSearching.value = false
+        }
+    }
+
+    private suspend fun loadBookSources() {
+        val (baseUrl, publicUrl, token) = preferences.getCredentials()
+        if (token == null) return
+        repository.getBookSources(appContext, baseUrl, publicUrl, token).collect { result ->
+            result.onSuccess { _availableBookSources.value = it }
+        }
+    }
+
+    private var onlineSearchJob: Job? = null
+    private fun performOnlineSearch(query: String) {
+        onlineSearchJob?.cancel()
+        onlineSearchJob = viewModelScope.launch {
+            delay(800) // Debounce
+            _isOnlineSearching.value = true
+            _onlineSearchResults.value = emptyList()
+
+            val (baseUrl, publicUrl, token) = preferences.getCredentials()
+            if (token == null) {
+                _isOnlineSearching.value = false
+                return@launch
+            }
+
+            val enabledSources = _availableBookSources.value.filter { it.enabled }
+            val targetSources = if (_preferredSearchSourceUrls.value.isEmpty()) {
+                enabledSources
+            } else {
+                enabledSources.filter { _preferredSearchSourceUrls.value.contains(it.bookSourceUrl) }
+            }
+
+            val deferredResults = targetSources.map { source ->
+                async {
+                    repository.searchBook(
+                        baseUrl = baseUrl,
+                        publicUrl = publicUrl,
+                        accessToken = token,
+                        keyword = query,
+                        bookSourceUrl = source.bookSourceUrl,
+                        page = 1
+                    ).getOrNull()?.map { it.copy(sourceDisplayName = source.bookSourceName) } ?: emptyList()
+                }
+            }
+
+            val allResults = deferredResults.awaitAll().flatten()
+            _onlineSearchResults.value = allResults
+            _isOnlineSearching.value = false
+        }
     }
 
     fun selectBook(book: Book) {
@@ -1164,6 +1234,17 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updateBookshelfSortByRecent(enabled: Boolean) { _bookshelfSortByRecent.value = enabled; viewModelScope.launch { preferences.saveBookshelfSortByRecent(enabled); applyBooksFilterAndSort() } }
     fun updateReadingMode(mode: com.readapp.data.ReadingMode) { _readingMode.value = mode; viewModelScope.launch { preferences.saveReadingMode(mode) } }
     fun updateLockPageOnTTS(enabled: Boolean) { _lockPageOnTTS.value = enabled; viewModelScope.launch { preferences.saveLockPageOnTTS(enabled) } }
+    fun updateSearchSourcesFromBookshelf(enabled: Boolean) { _searchSourcesFromBookshelf.value = enabled; viewModelScope.launch { preferences.saveSearchSourcesFromBookshelf(enabled) } }
+    fun togglePreferredSearchSource(url: String) {
+        val current = _preferredSearchSourceUrls.value.toMutableSet()
+        if (current.contains(url)) current.remove(url) else current.add(url)
+        _preferredSearchSourceUrls.value = current
+        viewModelScope.launch { preferences.savePreferredSearchSourceUrls(current.joinToString(";")) }
+    }
+    fun clearPreferredSearchSources() {
+        _preferredSearchSourceUrls.value = emptySet()
+        viewModelScope.launch { preferences.savePreferredSearchSourceUrls("") }
+    }
     fun clearCache() {
         viewModelScope.launch {
             clearAudioCache()

@@ -35,7 +35,7 @@ struct SettingsView: View {
                     Label("听书设置", systemImage: "speaker.wave.2")
                 }
                 
-                NavigationLink(destination: ContentSettingsView()) {
+                NavigationLink(destination: ContentSettingsView().environmentObject(apiService)) {
                     Label("内容与净化", systemImage: "shield.checkered")
                 }
             }

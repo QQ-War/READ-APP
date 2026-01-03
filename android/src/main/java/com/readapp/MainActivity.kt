@@ -321,10 +321,28 @@ fun ReadAppMain() {
 
             composable(Screen.SettingsContent.route) {
                 val bookshelfSortByRecent by bookViewModel.bookshelfSortByRecent.collectAsState()
+                val searchOnlineEnabled by bookViewModel.searchSourcesFromBookshelf.collectAsState()
+                val preferredSources by bookViewModel.preferredSearchSourceUrls.collectAsState()
                 ContentSettingsScreen(
                     bookshelfSortByRecent = bookshelfSortByRecent,
+                    searchOnlineEnabled = searchOnlineEnabled,
+                    preferredSourcesCount = preferredSources.size,
                     onBookshelfSortByRecentChange = bookViewModel::updateBookshelfSortByRecent,
+                    onSearchOnlineEnabledChange = bookViewModel::updateSearchSourcesFromBookshelf,
+                    onNavigateToPreferredSources = { navController.navigate(Screen.SettingsPreferredSources.route) },
                     onNavigateToReplaceRules = { navController.navigate(Screen.ReplaceRules.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.SettingsPreferredSources.route) {
+                val availableSources by bookViewModel.availableBookSources.collectAsState()
+                val preferredSources by bookViewModel.preferredSearchSourceUrls.collectAsState()
+                PreferredSourcesScreen(
+                    availableSources = availableSources,
+                    preferredUrls = preferredSources,
+                    onToggleSource = bookViewModel::togglePreferredSearchSource,
+                    onClearAll = bookViewModel::clearPreferredSearchSources,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -449,6 +467,7 @@ sealed class Screen(val route: String) {
     object SettingsTts : Screen("settings_tts")
     object SettingsTtsManage : Screen("settings_tts_manage")
     object SettingsContent : Screen("settings_content")
+    object SettingsPreferredSources : Screen("settings_preferred_sources")
     object SettingsDebug : Screen("settings_debug")
     object SettingsCache : Screen("settings_cache")
     object ReplaceRules : Screen("replace_rules")

@@ -47,7 +47,15 @@ fun BookshelfScreen(
 ) {
     val books by bookViewModel.books.collectAsState()
     val isLoading by bookViewModel.isLoading.collectAsState()
+    val onlineResults by bookViewModel.onlineSearchResults.collectAsState()
+    val isOnlineSearching by bookViewModel.isOnlineSearching.collectAsState()
+    val searchOnlineEnabled by bookViewModel.searchSourcesFromBookshelf.collectAsState()
+    val preferredSources by bookViewModel.preferredSearchSourceUrls.collectAsState()
+    val availableSources by bookViewModel.availableBookSources.collectAsState()
+    
     var searchQuery by remember { mutableStateOf("") }
+    var showSearchConfig by remember { mutableStateOf(false) }
+    
     val refreshState = rememberPullRefreshState(
         refreshing = isLoading,
         onRefresh = { bookViewModel.refreshBooks() }
@@ -118,49 +126,68 @@ fun BookshelfScreen(
                             searchQuery = it
                             bookViewModel.searchBooks(it)
                         },
+                        onConfigClick = { showSearchConfig = true },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                if (books.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 48.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.BookIcon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.customColors.textSecondary
-                                )
-                                Text(
-                                    text = "暂无书籍",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.customColors.textSecondary
-                                )
-                            }
+                if (searchQuery.isEmpty()) {
+                    if (books.isEmpty()) {
+                        item {
+                            EmptyBookshelf()
+                        }
+                    } else {
+                        items(books) { book ->
+                            BookRow(
+                                book = book,
+                                onCoverClick = {
+                                    bookViewModel.selectBook(book)
+                                    mainNavController.navigate(Screen.BookDetail.route)
+                                },
+                                onInfoClick = { 
+                                    bookViewModel.selectBook(book)
+                                    mainNavController.navigate(Screen.Reading.route)
+                                }
+                            )
                         }
                     }
                 } else {
-                    items(books) { book ->
-                        BookRow(
-                            book = book,
-                            onCoverClick = {
-                                bookViewModel.selectBook(book)
-                                mainNavController.navigate(Screen.BookDetail.route)
-                            },
-                            onInfoClick = { 
-                                bookViewModel.selectBook(book)
-                                mainNavController.navigate(Screen.Reading.route)
+                    // Search Results
+                    if (books.isNotEmpty()) {
+                        item { SectionHeader("书架内匹配") }
+                        items(books) { book ->
+                            BookRow(
+                                book = book,
+                                onCoverClick = {
+                                    bookViewModel.selectBook(book)
+                                    mainNavController.navigate(Screen.BookDetail.route)
+                                },
+                                onInfoClick = { 
+                                    bookViewModel.selectBook(book)
+                                    mainNavController.navigate(Screen.Reading.route)
+                                }
+                            )
+                        }
+                    }
+                    
+                    if (searchOnlineEnabled) {
+                        item { SectionHeader("全网搜索结果") }
+                        if (isOnlineSearching) {
+                            item { Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
+                        } else if (onlineResults.isEmpty()) {
+                            item { Text("未找到相关书籍", style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(16.dp)) }
+                        } else {
+                            items(onlineResults) { book ->
+                                BookSearchResultRow(
+                                    book = book,
+                                    onAdd = { bookViewModel.saveBookToBookshelf(book) },
+                                    modifier = Modifier.clickable {
+                                        bookViewModel.selectBook(book)
+                                        mainNavController.navigate(Screen.BookDetail.route)
+                                    }
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
@@ -172,12 +199,62 @@ fun BookshelfScreen(
             )
         }
     }
+
+    if (showSearchConfig) {
+        SearchConfigDialog(
+            enabled = searchOnlineEnabled,
+            onEnabledChange = { bookViewModel.updateSearchSourcesFromBookshelf(it) },
+            availableSources = availableSources.filter { it.enabled },
+            preferredUrls = preferredSources,
+            onToggleSource = { bookViewModel.togglePreferredSearchSource(it) },
+            onClearAll = { bookViewModel.clearPreferredSearchSources() },
+            onDismiss = { showSearchConfig = false }
+        )
+    }
+}
+
+@Composable
+private fun EmptyBookshelf() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 48.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.BookIcon,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.customColors.textSecondary
+            )
+            Text(
+                text = "暂无书籍",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.customColors.textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
 }
 
 @Composable
 private fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
+    onConfigClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     OutlinedTextField(
@@ -198,12 +275,67 @@ private fun SearchBar(
                 tint = MaterialTheme.customColors.textSecondary
             )
         },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = onConfigClick) {
+                    Icon(Icons.Default.Tune, "设置")
+                }
+            }
+        },
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedBorderColor = MaterialTheme.customColors.border,
             focusedBorderColor = MaterialTheme.colorScheme.primary
         ),
         shape = RoundedCornerShape(AppDimens.CornerRadiusLarge),
         singleLine = true
+    )
+}
+
+@Composable
+private fun SearchConfigDialog(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    availableSources: List<com.readapp.data.model.BookSource>,
+    preferredUrls: Set<String>,
+    onToggleSource: (String) -> Unit,
+    onClearAll: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("搜索设置") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = enabled, onCheckedChange = onEnabledChange)
+                    Text("搜索时包含全网书源")
+                }
+                if (enabled) {
+                    Divider()
+                    Text("选择优先搜索源", style = MaterialTheme.typography.labelMedium)
+                    LazyColumn(Modifier.heightIn(max = 300.dp)) {
+                        item {
+                            ListItem(
+                                headlineContent = { Text(if (preferredUrls.isEmpty()) "✓ 全部启用源" else "使用全部启用源") },
+                                modifier = Modifier.clickable { onClearAll() }
+                            )
+                        }
+                        items(availableSources) { source ->
+                            ListItem(
+                                headlineContent = { Text(source.bookSourceName) },
+                                trailingContent = {
+                                    if (preferredUrls.contains(source.bookSourceUrl)) {
+                                        Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                },
+                                modifier = Modifier.clickable { onToggleSource(source.bookSourceUrl) }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
     )
 }
 

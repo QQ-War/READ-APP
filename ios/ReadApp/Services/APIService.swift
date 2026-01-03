@@ -15,6 +15,7 @@ class APIService: ObservableObject {
     static let apiVersion = 5
     
     @Published var books: [Book] = []
+    @Published var availableSources: [BookSource] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -502,6 +503,9 @@ class APIService: ObservableObject {
             } else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "解析书源失败"])
             }
+        }
+        await MainActor.run {
+            self.availableSources = allSources
         }
         return allSources
     }

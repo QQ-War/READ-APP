@@ -12,9 +12,15 @@ struct BookListView: View {
     @State private var showingDeleteBookAlert = false
     @State private var bookToDelete: Book?
     
+    // Online Search State
+    @State private var onlineResults: [Book] = []
+    @State private var isSearchingOnline = false
+    @State private var searchTask: Task<Void, Never>? = nil
+    @State private var selectedOnlineBook: Book?
+    @State private var showAddSuccessAlert = false
+    
     // 过滤和排序后的书籍列表
     var filteredAndSortedBooks: [Book] {
-        // ... (保持原有排序逻辑不变)
         let filtered: [Book]
         if searchText.isEmpty {
             filtered = apiService.books
@@ -44,8 +50,44 @@ struct BookListView: View {
     var body: some View {
         Group {
             List {
-                ForEach(filteredAndSortedBooks) { book in
-                    bookRowView(for: book)
+                if !searchText.isEmpty {
+                    if !filteredAndSortedBooks.isEmpty {
+                        Section(header: Text("书架书籍")) {
+                            ForEach(filteredAndSortedBooks) { book in
+                                bookRowView(for: book)
+                            }
+                        }
+                    }
+                    
+                    if preferences.searchSourcesFromBookshelf {
+                        Section(header: Text("全网搜索")) {
+                            if isSearchingOnline {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                    Spacer()
+                                }
+                            } else if onlineResults.isEmpty {
+                                Text("未找到相关书籍").foregroundColor(.secondary).font(.caption)
+                            } else {
+                                ForEach(onlineResults) { book in
+                                    BookSearchResultRow(book: book) {
+                                        Task {
+                                            await addBookToBookshelf(book: book)
+                                        }
+                                    }
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        self.selectedOnlineBook = book
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    ForEach(filteredAndSortedBooks) { book in
+                        bookRowView(for: book)
+                    }
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: isReversed)
@@ -54,6 +96,9 @@ struct BookListView: View {
             .toolbar(content: listToolbarContent)
         }
         .searchable(text: $searchText, prompt: "搜索书名或作者")
+        .onChange(of: searchText) { newValue in
+            handleSearchChange(newValue)
+        }
         .refreshable { await loadBooks() }
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker { url in Task { await importBook(from: url) } }
@@ -61,29 +106,30 @@ struct BookListView: View {
         .fullScreenCover(item: $selectedBook) { book in
             ReadingView(book: book).environmentObject(apiService)
         }
+        .fullScreenCover(item: $selectedOnlineBook) { book in
+            BookDetailView(book: book).environmentObject(apiService)
+        }
         .task { if apiService.books.isEmpty { await loadBooks() } }
         .overlay {
             if isRefreshing {
                 ProgressView("加载中...")
-            } else if filteredAndSortedBooks.isEmpty && !apiService.books.isEmpty {
-                if #available(iOS 17.0, *) {
-                    ContentUnavailableView("未找到匹配的书籍", systemImage: "magnifyingglass")
-                } else {
-                    VStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.title2)
-                        Text("未找到匹配的书籍")
-                            .font(.subheadline)
-                    }
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if searchText.isEmpty && apiService.books.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "book.closed")
+                        .font(.largeTitle)
+                    Text("书架空空如也")
+                        .font(.headline)
                 }
+                .foregroundColor(.secondary)
             }
         }
         .alert("错误", isPresented: .constant(apiService.errorMessage != nil)) {
             Button("确定") { apiService.errorMessage = nil }
         } message: {
             if let error = apiService.errorMessage { Text(error) }
+        }
+        .alert("已加入书架", isPresented: $showAddSuccessAlert) {
+            Button("确定", role: .cancel) { }
         }
         .alert("移出书架", isPresented: $showingDeleteBookAlert) {
             Button("取消", role: .cancel) { bookToDelete = nil }
@@ -93,6 +139,68 @@ struct BookListView: View {
             }
         } message: {
             Text("确定要将《\(bookToDelete?.name ?? "未知书名")》从书架移除吗？")
+        }
+    }
+
+    private func handleSearchChange(_ query: String) {
+        searchTask?.cancel()
+        
+        guard !query.isEmpty && preferences.searchSourcesFromBookshelf else {
+            onlineResults = []
+            return
+        }
+        
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 800_000_000) // 800ms debounce
+            if Task.isCancelled { return }
+            
+            await performOnlineSearch(query: query)
+        }
+    }
+    
+    private func performOnlineSearch(query: String) async {
+        await MainActor.run { isSearchingOnline = true }
+        
+        do {
+            let sources = try await apiService.fetchBookSources()
+            let enabledSources = sources.filter { $0.enabled }
+            
+            // Filter by preferred sources if any are selected
+            let targetSources = preferences.preferredSearchSourceUrls.isEmpty ? 
+                enabledSources : 
+                enabledSources.filter { preferences.preferredSearchSourceUrls.contains($0.bookSourceUrl) }
+            
+            var allResults: [Book] = []
+            await withTaskGroup(of: [Book]?.self) { group in
+                for source in targetSources {
+                    group.addTask {
+                        try? await apiService.searchBook(keyword: query, bookSourceUrl: source.bookSourceUrl)
+                    }
+                }
+                
+                for await result in group {
+                    if let books = result {
+                        allResults.append(contentsOf: books)
+                    }
+                }
+            }
+            
+            await MainActor.run {
+                self.onlineResults = allResults
+                self.isSearchingOnline = false
+            }
+        } catch {
+            await MainActor.run { self.isSearchingOnline = false }
+        }
+    }
+    
+    private func addBookToBookshelf(book: Book) async {
+        do {
+            try await apiService.saveBook(book: book)
+            await MainActor.run { showAddSuccessAlert = true }
+            await loadBooks()
+        } catch {
+            await MainActor.run { apiService.errorMessage = error.localizedDescription }
         }
     }
 
@@ -152,35 +260,73 @@ struct BookListView: View {
     @ViewBuilder
     private var listToolbarTrailingItems: some View {
         HStack(spacing: 16) {
-            Button(action: { showingDocumentPicker = true }) { 
-                Image(systemName: "plus") 
-            }
-            NavigationLink(destination: SettingsView()) { 
-                Image(systemName: "gearshape") 
-            }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private func listToolbarContent() -> some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
-            listToolbarLeadingItems
-        }
-        ToolbarItem(placement: .navigationBarTrailing) {
-            listToolbarTrailingItems
-        }
-    }
-    
-    private func loadBooks() async {
-        isRefreshing = true
-        do {
-            try await apiService.fetchBookshelf()
-        } catch {
-            apiService.errorMessage = error.localizedDescription
-        }
-        isRefreshing = false
-    }
-    
+            if !searchText.isEmpty {
+                Menu {
+                    Toggle("同时搜索书源", isOn: $preferences.searchSourcesFromBookshelf)
+                    
+                    if preferences.searchSourcesFromBookshelf {
+                        Divider()
+                        Text("选择搜索源")
+                        Button(preferences.preferredSearchSourceUrls.isEmpty ? "✓ 全部启用源" : "全部启用源") {
+                            preferences.preferredSearchSourceUrls = []
+                        }
+                        
+                                                ForEach(apiService.availableSources.filter { $0.enabled }, id: \.bookSourceUrl) { source in
+                                                    Button(action: { togglePreferredSource(source.bookSourceUrl) }) {
+                                                        HStack {
+                                                            Text(source.bookSourceName)
+                                                            if preferences.preferredSearchSourceUrls.contains(source.bookSourceUrl) {
+                                                                Image(systemName: "checkmark")
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                                .foregroundColor(preferences.searchSourcesFromBookshelf ? .blue : .secondary)
+                                        }
+                                    }
+                                    
+                                    Button(action: { showingDocumentPicker = true }) {
+                                        Image(systemName: "plus")
+                                    }
+                                    NavigationLink(destination: SettingsView()) {
+                                        Image(systemName: "gearshape")
+                                    }
+                                }
+                            }
+                        
+                            private func togglePreferredSource(_ url: String) {
+                                if preferences.preferredSearchSourceUrls.contains(url) {
+                                    preferences.preferredSearchSourceUrls.removeAll { $0 == url }
+                                } else {
+                                    preferences.preferredSearchSourceUrls.append(url)
+                                }
+                            }
+                        
+                            @ToolbarContentBuilder
+                            private func listToolbarContent() -> some ToolbarContent {
+                                ToolbarItem(placement: .navigationBarLeading) {
+                                    listToolbarLeadingItems
+                                }
+                                ToolbarItem(placement: .navigationBarTrailing) {
+                                    listToolbarTrailingItems
+                                }
+                            }
+                            
+                            private func loadBooks() async {
+                                isRefreshing = true
+                                do {
+                                    try await apiService.fetchBookshelf()
+                                    if apiService.availableSources.isEmpty {
+                                        _ = try? await apiService.fetchBookSources()
+                                    }
+                                } catch {
+                                    apiService.errorMessage = error.localizedDescription
+                                }
+                                isRefreshing = false
+                            }    
     private func importBook(from url: URL) async {
         isRefreshing = true
         do {

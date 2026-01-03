@@ -250,6 +250,18 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(bookshelfSortByRecent, forKey: "bookshelfSortByRecent")
         }
     }
+
+    @Published var searchSourcesFromBookshelf: Bool {
+        didSet {
+            UserDefaults.standard.set(searchSourcesFromBookshelf, forKey: "searchSourcesFromBookshelf")
+        }
+    }
+
+    @Published var preferredSearchSourceUrls: [String] {
+        didSet {
+            UserDefaults.standard.set(preferredSearchSourceUrls, forKey: "preferredSearchSourceUrls")
+        }
+    }
     
     @Published var ttsPreloadCount: Int {
         didSet {
@@ -380,6 +392,8 @@ class UserPreferences: ObservableObject {
             self.speakerTTSMapping = [:]
         }
         self.bookshelfSortByRecent = UserDefaults.standard.bool(forKey: "bookshelfSortByRecent")
+        self.searchSourcesFromBookshelf = UserDefaults.standard.bool(forKey: "searchSourcesFromBookshelf")
+        self.preferredSearchSourceUrls = UserDefaults.standard.stringArray(forKey: "preferredSearchSourceUrls") ?? []
 
         let savedPreloadCount = UserDefaults.standard.integer(forKey: "ttsPreloadCount")
         self.ttsPreloadCount = savedPreloadCount == 0 ? 10 : savedPreloadCount

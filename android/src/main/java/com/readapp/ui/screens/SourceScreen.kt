@@ -78,60 +78,62 @@ fun SourceListScreen(
             OutlinedTextField(
                 value = searchText,
                 onValueChange = { sourceViewModel.onSearchTextChanged(it) },
-                label = { Text("全局搜索书籍...") },
+                label = { Text("搜索/过滤书源...") },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp)
             )
 
-            if (searchText.isBlank()) {
-                val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
-                val exploreKinds = remember { mutableStateMapOf<String, List<BookSource.ExploreKind>>() }
-                val loadingExplores = remember { mutableStateMapOf<String, Boolean>() }
-                val scope = rememberCoroutineScope()
-                val gson = remember { Gson() }
+            val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
+            val exploreKinds = remember { mutableStateMapOf<String, List<com.readapp.data.model.BookSource.ExploreKind>>() }
+            val loadingExplores = remember { mutableStateMapOf<String, Boolean>() }
+            val scope = rememberCoroutineScope()
+            val gson = remember { Gson() }
 
-                SourceListViewContent(
-                    sources = sources,
-                    isLoading = isLoading,
-                    errorMessage = errorMessage,
-                    expandedIds = expandedIds,
-                    exploreKinds = exploreKinds,
-                    loadingExplores = loadingExplores,
-                    onToggleExpand = { source ->
-                        val current = expandedIds[source.bookSourceUrl] ?: false
-                        expandedIds[source.bookSourceUrl] = !current
-                        if (!current && exploreKinds[source.bookSourceUrl] == null) {
-                            scope.launch {
-                                loadingExplores[source.bookSourceUrl] = true
-                                val foundJson = sourceViewModel.fetchExploreKinds(source.bookSourceUrl)
-                                if (foundJson != null) {
-                                    try {
-                                        val kinds = gson.fromJson(foundJson, Array<BookSource.ExploreKind>::class.java).toList()
-                                        exploreKinds[source.bookSourceUrl] = kinds
-                                    } catch (e: Exception) {}
-                                }
-                                loadingExplores[source.bookSourceUrl] = false
-                            }
-                        }
-                    },
-                    onExploreClick = { source, kind ->
-                        onNavigateToExplore(source.bookSourceUrl, source.bookSourceName, kind.url, kind.title)
-                    },
-                    onNavigateToEdit = onNavigateToEdit,
-                    onNavigateToSearch = onNavigateToSearch,
-                    onToggle = { sourceViewModel.toggleSource(it) },
-                    onDelete = { sourceViewModel.deleteSource(it) },
-                    onRefresh = { sourceViewModel.fetchSources() }
-                )
+            val filteredSources = if (searchText.isEmpty()) {
+                sources
             } else {
-                GlobalSearchViewContent(
-                    searchResults = searchResults,
-                    isGlobalSearching = isGlobalSearching,
-                    onAddBookToBookshelf = { sourceViewModel.saveBookToBookshelf(it) }
-                )
+                sources.filter { 
+                    it.bookSourceName.contains(searchText, ignoreCase = true) ||
+                    it.bookSourceUrl.contains(searchText, ignoreCase = true) ||
+                    (it.bookSourceGroup?.contains(searchText, ignoreCase = true) ?: false)
+                }
             }
+
+            SourceListViewContent(
+                sources = filteredSources,
+                isLoading = isLoading,
+                errorMessage = errorMessage,
+                expandedIds = expandedIds,
+                exploreKinds = exploreKinds,
+                loadingExplores = loadingExplores,
+                onToggleExpand = { source ->
+                    val current = expandedIds[source.bookSourceUrl] ?: false
+                    expandedIds[source.bookSourceUrl] = !current
+                    if (!current && exploreKinds[source.bookSourceUrl] == null) {
+                        scope.launch {
+                            loadingExplores[source.bookSourceUrl] = true
+                            val foundJson = sourceViewModel.fetchExploreKinds(source.bookSourceUrl)
+                            if (foundJson != null) {
+                                try {
+                                    val kinds = gson.fromJson(foundJson, Array<com.readapp.data.model.BookSource.ExploreKind>::class.java).toList()
+                                    exploreKinds[source.bookSourceUrl] = kinds
+                                } catch (e: Exception) {}
+                            }
+                            loadingExplores[source.bookSourceUrl] = false
+                        }
+                    }
+                },
+                onExploreClick = { source, kind ->
+                    onNavigateToExplore(source.bookSourceUrl, source.bookSourceName, kind.url, kind.title)
+                },
+                onNavigateToEdit = onNavigateToEdit,
+                onNavigateToSearch = onNavigateToSearch,
+                onToggle = { sourceViewModel.toggleSource(it) },
+                onDelete = { sourceViewModel.deleteSource(it) },
+                onRefresh = { sourceViewModel.fetchSources() }
+            )
         }
     }
 }
@@ -177,31 +179,6 @@ fun SourceListViewContent(
                         onSearchClick = { onNavigateToSearch(source) }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun GlobalSearchViewContent(
-    searchResults: List<Book>,
-    isGlobalSearching: Boolean,
-    onAddBookToBookshelf: (Book) -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (isGlobalSearching && searchResults.isEmpty()) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-        } else if (searchResults.isEmpty()) {
-            Text(
-                text = "没有找到相关书籍。",
-                modifier = Modifier.align(Alignment.Center),
-                color = Color.Gray
-            )
-        } else {
-            LazyColumn {
-                items(searchResults) { book ->
-                    BookSearchResultRow(book = book, onAdd = { onAddBookToBookshelf(book) })
                 }
             }
         }
