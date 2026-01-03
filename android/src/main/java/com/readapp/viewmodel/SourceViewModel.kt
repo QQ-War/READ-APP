@@ -210,6 +210,22 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
         return repository.getBookSourceDetail(serverUrl, publicUrl, token, id).getOrNull()
     }
 
+    suspend fun fetchExploreKinds(bookSourceUrl: String): String? {
+        val serverUrl = userPreferences.serverUrl.first()
+        val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
+        val token = userPreferences.accessToken.first()
+
+        return repository.fetchExploreKinds(serverUrl, publicUrl, token, bookSourceUrl).getOrNull()
+    }
+
+    suspend fun exploreBook(bookSourceUrl: String, ruleFindUrl: String, page: Int): Result<List<Book>> {
+        val serverUrl = userPreferences.serverUrl.first()
+        val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
+        val token = userPreferences.accessToken.first()
+
+        return repository.exploreBook(serverUrl, publicUrl, token, bookSourceUrl, ruleFindUrl, page)
+    }
+
     suspend fun saveSource(jsonContent: String): Result<Any> {
         val serverUrl = userPreferences.serverUrl.first()
         val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }

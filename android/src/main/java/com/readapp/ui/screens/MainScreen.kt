@@ -78,6 +78,9 @@ fun MainScreen(
                         },
                         onNavigateToSearch = { source ->
                             mainNavController.navigate(Screen.BookSearch.createRoute(source))
+                        },
+                        onNavigateToExplore = { sourceUrl, sourceName, ruleUrl, categoryName ->
+                            mainNavController.navigate(Screen.SourceExplore.createRoute(sourceUrl, sourceName, ruleUrl, categoryName))
                         }
                     )
                 }

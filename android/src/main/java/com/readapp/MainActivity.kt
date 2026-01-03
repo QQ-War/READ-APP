@@ -381,6 +381,30 @@ fun ReadAppMain() {
             }
 
             composable(
+                route = Screen.SourceExplore.route,
+                arguments = listOf(
+                    navArgument("sourceUrl") { type = NavType.StringType },
+                    navArgument("sourceName") { type = NavType.StringType },
+                    navArgument("ruleFindUrl") { type = NavType.StringType },
+                    navArgument("categoryName") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val sourceUrl = URLDecoder.decode(backStackEntry.arguments?.getString("sourceUrl") ?: "", UTF_8.name())
+                val sourceName = URLDecoder.decode(backStackEntry.arguments?.getString("sourceName") ?: "", UTF_8.name())
+                val ruleFindUrl = URLDecoder.decode(backStackEntry.arguments?.getString("ruleFindUrl") ?: "", UTF_8.name())
+                val categoryName = URLDecoder.decode(backStackEntry.arguments?.getString("categoryName") ?: "", UTF_8.name())
+                
+                SourceExploreScreen(
+                    sourceUrl = sourceUrl,
+                    sourceName = sourceName,
+                    ruleFindUrl = ruleFindUrl,
+                    categoryName = categoryName,
+                    onNavigateToDetail = { navController.navigate(Screen.BookDetail.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(
                 route = Screen.BookSearch.route,
                 arguments = listOf(navArgument("bookSourceJson") { type = NavType.StringType })
             ) { backStackEntry ->
@@ -431,6 +455,15 @@ sealed class Screen(val route: String) {
     object BookSource : Screen("book_source")
     object SourceEdit : Screen("source_edit?id={id}") {
         fun createRoute(id: String?) = if (id != null) "source_edit?id=$id" else "source_edit"
+    }
+    object SourceExplore : Screen("source_explore/{sourceUrl}/{sourceName}/{ruleFindUrl}/{categoryName}") {
+        fun createRoute(sourceUrl: String, sourceName: String, ruleFindUrl: String, categoryName: String): String {
+            val encodedSourceUrl = URLEncoder.encode(sourceUrl, UTF_8.name())
+            val encodedSourceName = URLEncoder.encode(sourceName, UTF_8.name())
+            val encodedRuleUrl = URLEncoder.encode(ruleFindUrl, UTF_8.name())
+            val encodedCategoryName = URLEncoder.encode(categoryName, UTF_8.name())
+            return "source_explore/$encodedSourceUrl/$encodedSourceName/$encodedRuleUrl/$encodedCategoryName"
+        }
     }
     object BookSearch : Screen("book_search/{bookSourceJson}") {
         fun createRoute(bookSource: com.readapp.data.model.BookSource): String {

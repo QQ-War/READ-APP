@@ -168,6 +168,21 @@ interface ReadApiService {
         @Query("accessToken") accessToken: String,
         @Query("id") id: String
     ): Response<ApiResponse<Map<String, Any>>>
+
+    @GET("getBookSourcesExploreUrl")
+    suspend fun getExploreUrl(
+        @Query("accessToken") accessToken: String,
+        @Query("bookSourceUrl") bookSourceUrl: String,
+        @Query("need") need: String = "true"
+    ): Response<ApiResponse<Map<String, String>>>
+
+    @GET("exploreBook")
+    suspend fun exploreBook(
+        @Query("accessToken") accessToken: String,
+        @Query("bookSourceUrl") bookSourceUrl: String,
+        @Query("ruleFindUrl") ruleFindUrl: String,
+        @Query("page") page: Int
+    ): Response<ApiResponse<List<Book>>>
     // endregion
 
     // region Book Search

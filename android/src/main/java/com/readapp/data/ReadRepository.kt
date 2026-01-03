@@ -256,6 +256,28 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
     }(buildEndpoints(baseUrl, publicUrl)).map { map ->
         map["json"] as? String ?: ""
     }
+
+    suspend fun fetchExploreKinds(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String,
+        bookSourceUrl: String
+    ): Result<String> = executeWithFailover {
+        it.getExploreUrl(accessToken, bookSourceUrl)
+    }(buildEndpoints(baseUrl, publicUrl)).map { map ->
+        map["found"] ?: ""
+    }
+
+    suspend fun exploreBook(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String,
+        bookSourceUrl: String,
+        ruleFindUrl: String,
+        page: Int
+    ): Result<List<Book>> = executeWithFailover {
+        it.exploreBook(accessToken, bookSourceUrl, ruleFindUrl, page)
+    }(buildEndpoints(baseUrl, publicUrl))
     // endregion
 
     // region Book Search

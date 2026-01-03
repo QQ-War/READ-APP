@@ -12,11 +12,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,11 +32,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -41,14 +47,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.google.gson.Gson
 import com.readapp.data.model.Book
 import com.readapp.data.model.BookSource
 import com.readapp.viewmodel.SourceViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun SourceListScreen(
     onNavigateToEdit: (String?) -> Unit = {},
     onNavigateToSearch: (BookSource) -> Unit = {},
+    onNavigateToExplore: (String, String, String, String) -> Unit = { _, _, _, _ -> },
     sourceViewModel: SourceViewModel = viewModel(factory = SourceViewModel.Factory)
 ) {
     val sources by sourceViewModel.sources.collectAsState()
@@ -77,10 +86,39 @@ fun SourceListScreen(
             )
 
             if (searchText.isBlank()) {
+                val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
+                val exploreKinds = remember { mutableStateMapOf<String, List<BookSource.ExploreKind>>() }
+                val loadingExplores = remember { mutableStateMapOf<String, Boolean>() }
+                val scope = rememberCoroutineScope()
+                val gson = remember { Gson() }
+
                 SourceListViewContent(
                     sources = sources,
                     isLoading = isLoading,
                     errorMessage = errorMessage,
+                    expandedIds = expandedIds,
+                    exploreKinds = exploreKinds,
+                    loadingExplores = loadingExplores,
+                    onToggleExpand = { source ->
+                        val current = expandedIds[source.bookSourceUrl] ?: false
+                        expandedIds[source.bookSourceUrl] = !current
+                        if (!current && exploreKinds[source.bookSourceUrl] == null) {
+                            scope.launch {
+                                loadingExplores[source.bookSourceUrl] = true
+                                val foundJson = sourceViewModel.fetchExploreKinds(source.bookSourceUrl)
+                                if (foundJson != null) {
+                                    try {
+                                        val kinds = gson.fromJson(foundJson, Array<BookSource.ExploreKind>::class.java).toList()
+                                        exploreKinds[source.bookSourceUrl] = kinds
+                                    } catch (e: Exception) {}
+                                }
+                                loadingExplores[source.bookSourceUrl] = false
+                            }
+                        }
+                    },
+                    onExploreClick = { source, kind ->
+                        onNavigateToExplore(source.bookSourceUrl, source.bookSourceName, kind.url, kind.title)
+                    },
                     onNavigateToEdit = onNavigateToEdit,
                     onNavigateToSearch = onNavigateToSearch,
                     onToggle = { sourceViewModel.toggleSource(it) },
@@ -103,6 +141,11 @@ fun SourceListViewContent(
     sources: List<BookSource>,
     isLoading: Boolean,
     errorMessage: String?,
+    expandedIds: Map<String, Boolean>,
+    exploreKinds: Map<String, List<BookSource.ExploreKind>>,
+    loadingExplores: Map<String, Boolean>,
+    onToggleExpand: (BookSource) -> Unit,
+    onExploreClick: (BookSource, BookSource.ExploreKind) -> Unit,
     onNavigateToEdit: (String?) -> Unit,
     onNavigateToSearch: (BookSource) -> Unit,
     onToggle: (BookSource) -> Unit,
@@ -123,6 +166,11 @@ fun SourceListViewContent(
                 items(sources, key = { it.bookSourceUrl }) { source ->
                     BookSourceItem(
                         source = source,
+                        isExpanded = expandedIds[source.bookSourceUrl] ?: false,
+                        exploreKinds = exploreKinds[source.bookSourceUrl],
+                        isExploreLoading = loadingExplores[source.bookSourceUrl] ?: false,
+                        onToggleExpand = { onToggleExpand(source) },
+                        onExploreClick = { kind -> onExploreClick(source, kind) },
                         onToggle = { onToggle(source) },
                         onDelete = { onDelete(source) },
                         onClick = { onNavigateToEdit(source.bookSourceUrl) },
@@ -153,7 +201,7 @@ fun GlobalSearchViewContent(
         } else {
             LazyColumn {
                 items(searchResults) { book ->
-                    BookSearchResultItem(book = book, onAdd = { onAddBookToBookshelf(book) })
+                    BookSearchResultRow(book = book, onAdd = { onAddBookToBookshelf(book) })
                 }
             }
         }
@@ -163,6 +211,11 @@ fun GlobalSearchViewContent(
 @Composable
 fun BookSourceItem(
     source: BookSource,
+    isExpanded: Boolean,
+    exploreKinds: List<BookSource.ExploreKind>?,
+    isExploreLoading: Boolean,
+    onToggleExpand: () -> Unit,
+    onExploreClick: (BookSource.ExploreKind) -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
     onClick: () -> Unit,
@@ -170,73 +223,109 @@ fun BookSourceItem(
 ) {
     Card(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (source.enabled) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = source.bookSourceName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (source.enabled) MaterialTheme.colorScheme.onSurface else Color.Gray
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-
-                if (!source.bookSourceGroup.isNullOrBlank()) {
+        Column {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "分组: ${source.bookSourceGroup}",
+                        text = source.bookSourceName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (source.enabled) MaterialTheme.colorScheme.onSurface else Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    if (!source.bookSourceGroup.isNullOrBlank()) {
+                        Text(
+                            text = "分组: ${source.bookSourceGroup}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                    }
+
+                    Text(
+                        text = source.bookSourceUrl,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
+
+                    if (!source.bookSourceComment.isNullOrBlank()) {
+                        Text(
+                            text = source.bookSourceComment,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = Color.Gray,
+                            maxLines = 2
+                        )
+                    }
                 }
-
-                Text(
-                    text = source.bookSourceUrl,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
-                )
-
-                if (!source.bookSourceComment.isNullOrBlank()) {
-                    Text(
-                        text = source.bookSourceComment,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontStyle = FontStyle.Italic,
-                        color = Color.Gray,
-                        maxLines = 2
-                    )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                Column(horizontalAlignment = Alignment.End) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = source.enabled,
+                            onCheckedChange = { onToggle() },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                        IconButton(onClick = onToggleExpand) {
+                            Icon(if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
+                        }
+                    }
+                    Row {
+                        IconButton(onClick = onSearchClick) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "搜索",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = onDelete) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "删除",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             }
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            Column(horizontalAlignment = Alignment.End) {
-                Switch(
-                    checked = source.enabled,
-                    onCheckedChange = { onToggle() }
-                )
-                Row {
-                    IconButton(onClick = onSearchClick) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "搜索",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+
+            if (isExpanded) {
+                if (isExploreLoading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(2.dp))
+                }
+                
+                if (exploreKinds != null) {
+                    LazyRow(
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(exploreKinds) { kind ->
+                            SuggestionChip(
+                                onClick = { onExploreClick(kind) },
+                                label = { Text(kind.title) }
+                            )
+                        }
                     }
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "删除",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+                } else if (!isExploreLoading) {
+                    Text(
+                        "该书源暂无发现配置", 
+                        style = MaterialTheme.typography.labelSmall, 
+                        color = Color.Gray,
+                        modifier = Modifier.padding(start = 16.dp, bottom = 12.dp)
+                    )
                 }
             }
         }
@@ -244,9 +333,13 @@ fun BookSourceItem(
 }
 
 @Composable
-fun BookSearchResultItem(book: Book, onAdd: () -> Unit) {
+fun BookSearchResultRow(
+    book: Book, 
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
