@@ -95,6 +95,12 @@ fun BookshelfScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showSearchConfig = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "搜索设置"
+                        )
+                    }
                     IconButton(onClick = { importBookLauncher.launch("*/*") }) {
                         Icon(
                             imageVector = Icons.Default.Add,
@@ -277,13 +283,6 @@ private fun SearchBar(
                 contentDescription = "搜索",
                 tint = MaterialTheme.customColors.textSecondary
             )
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = onConfigClick) {
-                    Icon(Icons.Default.Tune, "设置")
-                }
-            }
         },
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedBorderColor = MaterialTheme.customColors.border,

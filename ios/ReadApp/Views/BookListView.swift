@@ -6,7 +6,6 @@ struct BookListView: View {
     @State private var isRefreshing = false
     @State private var searchText = ""
     @State private var isReversed = false
-    @State private var showingActionSheet = false  // 显示操作菜单
     @State private var showingDocumentPicker = false
     @State private var selectedBook: Book?
     @State private var showingDeleteBookAlert = false
@@ -71,14 +70,12 @@ struct BookListView: View {
                                 Text("未找到相关书籍").foregroundColor(.secondary).font(.caption)
                             } else {
                                 ForEach(onlineResults) { book in
-                                    BookSearchResultRow(book: book) {
-                                        Task {
-                                            await addBookToBookshelf(book: book)
+                                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                                        BookSearchResultRow(book: book) {
+                                            Task {
+                                                await addBookToBookshelf(book: book)
+                                            }
                                         }
-                                    }
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        self.selectedOnlineBook = book
                                     }
                                 }
                             }
@@ -99,6 +96,9 @@ struct BookListView: View {
         .onChange(of: searchText) { newValue in
             handleSearchChange(newValue)
         }
+        .onChange(of: preferences.searchSourcesFromBookshelf) { _ in
+            handleSearchChange(searchText)
+        }
         .refreshable { await loadBooks() }
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker { url in Task { await importBook(from: url) } }
@@ -106,10 +106,10 @@ struct BookListView: View {
         .fullScreenCover(item: $selectedBook) { book in
             ReadingView(book: book).environmentObject(apiService)
         }
-        .fullScreenCover(item: $selectedOnlineBook) { book in
-            BookDetailView(book: book).environmentObject(apiService)
+        .task { 
+            if apiService.books.isEmpty { await loadBooks() }
+            if apiService.availableSources.isEmpty { _ = try? await apiService.fetchBookSources() }
         }
-        .task { if apiService.books.isEmpty { await loadBooks() } }
         .overlay {
             if isRefreshing {
                 ProgressView("加载中...")
@@ -162,7 +162,7 @@ struct BookListView: View {
         await MainActor.run { isSearchingOnline = true }
         
         do {
-            let sources = try await apiService.fetchBookSources()
+            let sources = apiService.availableSources.isEmpty ? try await apiService.fetchBookSources() : apiService.availableSources
             let enabledSources = sources.filter { $0.enabled }
             
             // Filter by preferred sources if any are selected
@@ -260,73 +260,69 @@ struct BookListView: View {
     @ViewBuilder
     private var listToolbarTrailingItems: some View {
         HStack(spacing: 16) {
-            if !searchText.isEmpty {
-                Menu {
-                    Toggle("同时搜索书源", isOn: $preferences.searchSourcesFromBookshelf)
+            Menu {
+                Toggle("同时搜索书源", isOn: $preferences.searchSourcesFromBookshelf)
+                
+                if preferences.searchSourcesFromBookshelf {
+                    Divider()
+                    Text("选择搜索源")
+                    Button(preferences.preferredSearchSourceUrls.isEmpty ? "✓ 全部启用源" : "全部启用源") {
+                        preferences.preferredSearchSourceUrls = []
+                    }
                     
-                    if preferences.searchSourcesFromBookshelf {
-                        Divider()
-                        Text("选择搜索源")
-                        Button(preferences.preferredSearchSourceUrls.isEmpty ? "✓ 全部启用源" : "全部启用源") {
-                            preferences.preferredSearchSourceUrls = []
+                    ForEach(apiService.availableSources.filter { $0.enabled }, id: \.bookSourceUrl) { source in
+                        Button(action: { togglePreferredSource(source.bookSourceUrl) }) {
+                            HStack {
+                                Text(source.bookSourceName)
+                                if preferences.preferredSearchSourceUrls.contains(source.bookSourceUrl) {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
-                        
-                                                ForEach(apiService.availableSources.filter { $0.enabled }, id: \.bookSourceUrl) { source in
-                                                    Button(action: { togglePreferredSource(source.bookSourceUrl) }) {
-                                                        HStack {
-                                                            Text(source.bookSourceName)
-                                                            if preferences.preferredSearchSourceUrls.contains(source.bookSourceUrl) {
-                                                                Image(systemName: "checkmark")
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } label: {
-                                            Image(systemName: "line.3.horizontal.decrease.circle")
-                                                .foregroundColor(preferences.searchSourcesFromBookshelf ? .blue : .secondary)
-                                        }
-                                    }
-                                    
-                                    Button(action: { showingDocumentPicker = true }) {
-                                        Image(systemName: "plus")
-                                    }
-                                    NavigationLink(destination: SettingsView()) {
-                                        Image(systemName: "gearshape")
-                                    }
-                                }
-                            }
-                        
-                            private func togglePreferredSource(_ url: String) {
-                                if preferences.preferredSearchSourceUrls.contains(url) {
-                                    preferences.preferredSearchSourceUrls.removeAll { $0 == url }
-                                } else {
-                                    preferences.preferredSearchSourceUrls.append(url)
-                                }
-                            }
-                        
-                            @ToolbarContentBuilder
-                            private func listToolbarContent() -> some ToolbarContent {
-                                ToolbarItem(placement: .navigationBarLeading) {
-                                    listToolbarLeadingItems
-                                }
-                                ToolbarItem(placement: .navigationBarTrailing) {
-                                    listToolbarTrailingItems
-                                }
-                            }
-                            
-                            private func loadBooks() async {
-                                isRefreshing = true
-                                do {
-                                    try await apiService.fetchBookshelf()
-                                    if apiService.availableSources.isEmpty {
-                                        _ = try? await apiService.fetchBookSources()
-                                    }
-                                } catch {
-                                    apiService.errorMessage = error.localizedDescription
-                                }
-                                isRefreshing = false
-                            }    
+                    }
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .foregroundColor(preferences.searchSourcesFromBookshelf ? .blue : .secondary)
+            }
+            
+            Button(action: { showingDocumentPicker = true }) { 
+                Image(systemName: "plus") 
+            }
+            NavigationLink(destination: SettingsView()) { 
+                Image(systemName: "gearshape") 
+            }
+        }
+    }
+
+    private func togglePreferredSource(_ url: String) {
+        if preferences.preferredSearchSourceUrls.contains(url) {
+            preferences.preferredSearchSourceUrls.removeAll { $0 == url }
+        } else {
+            preferences.preferredSearchSourceUrls.append(url)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func listToolbarContent() -> some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            listToolbarLeadingItems
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            listToolbarTrailingItems
+        }
+    }
+    
+    private func loadBooks() async {
+        isRefreshing = true
+        do {
+            try await apiService.fetchBookshelf()
+        } catch {
+            apiService.errorMessage = error.localizedDescription
+        }
+        isRefreshing = false
+    }
+    
     private func importBook(from url: URL) async {
         isRefreshing = true
         do {

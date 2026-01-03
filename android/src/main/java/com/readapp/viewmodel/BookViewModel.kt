@@ -1278,7 +1278,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updateBookshelfSortByRecent(enabled: Boolean) { _bookshelfSortByRecent.value = enabled; viewModelScope.launch { preferences.saveBookshelfSortByRecent(enabled); applyBooksFilterAndSort() } }
     fun updateReadingMode(mode: com.readapp.data.ReadingMode) { _readingMode.value = mode; viewModelScope.launch { preferences.saveReadingMode(mode) } }
     fun updateLockPageOnTTS(enabled: Boolean) { _lockPageOnTTS.value = enabled; viewModelScope.launch { preferences.saveLockPageOnTTS(enabled) } }
-    fun updateSearchSourcesFromBookshelf(enabled: Boolean) { _searchSourcesFromBookshelf.value = enabled; viewModelScope.launch { preferences.saveSearchSourcesFromBookshelf(enabled) } }
+    fun updateSearchSourcesFromBookshelf(enabled: Boolean) { 
+        _searchSourcesFromBookshelf.value = enabled
+        viewModelScope.launch { 
+            preferences.saveSearchSourcesFromBookshelf(enabled)
+            // Re-trigger search to update online results immediately
+            searchBooks(currentSearchQuery)
+        } 
+    }
     fun togglePreferredSearchSource(url: String) {
         val current = _preferredSearchSourceUrls.value.toMutableSet()
         if (current.contains(url)) current.remove(url) else current.add(url)
