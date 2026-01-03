@@ -631,6 +631,54 @@ class APIService: ObservableObject {
         }
     }
     
+    // MARK: - Explore / Discovery
+    func fetchExploreKinds(bookSourceUrl: String) async throws -> [BookSource.ExploreKind] {
+        let queryItems = [
+            URLQueryItem(name: "accessToken", value: accessToken),
+            URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl),
+            URLQueryItem(name: "need", value: "true")
+        ]
+        
+        let (data, httpResponse) = try await requestWithFailback(endpoint: "getBookSourcesExploreUrl", queryItems: queryItems)
+        guard httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "获取发现配置失败"])
+        }
+        
+        struct ExploreUrlResponse: Codable {
+            let found: String?
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<ExploreUrlResponse>.self, from: data)
+        if apiResponse.isSuccess, let found = apiResponse.data?.found {
+            // The 'found' field is a JSON string of ExploreKind objects
+            if let foundData = found.data(using: .utf8) {
+                return try JSONDecoder().decode([BookSource.ExploreKind].self, from: foundData)
+            }
+        }
+        return []
+    }
+    
+    func exploreBook(bookSourceUrl: String, ruleFindUrl: String, page: Int = 1) async throws -> [Book] {
+        let queryItems = [
+            URLQueryItem(name: "accessToken", value: accessToken),
+            URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl),
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "ruleFindUrl", value: ruleFindUrl)
+        ]
+        
+        let (data, httpResponse) = try await requestWithFailback(endpoint: "exploreBook", queryItems: queryItems)
+        guard httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "浏览书源失败"])
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<[Book]>.self, from: data)
+        if apiResponse.isSuccess, let books = apiResponse.data {
+            return books
+        } else {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "解析发现结果失败"])
+        }
+    }
+    
     // MARK: - Save Book to Bookshelf
     func saveBook(book: Book, useReplaceRule: Int = 0) async throws {
         guard !accessToken.isEmpty else {

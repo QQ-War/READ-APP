@@ -27,6 +27,12 @@ struct BookSource: Codable, Identifiable {
         case bookSourceComment
         case respondTime
     }
+    
+    struct ExploreKind: Codable, Identifiable {
+        var id: String { url }
+        let title: String
+        let url: String
+    }
 }
 
 // For preview and testing purposes
