@@ -764,6 +764,26 @@ class APIService: ObservableObject {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "保存书籍时发生未知错误"])
         }
     }
+    
+    // MARK: - Change Book Source
+    func changeBookSource(oldBookUrl: String, newBookUrl: String, newBookSourceUrl: String) async throws {
+        let queryItems = [
+            URLQueryItem(name: "accessToken", value: accessToken),
+            URLQueryItem(name: "bookUrl", value: oldBookUrl),
+            URLQueryItem(name: "newUrl", value: newBookUrl),
+            URLQueryItem(name: "bookSourceUrl", value: newBookSourceUrl)
+        ]
+        
+        let (data, httpResponse) = try await requestWithFailback(endpoint: "setBookSource", queryItems: queryItems)
+        guard httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "换源请求失败"])
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<Book>.self, from: data)
+        if !apiResponse.isSuccess {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "后端换源逻辑执行失败"])
+        }
+    }
 
     // MARK: - Delete Book from Bookshelf
     func deleteBook(bookUrl: String) async throws {

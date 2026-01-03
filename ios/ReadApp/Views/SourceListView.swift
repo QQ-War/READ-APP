@@ -20,7 +20,6 @@ struct SourceListView: View {
     var body: some View {
         sourceManagementView
             .navigationTitle("书源管理")
-            .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "过滤书源...")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
@@ -188,6 +187,7 @@ struct SourceListView: View {
                 .refreshable {
                     viewModel.fetchSources()
                 }
+                .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "过滤书源...")
             }
         }
     }

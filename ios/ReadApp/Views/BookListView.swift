@@ -91,8 +91,8 @@ struct BookListView: View {
             .navigationTitle("书架")
             .navigationBarTitleDisplayMode(.large)
             .toolbar(content: listToolbarContent)
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索书名或作者")
         }
-        .searchable(text: $searchText, prompt: "搜索书名或作者")
         .onChange(of: searchText) { newValue in
             handleSearchChange(newValue)
         }

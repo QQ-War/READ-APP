@@ -92,7 +92,7 @@ struct BookDetailView: View {
                     }
                     .padding(.horizontal)
                     
-                    if groupCount > 1 {
+                    if chapterGroups.count > 1 {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(chapterGroups, id: \.self) { index in
@@ -167,7 +167,7 @@ struct BookDetailView: View {
             Button("确定", role: .cancel) { }
         }
         .sheet(isPresented: $showingSourceSwitch) {
-            SourceSwitchView(bookName: book.name ?? "", currentSource: book.origin ?? "") { newBook in
+            SourceSwitchView(bookName: book.name ?? "", author: book.author ?? "", currentSource: book.origin ?? "") { newBook in
                 updateBookSource(with: newBook)
             }
         }
@@ -336,9 +336,23 @@ struct BookDetailView: View {
     private func updateBookSource(with newBook: Book) {
         Task {
             do {
-                try await apiService.saveBook(book: newBook)
-                await loadData()
-            } catch { errorMessage = "换源失败: \(error.localizedDescription)" }
+                guard let oldUrl = book.bookUrl, let newUrl = newBook.bookUrl, let sourceUrl = newBook.origin else { return }
+                
+                isLoading = true
+                try await apiService.changeBookSource(oldBookUrl: oldUrl, newBookUrl: newUrl, newBookSourceUrl: sourceUrl)
+                
+                // 换源成功后，先刷新书架，然后通知父级并返回
+                try await apiService.fetchBookshelf()
+                await MainActor.run {
+                    isLoading = false
+                    dismiss() // 换源后通常需要重新打开详情页
+                }
+            } catch { 
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = "换源失败: \(error.localizedDescription)" 
+                }
+            }
         }
     }
     
@@ -409,6 +423,7 @@ struct BookDetailView: View {
 // MARK: - Source Switch View
 struct SourceSwitchView: View {
     let bookName: String
+    let author: String
     let currentSource: String
     let onSelect: (Book) -> Void
     @Environment(\.dismiss) var dismiss
@@ -420,20 +435,26 @@ struct SourceSwitchView: View {
         NavigationView {
             List {
                 if isSearching {
-                    HStack { Spacer(); ProgressView("正在全网搜索来源..."); Spacer() }
+                    HStack { Spacer(); ProgressView("正在全网匹配来源..."); Spacer() }
                 } else if searchResults.isEmpty {
-                    Text("未找到其他可用来源").foregroundColor(.secondary)
+                    Text("未找到匹配的书籍，请尝试检查书名或作者").foregroundColor(.secondary).padding()
                 } else {
-                    ForEach(searchResults) { book in
-                        Button(action: { onSelect(book); dismiss() }) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(book.originName ?? "未知源").font(.headline)
-                                    Spacer()
-                                    if book.origin == currentSource { Text("当前源").font(.caption).foregroundColor(.blue) }
+                    Section(header: Text("匹配结果（优先匹配书名+作者）")) {
+                        ForEach(searchResults) { book in
+                            Button(action: { onSelect(book); dismiss() }) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text(book.originName ?? "未知源").font(.headline)
+                                        Spacer()
+                                        if book.origin == currentSource { 
+                                            Text("当前源").font(.caption).padding(.horizontal, 6).padding(.vertical, 2).background(Color.blue.opacity(0.1)).foregroundColor(.blue).cornerRadius(4)
+                                        }
+                                    }
+                                    Text("\(book.name ?? "") • \(book.author ?? "未知作者")").font(.subheadline)
+                                    if let latest = book.latestChapterTitle { 
+                                        Text("最新: \(latest)").font(.caption2).foregroundColor(.secondary).lineLimit(1) 
+                                    }
                                 }
-                                Text(book.author ?? "未知作者").font(.subheadline).foregroundColor(.secondary)
-                                if let latest = book.latestChapterTitle { Text("最新: \(latest)").font(.caption2).foregroundColor(.gray) }
                             }
                         }
                     }
@@ -450,14 +471,34 @@ struct SourceSwitchView: View {
         isSearching = true
         let sources = (try? await apiService.fetchBookSources()) ?? []
         let enabledSources = sources.filter { $0.enabled }
+        
         await withTaskGroup(of: [Book]?.self) { group in
-            for source in enabledSources { group.addTask { try? await apiService.searchBook(keyword: bookName, bookSourceUrl: source.bookSourceUrl) } }
+            for source in enabledSources { 
+                group.addTask { 
+                    // 先尝试带作者搜索
+                    let query = author.isEmpty ? bookName : "\(bookName) \(author)"
+                    return try? await apiService.searchBook(keyword: query, bookSourceUrl: source.bookSourceUrl) 
+                } 
+            }
             for await result in group {
                 if let books = result {
-                    await MainActor.run { self.searchResults.append(contentsOf: books) }
+                    await MainActor.run { 
+                        // 将结果加入列表，并按照书名和作者匹配度排序
+                        self.searchResults.append(contentsOf: books) 
+                    }
                 }
             }
         }
-        isSearching = false
+        
+        // 简单排序：完全匹配作者的排在前面
+        await MainActor.run {
+            self.searchResults.sort { b1, b2 in
+                let match1 = (b1.author == author) ? 1 : 0
+                let match2 = (b2.author == author) ? 1 : 0
+                return match1 > match2
+            }
+            isSearching = false
+        }
     }
 }
+
