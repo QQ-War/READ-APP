@@ -1281,7 +1281,11 @@ struct ReadingView: View {
                     }
                     
                     if self.shouldSyncPageAfterPagination {
-                        self.syncPageForSentenceIndex(self.ttsManager.currentSentenceIndex)
+                        let currentIndex = self.ttsManager.currentSentenceIndex + self.ttsBaseIndex
+                        let baselineIndex = capturedTTSIndex ?? currentIndex
+                        if abs(currentIndex - baselineIndex) >= 2 {
+                            self.syncPageForSentenceIndex(self.ttsManager.currentSentenceIndex)
+                        }
                         self.shouldSyncPageAfterPagination = false
                     }
                     self.isLoading = false
