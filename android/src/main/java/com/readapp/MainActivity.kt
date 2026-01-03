@@ -133,8 +133,8 @@ fun ReadAppMain() {
                             bookViewModel.setCurrentChapter(index)
                             navController.navigate(Screen.Reading.route)
                         },
-                        onDownloadChapters = {
-                            bookViewModel.downloadAllChapters()
+                        onDownloadChapters = { start, end ->
+                            bookViewModel.downloadChapters(start, end)
                         }
                     )
                 }
@@ -303,6 +303,17 @@ fun ReadAppMain() {
                     onSpeechSpeedChange = bookViewModel::updateSpeechSpeed,
                     onPreloadCountChange = bookViewModel::updatePreloadCount,
                     onLockPageOnTTSChange = bookViewModel::updateLockPageOnTTS,
+                    onNavigateToManage = { navController.navigate(Screen.SettingsTtsManage.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.SettingsTtsManage.route) {
+                val engines by bookViewModel.availableTtsEngines.collectAsState()
+                TtsEngineManageScreen(
+                    engines = engines,
+                    onAddEngine = bookViewModel::addTtsEngine,
+                    onDeleteEngine = bookViewModel::deleteTtsEngine,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -411,6 +422,7 @@ sealed class Screen(val route: String) {
     object SettingsAccount : Screen("settings_account")
     object SettingsReading : Screen("settings_reading")
     object SettingsTts : Screen("settings_tts")
+    object SettingsTtsManage : Screen("settings_tts_manage")
     object SettingsContent : Screen("settings_content")
     object SettingsDebug : Screen("settings_debug")
     object SettingsCache : Screen("settings_cache")

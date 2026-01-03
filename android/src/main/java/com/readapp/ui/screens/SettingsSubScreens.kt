@@ -162,6 +162,7 @@ fun TtsSettingsScreen(
     onSpeechSpeedChange: (Int) -> Unit,
     onPreloadCountChange: (Int) -> Unit,
     onLockPageOnTTSChange: (Boolean) -> Unit,
+    onNavigateToManage: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     var showTtsDialog by remember { mutableStateOf(false) }
@@ -179,6 +180,11 @@ fun TtsSettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "返回")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = onNavigateToManage) {
+                        Text("管理引擎")
                     }
                 }
             )
@@ -342,6 +348,123 @@ fun DebugSettingsScreen(
             SettingsItem(title = "清除离线缓存", icon = Icons.Default.LayersClear, onClick = onClearCache)
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TtsEngineManageScreen(
+    engines: List<HttpTTS>,
+    onAddEngine: (HttpTTS) -> Unit,
+    onDeleteEngine: (String) -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    var showEditDialog by remember { mutableStateOf(false) }
+    var engineToEdit by remember { mutableStateOf<HttpTTS?>(null) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("TTS 引擎管理") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        engineToEdit = null
+                        showEditDialog = true
+                    }) {
+                        Icon(Icons.Default.Add, "添加")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
+            items(engines) { engine ->
+                ListItem(
+                    headlineContent = { Text(engine.name) },
+                    supportingContent = { Text(engine.url, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    trailingContent = {
+                        Row {
+                            IconButton(onClick = {
+                                engineToEdit = engine
+                                showEditDialog = true
+                            }) {
+                                Icon(Icons.Default.Edit, "编辑")
+                            }
+                            IconButton(onClick = { onDeleteEngine(engine.id) }) {
+                                Icon(Icons.Default.Delete, "删除", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                )
+                Divider()
+            }
+        }
+    }
+
+    if (showEditDialog) {
+        TtsEngineEditDialog(
+            engine = engineToEdit,
+            onSave = {
+                onAddEngine(it)
+                showEditDialog = false
+            },
+            onDismiss = { showEditDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun TtsEngineEditDialog(
+    engine: HttpTTS?,
+    onSave: (HttpTTS) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf(engine?.name ?: "") }
+    var url by remember { mutableStateOf(engine?.url ?: "") }
+    var contentType by remember { mutableStateOf(engine?.contentType ?: "audio/mpeg") }
+    var concurrentRate by remember { mutableStateOf(engine?.concurrentRate ?: "1") }
+    var header by remember { mutableStateOf(engine?.header ?: "") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (engine == null) "添加引擎" else "编辑引擎") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名称") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("接口 URL") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = contentType, onValueChange = { contentType = it }, label = { Text("Content Type") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = concurrentRate, onValueChange = { concurrentRate = it }, label = { Text("并发频率") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = header, onValueChange = { header = it }, label = { Text("自定义 Header (JSON)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                onSave(HttpTTS(
+                    id = engine?.id ?: java.util.UUID.randomUUID().toString(),
+                    userid = engine?.userid,
+                    name = name,
+                    url = url,
+                    contentType = contentType,
+                    concurrentRate = concurrentRate,
+                    loginUrl = engine?.loginUrl,
+                    loginUi = engine?.loginUi,
+                    header = header,
+                    enabledCookieJar = engine?.enabledCookieJar,
+                    loginCheckJs = engine?.loginCheckJs,
+                    lastUpdateTime = System.currentTimeMillis()
+                ))
+            }, enabled = name.isNotBlank() && url.isNotBlank()) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }
 
 @Composable

@@ -79,6 +79,18 @@ interface ReadApiService {
         @Query("accessToken") accessToken: String,
     ): Response<ApiResponse<String>>
 
+    @POST("addtts")
+    suspend fun addTts(
+        @Query("accessToken") accessToken: String,
+        @Body tts: HttpTTS
+    ): Response<ApiResponse<String>>
+
+    @POST("deltts")
+    suspend fun delTts(
+        @Query("accessToken") accessToken: String,
+        @Query("id") id: String
+    ): Response<ApiResponse<String>>
+
     @Multipart
     @POST("importBookPreview")
     suspend fun importBook(

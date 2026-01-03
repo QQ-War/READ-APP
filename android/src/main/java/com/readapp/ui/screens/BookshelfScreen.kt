@@ -152,9 +152,13 @@ fun BookshelfScreen(
                     items(books) { book ->
                         BookRow(
                             book = book,
-                            onClick = { 
+                            onCoverClick = {
                                 bookViewModel.selectBook(book)
                                 mainNavController.navigate(Screen.BookDetail.route)
+                            },
+                            onInfoClick = { 
+                                bookViewModel.selectBook(book)
+                                mainNavController.navigate(Screen.Reading.route)
                             }
                         )
                     }
@@ -206,14 +210,14 @@ private fun SearchBar(
 @Composable
 private fun BookRow(
     book: Book,
-    onClick: () -> Unit,
+    onCoverClick: () -> Unit,
+    onInfoClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(120.dp)
-            .clickable(onClick = onClick),
+            .height(120.dp),
         shape = RoundedCornerShape(AppDimens.CornerRadiusLarge),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.customColors.cardBackground
@@ -234,12 +238,14 @@ private fun BookRow(
                 modifier = Modifier
                     .fillMaxHeight()
                     .aspectRatio(3f / 4f)
+                    .clickable(onClick = onCoverClick)
             )
 
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .weight(1f),
+                    .weight(1f)
+                    .clickable(onClick = onInfoClick),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

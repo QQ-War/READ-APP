@@ -959,14 +959,35 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { loadChapterContent(_currentChapterIndex.value) }
     }
 
-    fun downloadAllChapters() {
+    fun deleteTtsEngine(id: String) {
+        viewModelScope.launch {
+            repository.deleteTts(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, id)
+                .onSuccess { loadTtsEnginesInternal() }
+                .onFailure { _errorMessage.value = "删除失败: ${it.message}" }
+        }
+    }
+
+    fun addTtsEngine(tts: HttpTTS) {
+        viewModelScope.launch {
+            repository.addTts(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, tts)
+                .onSuccess { loadTtsEnginesInternal() }
+                .onFailure { _errorMessage.value = "保存失败: ${it.message}" }
+        }
+    }
+
+    fun downloadChapters(startIndex: Int, endIndex: Int) {
         val book = _selectedBook.value ?: return
         val chapters = _chapters.value
         if (chapters.isEmpty()) return
         
+        val actualStart = startIndex.coerceIn(0, chapters.lastIndex)
+        val actualEnd = endIndex.coerceIn(actualStart, chapters.lastIndex)
+        val count = actualEnd - actualStart + 1
+
         viewModelScope.launch(Dispatchers.IO) {
-            chapters.forEachIndexed { index, chapter ->
-                if (!localCache.isChapterCached(book.bookUrl ?: "", index)) {
+            for (i in actualStart..actualEnd) {
+                if (!localCache.isChapterCached(book.bookUrl ?: "", i)) {
+                    val chapter = chapters[i]
                     repository.fetchChapterContent(
                         currentServerEndpoint(),
                         _publicServerAddress.value.ifBlank { null },
@@ -976,14 +997,18 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                         chapter.index
                     ).onSuccess { content ->
                         val cleaned = cleanChapterContent(content.orEmpty())
-                        localCache.saveChapter(book.bookUrl ?: "", index, cleaned)
+                        localCache.saveChapter(book.bookUrl ?: "", i, cleaned)
                     }
                 }
             }
             withContext(Dispatchers.Main) {
-                Toast.makeText(appContext, "下载完成", Toast.LENGTH_SHORT).show()
+                Toast.makeText(appContext, "缓存完成 ($count 章)", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    fun downloadAllChapters() {
+        downloadChapters(0, _chapters.value.lastIndex)
     }
 
     private suspend fun loadChapters(book: Book) {

@@ -34,8 +34,11 @@ fun BookDetailScreen(
     onNavigateBack: () -> Unit,
     onStartReading: () -> Unit,
     onChapterClick: (Int) -> Unit,
-    onDownloadChapters: () -> Unit
+    onDownloadChapters: (Int, Int) -> Unit
 ) {
+    var showDownloadDialog by remember { mutableStateOf(false) }
+    var showCustomRangeDialog by remember { mutableStateOf(false) }
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -46,7 +49,7 @@ fun BookDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onDownloadChapters) {
+                    IconButton(onClick = { showDownloadDialog = true }) {
                         Icon(Icons.Default.Download, "下载")
                     }
                 }
@@ -142,6 +145,79 @@ fun BookDetailScreen(
             item {
                 Spacer(Modifier.height(80.dp))
             }
+        }
+
+        if (showDownloadDialog) {
+            AlertDialog(
+                onDismissRequest = { showDownloadDialog = false },
+                title = { Text("选择缓存范围") },
+                text = {
+                    Column {
+                        ListItem(
+                            headlineContent = { Text("缓存全文") },
+                            modifier = Modifier.clickable {
+                                onDownloadChapters(0, chapters.lastIndex)
+                                showDownloadDialog = false
+                            }
+                        )
+                        ListItem(
+                            headlineContent = { Text("缓存后续 50 章") },
+                            modifier = Modifier.clickable {
+                                val current = book.durChapterIndex ?: 0
+                                onDownloadChapters(current, (current + 50).coerceAtMost(chapters.lastIndex))
+                                showDownloadDialog = false
+                            }
+                        )
+                        ListItem(
+                            headlineContent = { Text("自定义范围") },
+                            modifier = Modifier.clickable {
+                                showDownloadDialog = false
+                                showCustomRangeDialog = true
+                            }
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showDownloadDialog = false }) { Text("取消") }
+                }
+            )
+        }
+
+        if (showCustomRangeDialog) {
+            var startText by remember { mutableStateOf("1") }
+            var endText by remember { mutableStateOf(chapters.size.toString()) }
+            
+            AlertDialog(
+                onDismissRequest = { showCustomRangeDialog = false },
+                title = { Text("自定义缓存范围") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = startText,
+                            onValueChange = { startText = it },
+                            label = { Text("起始章节") }
+                        )
+                        OutlinedTextField(
+                            value = endText,
+                            onValueChange = { endText = it },
+                            label = { Text("结束章节") }
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val s = startText.toIntOrNull()?.minus(1) ?: 0
+                        val e = endText.toIntOrNull()?.minus(1) ?: chapters.lastIndex
+                        onDownloadChapters(s, e)
+                        showCustomRangeDialog = false
+                    }) {
+                        Text("开始下载")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCustomRangeDialog = false }) { Text("取消") }
+                }
+            )
         }
     }
 }
