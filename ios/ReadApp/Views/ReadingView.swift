@@ -1246,15 +1246,16 @@ struct ReadingView: View {
                         self.currentContent = processed
                         self.currentCache = cache
                         
-                        // 初始对焦时锁定同步标志，防止触发 handlePageIndexChange 中的播放逻辑
-                        if capturedTTSIndex != nil { 
-                            self.isTTSSyncingPage = true 
-                            self.lastTTSSentenceIndex = capturedTTSIndex
+                        // 初始对焦：静默同步模式
+                        if let ttsIdx = capturedTTSIndex {
+                            self.isTTSSyncingPage = true
+                            self.isAutoFlipping = true // 关键：标记为自动对焦，防止重启 TTS
+                            self.lastTTSSentenceIndex = ttsIdx
                         }
                         
-                        // 使用无动画请求进行初始化跳转
-                        self.pageTurnRequest = PageTurnRequest(direction: .forward, animated: false, targetIndex: targetPageIndex)
+                        // 先设页码，再发跳转指令
                         self.currentPageIndex = targetPageIndex
+                        self.pageTurnRequest = PageTurnRequest(direction: .forward, animated: false, targetIndex: targetPageIndex)
                         
                         self.didApplyResumePos = true 
                         if !self.hasInitialPagination, !cache.pages.isEmpty { self.hasInitialPagination = true }
@@ -1262,9 +1263,10 @@ struct ReadingView: View {
                         // Set the pagination key to current state to prevent immediate redundant re-pagination
                         self.lastPaginationKey = PaginationKey(width: Int(targetPageSize.width * 100), height: Int(targetPageSize.height * 100), fontSize: Int(fontSize * 10), lineSpacing: Int(lineSpacing * 10), margin: Int(margin * 10), sentenceCount: sentences.count, chapterIndex: chapterIndex, resumeCharIndex: -1, resumePageIndex: -1)
                         
-                        // 延迟清除同步标志，确保 handlePageIndexChange 被完全跳过
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        // 给予足够宽裕的时间（0.8s）让 UIKit 的 setViewControllers 完成
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                             self.isTTSSyncingPage = false
+                            self.isAutoFlipping = false
                         }
                     } else {
                         // 回落逻辑
