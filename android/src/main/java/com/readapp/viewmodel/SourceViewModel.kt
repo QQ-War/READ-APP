@@ -149,8 +149,12 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun deleteSource(source: BookSource) {
+        deleteSourceById(source.bookSourceUrl)
+    }
+
+    fun deleteSourceById(id: String) {
         val currentSources = _sources.value
-        _sources.value = currentSources.filter { it.bookSourceUrl != source.bookSourceUrl }
+        _sources.value = currentSources.filter { it.bookSourceUrl != id }
 
         viewModelScope.launch {
             val serverUrl = userPreferences.serverUrl.first()
@@ -162,7 +166,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
                 baseUrl = serverUrl,
                 publicUrl = publicUrl,
                 accessToken = token,
-                id = source.bookSourceUrl
+                id = id
             )
             if (result.isFailure) {
                 _sources.value = currentSources // Revert
