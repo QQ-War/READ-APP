@@ -358,7 +358,11 @@ struct PreferredSourcesView: View {
     
     var body: some View {
         List {
-            Section(footer: Text("未选择任何书源时，将默认搜索所有已启用的书源。")) {
+            Section(header: Text("全局开关")) {
+                Toggle("搜索书架时包含全网书源", isOn: $preferences.searchSourcesFromBookshelf)
+            }
+            
+            Section(header: Text("指定搜索源"), footer: Text("未选择任何书源时，将默认搜索所有已启用的书源。")) {
                 if filterText.isEmpty {
                     Button(preferences.preferredSearchSourceUrls.isEmpty ? "✓ 全部启用源" : "全部启用源") {
                         preferences.preferredSearchSourceUrls = []

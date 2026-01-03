@@ -1222,85 +1222,113 @@ private fun ChapterListDialog(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val localCache = remember { com.readapp.data.LocalCacheManager(context) }
+    var currentGroupIndex by remember(chapters.size) {
+        mutableStateOf(currentChapterIndex / 50)
+    }
+    val groupCount = (chapters.size + 49) / 50
     
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "绔犺妭鍒楄〃",
+                text = "章节列表 (${chapters.size})",
                 style = MaterialTheme.typography.titleLarge
             )
         },
         text = {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                itemsIndexed(chapters) { index, chapter ->
-                    val isCurrentChapter = index == currentChapterIndex
-                    val isCached = remember(bookUrl, index) { localCache.isChapterCached(bookUrl, index) }
-                    
-                    Surface(
-                        onClick = { onChapterClick(index) },
-                        color = if (isCurrentChapter) {
-                            MaterialTheme.customColors.gradientStart.copy(alpha = 0.25f)
-                        } else if (preloadedChapters.contains(index)) {
-                            MaterialTheme.customColors.success.copy(alpha = 0.12f)
-                        } else {
-                            MaterialTheme.colorScheme.surface
-                        },
-                        modifier = Modifier.fillMaxWidth()
+            Column {
+                if (groupCount > 1) {
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp, horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        items(groupCount) {
+                            val start = it * 50 + 1
+                            val end = minOf((it + 1) * 50, chapters.size)
+                            FilterChip(
+                                selected = currentGroupIndex == it,
+                                onClick = { currentGroupIndex = it },
+                                label = { Text("$start-$end") }
+                            )
+                        }
+                    }
+                }
+                
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
+                ) {
+                    val start = currentGroupIndex * 50
+                    val end = minOf((currentGroupIndex + 1) * 50, chapters.size)
+                    val visibleChapters = chapters.subList(start, end)
+                    
+                    itemsIndexed(visibleChapters) { relativeIndex, chapter ->
+                        val index = start + relativeIndex
+                        val isCurrentChapter = index == currentChapterIndex
+                        val isCached = remember(bookUrl, index) { localCache.isChapterCached(bookUrl, index) }
+                        
+                        Surface(
+                            onClick = { onChapterClick(index) },
+                            color = if (isCurrentChapter) {
+                                MaterialTheme.customColors.gradientStart.copy(alpha = 0.25f)
+                            } else if (preloadedChapters.contains(index)) {
+                                MaterialTheme.customColors.success.copy(alpha = 0.12f)
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            },
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = chapter.title,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = if (isCurrentChapter) {
-                                        MaterialTheme.customColors.gradientStart
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    }
-                                )
-                            }
-                            
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (isCached) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = "已缓存",
-                                        tint = MaterialTheme.customColors.success,
-                                        modifier = Modifier.size(16.dp).padding(end = 4.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = chapter.title,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = if (isCurrentChapter) {
+                                            MaterialTheme.customColors.gradientStart
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
                                     )
                                 }
                                 
-                                if (isCurrentChapter) {
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = MaterialTheme.customColors.gradientStart
-                                    ) {
-                                        Text(
-                                            text = "褰撳墠",
-                                            modifier = Modifier.padding(
-                                                horizontal = 8.dp,
-                                                vertical = 4.dp
-                                            ),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onPrimary
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (isCached) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "已缓存",
+                                            tint = MaterialTheme.customColors.success,
+                                            modifier = Modifier.size(16.dp).padding(end = 4.dp)
                                         )
+                                    }
+                                    
+                                    if (isCurrentChapter) {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.customColors.gradientStart
+                                        ) {
+                                            Text(
+                                                text = "当前",
+                                                modifier = Modifier.padding(
+                                                    horizontal = 8.dp,
+                                                    vertical = 4.dp
+                                                ),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    
-                    if (index < chapters.size - 1) {
-                        Divider(color = MaterialTheme.customColors.border)
+                        
+                        if (index < chapters.size - 1) {
+                            Divider(color = MaterialTheme.customColors.border)
+                        }
                     }
                 }
             }
@@ -1308,7 +1336,7 @@ private fun ChapterListDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("鍏抽棴")
+                Text("关闭")
             }
         },
         shape = RoundedCornerShape(AppDimens.CornerRadiusLarge)

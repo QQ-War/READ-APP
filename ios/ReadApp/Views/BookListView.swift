@@ -260,37 +260,15 @@ struct BookListView: View {
     @ViewBuilder
     private var listToolbarTrailingItems: some View {
         HStack(spacing: 16) {
-            Menu {
-                Toggle("同时搜索书源", isOn: $preferences.searchSourcesFromBookshelf)
-                
-                if preferences.searchSourcesFromBookshelf {
-                    Divider()
-                    Text("选择搜索源")
-                    Button(preferences.preferredSearchSourceUrls.isEmpty ? "✓ 全部启用源" : "全部启用源") {
-                        preferences.preferredSearchSourceUrls = []
-                    }
-                    
-                    ForEach(apiService.availableSources.filter { $0.enabled }, id: \.bookSourceUrl) { source in
-                        Button(action: { togglePreferredSource(source.bookSourceUrl) }) {
-                            HStack {
-                                Text(source.bookSourceName)
-                                if preferences.preferredSearchSourceUrls.contains(source.bookSourceUrl) {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
+            if !searchText.isEmpty {
+                NavigationLink(destination: PreferredSourcesView().environmentObject(apiService)) {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .foregroundColor(preferences.searchSourcesFromBookshelf ? .blue : .secondary)
                 }
-            } label: {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .foregroundColor(preferences.searchSourcesFromBookshelf ? .blue : .secondary)
             }
             
             Button(action: { showingDocumentPicker = true }) { 
                 Image(systemName: "plus") 
-            }
-            NavigationLink(destination: SettingsView()) { 
-                Image(systemName: "gearshape") 
             }
         }
     }

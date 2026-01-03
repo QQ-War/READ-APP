@@ -115,40 +115,68 @@ fun BookDetailScreen(
 
             // Chapter List Header
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "目录 (${chapters.size}章)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (isChaptersLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    }
+                var currentGroupIndex by remember(chapters.size) {
+                    val initialIndex = book.durChapterIndex ?: 0
+                    mutableStateOf(initialIndex / 50)
                 }
-            }
-
-            // Chapters
-            itemsIndexed(chapters) { index, chapter ->
-                ListItem(
-                    headlineContent = { 
+                val groupCount = (chapters.size + 49) / 50
+                
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            chapter.title,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = if (index == (book.durChapterIndex ?: 0)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            "目录 (${chapters.size}章)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
-                    },
-                    supportingContent = { Text("第 ${index + 1} 章") },
-                    modifier = Modifier.clickable { onChapterClick(index) }
-                )
-                if (index < chapters.size - 1) {
-                    Divider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                        if (isChaptersLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                    
+                    if (groupCount > 1) {
+                        androidx.compose.foundation.lazy.LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            items(groupCount) { index ->
+                                val start = index * 50 + 1
+                                val end = minOf((index + 1) * 50, chapters.size)
+                                FilterChip(
+                                    selected = currentGroupIndex == index,
+                                    onClick = { currentGroupIndex = index },
+                                    label = { Text("$start-$end") }
+                                )
+                            }
+                        }
+                    }
+                    
+                    val start = currentGroupIndex * 50
+                    val end = minOf((currentGroupIndex + 1) * 50, chapters.size)
+                    val visibleChapters = chapters.subList(start, end)
+                    
+                    visibleChapters.forEachIndexed { relativeIndex, chapter ->
+                        val index = start + relativeIndex
+                        ListItem(
+                            headlineContent = { 
+                                Text(
+                                    chapter.title,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (index == (book.durChapterIndex ?: 0)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            supportingContent = { Text("第 ${index + 1} 章") },
+                            modifier = Modifier.clickable { onChapterClick(index) }
+                        )
+                        Divider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    }
                 }
             }
             

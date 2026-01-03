@@ -1673,61 +1673,97 @@ private struct ChapterListView: View {
     let onSelectChapter: (Int) -> Void
     @Environment(\.dismiss) var dismiss
     @State private var isReversed = false
+    @State private var selectedGroupIndex: Int
+    
+    init(chapters: [BookChapter], currentIndex: Int, bookUrl: String, onSelectChapter: @escaping (Int) -> Void) {
+        self.chapters = chapters
+        self.currentIndex = currentIndex
+        self.bookUrl = bookUrl
+        self.onSelectChapter = onSelectChapter
+        self._selectedGroupIndex = State(initialValue: currentIndex / 50)
+    }
+    
+    var chapterGroups: [Int] {
+        guard !chapters.isEmpty else { return [] }
+        return Array(0...((chapters.count - 1) / 50))
+    }
     
     var displayedChapters: [(offset: Int, element: BookChapter)] {
-        let enumerated = Array(chapters.enumerated())
-        return isReversed ? Array(enumerated.reversed()) : enumerated
+        let startIndex = selectedGroupIndex * 50
+        let endIndex = min(startIndex + 50, chapters.count)
+        let slice = chapters.indices.contains(startIndex) ? Array(chapters[startIndex..<endIndex].enumerated()).map { (offset: $0.offset + startIndex, element: $0.element) } : []
+        return isReversed ? Array(slice.reversed()) : slice
     }
     
     var body: some View {
         NavigationView {
-            ScrollViewReader {
-                proxy in
-                List {
-                    ForEach(displayedChapters, id: \.element.id) { item in
-                        Button(action: {
-                            onSelectChapter(item.offset)
-                            dismiss()
-                        }) {
-                            HStack {
-                                Text(item.element.title)
-                                    .foregroundColor(item.offset == currentIndex ? .blue : .primary)
-                                    .fontWeight(item.offset == currentIndex ? .semibold : .regular)
-                                Spacer()
-                                if LocalCacheManager.shared.isChapterCached(bookUrl: bookUrl, index: item.offset) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
+            VStack(spacing: 0) {
+                if chapterGroups.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(chapterGroups, id: \.self) { index in
+                                let start = index * 50 + 1
+                                let end = min((index + 1) * 50, chapters.count)
+                                Button(action: { selectedGroupIndex = index }) {
+                                    Text("\(start)-\(end)")
                                         .font(.caption)
-                                }
-                                if item.offset == currentIndex {
-                                    Image(systemName: "book.fill").foregroundColor(.blue).font(.caption)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(selectedGroupIndex == index ? Color.blue : Color.gray.opacity(0.1))
+                                        .foregroundColor(selectedGroupIndex == index ? .white : .primary)
+                                        .cornerRadius(16)
                                 }
                             }
                         }
-                        .id(item.offset)
-                        .listRowBackground(item.offset == currentIndex ? Color.blue.opacity(0.1) : Color.clear)
+                        .padding()
                     }
+                    Divider()
                 }
-                .navigationTitle("目录（共\(chapters.count)章）")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button(action: {
-                            withAnimation { isReversed.toggle() }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { withAnimation { proxy.scrollTo(currentIndex, anchor: .center) } }
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: isReversed ? "arrow.up" : "arrow.down")
-                                Text(isReversed ? "倒序" : "正序")
-                            }.font(.caption)
+                
+                ScrollViewReader {
+                    proxy in
+                    List {
+                        ForEach(displayedChapters, id: \.element.id) { item in
+                            Button(action: {
+                                onSelectChapter(item.offset)
+                                dismiss()
+                            }) {
+                                HStack {
+                                    Text(item.element.title)
+                                        .foregroundColor(item.offset == currentIndex ? .blue : .primary)
+                                        .fontWeight(item.offset == currentIndex ? .semibold : .regular)
+                                    Spacer()
+                                    if LocalCacheManager.shared.isChapterCached(bookUrl: bookUrl, index: item.offset) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                            .font(.caption)
+                                    }
+                                    if item.offset == currentIndex {
+                                        Image(systemName: "book.fill").foregroundColor(.blue).font(.caption)
+                                    }
+                                }
+                            }
+                            .id(item.offset)
+                            .listRowBackground(item.offset == currentIndex ? Color.blue.opacity(0.1) : Color.clear)
                         }
                     }
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("关闭") { dismiss() }
+                    .navigationTitle("目录（共\(chapters.count)章）")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button(action: {
+                                withAnimation { isReversed.toggle() }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: isReversed ? "arrow.up" : "arrow.down")
+                                    Text(isReversed ? "倒序" : "正序")
+                                }.font(.caption)
+                            }
+                        }
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("关闭") { dismiss() }
+                        }
                     }
-                }
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { withAnimation { proxy.scrollTo(currentIndex, anchor: .center) } }
                 }
             }
         }

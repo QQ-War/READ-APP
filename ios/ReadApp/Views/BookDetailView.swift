@@ -25,9 +25,15 @@ struct BookDetailView: View {
     @State private var showingClearCacheAlert = false
     @State private var showingAddSuccessAlert = false
     @State private var showingRemoveSuccessAlert = false
+    @State private var selectedGroupIndex: Int = 0
     
     private var isInBookshelf: Bool {
         apiService.books.contains { $0.bookUrl == book.bookUrl }
+    }
+    
+    private var chapterGroups: [Int] {
+        guard !chapters.isEmpty else { return [] }
+        return Array(0...((chapters.count - 1) / 50))
     }
     
     var body: some View {
@@ -82,11 +88,36 @@ struct BookDetailView: View {
                     }
                     .padding(.horizontal)
                     
+                    if groupCount > 1 {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(chapterGroups, id: \.self) { index in
+                                    let start = index * 50 + 1
+                                    let end = min((index + 1) * 50, chapters.count)
+                                    Button(action: { selectedGroupIndex = index }) {
+                                        Text("\(start)-\(end)")
+                                            .font(.caption)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(selectedGroupIndex == index ? Color.blue : Color.gray.opacity(0.1))
+                                            .foregroundColor(selectedGroupIndex == index ? .white : .primary)
+                                            .cornerRadius(16)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                    }
+                    
                     if isLoading {
                         HStack { Spacer(); ProgressView(); Spacer() }.padding()
                     } else {
+                        let startIndex = selectedGroupIndex * 50
+                        let endIndex = min(startIndex + 50, chapters.count)
+                        let visibleChapters = chapters.indices.contains(startIndex) ? Array(chapters[startIndex..<endIndex]) : []
+                        
                         LazyVStack(spacing: 0) {
-                            ForEach(chapters) { chapter in
+                            ForEach(visibleChapters) { chapter in
                                 chapterRow(chapter)
                             }
                         }
@@ -275,6 +306,9 @@ struct BookDetailView: View {
         do {
             chapters = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             if endChapter.isEmpty { endChapter = "\(chapters.count)" }
+            // 自动跳转到当前章节所在的分组
+            let initialIndex = book.durChapterIndex ?? 0
+            selectedGroupIndex = initialIndex / 50
             refreshCachedStatus()
         } catch { errorMessage = error.localizedDescription }
         isLoading = false
