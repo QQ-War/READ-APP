@@ -73,6 +73,7 @@ struct SourceListView: View {
             .sheet(isPresented: $showingBookSearchView) {
                 if let bookSource = selectedBookSource {
                     BookSearchView(viewModel: BookSearchViewModel(bookSource: bookSource))
+                        .environmentObject(apiService)
                 }
             }
     }

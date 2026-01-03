@@ -465,14 +465,14 @@ struct ReadingView: View {
                 chaptersCount: chapters.count,
                 timerRemaining: timerRemaining,
                 timerActive: timerActive,
-                onPreviousChapter: previousChapter,
-                onNextChapter: nextChapter,
+                onPreviousChapter: { previousChapter() },
+                onNextChapter: { nextChapter() },
                 onShowChapterList: { showChapterList = true },
                 onTogglePlayPause: toggleTTS,
                 onSetTimer: { minutes in toggleSleepTimer(minutes: minutes) }
             )
         } else {
-            NormalControlBar(currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, onPreviousChapter: previousChapter, onNextChapter: nextChapter, onShowChapterList: { showChapterList = true }, onToggleTTS: toggleTTS, onShowFontSettings: { showFontSettings = true })
+            NormalControlBar(currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onToggleTTS: toggleTTS, onShowFontSettings: { showFontSettings = true })
         }
     }
 
@@ -1171,7 +1171,12 @@ struct ReadingView: View {
                     
                     // 2. Pre-paginate on main thread (TextKit2 is not thread-safe)
                     if targetPageSize.width > 0 {
-                        // ... (previous logic)
+                        let attrText = TextKitPaginator.createAttributedText(sentences: sentences, fontSize: fontSize, lineSpacing: lineSpacing, chapterTitle: chapterTitle)
+                        let pStarts = TextKitPaginator.paragraphStartIndices(sentences: sentences)
+                        let prefixLen = (chapterTitle.isEmpty) ? 0 : (chapterTitle + "\n").utf16.count
+                        let tk2Store = TextKit2RenderStore(attributedString: attrText, layoutWidth: targetPageSize.width)
+                        let inset = max(8, min(18, fontSize * 0.6))
+                        let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: targetPageSize, paragraphStarts: pStarts, prefixLen: prefixLen, contentInset: inset)
                         
                         initialCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: cleaned, attributedText: attrText, paragraphStarts: pStarts, chapterPrefixLen: prefixLen, isFullyPaginated: result.reachedEnd)
                         
@@ -1180,7 +1185,29 @@ struct ReadingView: View {
                             targetPageIndex = max(0, result.pages.count - 1)
                         } else if jumpFirst {
                             targetPageIndex = 0
-                        } // ... (rest of logic)
+                        } else if let ttsIdx = capturedTTSIndex, ttsIdx < pStarts.count {
+                            // High Priority: Align with TTS progress if available
+                            let charOffset = pStarts[ttsIdx] + prefixLen
+                            targetPageIndex = result.pages.firstIndex(where: { NSLocationInRange(charOffset, $0.globalRange) }) ?? 0
+                        } else if shouldResume {
+                            let bodyLength = (pStarts.last ?? 0) + (sentences.last?.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count ?? 0)
+                            let bodyIndex: Int
+                            if let localIndex = resumeLocalBodyIndex, resumeLocalChapterIndex == chapterIndex {
+                                bodyIndex = localIndex
+                            } else if let pos = resumePos, pos > 0 {
+                                bodyIndex = pos > 1.0 ? Int(pos) : Int(Double(bodyLength) * min(max(pos, 0.0), 1.0))
+                            } else {
+                                bodyIndex = 0
+                            }
+                            let clampedBodyIndex = max(0, min(bodyIndex, max(0, bodyLength - 1)))
+                            let charIndex = clampedBodyIndex + prefixLen
+                            
+                            if let pageIdx = result.pages.firstIndex(where: { NSLocationInRange(charIndex, $0.globalRange) }) {
+                                targetPageIndex = pageIdx
+                            } else if let localPage = resumeLocalPageIndex, resumeLocalChapterIndex == chapterIndex, result.pages.indices.contains(localPage) {
+                                targetPageIndex = localPage
+                            }
+                        }
                     }
                     
                     self.rawContent = cleaned
