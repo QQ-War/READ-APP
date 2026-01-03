@@ -6,8 +6,8 @@ private struct PageTurnRequest: Equatable {
     let direction: UIPageViewController.NavigationDirection
     let animated: Bool
     let targetIndex: Int
-    let targetSnapshot: PageSnapshot? // 跨章节时携带目标快照
-    let targetChapterIndex: Int?     // 目标章节索引
+    let targetSnapshot: PageSnapshot? = nil // 跨章节时携带目标快照
+    let targetChapterIndex: Int? = nil     // 目标章节索引
     let timestamp: TimeInterval = Date().timeIntervalSince1970
     
     static func == (lhs: PageTurnRequest, rhs: PageTurnRequest) -> Bool {
