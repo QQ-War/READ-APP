@@ -35,6 +35,10 @@ struct BookDetailView: View {
         guard !chapters.isEmpty else { return [] }
         return Array(0...((chapters.count - 1) / 50))
     }
+
+    private var groupCount: Int {
+        chapterGroups.count
+    }
     
     var body: some View {
         ScrollView {
@@ -457,4 +461,3 @@ struct SourceSwitchView: View {
         isSearching = false
     }
 }
-
