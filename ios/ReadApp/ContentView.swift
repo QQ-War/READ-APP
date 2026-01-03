@@ -26,6 +26,15 @@ struct ContentView: View {
                     Image(systemName: "list.bullet")
                     Text("书源")
                 }
+
+                NavigationView {
+                    SettingsView()
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .tabItem {
+                    Image(systemName: "gearshape.fill")
+                    Text("设置")
+                }
             }
         }
     }
