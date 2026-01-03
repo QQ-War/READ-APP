@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SourceListView: View {
+    @EnvironmentObject var apiService: APIService
     @StateObject private var viewModel = SourceListViewModel()
     
     // For specific source search via swipe action

@@ -9,6 +9,8 @@ class SourceListViewModel: ObservableObject {
     @Published var failedSources: [String] = []
 
     @Published var searchText: String = ""
+    @Published var searchResults: [Book] = []
+    @Published var isSearching = false
     
     var filteredSources: [BookSource] {
         if searchText.isEmpty {
