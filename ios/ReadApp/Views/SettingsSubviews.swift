@@ -2,8 +2,10 @@ import SwiftUI
 
 struct AccountSettingsView: View {
     @StateObject private var preferences = UserPreferences.shared
+    @EnvironmentObject var apiService: APIService
     @Environment(\.dismiss) var dismiss
     @State private var showLogoutAlert = false
+    @State private var showChangePasswordSheet = false
 
     var body: some View {
         Form {
@@ -40,6 +42,10 @@ struct AccountSettingsView: View {
             }
             
             Section {
+                Button(action: { showChangePasswordSheet = true }) {
+                    Label("修改密码", systemImage: "key.viewfinder")
+                }
+                
                 Button(action: { showLogoutAlert = true }) {
                     HStack {
                         Spacer()
@@ -52,6 +58,9 @@ struct AccountSettingsView: View {
         }
         .navigationTitle("账号管理")
         .ifAvailableHideTabBar()
+        .sheet(isPresented: $showChangePasswordSheet) {
+            ChangePasswordView().environmentObject(apiService)
+        }
         .alert("退出登录", isPresented: $showLogoutAlert) {
             Button("取消", role: .cancel) { }
             Button("退出", role: .destructive) {
@@ -69,6 +78,10 @@ struct ReadingSettingsView: View {
 
     var body: some View {
         Form {
+            Section(header: Text("通用设置")) {
+                Toggle("夜间模式", isOn: $preferences.isDarkMode)
+            }
+            
             Section(header: Text("显示设置")) {
                 HStack {
                     Text("字体大小")
@@ -106,6 +119,79 @@ struct ReadingSettingsView: View {
         }
         .navigationTitle("阅读设置")
         .ifAvailableHideTabBar()
+    }
+}
+
+// MARK: - Change Password View
+struct ChangePasswordView: View {
+    @EnvironmentObject var apiService: APIService
+    @Environment(\.dismiss) var dismiss
+    @State private var oldPassword = ""
+    @State private var newPassword = ""
+    @State private var confirmPassword = ""
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var showSuccess = false
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("安全信息")) {
+                    SecureField("当前密码", text: $oldPassword)
+                    SecureField("新密码", text: $newPassword)
+                    SecureField("确认新密码", text: $confirmPassword)
+                }
+                
+                Section {
+                    Button(action: changePassword) {
+                        HStack {
+                            Spacer()
+                            if isLoading {
+                                ProgressView().padding(.trailing, 8)
+                            }
+                            Text("确认修改")
+                            Spacer()
+                        }
+                    }
+                    .disabled(oldPassword.isEmpty || newPassword.isEmpty || newPassword != confirmPassword || isLoading)
+                }
+            }
+            .navigationTitle("修改密码")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { dismiss() }
+                }
+            }
+            .alert("结果", isPresented: $showSuccess) {
+                Button("确定") { dismiss() }
+            } message: {
+                Text("密码修改成功")
+            }
+            .alert("错误", isPresented: .constant(errorMessage != nil)) {
+                Button("确定") { errorMessage = nil }
+            } message: {
+                if let error = errorMessage { Text(error) }
+            }
+        }
+    }
+
+    private func changePassword() {
+        isLoading = true
+        Task {
+            do {
+                try await apiService.changePassword(oldPassword: oldPassword, newPassword: newPassword)
+                await MainActor.run {
+                    isLoading = false
+                    showSuccess = true
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
 }
 

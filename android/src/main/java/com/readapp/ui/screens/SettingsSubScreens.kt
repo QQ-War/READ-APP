@@ -24,12 +24,20 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccountSettingsScreen(
-    serverAddress: String,
+fun AccountSettingsView(
     username: String,
+    serverUrl: String,
+    publicServerUrl: String,
     onLogout: () -> Unit,
+    onConfirmPasswordChange: (String, String) -> Unit,
     onNavigateBack: () -> Unit
 ) {
+    var showLogoutAlert by remember { mutableStateOf(false) }
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var oldPass by remember { mutableStateOf("") }
+    var newPass by remember { mutableStateOf("") }
+    var confirmPass by remember { mutableStateOf("") }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -49,28 +57,82 @@ fun AccountSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("用户信息", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("用户名")
-                        Text(username, color = MaterialTheme.colorScheme.secondary)
-                    }
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    Text("服务器地址", style = MaterialTheme.typography.labelSmall)
-                    Text(serverAddress, style = MaterialTheme.typography.bodySmall)
-                }
+            SectionHeader("用户信息")
+            SettingsItem(title = "用户名", subtitle = username, icon = Icons.Default.Person) {}
+            SettingsItem(title = "局域网服务器", subtitle = serverUrl, icon = Icons.Default.Dns) {}
+            if (publicServerUrl.isNotBlank()) {
+                SettingsItem(title = "公网服务器", subtitle = publicServerUrl, icon = Icons.Default.Public) {}
             }
 
+            SectionHeader("安全与操作")
+            SettingsItem(title = "修改密码", subtitle = "更新您的登录凭据", icon = Icons.Default.Lock) {
+                showChangePasswordDialog = true
+            }
+            
             Button(
-                onClick = onLogout,
+                onClick = { showLogoutAlert = true },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
             ) {
                 Text("退出登录")
             }
         }
+    }
+
+    if (showChangePasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { showChangePasswordDialog = false },
+            title = { Text("修改密码") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = oldPass,
+                        onValueChange = { oldPass = it },
+                        label = { Text("当前密码") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    )
+                    OutlinedTextField(
+                        value = newPass,
+                        onValueChange = { newPass = it },
+                        label = { Text("新密码") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    )
+                    OutlinedTextField(
+                        value = confirmPass,
+                        onValueChange = { confirmPass = it },
+                        label = { Text("确认新密码") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onConfirmPasswordChange(oldPass, newPass)
+                        showChangePasswordDialog = false
+                        oldPass = ""; newPass = ""; confirmPass = ""
+                    },
+                    enabled = oldPass.isNotBlank() && newPass.isNotBlank() && newPass == confirmPass
+                ) { Text("确认") }
+            },
+            dismissButton = { TextButton(onClick = { showChangePasswordDialog = false }) { Text("取消") } }
+        )
+    }
+
+    if (showLogoutAlert) {
+        AlertDialog(
+            onDismissRequest = { showLogoutAlert = false },
+            title = { Text("退出登录") },
+            text = { Text("确定要退出登录吗？") },
+            confirmButton = {
+                TextButton(onClick = { onLogout(); showLogoutAlert = false }) {
+                    Text("退出", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutAlert = false }) { Text("取消") }
+            }
+        )
     }
 }
 

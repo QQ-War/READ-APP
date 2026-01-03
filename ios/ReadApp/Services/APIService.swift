@@ -132,6 +132,24 @@ class APIService: ObservableObject {
         }
     }
     
+    func changePassword(oldPassword: String, newPassword: String) async throws {
+        let queryItems = [
+            URLQueryItem(name: "accessToken", value: accessToken),
+            URLQueryItem(name: "oldpassword", value: oldPassword),
+            URLQueryItem(name: "password", value: newPassword)
+        ]
+        
+        let (data, httpResponse) = try await requestWithFailback(endpoint: "changepass", queryItems: queryItems)
+        guard httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "修改密码失败(状态码: \(httpResponse.statusCode))"])
+        }
+        
+        let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+        if !apiResponse.isSuccess {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "修改密码时发生未知错误"])
+        }
+    }
+
     // MARK: - 获取书架列表
     func fetchBookshelf() async throws {
         guard !accessToken.isEmpty else {

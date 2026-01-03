@@ -153,6 +153,19 @@ enum ReadingMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum PageTurningMode: String, CaseIterable, Identifiable {
+    case scroll = "Scroll"
+    case simulation = "Simulation"
+
+    var id: String { self.rawValue }
+    var localizedName: String {
+        switch self {
+        case .scroll: return "平滑滑动"
+        case .simulation: return "仿真翻页"
+        }
+    }
+}
+
 class UserPreferences: ObservableObject {
     static let shared = UserPreferences()
     
@@ -287,6 +300,18 @@ class UserPreferences: ObservableObject {
         }
     }
     
+    @Published var pageTurningMode: PageTurningMode {
+        didSet {
+            UserDefaults.standard.set(pageTurningMode.rawValue, forKey: "pageTurningMode")
+        }
+    }
+
+    @Published var isDarkMode: Bool {
+        didSet {
+            UserDefaults.standard.set(isDarkMode, forKey: "isDarkMode")
+        }
+    }
+    
     @Published var lockPageOnTTS: Bool {
         didSet {
             UserDefaults.standard.set(lockPageOnTTS, forKey: "lockPageOnTTS")
@@ -404,6 +429,15 @@ class UserPreferences: ObservableObject {
         } else {
             self.readingMode = .vertical // Default value
         }
+
+        if let savedTurningModeString = UserDefaults.standard.string(forKey: "pageTurningMode"),
+           let savedTurningMode = PageTurningMode(rawValue: savedTurningModeString) {
+            self.pageTurningMode = savedTurningMode
+        } else {
+            self.pageTurningMode = .simulation // iOS 默认推荐仿真
+        }
+
+        self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
 
         // 兼容旧版：如果没有单独设置旁白/对话 TTS，则使用原有的 selectedTTSId
         if narrationTTSId.isEmpty { narrationTTSId = selectedTTSId }

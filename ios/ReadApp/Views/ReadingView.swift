@@ -238,7 +238,7 @@ struct ReadingView: View {
             loadChapterContent()
             showChapterList = false
         } }
-        .sheet(isPresented: $showFontSettings) { FontSizeSheet(preferences: preferences) }
+        .sheet(isPresented: $showFontSettings) { ReaderOptionsSheet(preferences: preferences) }
         .sheet(isPresented: $showAddReplaceRule) { ReplaceRuleEditView(viewModel: replaceRuleViewModel, rule: pendingReplaceRule) }
         .onChange(of: showAddReplaceRule) { value in if !value { pendingReplaceRule = nil } }
         .task {
@@ -358,6 +358,7 @@ struct ReadingView: View {
                                 nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.renderStore, pageInfos: nextCache.pageInfos),
                                 currentPageIndex: $currentPageIndex,
                                 pageSpacing: preferences.pageInterSpacing,
+                                transitionStyle: preferences.pageTurningMode == .simulation ? .pageCurl : .scroll,
                                 onTransitioningChanged: { self.isPageTransitioning = $0 },
                                 onTapLocation: handleReaderTap,
                                 onChapterChange: { offset in self.isAutoFlipping = true; self.handleChapterSwitch(offset: offset) },
@@ -371,7 +372,7 @@ struct ReadingView: View {
                                 nextContentViewController: nextVC,
                                 makeViewController: makeContentViewController
                             )
-                            .id(preferences.pageInterSpacing)
+                            .id("\(preferences.pageInterSpacing)_\(preferences.pageTurningMode.rawValue)")
                             .frame(width: contentSize.width, height: contentSize.height)
 
                             if !showUIControls && currentCache.pages.count > 0 {
@@ -1434,14 +1435,14 @@ struct ReadingView: View {
     }
 }
 
-// MARK: - UIPageViewController Wrapper
-	private struct ReadPageViewController: UIViewControllerRepresentable {
-	    var snapshot: PageSnapshot
-	    var prevSnapshot: PageSnapshot?
-	    var nextSnapshot: PageSnapshot?
+private struct ReadPageViewController: UIViewControllerRepresentable {
+    var snapshot: PageSnapshot
+    var prevSnapshot: PageSnapshot?
+    var nextSnapshot: PageSnapshot?
     
     @Binding var currentPageIndex: Int
     var pageSpacing: CGFloat
+    var transitionStyle: UIPageViewController.TransitionStyle
     var onTransitioningChanged: (Bool) -> Void
     var onTapLocation: (ReaderTapLocation) -> Void
     var onChapterChange: (Int) -> Void
@@ -1453,7 +1454,7 @@ struct ReadingView: View {
     var makeViewController: (PageSnapshot, Int, Int) -> ReadContentViewController?
 
     func makeUIViewController(context: Context) -> UIPageViewController {
-        let pvc = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: [UIPageViewController.OptionsKey.interPageSpacing: pageSpacing])
+        let pvc = UIPageViewController(transitionStyle: transitionStyle, navigationOrientation: .horizontal, options: [UIPageViewController.OptionsKey.interPageSpacing: pageSpacing])
         pvc.delegate = context.coordinator
         context.coordinator.pageViewController = pvc
         pvc.view.backgroundColor = UIColor.systemBackground
@@ -2016,8 +2017,8 @@ private struct NormalControlBar: View {
             
             Button(action: onShowFontSettings) {
                 VStack(spacing: 4) {
-                    Image(systemName: "textformat.size").font(.title2)
-                    Text("字体").font(.caption2)
+                    Image(systemName: "slider.horizontal.3").font(.title2)
+                    Text("选项").font(.caption2)
                 }
             }
             
@@ -2034,37 +2035,59 @@ private struct NormalControlBar: View {
     }
 }
 
-private struct FontSizeSheet: View {
+private struct ReaderOptionsSheet: View {
     @ObservedObject var preferences: UserPreferences
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 24) {
-                VStack(spacing: 8) {
-                    Text("字体大小: \(String(format: "%.0f", preferences.fontSize))")
-                        .font(.headline)
-                    Slider(value: $preferences.fontSize, in: 12...30, step: 1)
+            Form {
+                Section(header: Text("字体与间距")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("字体大小: \(String(format: "%.0f", preferences.fontSize))")
+                            .font(.subheadline)
+                        Slider(value: $preferences.fontSize, in: 12...30, step: 1)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("行间距: \(String(format: "%.0f", preferences.lineSpacing))")
+                            .font(.subheadline)
+                        Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
+                    }
                 }
                 
-                VStack(spacing: 8) {
-                    Text("左右边距: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
-                        .font(.headline)
-                    Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
-                }
+                Section(header: Text("页面布局")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("左右边距: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
+                            .font(.subheadline)
+                        Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
+                    }
 
-                VStack(spacing: 8) {
-                    Text("翻页间距: \(String(format: "%.0f", preferences.pageInterSpacing))")
-                        .font(.headline)
-                    Slider(value: $preferences.pageInterSpacing, in: 0...30, step: 1)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("翻页间距: \(String(format: "%.0f", preferences.pageInterSpacing))")
+                            .font(.subheadline)
+                        Slider(value: $preferences.pageInterSpacing, in: 0...30, step: 1)
+                    }
                 }
-
-                Toggle("播放时锁定翻页", isOn: $preferences.lockPageOnTTS)
-                    .padding(.top)
                 
-                Spacer()
+                Section(header: Text("交互设置")) {
+                    Picker("翻页效果", selection: $preferences.pageTurningMode) {
+                        Text("平滑滑动").tag(PageTurningMode.scroll)
+                        Text("仿真翻页").tag(PageTurningMode.simulation)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.vertical, 4)
+                    
+                    Toggle("听书时锁定翻页", isOn: $preferences.lockPageOnTTS)
+                }
             }
-            .padding()
+            .navigationTitle("阅读选项")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
         }
     }
 }

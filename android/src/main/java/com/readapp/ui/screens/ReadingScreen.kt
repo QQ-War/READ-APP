@@ -1127,40 +1127,86 @@ private fun BottomControlBar(
 }
 
 @Composable
-private fun FontSizeDialog(
-    value: Float,
-    onValueChange: (Float) -> Unit,
+private fun ReaderOptionsDialog(
+    fontSize: Float,
+    onFontSizeChange: (Float) -> Unit,
     horizontalPadding: Float,
     onHorizontalPaddingChange: (Float) -> Unit,
     lockPageOnTTS: Boolean,
     onLockPageOnTTSChange: (Boolean) -> Unit,
+    pageTurningMode: com.readapp.data.PageTurningMode,
+    onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit,
+    isDarkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "阅读设置") },
+        title = { Text(text = "阅读选项") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "字体大小: ${value.toInt()}sp")
-                Slider(
-                    value = value,
-                    onValueChange = onValueChange,
-                    valueRange = 12f..28f,
-                    steps = 7
-                )
-                Text(text = "\u5de6\u53f3\u7a7a\u767d: ${horizontalPadding.toInt()}dp")
-                Slider(
-                    value = horizontalPadding,
-                    onValueChange = onHorizontalPaddingChange,
-                    valueRange = 8f..48f,
-                    steps = 4
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // 夜间模式
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onLockPageOnTTSChange(!lockPageOnTTS) }
+                    modifier = Modifier.fillMaxWidth().clickable { onDarkModeChange(!isDarkMode) }
+                ) {
+                    Text("夜间模式", modifier = Modifier.weight(1f))
+                    Switch(checked = isDarkMode, onCheckedChange = onDarkModeChange)
+                }
+
+                Divider()
+
+                // 字体大小
+                Column {
+                    Text(text = "字体大小: ${fontSize.toInt()}sp", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = fontSize,
+                        onValueChange = onFontSizeChange,
+                        valueRange = 12f..30f
+                    )
+                }
+
+                // 左右间距
+                Column {
+                    Text(text = "页面边距: ${horizontalPadding.toInt()}dp", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = horizontalPadding,
+                        onValueChange = onHorizontalPaddingChange,
+                        valueRange = 0f..50f
+                    )
+                }
+
+                Divider()
+
+                // 翻页模式
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("翻页效果", style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        com.readapp.data.PageTurningMode.values().forEach { mode ->
+                            val isSelected = pageTurningMode == mode
+                            val label = when(mode) {
+                                com.readapp.data.PageTurningMode.Scroll -> "平滑滑动"
+                                com.readapp.data.PageTurningMode.Simulation -> "仿真翻页"
+                            }
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { onPageTurningModeChange(mode) },
+                                label = { Text(label) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable { onLockPageOnTTSChange(!lockPageOnTTS) }
                 ) {
                     Checkbox(checked = lockPageOnTTS, onCheckedChange = onLockPageOnTTSChange)
-                    Text("播放时锁定翻页", modifier = Modifier.padding(start = 8.dp))
+                    Text("播放时锁定翻页", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         },

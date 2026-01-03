@@ -195,6 +195,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = _readingMode.asStateFlow()
     private val _lockPageOnTTS = MutableStateFlow(false)
     val lockPageOnTTS: StateFlow<Boolean> = _lockPageOnTTS.asStateFlow()
+    private val _pageTurningMode = MutableStateFlow(com.readapp.data.PageTurningMode.Scroll)
+    val pageTurningMode: StateFlow<com.readapp.data.PageTurningMode> = _pageTurningMode.asStateFlow()
+    private val _isDarkMode = MutableStateFlow(false)
+    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
     private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080/api/5")
     val serverAddress: StateFlow<String> = _serverAddress.asStateFlow()
     private val _publicServerAddress = MutableStateFlow("")
@@ -246,6 +250,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
             _readingMode.value = preferences.readingMode.first()
             _lockPageOnTTS.value = preferences.lockPageOnTTS.first()
+            _pageTurningMode.value = preferences.pageTurningMode.first()
+            _isDarkMode.value = preferences.isDarkMode.first()
 
             if (_accessToken.value.isNotBlank()) {
                 _isLoading.value = true
@@ -1159,6 +1165,24 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun changePassword(oldPass: String, newPass: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val (baseUrl, publicUrl, token) = preferences.getCredentials()
+            if (token == null) {
+                _isLoading.value = false
+                return@launch
+            }
+
+            repository.changePassword(baseUrl, publicUrl, token, oldPass, newPass)
+                .onSuccess {
+                    onSuccess()
+                }
+                .onFailure { _errorMessage.value = "修改失败: ${it.message}" }
+            _isLoading.value = false
+        }
+    }
+
     fun downloadChapters(startIndex: Int, endIndex: Int) {
         val book = _selectedBook.value ?: return
         val chapters = _chapters.value
@@ -1348,6 +1372,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updateBookshelfSortByRecent(enabled: Boolean) { _bookshelfSortByRecent.value = enabled; viewModelScope.launch { preferences.saveBookshelfSortByRecent(enabled); applyBooksFilterAndSort() } }
     fun updateReadingMode(mode: com.readapp.data.ReadingMode) { _readingMode.value = mode; viewModelScope.launch { preferences.saveReadingMode(mode) } }
     fun updateLockPageOnTTS(enabled: Boolean) { _lockPageOnTTS.value = enabled; viewModelScope.launch { preferences.saveLockPageOnTTS(enabled) } }
+    fun updatePageTurningMode(mode: com.readapp.data.PageTurningMode) { _pageTurningMode.value = mode; viewModelScope.launch { preferences.savePageTurningMode(mode) } }
+    fun updateDarkMode(enabled: Boolean) { _isDarkMode.value = enabled; viewModelScope.launch { preferences.saveIsDarkMode(enabled) } }
     fun updateSearchSourcesFromBookshelf(enabled: Boolean) { 
         _searchSourcesFromBookshelf.value = enabled
         viewModelScope.launch { 

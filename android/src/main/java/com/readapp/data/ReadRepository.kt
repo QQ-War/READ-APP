@@ -39,6 +39,12 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
             api.login(username, password)
         }(buildEndpoints(baseUrl, publicUrl))
 
+    suspend fun getUserInfo(baseUrl: String, publicUrl: String?, accessToken: String): Result<com.readapp.data.model.UserInfo> =
+        executeWithFailover { it.getUserInfo(accessToken) }(buildEndpoints(baseUrl, publicUrl))
+
+    suspend fun changePassword(baseUrl: String, publicUrl: String?, accessToken: String, oldPass: String, newPass: String): Result<String> =
+        executeWithFailover { it.changePassword(accessToken, oldPass, newPass) }(buildEndpoints(baseUrl, publicUrl))
+
     suspend fun fetchBooks(baseUrl: String, publicUrl: String?, accessToken: String): Result<List<Book>> =
         executeWithFailover {
             it.getBookshelf(accessToken)

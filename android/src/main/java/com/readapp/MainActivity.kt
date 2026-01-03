@@ -166,6 +166,8 @@ fun ReadAppMain() {
                 val errorMessage by bookViewModel.errorMessage.collectAsState()
                 val readingMode by bookViewModel.readingMode.collectAsState()
                 val lockPageOnTTS by bookViewModel.lockPageOnTTS.collectAsState()
+                val pageTurningMode by bookViewModel.pageTurningMode.collectAsState()
+                val isDarkMode by bookViewModel.isDarkMode.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
@@ -189,6 +191,10 @@ fun ReadAppMain() {
                         readingMode = readingMode,
                         lockPageOnTTS = lockPageOnTTS,
                         onLockPageOnTTSChange = { bookViewModel.updateLockPageOnTTS(it) },
+                        pageTurningMode = pageTurningMode,
+                        onPageTurningModeChange = { bookViewModel.updatePageTurningMode(it) },
+                        isDarkMode = isDarkMode,
+                        onDarkModeChange = { bookViewModel.updateDarkMode(it) },
                         onClearError = { bookViewModel.clearError() },
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
@@ -254,17 +260,17 @@ fun ReadAppMain() {
 
             composable(Screen.SettingsAccount.route) {
                 val serverAddress by bookViewModel.serverAddress.collectAsState()
+                val publicServerUrl by bookViewModel.publicServerAddress.collectAsState()
                 val username by bookViewModel.username.collectAsState()
-                AccountSettingsScreen(
-                    serverAddress = serverAddress,
+                AccountSettingsView(
                     username = username,
+                    serverUrl = serverAddress,
+                    publicServerUrl = publicServerUrl,
                     onLogout = {
                         bookViewModel.logout()
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0)
-                            launchSingleTop = true
-                        }
+                        navController.navigate(Screen.Login.route) { popUpTo(0) }
                     },
+                    onConfirmPasswordChange = { old, new -> bookViewModel.changePassword(old, new) {} },
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -273,13 +279,16 @@ fun ReadAppMain() {
                 val readingMode by bookViewModel.readingMode.collectAsState()
                 val readingFontSize by bookViewModel.readingFontSize.collectAsState()
                 val readingHorizontalPadding by bookViewModel.readingHorizontalPadding.collectAsState()
+                val isDarkMode by bookViewModel.isDarkMode.collectAsState()
                 ReadingSettingsScreen(
                     readingMode = readingMode,
                     fontSize = readingFontSize,
                     horizontalPadding = readingHorizontalPadding,
+                    isDarkMode = isDarkMode,
                     onReadingModeChange = bookViewModel::updateReadingMode,
                     onFontSizeChange = bookViewModel::updateReadingFontSize,
                     onHorizontalPaddingChange = bookViewModel::updateReadingHorizontalPadding,
+                    onDarkModeChange = bookViewModel::updateDarkMode,
                     onClearCache = { bookViewModel.clearCache() },
                     onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                     onNavigateBack = { navController.popBackStack() }

@@ -39,6 +39,18 @@ interface ReadApiService {
         @Query("accessToken") accessToken: String,
     ): Response<ApiResponse<UserInfo>>
 
+    @GET("changepass")
+    suspend fun changePassword(
+        @Query("accessToken") accessToken: String,
+        @Query("oldpassword") oldPass: String,
+        @Query("password") newPass: String
+    ): Response<ApiResponse<String>>
+
+    @GET("getalltocken")
+    suspend fun getAllTokens(
+        @Query("accessToken") accessToken: String,
+    ): Response<ApiResponse<List<String>>>
+
     @GET("getBookshelf")
     suspend fun getBookshelf(
         @Query("accessToken") accessToken: String,
