@@ -1,17 +1,20 @@
 package com.readapp.ui.screens
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import android.widget.Toast
-import android.content.Intent
-import android.content.ClipData
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -28,8 +31,6 @@ fun MainScreen(
     bookViewModel: BookViewModel
 ) {
     val localNavController = rememberNavController()
-    val context = LocalContext.current
-    
     Scaffold(
         bottomBar = {
             NavigationBar {
@@ -81,86 +82,13 @@ fun MainScreen(
                     )
                 }
                 composable(BottomNavItem.Settings.route) {
-                    val serverAddress by bookViewModel.serverAddress.collectAsState()
                     val username by bookViewModel.username.collectAsState()
-                    val selectedTtsEngine by bookViewModel.selectedTtsEngine.collectAsState()
-                    val useSystemTts by bookViewModel.useSystemTts.collectAsState()
-                    val systemVoiceId by bookViewModel.systemVoiceId.collectAsState()
-                    val narrationTtsEngine by bookViewModel.narrationTtsEngine.collectAsState()
-                    val dialogueTtsEngine by bookViewModel.dialogueTtsEngine.collectAsState()
-                    val speakerTtsMapping by bookViewModel.speakerTtsMapping.collectAsState()
-                    val availableTtsEngines by bookViewModel.availableTtsEngines.collectAsState()
-                    val speechSpeed by bookViewModel.speechSpeed.collectAsState()
-                    val preloadCount by bookViewModel.preloadCount.collectAsState()
-                    val loggingEnabled by bookViewModel.loggingEnabled.collectAsState()
-                    val bookshelfSortByRecent by bookViewModel.bookshelfSortByRecent.collectAsState()
-                    val readingMode by bookViewModel.readingMode.collectAsState()
-
                     SettingsScreen(
-                        serverAddress = serverAddress,
                         username = username,
-                        selectedTtsEngine = selectedTtsEngine,
-                        useSystemTts = useSystemTts,
-                        systemVoiceId = systemVoiceId,
-                        narrationTtsEngine = narrationTtsEngine,
-                        dialogueTtsEngine = dialogueTtsEngine,
-                        speakerTtsMapping = speakerTtsMapping,
-                        availableTtsEngines = availableTtsEngines,
-                        speechSpeed = speechSpeed,
-                        preloadCount = preloadCount,
-                        loggingEnabled = loggingEnabled,
-                        bookshelfSortByRecent = bookshelfSortByRecent,
-                        readingMode = readingMode,
-                        onReadingModeChange = bookViewModel::updateReadingMode,
-                        onServerAddressChange = { bookViewModel.updateServerAddress(it) },
-                        onSelectTtsEngine = { bookViewModel.selectTtsEngine(it) },
-                        onUseSystemTtsChange = { bookViewModel.updateUseSystemTts(it) },
-                        onSystemVoiceIdChange = { bookViewModel.updateSystemVoiceId(it) },
-                        onSelectNarrationTtsEngine = { bookViewModel.selectNarrationTtsEngine(it) },
-                        onSelectDialogueTtsEngine = { bookViewModel.selectDialogueTtsEngine(it) },
-                        onAddSpeakerMapping = { name, ttsId -> bookViewModel.updateSpeakerMapping(name, ttsId) },
-                        onRemoveSpeakerMapping = { name -> bookViewModel.removeSpeakerMapping(name) },
-                        onReloadTtsEngines = { bookViewModel.loadTtsEngines() },
-                        onSpeechSpeedChange = { bookViewModel.updateSpeechSpeed(it) },
-                        onPreloadCountChange = { bookViewModel.updatePreloadCount(it) },
-                        onClearCache = { bookViewModel.clearCache() },
-                        onExportLogs = {
-                            val uri = bookViewModel.exportLogs(context)
-                            if (uri == null) {
-                                Toast.makeText(context, "No logs to export", Toast.LENGTH_SHORT).show()
-                            } else {
-                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                    clipData = ClipData.newRawUri("logs", uri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(shareIntent, "导出日志"))
-                            }
+                        onNavigateToSubSetting = { route ->
+                            mainNavController.navigate(route)
                         },
-                        onClearLogs = {
-                            bookViewModel.clearLogs()
-                            Toast.makeText(context, "Logs cleared", Toast.LENGTH_SHORT).show()
-                        },
-                        onLoggingEnabledChange = { enabled ->
-                            bookViewModel.updateLoggingEnabled(enabled)
-                        },
-                        onBookshelfSortByRecentChange = { enabled ->
-                            bookViewModel.updateBookshelfSortByRecent(enabled)
-                        },
-                        onNavigateToReplaceRules = {
-                            mainNavController.navigate(Screen.ReplaceRules.route)
-                        },
-                        onLogout = {
-                            bookViewModel.logout()
-                            mainNavController.navigate(Screen.Login.route) {
-                                popUpTo(0)
-                                launchSingleTop = true
-                            }
-                        },
-                        onNavigateBack = {
-                            // Back is handled by TabView navigation or system back
-                        }
+                        onNavigateBack = { }
                     )
                 }
             }
@@ -173,4 +101,3 @@ sealed class BottomNavItem(val route: String, val title: String, val icon: andro
     object BookSource : BottomNavItem(Screen.BookSource.route, "书源", Icons.Default.List)
     object Settings : BottomNavItem(Screen.Settings.route, "设置", Icons.Default.Settings)
 }
-
