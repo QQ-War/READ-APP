@@ -225,9 +225,6 @@ fun SourceListScreen(
     }
 }
 
-    }
-}
-
 private suspend fun fetchUrlContent(url: String): String? {
     return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
