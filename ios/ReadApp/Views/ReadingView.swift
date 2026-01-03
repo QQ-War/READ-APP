@@ -633,7 +633,7 @@ struct ReadingView: View {
         }
         else if currentChapterIndex > 0 {
             pendingJumpToLastPage = true
-            previousChapter()
+            previousChapter(animated: true)
         }
     }
 
@@ -643,7 +643,7 @@ struct ReadingView: View {
         }
         else if currentChapterIndex < chapters.count - 1 {
             pendingJumpToFirstPage = true
-            nextChapter()
+            nextChapter(animated: true)
         }
     }
 
@@ -877,7 +877,7 @@ struct ReadingView: View {
         return false
     }
 
-    private func applyCachedChapter(_ cache: ChapterCache, chapterIndex: Int, jumpToFirst: Bool, jumpToLast: Bool) {
+    private func applyCachedChapter(_ cache: ChapterCache, chapterIndex: Int, jumpToFirst: Bool, jumpToLast: Bool, animated: Bool = false) {
         suppressRepaginateOnce = true
         currentChapterIndex = chapterIndex
         currentCache = cache
@@ -888,7 +888,7 @@ struct ReadingView: View {
         pendingScrollToSentenceIndex = nil
         
         let targetIdx = jumpToLast ? max(0, cache.pages.count - 1) : 0
-        self.pageTurnRequest = PageTurnRequest(direction: jumpToLast ? .reverse : .forward, animated: false, targetIndex: targetIdx)
+        self.pageTurnRequest = PageTurnRequest(direction: jumpToLast ? .reverse : .forward, animated: animated, targetIndex: targetIdx)
         self.currentPageIndex = targetIdx
         
         pendingJumpToFirstPage = false
@@ -1233,7 +1233,7 @@ struct ReadingView: View {
         pendingBufferPageIndex = nil; lastHandledPageIndex = nil
     }
     
-    private func previousChapter() {
+    private func previousChapter(animated: Bool = false) {
         guard currentChapterIndex > 0 else { return }
         didApplyResumePos = true
         currentVisibleSentenceIndex = nil
@@ -1242,7 +1242,7 @@ struct ReadingView: View {
             let cached = prevCache
             nextCache = currentCache
             prevCache = .empty
-            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: false, jumpToLast: true)
+            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: false, jumpToLast: true, animated: animated)
             ttsBaseIndex = 0
             prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
             if ttsManager.isPlaying && !ttsManager.isPaused {
@@ -1257,7 +1257,7 @@ struct ReadingView: View {
         saveProgress()
     }
     
-    private func nextChapter() {
+    private func nextChapter(animated: Bool = false) {
         guard currentChapterIndex < chapters.count - 1 else { return }
         didApplyResumePos = true
         currentVisibleSentenceIndex = nil
@@ -1266,7 +1266,7 @@ struct ReadingView: View {
             let cached = nextCache
             prevCache = currentCache
             nextCache = .empty
-            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: true, jumpToLast: false)
+            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: true, jumpToLast: false, animated: animated)
             ttsBaseIndex = 0
             prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
             if ttsManager.isPlaying && !ttsManager.isPaused {
