@@ -3,6 +3,7 @@ import SwiftUI
 struct BookSearchView: View {
     @ObservedObject var viewModel: BookSearchViewModel
     @Environment(\.presentationMode) var presentationMode // For dismissing the view
+    @EnvironmentObject var apiService: APIService
     
     @State private var showingAddSuccessAlert = false
     @State private var showingAddFailureAlert = false
