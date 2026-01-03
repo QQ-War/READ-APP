@@ -163,7 +163,7 @@ struct BookDetailView: View {
                 if isInBookshelf {
                     Button(action: removeFromBookshelf) {
                         Label("移出书架", systemImage: "minus.circle")
-                            .fontWeight(.semibold)
+                            .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .background(Color.red.opacity(0.1))
@@ -173,7 +173,7 @@ struct BookDetailView: View {
                 } else {
                     Button(action: addToBookshelf) {
                         Label("加入书架", systemImage: "plus.circle")
-                            .fontWeight(.semibold)
+                            .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .background(Color.blue.opacity(0.1))
@@ -183,7 +183,13 @@ struct BookDetailView: View {
                 }
                 
                 Button(action: { isReading = true }) {
-                    Text("开始阅读").fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 10).background(Color.blue).foregroundColor(.white).cornerRadius(8)
+                    Text("开始阅读")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
                 }
                 .fullScreenCover(isPresented: $isReading) {
                     ReadingView(book: book).environmentObject(apiService)
@@ -302,7 +308,7 @@ struct BookDetailView: View {
         Task {
             do {
                 try await apiService.saveBook(book: book)
-                await apiService.fetchBookshelf() // Refresh list
+                try await apiService.fetchBookshelf() // Refresh list
                 await MainActor.run {
                     showingAddSuccessAlert = true
                 }
@@ -319,7 +325,7 @@ struct BookDetailView: View {
         Task {
             do {
                 try await apiService.deleteBook(bookUrl: bookUrl)
-                await apiService.fetchBookshelf() // Refresh list
+                try await apiService.fetchBookshelf() // Refresh list
                 await MainActor.run {
                     showingRemoveSuccessAlert = true
                 }
@@ -417,5 +423,4 @@ struct SourceSwitchView: View {
         isSearching = false
     }
 }
-
 
