@@ -6,51 +6,106 @@ struct TTSEngineEditView: View {
     
     let ttsToEdit: HttpTTS?
     
-    @State private var name: String = ""
-    @State private var url: String = ""
-    @State private var contentType: String = "audio/mpeg"
-    @State private var concurrentRate: String = "1"
-    @State private var loginUrl: String = ""
-    @State private var header: String = ""
+    @State private var name: String
+    @State private var url: String
+    @State private var contentType: String
+    @State private var concurrentRate: String
+    @State private var loginUrl: String
+    @State private var header: String
     
     @State private var isLoading = false
     @State private var errorMessage: String?
     
     var isEditing: Bool { ttsToEdit != nil }
     
+    // 使用自定义构造函数来确保 State 变量被正确初始化为传入的值
+    init(ttsToEdit: HttpTTS?) {
+        self.ttsToEdit = ttsToEdit
+        _name = State(initialValue: ttsToEdit?.name ?? "")
+        _url = State(initialValue: ttsToEdit?.url ?? "")
+        _contentType = State(initialValue: ttsToEdit?.contentType ?? "audio/mpeg")
+        _concurrentRate = State(initialValue: ttsToEdit?.concurrentRate ?? "1")
+        _loginUrl = State(initialValue: ttsToEdit?.loginUrl ?? "")
+        _header = State(initialValue: ttsToEdit?.header ?? "")
+    }
+    
     var body: some View {
         Form {
             Section(header: Text("基本信息")) {
-                TextField("引擎名称", text: $name)
-                TextField("接口 URL", text: $url)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
+                HStack {
+                    Text("名称")
+                    TextField("引擎名称", text: $name)
+                        .multilineTextAlignment(.trailing)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("接口 URL")
+                    TextEditor(text: $url)
+                        .frame(minHeight: 60)
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundColor(.blue)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                }
             }
             
-            Section(header: Text("高级配置"), footer: Text("JSON 格式的 Header 或其他配置项")) {
-                TextField("Content Type", text: $contentType)
-                TextField("并发频率", text: $concurrentRate)
-                TextField("登录 URL", text: $loginUrl)
-                TextEditor(text: $header)
-                    .frame(height: 100)
-                    .font(.system(.body, design: .monospaced))
+            Section(header: Text("高级配置"), footer: Text("Header 请使用标准 JSON 格式，例如 {\"User-Agent\": \"...\"}")) {
+                HStack {
+                    Text("Content Type")
+                    TextField("audio/mpeg", text: $contentType)
+                        .multilineTextAlignment(.trailing)
+                }
+                HStack {
+                    Text("并发频率")
+                    TextField("1", text: $concurrentRate)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.numberPad)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("登录 URL (可选)")
+                    TextField("https://...", text: $loginUrl)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("自定义 Header (JSON)")
+                    TextEditor(text: $header)
+                        .frame(height: 100)
+                        .font(.system(.body, design: .monospaced))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                }
             }
             
             Section {
                 Button(action: saveTTS) {
                     if isLoading {
-                        ProgressView().progressViewStyle(CircularProgressViewStyle())
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
                     } else {
-                        Text(isEditing ? "保存修改" : "添加引擎")
+                        Text(isEditing ? "保存修改" : "立即添加")
                             .frame(maxWidth: .infinity)
+                            .fontWeight(.bold)
                     }
                 }
                 .disabled(name.isEmpty || url.isEmpty || isLoading)
+                
+                if isEditing {
+                    Button(role: .destructive, action: deleteTTS) {
+                        Text("删除此引擎")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .disabled(isLoading)
+                }
             }
         }
         .navigationTitle(isEditing ? "编辑引擎" : "新增引擎")
+        .navigationBarTitleDisplayMode(.inline)
         .ifAvailableHideTabBar()
-        .onAppear(perform: loadInitialData)
         .alert("错误", isPresented: .constant(errorMessage != nil)) {
             Button("确定") { errorMessage = nil }
         } message: {
@@ -58,21 +113,11 @@ struct TTSEngineEditView: View {
         }
     }
     
-    private func loadInitialData() {
-        if let tts = ttsToEdit {
-            name = tts.name
-            url = tts.url
-            contentType = tts.contentType ?? "audio/mpeg"
-            concurrentRate = tts.concurrentRate ?? "1"
-            loginUrl = tts.loginUrl ?? ""
-            header = tts.header ?? ""
-        }
-    }
-    
     private func saveTTS() {
         isLoading = true
         errorMessage = nil
         
+        // 构建模型
         let tts = HttpTTS(
             id: ttsToEdit?.id ?? UUID().uuidString,
             userid: ttsToEdit?.userid,
@@ -91,6 +136,25 @@ struct TTSEngineEditView: View {
         Task {
             do {
                 try await apiService.saveTTS(tts: tts)
+                await MainActor.run {
+                    isLoading = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+    
+    private func deleteTTS() {
+        guard let id = ttsToEdit?.id else { return }
+        isLoading = true
+        Task {
+            do {
+                try await apiService.deleteTTS(id: id)
                 await MainActor.run {
                     isLoading = false
                     dismiss()
