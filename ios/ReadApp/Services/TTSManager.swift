@@ -1251,6 +1251,9 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 鍋滄
     func stop() {
+        // 在停止前保存最后一次进度
+        saveCurrentProgress()
+        
         stopKeepAlive()
         audioPlayer?.stop()
         audioPlayer = nil
@@ -1275,6 +1278,38 @@ class TTSManager: NSObject, ObservableObject {
         // 缁撴潫鍚庡彴浠诲姟
         endBackgroundTask()
         logger.log("TTS 鍋滄", category: "TTS")
+    }
+    
+    private func saveCurrentProgress() {
+        guard !bookUrl.isEmpty, isPlaying else { return }
+        
+        let chapterIdx = currentChapterIndex
+        let sentenceIdx = currentSentenceIndex + currentBaseSentenceIndex
+        
+        // 1. 本地保存
+        UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: chapterIdx, sentenceIndex: sentenceIdx)
+        
+        // 2. 远程同步
+        Task {
+            // 计算字符偏移量
+            let pStarts = sentences.enumerated().map { (idx, _) in
+                sentences[0..<idx].reduce(0) { $0 + $1.utf16.count + 1 }
+            }
+            let bodyIndex = pStarts.indices.contains(currentSentenceIndex) ? pStarts[currentSentenceIndex] : 0
+            
+            // 计算比例
+            let totalLen = sentences.reduce(0) { $0 + $1.utf16.count + 1 }
+            let pos = totalLen > 0 ? Double(bodyIndex) / Double(totalLen) : 0.0
+            
+            let title = chapterIdx < chapters.count ? chapters[chapterIdx].title : nil
+            
+            // 保存到 UserPreferences 的通用阅读进度
+            UserPreferences.shared.saveReadingProgress(bookUrl: bookUrl, chapterIndex: chapterIdx, pageIndex: 0, bodyCharIndex: bodyIndex)
+            
+            // 发送到服务器
+            try? await APIService.shared.saveBookProgress(bookUrl: bookUrl, index: chapterIdx, pos: pos, title: title)
+            logger.log("鉁?TTS 鍋滄鏃跺凡鑷姩鍚屾杩涘害", category: "TTS")
+        }
     }
     
     // MARK: - 涓嬩竴绔?
