@@ -309,8 +309,8 @@ struct ReadingView: View {
             ScrollViewReader {
                 proxy in
                 ScrollView {
-                    let primaryHighlight = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : lastTTSSentenceIndex
-                    let secondaryHighlights = ttsManager.isPlaying ? ttsManager.preloadedIndices : Set<Int>()
+                    let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
+                    let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
                     RichTextView(
                         sentences: contentSentences,
                         fontSize: preferences.fontSize,
@@ -327,7 +327,8 @@ struct ReadingView: View {
                 .onTapGesture { handleReaderTap(location: .middle) }
                 .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
                     if ttsManager.isPlaying, !contentSentences.isEmpty {
-                        withAnimation { proxy.scrollTo(newIndex, anchor: .center) }
+                        let absoluteIndex = newIndex + ttsBaseIndex
+                        withAnimation { proxy.scrollTo(absoluteIndex, anchor: .center) }
                     }
                 }
                 .onPreferenceChange(SentenceFramePreferenceKey.self) { updateVisibleSentenceIndex(frames: $0, viewportHeight: geometry.size.height) }
@@ -556,7 +557,8 @@ struct ReadingView: View {
         if preferences.readingMode == .horizontal {
             syncPageForSentenceIndex(ttsManager.currentSentenceIndex)
         } else {
-            pendingScrollToSentenceIndex = ttsManager.currentSentenceIndex
+            let absoluteIndex = ttsManager.currentSentenceIndex + ttsBaseIndex
+            pendingScrollToSentenceIndex = absoluteIndex
             handlePendingScroll()
         }
     }
@@ -1136,8 +1138,8 @@ struct ReadingView: View {
 
         if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
             currentChapterIndex = ttsManager.currentChapterIndex
-            lastTTSSentenceIndex = ttsManager.currentSentenceIndex
             ttsBaseIndex = ttsManager.currentBaseSentenceIndex
+            lastTTSSentenceIndex = ttsManager.currentSentenceIndex + ttsBaseIndex
             didApplyResumePos = true // Prevent local/server resume from overriding TTS position
             pendingResumeLocalBodyIndex = nil
             pendingResumeLocalChapterIndex = nil
