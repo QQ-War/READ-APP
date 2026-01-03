@@ -817,6 +817,7 @@ struct ReadingView: View {
 
         if let pageIndex = pageIndexForSentence(realIndex) ?? (globalCharIndexForSentence(realIndex).flatMap { ensurePagesForCharIndex($0) }), pageIndex != currentPageIndex {
             isTTSSyncingPage = true
+            isAutoFlipping = true // 标记为自动翻页，防止 handlePageIndexChange 重启播放
             // 使用动画请求进行 TTS 自动翻页
             pageTurnRequest = PageTurnRequest(direction: .forward, animated: true, targetIndex: pageIndex)
             DispatchQueue.main.async { self.isTTSSyncingPage = false }
@@ -1136,18 +1137,25 @@ struct ReadingView: View {
         guard !didEnterReadingSession else { return }
         didEnterReadingSession = true
 
-        if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
-            currentChapterIndex = ttsManager.currentChapterIndex
-            ttsBaseIndex = ttsManager.currentBaseSentenceIndex
-            lastTTSSentenceIndex = ttsManager.currentSentenceIndex + ttsBaseIndex
-            didApplyResumePos = true // Prevent local/server resume from overriding TTS position
-            pendingResumeLocalBodyIndex = nil
-            pendingResumeLocalChapterIndex = nil
-            pendingResumeLocalPageIndex = nil
-            pendingResumePos = nil
-            shouldSyncPageAfterPagination = true
-            loadChapterContent()
-            return
+        if ttsManager.isPlaying {
+            if ttsManager.bookUrl == book.bookUrl {
+                // 同一本书：恢复对焦
+                currentChapterIndex = ttsManager.currentChapterIndex
+                ttsBaseIndex = ttsManager.currentBaseSentenceIndex
+                lastTTSSentenceIndex = ttsManager.currentSentenceIndex + ttsBaseIndex
+                didApplyResumePos = true 
+                pendingResumeLocalBodyIndex = nil
+                pendingResumeLocalChapterIndex = nil
+                pendingResumeLocalPageIndex = nil
+                pendingResumePos = nil
+                shouldSyncPageAfterPagination = true
+                isTTSSyncingPage = true // 关键锁：防止初始对焦触发重新播放
+                loadChapterContent()
+                return
+            } else {
+                // 不同书：停止之前的播放
+                ttsManager.stop()
+            }
         }
 
         shouldApplyResumeOnce = true
@@ -1238,12 +1246,29 @@ struct ReadingView: View {
                         self.currentContent = processed
                         self.currentCache = cache
                         
+                        // 初始对焦时锁定同步标志，防止触发 handlePageIndexChange 中的播放逻辑
+                        if capturedTTSIndex != nil { 
+                            self.isTTSSyncingPage = true 
+                            self.lastTTSSentenceIndex = capturedTTSIndex
+                        }
+                        
                         // 使用无动画请求进行初始化跳转
                         self.pageTurnRequest = PageTurnRequest(direction: .forward, animated: false, targetIndex: targetPageIndex)
                         self.currentPageIndex = targetPageIndex
                         
                         self.didApplyResumePos = true 
-                        // ...
+                        if !self.hasInitialPagination, !cache.pages.isEmpty { self.hasInitialPagination = true }
+                        
+                        // Set the pagination key to current state to prevent immediate redundant re-pagination
+                        self.lastPaginationKey = PaginationKey(width: Int(targetPageSize.width * 100), height: Int(targetPageSize.height * 100), fontSize: Int(fontSize * 10), lineSpacing: Int(lineSpacing * 10), margin: Int(margin * 10), sentenceCount: sentences.count, chapterIndex: chapterIndex, resumeCharIndex: -1, resumePageIndex: -1)
+                        
+                        // 延迟清除同步标志，确保 handlePageIndexChange 被完全跳过
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            self.isTTSSyncingPage = false
+                        }
+                    } else {
+                        // 回落逻辑
+                        updateProcessedContent(from: cleaned)
                     }
                     
                     if self.shouldSyncPageAfterPagination {
