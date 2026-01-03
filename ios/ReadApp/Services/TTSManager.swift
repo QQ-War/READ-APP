@@ -727,6 +727,10 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 鏈楄涓嬩竴鍙?
     private func speakNextSentence() {
+        guard isPlaying else {
+            logger.log("TTS 已停止，跳过后续朗读", category: "TTS")
+            return
+        }
         guard currentSentenceIndex < sentences.count else {
             logger.log("褰撳墠绔犺妭鏈楄瀹屾垚锛屽噯澶囦笅涓€绔?", category: "TTS")
             // 褰撳墠绔犺妭璇诲畬锛岃嚜鍔ㄨ涓嬩竴绔?
@@ -1415,6 +1419,10 @@ class TTSManager: NSObject, ObservableObject {
 extension TTSManager: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
+            guard self.isPlaying else {
+                self.logger.log("绯荤粺 TTS 宸插仠姝㈢晠璇?", category: "TTS")
+                return
+            }
             self.logger.log("绯荤粺 TTS 鏈楄瀹屾垚", category: "TTS")
             
             // 鎾斁闂撮殭鍚姩淇濇椿
@@ -1437,6 +1445,10 @@ extension TTSManager: AVAudioPlayerDelegate {
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         // AVAudioPlayer 鐨勫洖璋冪嚎绋嬩笉淇濊瘉鍦ㄤ富绾跨▼锛岀粺涓€鍒囨崲鍒颁富绾跨▼鏇存柊鐘舵€?
         DispatchQueue.main.async {
+            guard self.isPlaying else {
+                self.logger.log("TTS 宸插仠姝㈡挱鏀?", category: "TTS")
+                return
+            }
             self.logger.log("闊抽鎾斁瀹屾垚 - 鎴愬姛: \(flag)", category: "TTS")
 
             // 鎾斁闂撮殭鍚姩淇濇椿
@@ -1470,7 +1482,6 @@ extension TTSManager: AVAudioPlayerDelegate {
         speakNextSentence()
     }
 }
-
 
 
 

@@ -40,11 +40,15 @@ struct TTSEngineEditView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("接口 URL")
                     TextEditor(text: $url)
-                        .frame(minHeight: 60)
+                        .frame(minHeight: 120)
                         .font(.system(.subheadline, design: .monospaced))
                         .foregroundColor(.blue)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
                 }
             }
             
