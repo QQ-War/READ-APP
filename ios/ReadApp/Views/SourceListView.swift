@@ -15,30 +15,26 @@ struct SourceListView: View {
     @State private var loadingExploreIds: Set<String> = []
 
     var body: some View {
-        VStack {
-            GlobalSearchBar(text: $viewModel.searchText, placeholder: "过滤书源...")
-                .padding()
-
-            sourceManagementView
-        }
-        .navigationTitle("书源管理")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink(destination: SourceEditView()) {
-                    Image(systemName: "plus")
+        sourceManagementView
+            .navigationTitle("书源管理")
+            .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "过滤书源...")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink(destination: SourceEditView()) {
+                        Image(systemName: "plus")
+                    }
                 }
             }
-        }
-        .alert("加入书架", isPresented: $showAddResultAlert) {
-            Button("确定", role: .cancel) { }
-        } message: {
-            Text(addResultMessage)
-        }
-        .sheet(isPresented: $showingBookSearchView) {
-            if let bookSource = selectedBookSource {
-                BookSearchView(viewModel: BookSearchViewModel(bookSource: bookSource))
+            .alert("加入书架", isPresented: $showAddResultAlert) {
+                Button("确定", role: .cancel) { }
+            } message: {
+                Text(addResultMessage)
             }
-        }
+            .sheet(isPresented: $showingBookSearchView) {
+                if let bookSource = selectedBookSource {
+                    BookSearchView(viewModel: BookSearchViewModel(bookSource: bookSource))
+                }
+            }
     }
     
     @ViewBuilder
@@ -210,60 +206,6 @@ struct SourceListView: View {
         }
     }
 }
-
-// MARK: - SearchBar
-struct GlobalSearchBar: View {
-    @Binding var text: String
-    var placeholder: String
-    var onSearchButtonClicked: (() -> Void)?
-    
-    @State private var isFocused = false
-    
-    var body: some View {
-        HStack {
-            TextField(placeholder, text: $text, onEditingChanged: { focused in
-                withAnimation { isFocused = focused }
-            })
-            .padding(7)
-            .padding(.horizontal, 25)
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
-            .overlay(
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 8)
-                    
-                    if !text.isEmpty {
-                        Button(action: {
-                            self.text = ""
-                        }) {
-                            Image(systemName: "multiply.circle.fill")
-                                .foregroundColor(.gray)
-                                .padding(.trailing, 8)
-                        }
-                    }
-                }
-            )
-            .submitLabel(.search)
-            .onSubmit {
-                onSearchButtonClicked?()
-            }
-            
-            if isFocused || !text.isEmpty {
-                Button("取消") {
-                    text = ""
-                    isFocused = false
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                }
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-        }
-        .animation(.spring(), value: isFocused || !text.isEmpty)
-    }
-}
-
 
 struct SourceListView_Previews: PreviewProvider {
     static var previews: some View {
