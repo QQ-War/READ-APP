@@ -379,14 +379,33 @@ fun DebugSettingsScreen(
 fun TtsEngineManageScreen(
     engines: List<HttpTTS>,
     onAddEngine: (HttpTTS) -> Unit,
+    onAddEngines: (String) -> Unit,
     onDeleteEngine: (String) -> Unit,
     onNavigateBack: () -> Unit
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
+    var showImportUrlDialog by remember { mutableStateOf(false) }
+    var importUrl by remember { mutableStateOf("") }
     var engineToEdit by remember { mutableStateOf<HttpTTS?>(null) }
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            scope.launch {
+                val content = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { it.readText() }
+                if (!content.isNullOrBlank()) {
+                    onAddEngines(content)
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
+            var showMenu by remember { mutableStateOf(false) }
             TopAppBar(
                 title = { Text("TTS 引擎管理") },
                 navigationIcon = {
@@ -395,36 +414,91 @@ fun TtsEngineManageScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        engineToEdit = null
-                        showEditDialog = true
-                    }) {
-                        Icon(Icons.Default.Add, "添加")
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("新建引擎") },
+                                onClick = {
+                                    showMenu = false
+                                    engineToEdit = null
+                                    showEditDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Default.Add, null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("本地导入") },
+                                onClick = {
+                                    showMenu = false
+                                    filePickerLauncher.launch("*/*")
+                                },
+                                leadingIcon = { Icon(Icons.Default.Folder, null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("网络导入") },
+                                onClick = {
+                                    showMenu = false
+                                    showImportUrlDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Default.Link, null) }
+                            )
+                        }
                     }
                 }
             )
         }
     ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
-            items(engines) { engine ->
-                ListItem(
-                    headlineContent = { Text(engine.name) },
-                    supportingContent = { Text(engine.url, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    trailingContent = {
-                        Row {
-                            IconButton(onClick = {
-                                engineToEdit = engine
-                                showEditDialog = true
-                            }) {
-                                Icon(Icons.Default.Edit, "编辑")
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (showImportUrlDialog) {
+                AlertDialog(
+                    onDismissRequest = { showImportUrlDialog = false },
+                    title = { Text("网络导入") },
+                    text = {
+                        OutlinedTextField(
+                            value = importUrl,
+                            onValueChange = { importUrl = it },
+                            label = { Text("输入引擎 URL") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            scope.launch {
+                                val content = fetchUrlContent(importUrl)
+                                if (content != null) {
+                                    onAddEngines(content)
+                                }
+                                showImportUrlDialog = false
+                                importUrl = ""
                             }
-                            IconButton(onClick = { onDeleteEngine(engine.id) }) {
-                                Icon(Icons.Default.Delete, "删除", tint = MaterialTheme.colorScheme.error)
+                        }) { Text("导入") }
+                    },
+                    dismissButton = { TextButton(onClick = { showImportUrlDialog = false }) { Text("取消") } }
+                )
+            }
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(engines) { engine ->
+                    ListItem(
+                        headlineContent = { Text(engine.name) },
+                        supportingContent = { Text(engine.url, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        trailingContent = {
+                            Row {
+                                IconButton(onClick = {
+                                    engineToEdit = engine
+                                    showEditDialog = true
+                                }) {
+                                    Icon(Icons.Default.Edit, "编辑")
+                                }
+                                IconButton(onClick = { onDeleteEngine(engine.id) }) {
+                                    Icon(Icons.Default.Delete, "删除", tint = MaterialTheme.colorScheme.error)
+                                }
                             }
                         }
-                    }
-                )
-                Divider()
+                    )
+                    Divider()
+                }
             }
         }
     }

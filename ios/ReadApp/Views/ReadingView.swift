@@ -154,6 +154,11 @@ struct ReadingView: View {
     @State private var pendingTTSRequest: TTSPlayRequest?
     @State private var showDetailFromHeader = false
     
+    // Sleep Timer State
+    @State private var timerRemaining: Int = 0
+    @State private var timerActive = false
+    @State private var sleepTimer: Timer? = nil
+    
     // Replace Rule State
     @State private var showAddReplaceRule = false
     @State private var pendingReplaceRule: ReplaceRule?
@@ -438,7 +443,18 @@ struct ReadingView: View {
 
     @ViewBuilder private var controlBar: some View {
         if ttsManager.isPlaying && !contentSentences.isEmpty {
-            TTSControlBar(ttsManager: ttsManager, currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, onPreviousChapter: previousChapter, onNextChapter: nextChapter, onShowChapterList: { showChapterList = true }, onTogglePlayPause: toggleTTS)
+            TTSControlBar(
+                ttsManager: ttsManager,
+                currentChapterIndex: currentChapterIndex,
+                chaptersCount: chapters.count,
+                timerRemaining: timerRemaining,
+                timerActive: timerActive,
+                onPreviousChapter: previousChapter,
+                onNextChapter: nextChapter,
+                onShowChapterList: { showChapterList = true },
+                onTogglePlayPause: toggleTTS,
+                onSetTimer: { minutes in toggleSleepTimer(minutes: minutes) }
+            )
         } else {
             NormalControlBar(currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, onPreviousChapter: previousChapter, onNextChapter: nextChapter, onShowChapterList: { showChapterList = true }, onToggleTTS: toggleTTS, onShowFontSettings: { showFontSettings = true })
         }
@@ -1390,6 +1406,32 @@ struct ReadingView: View {
             if first.key != currentVisibleSentenceIndex { currentVisibleSentenceIndex = first.key }
         }
     }
+    
+    private func toggleSleepTimer(minutes: Int) {
+        sleepTimer?.invalidate()
+        sleepTimer = nil
+        
+        if minutes == 0 {
+            timerRemaining = 0
+            timerActive = false
+            return
+        }
+        
+        timerRemaining = minutes
+        timerActive = true
+        
+        sleepTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+            if self.timerRemaining > 1 {
+                self.timerRemaining -= 1
+            } else {
+                self.timerRemaining = 0
+                self.timerActive = false
+                self.sleepTimer?.invalidate()
+                self.sleepTimer = nil
+                self.ttsManager.stop() // 时间到，停止播放
+            }
+        }
+    }
 }
 
 // MARK: - UIPageViewController Wrapper
@@ -1819,88 +1861,122 @@ private struct SentenceFramePreferenceKey: PreferenceKey {
 
 private struct TTSControlBar: View {
     @ObservedObject var ttsManager: TTSManager
+    @StateObject private var preferences = UserPreferences.shared
     let currentChapterIndex: Int
     let chaptersCount: Int
+    
+    let timerRemaining: Int
+    let timerActive: Bool
+    
     let onPreviousChapter: () -> Void
     let onNextChapter: () -> Void
     let onShowChapterList: () -> Void
     let onTogglePlayPause: () -> Void
+    let onSetTimer: (Int) -> Void
     
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 20) {
-                Button(action: { ttsManager.previousSentence() }) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "arrow.backward.circle.fill").font(.title)
-                        Text("上一段").font(.caption)
-                    }
-                    .foregroundColor(ttsManager.currentSentenceIndex <= 0 ? .gray : .blue)
+        VStack(spacing: 16) {
+            // 第一行：播放进度与定时
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("段落进度").font(.caption2).foregroundColor(.secondary)
+                    Text("\(ttsManager.currentSentenceIndex + 1) / \(ttsManager.totalSentences)")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .fontWeight(.bold)
                 }
-                .disabled(ttsManager.currentSentenceIndex <= 0)
                 
                 Spacer()
-                VStack(spacing: 4) {
-                    Text("段落进度").font(.caption).foregroundColor(.secondary)
-                    Text("\(ttsManager.currentSentenceIndex + 1) / \(ttsManager.totalSentences)").font(.title2).fontWeight(.semibold)
-                }
-                Spacer()
                 
-                Button(action: { ttsManager.nextSentence() }) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "arrow.forward.circle.fill").font(.title)
-                        Text("下一段").font(.caption)
-                    }
-                    .foregroundColor(ttsManager.currentSentenceIndex >= ttsManager.totalSentences - 1 ? .gray : .blue)
+                // 定时按钮
+                Menu {
+                    Button("取消定时") { onSetTimer(0) }
+                    Divider()
+                    Button("15 分钟") { onSetTimer(15) }
+                    Button("30 分钟") { onSetTimer(30) }
+                    Button("60 分钟") { onSetTimer(60) }
+                    Button("90 分钟") { onSetTimer(90) }
+                } label: {
+                    Label(timerActive ? "\(timerRemaining)m" : "定时", systemImage: timerActive ? "timer" : "timer")
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(timerActive ? Color.orange.opacity(0.1) : Color.gray.opacity(0.1))
+                        .foregroundColor(timerActive ? .orange : .secondary)
+                        .cornerRadius(12)
                 }
-                .disabled(ttsManager.currentSentenceIndex >= ttsManager.totalSentences - 1)
             }
-            .padding(.horizontal, 20).padding(.top, 12)
+            .padding(.horizontal, 20)
             
-            Divider().padding(.horizontal, 20)
+            // 第二行：语速调节
+            HStack(spacing: 12) {
+                Image(systemName: "speedometer").font(.caption).foregroundColor(.secondary)
+                Slider(value: $preferences.speechRate, in: 50...300, step: 10)
+                    .accentColor(.blue)
+                Text("\(Int(preferences.speechRate))%")
+                    .font(.system(.caption, design: .monospaced))
+                    .frame(width: 45)
+            }
+            .padding(.horizontal, 20)
             
-            HStack(spacing: 25) {
-                Button(action: onPreviousChapter) {
-                    VStack(spacing: 2) {
-                        Image(systemName: "chevron.left").font(.title3)
-                        Text("上一章").font(.caption2)
-                    }
-                }.disabled(currentChapterIndex <= 0)
+            // 第三行：核心播放控制
+            HStack(spacing: 0) {
+                IconButton(icon: "chevron.left.2", label: "上章", action: onPreviousChapter, enabled: currentChapterIndex > 0)
+                Spacer()
+                IconButton(icon: "backward.fill", label: "上段", action: { ttsManager.previousSentence() }, enabled: ttsManager.currentSentenceIndex > 0)
+                Spacer()
                 
+                Button(action: onTogglePlayPause) {
+                    ZStack {
+                        Circle().fill(Color.blue).frame(width: 56, height: 56)
+                        Image(systemName: ttsManager.isPaused ? "play.fill" : "pause.fill")
+                            .font(.title2).foregroundColor(.white)
+                    }
+                }
+                
+                Spacer()
+                IconButton(icon: "forward.fill", label: "下段", action: { ttsManager.nextSentence() }, enabled: ttsManager.currentSentenceIndex < ttsManager.totalSentences - 1)
+                Spacer()
+                IconButton(icon: "chevron.right.2", label: "下章", action: onNextChapter, enabled: currentChapterIndex < chaptersCount - 1)
+            }
+            .padding(.horizontal, 20)
+            
+            // 第四行：功能入口
+            HStack {
                 Button(action: onShowChapterList) {
-                    VStack(spacing: 2) {
-                        Image(systemName: "list.bullet").font(.title3)
-                        Text("目录").font(.caption2)
-                    }
-                }
-                
-                Spacer()
-                Button(action: { onTogglePlayPause() }) {
-                    VStack(spacing: 2) {
-                        Image(systemName: ttsManager.isPaused ? "play.circle.fill" : "pause.circle.fill")
-                            .font(.system(size: 36)).foregroundColor(.blue)
-                        Text(ttsManager.isPaused ? "播放" : "暂停").font(.caption2)
-                    }
+                    Label("目录", systemImage: "list.bullet")
                 }
                 Spacer()
-                
                 Button(action: { ttsManager.stop() }) {
-                    VStack(spacing: 2) {
-                        Image(systemName: "xmark.circle.fill").font(.title3).foregroundColor(.red)
-                        Text("退出").font(.caption2).foregroundColor(.red)
-                    }
+                    Label("停止播放", systemImage: "stop.circle")
+                        .foregroundColor(.red)
                 }
-                
-                Button(action: onNextChapter) {
-                    VStack(spacing: 2) {
-                        Image(systemName: "chevron.right").font(.title3)
-                        Text("下一章").font(.caption2)
-                    }
-                }.disabled(currentChapterIndex >= chaptersCount - 1)
             }
-            .padding(.horizontal, 20).padding(.bottom, 12)
+            .font(.caption)
+            .padding(.horizontal, 25)
+            .padding(.bottom, 8)
         }
+        .padding(.vertical, 12)
         .background(Color(UIColor.systemBackground))
         .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
+    }
+}
+
+private struct IconButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+    var enabled: Bool = true
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.title3)
+                Text(label).font(.system(size: 10))
+            }
+            .frame(width: 44)
+            .foregroundColor(enabled ? .primary : .gray.opacity(0.3))
+        }
+        .disabled(!enabled)
     }
 }
 

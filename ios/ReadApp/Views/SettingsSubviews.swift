@@ -116,10 +116,14 @@ struct TTSSettingsView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("引擎设置")) {
+            Section(header: Text("引擎管理")) {
+                NavigationLink(destination: TTSEngineListView().environmentObject(apiService)) {
+                    Label("TTS 引擎管理", systemImage: "waveform.path.ecg")
+                }
+                
                 NavigationLink(destination: TTSSelectionView().environmentObject(apiService)) {
                     HStack {
-                        Text("TTS 引擎选择")
+                        Text("当前使用引擎")
                             .foregroundColor(.primary)
                         Spacer()
                         if preferences.useSystemTTS {

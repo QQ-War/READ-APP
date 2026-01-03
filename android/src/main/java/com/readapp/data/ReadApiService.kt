@@ -91,6 +91,12 @@ interface ReadApiService {
         @Query("id") id: String
     ): Response<ApiResponse<String>>
 
+    @POST("upjson")
+    suspend fun saveTtsBatch(
+        @Query("accessToken") accessToken: String,
+        @Body content: RequestBody
+    ): Response<ApiResponse<Any>>
+
     @Multipart
     @POST("importBookPreview")
     suspend fun importBook(

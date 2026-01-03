@@ -324,6 +324,7 @@ fun ReadAppMain() {
                 TtsEngineManageScreen(
                     engines = engines,
                     onAddEngine = bookViewModel::addTtsEngine,
+                    onAddEngines = bookViewModel::saveTtsBatch,
                     onDeleteEngine = bookViewModel::deleteTtsEngine,
                     onNavigateBack = { navController.popBackStack() }
                 )

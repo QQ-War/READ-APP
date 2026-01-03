@@ -89,6 +89,13 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
     suspend fun deleteTts(baseUrl: String, publicUrl: String?, accessToken: String, id: String): Result<String> =
         executeWithFailover { it.delTts(accessToken, id) }(buildEndpoints(baseUrl, publicUrl))
 
+    suspend fun saveTtsBatch(baseUrl: String, publicUrl: String?, accessToken: String, jsonContent: String): Result<Any> {
+        val requestBody = jsonContent.toRequestBody("text/plain".toMediaTypeOrNull())
+        return executeWithFailover {
+            it.saveTtsBatch(accessToken, requestBody)
+        }(buildEndpoints(baseUrl, publicUrl))
+    }
+
     suspend fun importBook(
         baseUrl: String,
         publicUrl: String?,

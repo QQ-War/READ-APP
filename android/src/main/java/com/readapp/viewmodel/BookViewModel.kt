@@ -1104,6 +1104,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun saveTtsBatch(jsonContent: String) {
+        viewModelScope.launch {
+            repository.saveTtsBatch(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, jsonContent)
+                .onSuccess { loadTtsEnginesInternal() }
+                .onFailure { _errorMessage.value = "批量导入失败: ${it.message}" }
+        }
+    }
+
     fun downloadChapters(startIndex: Int, endIndex: Int) {
         val book = _selectedBook.value ?: return
         val chapters = _chapters.value
