@@ -79,25 +79,31 @@ fun SourceListScreen(
     ) { paddingValues ->
         val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            OutlinedTextField(
-                value = searchText,
-                onValueChange = { sourceViewModel.onSearchTextChanged(it) },
-                label = { Text("搜索/过滤书源...") },
-                singleLine = true,
-                trailingIcon = {
-                    if (searchText.isNotEmpty()) {
-                        IconButton(onClick = { 
-                            sourceViewModel.onSearchTextChanged("")
-                            focusManager.clearFocus()
-                        }) {
-                            Icon(Icons.Default.Clear, "清除")
+            Surface(
+                tonalElevation = 2.dp,
+                shadowElevation = 2.dp
+            ) {
+                OutlinedTextField(
+                    value = searchText,
+                    onValueChange = { sourceViewModel.onSearchTextChanged(it) },
+                    label = { Text("过滤书源...") },
+                    singleLine = true,
+                    trailingIcon = {
+                        if (searchText.isNotEmpty()) {
+                            IconButton(onClick = { 
+                                sourceViewModel.onSearchTextChanged("")
+                                focusManager.clearFocus()
+                            }) {
+                                Icon(Icons.Default.Clear, "清除")
+                            }
                         }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-            )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
 
             val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
             val exploreKinds = remember { mutableStateMapOf<String, List<com.readapp.data.model.BookSource.ExploreKind>>() }

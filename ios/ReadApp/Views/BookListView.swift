@@ -260,11 +260,10 @@ struct BookListView: View {
     @ViewBuilder
     private var listToolbarTrailingItems: some View {
         HStack(spacing: 16) {
-            if !searchText.isEmpty {
-                NavigationLink(destination: PreferredSourcesView().environmentObject(apiService)) {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                        .foregroundColor(preferences.searchSourcesFromBookshelf ? .blue : .secondary)
-                }
+            // 搜索配置按钮：始终可见
+            NavigationLink(destination: PreferredSourcesView().environmentObject(apiService)) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .foregroundColor(preferences.searchSourcesFromBookshelf ? .blue : .secondary)
             }
             
             Button(action: { showingDocumentPicker = true }) { 

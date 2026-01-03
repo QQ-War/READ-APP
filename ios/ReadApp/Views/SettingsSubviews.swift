@@ -385,7 +385,7 @@ struct PreferredSourcesView: View {
             }
         }
         .navigationTitle("指定搜索源")
-        .searchable(text: $filterText, prompt: "搜索书源名称")
+        .searchable(text: $filterText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索书源名称")
         .ifAvailableHideTabBar()
         .task {
             if apiService.availableSources.isEmpty {
