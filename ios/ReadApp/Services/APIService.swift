@@ -434,17 +434,29 @@ class APIService: ObservableObject {
             throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
         }
         
-        guard let serverURL = URL(string: "\(baseURL)/uploadBook") else {
+        let urlString = "\(baseURL)/importBookPreview?accessToken=\(accessToken)"
+        guard let serverURL = URL(string: urlString) else {
             throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的上传URL"])
         }
         
+        let boundary = "Boundary-\(UUID().uuidString)"
         var request = URLRequest(url: serverURL)
         request.httpMethod = "POST"
-        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type") // Or appropriate content type
-        request.setValue(accessToken, forHTTPHeaderField: "accessToken")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        let fileName = url.lastPathComponent
+        let fileData = try Data(contentsOf: url)
+        
+        var body = Data()
+        body.append("--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n")
+        body.append("Content-Type: application/octet-stream\r\n\r\n")
+        body.append(fileData)
+        body.append("\r\n")
+        body.append("--\(boundary)--\r\n")
         
         do {
-            let (data, response) = try await URLSession.shared.upload(for: request, fromFile: url)
+            let (data, response) = try await URLSession.shared.upload(for: request, from: body)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "无效的响应类型"])
@@ -455,7 +467,7 @@ class APIService: ObservableObject {
                 throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "上传失败: \(errorMsg)"])
             }
             
-            let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+            let apiResponse = try JSONDecoder().decode(APIResponse<BookImportResponse>.self, from: data)
             if !apiResponse.isSuccess {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "导入书籍失败"])
             }
