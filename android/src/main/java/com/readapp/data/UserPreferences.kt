@@ -38,6 +38,8 @@ class UserPreferences(private val context: Context) {
         val LoggingEnabled = stringPreferencesKey("loggingEnabled")
         val BookshelfSortByRecent = booleanPreferencesKey("bookshelfSortByRecent")
         val LockPageOnTTS = booleanPreferencesKey("lockPageOnTTS")
+        val UseSystemTts = booleanPreferencesKey("useSystemTts")
+        val SystemVoiceId = stringPreferencesKey("systemVoiceId")
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080/api/5" }
@@ -45,6 +47,8 @@ class UserPreferences(private val context: Context) {
     val accessToken: Flow<String> = context.dataStore.data.map { it[Keys.AccessToken] ?: "" }
     val username: Flow<String> = context.dataStore.data.map { it[Keys.Username] ?: "" }
     val selectedTtsId: Flow<String> = context.dataStore.data.map { it[Keys.SelectedTtsId] ?: "" }
+    val useSystemTts: Flow<Boolean> = context.dataStore.data.map { it[Keys.UseSystemTts] ?: false }
+    val systemVoiceId: Flow<String> = context.dataStore.data.map { it[Keys.SystemVoiceId] ?: "" }
     val narrationTtsId: Flow<String> = context.dataStore.data.map { it[Keys.NarrationTtsId] ?: "" }
     val dialogueTtsId: Flow<String> = context.dataStore.data.map { it[Keys.DialogueTtsId] ?: "" }
     val speakerTtsMapping: Flow<String> = context.dataStore.data.map { it[Keys.SpeakerTtsMapping] ?: "" }
@@ -104,6 +108,18 @@ class UserPreferences(private val context: Context) {
     suspend fun saveSelectedTtsId(value: String) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.SelectedTtsId] = value
+        }
+    }
+
+    suspend fun saveUseSystemTts(value: Boolean) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.UseSystemTts] = value
+        }
+    }
+
+    suspend fun saveSystemVoiceId(value: String) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.SystemVoiceId] = value
         }
     }
 

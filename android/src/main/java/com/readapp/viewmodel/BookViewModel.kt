@@ -38,6 +38,9 @@ import java.util.Locale
 import com.readapp.data.model.ReplaceRule
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 
 class BookViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -64,6 +67,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private var mediaController: MediaController? = null
     private val controllerListener = ControllerListener()
+    private var textToSpeech: TextToSpeech? = null
+    private var isTtsInitialized = false
 
     private val httpClient = OkHttpClient()
     private val preloadingIndices = mutableSetOf<Int>()
@@ -146,6 +151,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     // (No changes in this section, keeping it compact)
     private val _selectedTtsEngine = MutableStateFlow("")
     val selectedTtsEngine: StateFlow<String> = _selectedTtsEngine.asStateFlow()
+    private val _useSystemTts = MutableStateFlow(false)
+    val useSystemTts: StateFlow<Boolean> = _useSystemTts.asStateFlow()
+    private val _systemVoiceId = MutableStateFlow("")
+    val systemVoiceId: StateFlow<String> = _systemVoiceId.asStateFlow()
     private val _narrationTtsEngine = MutableStateFlow("")
     val narrationTtsEngine: StateFlow<String> = _narrationTtsEngine.asStateFlow()
     private val _dialogueTtsEngine = MutableStateFlow("")
@@ -154,6 +163,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val speakerTtsMapping: StateFlow<Map<String, String>> = _speakerTtsMapping.asStateFlow()
     private val _availableTtsEngines = MutableStateFlow<List<HttpTTS>>(emptyList())
     val availableTtsEngines: StateFlow<List<HttpTTS>> = _availableTtsEngines.asStateFlow()
+    
+    private val _availableSystemVoices = MutableStateFlow<List<Voice>>(emptyList())
+    val availableSystemVoices: StateFlow<List<Voice>> = _availableSystemVoices.asStateFlow()
+
     private val _speechSpeed = MutableStateFlow(20)
     val speechSpeed: StateFlow<Int> = _speechSpeed.asStateFlow()
     private val _preloadCount = MutableStateFlow(3)
@@ -201,6 +214,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _accessToken.value = preferences.accessToken.first()
             _username.value = preferences.username.first()
             _selectedTtsEngine.value = preferences.selectedTtsId.firstOrNull().orEmpty()
+            _useSystemTts.value = preferences.useSystemTts.first()
+            _systemVoiceId.value = preferences.systemVoiceId.firstOrNull().orEmpty()
             _narrationTtsEngine.value = preferences.narrationTtsId.firstOrNull().orEmpty()
             _dialogueTtsEngine.value = preferences.dialogueTtsId.firstOrNull().orEmpty()
             _speakerTtsMapping.value = parseSpeakerMapping(preferences.speakerTtsMapping.firstOrNull().orEmpty())
@@ -226,6 +241,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _isInitialized.value = true
         }
 
+        initSystemTts()
+
         // Connect to MediaSession
         viewModelScope.launch {
             val sessionToken = SessionToken(appContext, ComponentName(appContext, ReadAudioService::class.java))
@@ -239,6 +256,35 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ==================== Controller Listener ====================
+
+    private fun initSystemTts() {
+        textToSpeech = TextToSpeech(appContext) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                isTtsInitialized = true
+                textToSpeech?.language = Locale.CHINESE
+                textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {
+                        _isPlaying.value = true
+                        _isPaused.value = false
+                    }
+                    override fun onDone(utteranceId: String?) {
+                        if (_keepPlaying.value) {
+                            viewModelScope.launch {
+                                playNextSeamlessly()
+                            }
+                        }
+                    }
+                    override fun onError(utteranceId: String?) {
+                        _errorMessage.value = "系统TTS发生错误"
+                    }
+                })
+                // Load available voices
+                _availableSystemVoices.value = textToSpeech?.voices?.filter { 
+                    it.locale.language.startsWith("zh") || it.locale.language.startsWith("en")
+                } ?: emptyList()
+            }
+        }
+    }
 
     private inner class ControllerListener : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -381,6 +427,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 playNextSeamlessly()
                 return@launch
             }
+
+            if (_useSystemTts.value) {
+                speakWithSystemTts(trimmedSentence)
+                return@launch
+            }
+
             val audioCacheKey = generateAudioCacheKey(index, overrideOffset)
 
             val audioData = AudioCache.get(audioCacheKey) ?: run {
@@ -405,6 +457,28 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
             playFromService(audioCacheKey)
             preloadNextParagraphs()
+        }
+    }
+
+    private fun speakWithSystemTts(text: String) {
+        if (!isTtsInitialized) {
+            _errorMessage.value = "系统TTS尚未就绪"
+            return
+        }
+        
+        textToSpeech?.let { tts ->
+            // Set voice if selected
+            if (_systemVoiceId.value.isNotBlank()) {
+                tts.voices?.firstOrNull { it.name == _systemVoiceId.value }?.let {
+                    tts.voice = it
+                }
+            }
+            
+            // Set speech rate: 1.0 is normal. 
+            // Our speedSpeed is 5..50, where 20 is 1.0.
+            tts.setSpeechRate(_speechSpeed.value / 20.0f)
+            
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "paragraph_${_currentParagraphIndex.value}")
         }
     }
 
@@ -514,7 +588,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun pausePlayback(reason: String = "unspecified") {
-        mediaController?.pause()
+        if (_useSystemTts.value) {
+            textToSpeech?.stop()
+        } else {
+            mediaController?.pause()
+        }
     }
 
     private fun stopPlayback(reason: String = "unspecified") {
@@ -532,8 +610,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         startOffsetOverrideIndex = null
         startOffsetOverrideChars = 0
         _currentParagraphStartOffset.value = 0
-        mediaController?.stop()
-        mediaController?.clearMediaItems()
+        
+        if (_useSystemTts.value) {
+            textToSpeech?.stop()
+        } else {
+            mediaController?.stop()
+            mediaController?.clearMediaItems()
+        }
+        
         _currentParagraphIndex.value = -1
         isReadingChapterTitle = false
         _preloadedParagraphs.value = emptySet()
@@ -942,6 +1026,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun loadTtsEngines() { if (_accessToken.value.isBlank()) return; viewModelScope.launch { loadTtsEnginesInternal() } }
     fun selectTtsEngine(engineId: String) { _selectedTtsEngine.value = engineId; viewModelScope.launch { preferences.saveSelectedTtsId(engineId) } }
+    fun updateUseSystemTts(enabled: Boolean) { _useSystemTts.value = enabled; viewModelScope.launch { preferences.saveUseSystemTts(enabled) } }
+    fun updateSystemVoiceId(voiceId: String) { _systemVoiceId.value = voiceId; viewModelScope.launch { preferences.saveSystemVoiceId(voiceId) } }
     fun selectNarrationTtsEngine(engineId: String) { _narrationTtsEngine.value = engineId; viewModelScope.launch { preferences.saveNarrationTtsId(engineId) } }
     fun selectDialogueTtsEngine(engineId: String) { _dialogueTtsEngine.value = engineId; viewModelScope.launch { preferences.saveDialogueTtsId(engineId) } }
     fun updateSpeakerMapping(name: String, engineId: String) {
