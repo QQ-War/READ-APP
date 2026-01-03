@@ -300,6 +300,15 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
     ): Result<Any> = executeWithFailover {
         it.saveBook(accessToken, book = book)
     }(buildEndpoints(baseUrl, publicUrl))
+
+    suspend fun deleteBook(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String,
+        book: Book
+    ): Result<Any> = executeWithFailover {
+        it.deleteBook(accessToken, book = book)
+    }(buildEndpoints(baseUrl, publicUrl))
     // endregion
 
     private fun createMultipartBodyPart(fileUri: Uri, context: Context): MultipartBody.Part? {

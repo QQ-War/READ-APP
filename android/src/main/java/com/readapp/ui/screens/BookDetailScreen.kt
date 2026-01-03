@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +33,9 @@ fun BookDetailScreen(
     book: Book,
     chapters: List<Chapter>,
     isChaptersLoading: Boolean,
+    isInBookshelf: Boolean,
+    onAddToBookshelf: () -> Unit,
+    onRemoveFromBookshelf: () -> Unit,
     onNavigateBack: () -> Unit,
     onStartReading: () -> Unit,
     onChapterClick: (Int) -> Unit,
@@ -83,7 +88,12 @@ fun BookDetailScreen(
         ) {
             // Book Header Info
             item {
-                BookHeaderSection(book)
+                BookHeaderSection(
+                    book = book,
+                    isInBookshelf = isInBookshelf,
+                    onAddToBookshelf = onAddToBookshelf,
+                    onRemoveFromBookshelf = onRemoveFromBookshelf
+                )
             }
 
             // Introduction
@@ -223,7 +233,12 @@ fun BookDetailScreen(
 }
 
 @Composable
-private fun BookHeaderSection(book: Book) {
+private fun BookHeaderSection(
+    book: Book,
+    isInBookshelf: Boolean,
+    onAddToBookshelf: () -> Unit,
+    onRemoveFromBookshelf: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -255,6 +270,30 @@ private fun BookHeaderSection(book: Book) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.secondary
             )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            if (isInBookshelf) {
+                OutlinedButton(
+                    onClick = onRemoveFromBookshelf,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Default.RemoveCircleOutline, null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("移出书架")
+                }
+            } else {
+                Button(
+                    onClick = onAddToBookshelf,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.AddCircleOutline, null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("加入书架")
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
             SuggestionChip(
                 onClick = { },

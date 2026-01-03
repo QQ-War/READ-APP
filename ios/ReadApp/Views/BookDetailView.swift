@@ -23,6 +23,12 @@ struct BookDetailView: View {
     @State private var isReading = false
     @State private var showingSourceSwitch = false
     @State private var showingClearCacheAlert = false
+    @State private var showingAddSuccessAlert = false
+    @State private var showingRemoveSuccessAlert = false
+    
+    private var isInBookshelf: Bool {
+        apiService.books.contains { $0.bookUrl == book.bookUrl }
+    }
     
     var body: some View {
         ScrollView {
@@ -119,6 +125,12 @@ struct BookDetailView: View {
         } message: {
             Text("确定要删除本书所有的离线缓存内容吗？")
         }
+        .alert("已加入书架", isPresented: $showingAddSuccessAlert) {
+            Button("确定", role: .cancel) { }
+        }
+        .alert("已从书架移除", isPresented: $showingRemoveSuccessAlert) {
+            Button("确定", role: .cancel) { }
+        }
         .sheet(isPresented: $showingSourceSwitch) {
             SourceSwitchView(bookName: book.name ?? "", currentSource: book.origin ?? "") { newBook in
                 updateBookSource(with: newBook)
@@ -147,6 +159,28 @@ struct BookDetailView: View {
                 Text(book.originName ?? "未知来源").font(.caption).padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.1)).foregroundColor(.blue).cornerRadius(4)
                 
                 Spacer()
+                
+                if isInBookshelf {
+                    Button(action: removeFromBookshelf) {
+                        Label("移出书架", systemImage: "minus.circle")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .cornerRadius(8)
+                    }
+                } else {
+                    Button(action: addToBookshelf) {
+                        Label("加入书架", systemImage: "plus.circle")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(8)
+                    }
+                }
                 
                 Button(action: { isReading = true }) {
                     Text("开始阅读").fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 10).background(Color.blue).foregroundColor(.white).cornerRadius(8)
@@ -264,6 +298,39 @@ struct BookDetailView: View {
         }
     }
     
+    private func addToBookshelf() {
+        Task {
+            do {
+                try await apiService.saveBook(book: book)
+                await apiService.fetchBookshelf() // Refresh list
+                await MainActor.run {
+                    showingAddSuccessAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+    
+    private func removeFromBookshelf() {
+        guard let bookUrl = book.bookUrl else { return }
+        Task {
+            do {
+                try await apiService.deleteBook(bookUrl: bookUrl)
+                await apiService.fetchBookshelf() // Refresh list
+                await MainActor.run {
+                    showingRemoveSuccessAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+    
     private func startDownload(start: Int?, end: Int?) {
         guard let start = start, let end = end, start > 0, end >= start, end <= chapters.count else {
             errorMessage = "请输入有效的章节范围 (1-\(chapters.count))"
@@ -350,4 +417,5 @@ struct SourceSwitchView: View {
         isSearching = false
     }
 }
+
 

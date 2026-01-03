@@ -11,7 +11,6 @@ struct SourceExploreView: View {
     @State private var currentPage = 1
     @State private var canLoadMore = true
     
-    @State private var selectedBook: Book?
     @State private var showAddSuccessAlert = false
     @State private var showAddFailureAlert = false
     @State private var alertMessage = ""
@@ -19,14 +18,12 @@ struct SourceExploreView: View {
     var body: some View {
         List {
             ForEach(books) { book in
-                BookSearchResultRow(book: book) {
-                    Task {
-                        await addBookToBookshelf(book: book)
+                NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                    BookSearchResultRow(book: book) {
+                        Task {
+                            await addBookToBookshelf(book: book)
+                        }
                     }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    selectedBook = book
                 }
             }
             
@@ -52,9 +49,6 @@ struct SourceExploreView: View {
         .ifAvailableHideTabBar()
         .task {
             await loadBooks()
-        }
-        .fullScreenCover(item: $selectedBook) { book in
-            BookDetailView(book: book).environmentObject(apiService)
         }
         .alert("添加书架", isPresented: $showAddSuccessAlert) {
             Button("确定", role: .cancel) { }

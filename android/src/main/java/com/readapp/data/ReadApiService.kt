@@ -200,6 +200,12 @@ interface ReadApiService {
         @Query("useReplaceRule") useReplaceRule: Int = 0,
         @Body book: Book
     ): Response<ApiResponse<Any>>
+
+    @POST("deleteBook")
+    suspend fun deleteBook(
+        @Query("accessToken") accessToken: String,
+        @Body book: Book
+    ): Response<ApiResponse<Any>>
     // endregion
 
     companion object {

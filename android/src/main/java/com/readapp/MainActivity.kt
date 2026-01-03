@@ -122,12 +122,17 @@ fun ReadAppMain() {
                 val selectedBook by bookViewModel.selectedBook.collectAsState()
                 val chapters by bookViewModel.chapters.collectAsState()
                 val isChaptersLoading by bookViewModel.isChapterListLoading.collectAsState()
+                val bookshelfBooks by bookViewModel.books.collectAsState()
                 
                 selectedBook?.let { book ->
+                    val isInBookshelf = bookshelfBooks.any { it.bookUrl == book.bookUrl }
                     BookDetailScreen(
                         book = book,
                         chapters = chapters,
                         isChaptersLoading = isChaptersLoading,
+                        isInBookshelf = isInBookshelf,
+                        onAddToBookshelf = { bookViewModel.saveBookToBookshelf(book) },
+                        onRemoveFromBookshelf = { bookViewModel.removeFromBookshelf(book) },
                         onNavigateBack = { navController.popBackStack() },
                         onStartReading = {
                             navController.navigate(Screen.Reading.route)

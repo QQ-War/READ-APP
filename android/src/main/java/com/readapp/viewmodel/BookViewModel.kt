@@ -999,8 +999,31 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 publicUrl = publicUrl,
                 accessToken = token,
                 book = book
-            ).onFailure {
+            ).onSuccess {
+                refreshBooks()
+            }.onFailure {
                 _errorMessage.value = it.message ?: "Failed to add book to bookshelf"
+            }
+        }
+    }
+
+    fun removeFromBookshelf(book: Book) {
+        viewModelScope.launch {
+            val (baseUrl, publicUrl, token) = preferences.getCredentials()
+            if (token == null) {
+                _errorMessage.value = "Not logged in"
+                return@launch
+            }
+
+            repository.deleteBook(
+                baseUrl = baseUrl,
+                publicUrl = publicUrl,
+                accessToken = token,
+                book = book
+            ).onSuccess {
+                refreshBooks()
+            }.onFailure {
+                _errorMessage.value = it.message ?: "Failed to remove book from bookshelf"
             }
         }
     }
