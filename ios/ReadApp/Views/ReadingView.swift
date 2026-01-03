@@ -109,6 +109,7 @@ enum ReaderTapLocation {
 
 struct ReadingView: View {
     let book: Book
+    private let logger = LogManager.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var apiService: APIService
@@ -1149,11 +1150,12 @@ struct ReadingView: View {
                 pendingResumeLocalPageIndex = nil
                 pendingResumePos = nil
                 shouldSyncPageAfterPagination = true
-                isTTSSyncingPage = true // 关键锁：防止初始对焦触发重新播放
+                isTTSSyncingPage = true
                 loadChapterContent()
                 return
             } else {
-                // 不同书：停止之前的播放
+                // 不同书：停止之前的播放，并触发保存
+                logger.log("检测到切换书籍，停止旧书 TTS 并保存进度: \(ttsManager.bookUrl)", category: "TTS")
                 ttsManager.stop()
             }
         }

@@ -1283,32 +1283,38 @@ class TTSManager: NSObject, ObservableObject {
     private func saveCurrentProgress() {
         guard !bookUrl.isEmpty, isPlaying else { return }
         
-        let chapterIdx = currentChapterIndex
-        let sentenceIdx = currentSentenceIndex + currentBaseSentenceIndex
+        // 立即捕获快照，防止异步任务执行时数据已被 stop() 清空
+        let snapshotBookUrl = self.bookUrl
+        let snapshotChapterIdx = self.currentChapterIndex
+        let snapshotSentences = self.sentences
+        let snapshotSentenceIdx = self.currentSentenceIndex
+        let snapshotBaseIdx = self.currentBaseSentenceIndex
+        let snapshotTitle = snapshotChapterIdx < chapters.count ? chapters[snapshotChapterIdx].title : nil
         
-        // 1. 本地保存
-        UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: chapterIdx, sentenceIndex: sentenceIdx)
+        // 1. 立即同步保存到本地 (UserDefaults 是线程安全的)
+        let absoluteSentenceIdx = snapshotSentenceIdx + snapshotBaseIdx
+        UserPreferences.shared.saveTTSProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, sentenceIndex: absoluteSentenceIdx)
         
-        // 2. 远程同步
+        // 2. 异步执行远程同步，使用捕获的快照数据
         Task {
-            // 计算字符偏移量
-            let pStarts = sentences.enumerated().map { (idx, _) in
-                sentences[0..<idx].reduce(0) { $0 + $1.utf16.count + 1 }
+            guard !snapshotSentences.isEmpty else { return }
+            
+            // 使用快照计算字符偏移量
+            var bodyIndex = 0
+            for i in 0..<min(snapshotSentenceIdx, snapshotSentences.count) {
+                bodyIndex += snapshotSentences[i].utf16.count + 1
             }
-            let bodyIndex = pStarts.indices.contains(currentSentenceIndex) ? pStarts[currentSentenceIndex] : 0
             
             // 计算比例
-            let totalLen = sentences.reduce(0) { $0 + $1.utf16.count + 1 }
+            let totalLen = snapshotSentences.reduce(0) { $0 + $1.utf16.count + 1 }
             let pos = totalLen > 0 ? Double(bodyIndex) / Double(totalLen) : 0.0
             
-            let title = chapterIdx < chapters.count ? chapters[chapterIdx].title : nil
-            
-            // 保存到 UserPreferences 的通用阅读进度
-            UserPreferences.shared.saveReadingProgress(bookUrl: bookUrl, chapterIndex: chapterIdx, pageIndex: 0, bodyCharIndex: bodyIndex)
+            // 同步到通用阅读进度
+            UserPreferences.shared.saveReadingProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, pageIndex: 0, bodyCharIndex: bodyIndex)
             
             // 发送到服务器
-            try? await APIService.shared.saveBookProgress(bookUrl: bookUrl, index: chapterIdx, pos: pos, title: title)
-            logger.log("鉁?TTS 鍋滄鏃跺凡鑷姩鍚屾杩涘害", category: "TTS")
+            try? await APIService.shared.saveBookProgress(bookUrl: snapshotBookUrl, index: snapshotChapterIdx, pos: pos, title: snapshotTitle)
+            logger.log("鉁?TTS 进度快照已保存: \(snapshotBookUrl), 章节: \(snapshotChapterIdx), 比例: \(pos)", category: "TTS")
         }
     }
     
