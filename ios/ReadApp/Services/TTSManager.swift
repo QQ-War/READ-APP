@@ -17,6 +17,7 @@ class TTSManager: NSObject, ObservableObject {
     var currentBaseSentenceIndex: Int = 0
     
     private var audioPlayer: AVAudioPlayer?
+    private let speechSynthesizer = AVSpeechSynthesizer()
     private var sentences: [String] = []
     var currentChapterIndex: Int = 0  // 鍏紑缁橰eadingView浣跨敤
     private var chapters: [BookChapter] = []
@@ -125,6 +126,7 @@ class TTSManager: NSObject, ObservableObject {
     private override init() {
         super.init()
         logger.log("TTSManager 鍒濆鍖?", category: "TTS")
+        speechSynthesizer.delegate = self
         setupAudioSession()
         setupRemoteCommands()
         setupNotifications()
@@ -672,6 +674,12 @@ class TTSManager: NSObject, ObservableObject {
         
         isReadingChapterTitle = true
         
+        // 绯荤粺 TTS 鍒ゆ柇
+        if UserPreferences.shared.useSystemTTS {
+            speakWithSystemTTS(text: chapterTitle)
+            return
+        }
+        
         guard let audioURL = buildAudioURL(for: chapterTitle, isChapterTitle: true) else {
             logger.log("鏈€夋嫨 TTS 寮曟搸锛岃烦杩囩珷鑺傚悕鏈楄", category: "TTS")
             isReadingChapterTitle = false
@@ -739,6 +747,12 @@ class TTSManager: NSObject, ObservableObject {
         // 淇濆瓨杩涘害
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex)
 
+        // 绯荤粺 TTS 鍒ゆ柇
+        if UserPreferences.shared.useSystemTTS {
+            speakWithSystemTTS(text: sentence)
+            return
+        }
+
         // 鎻愬墠鍑嗗鍚庣画娈佃惤锛屽敖閲忔秷闄ゅ彞闂寸┖妗?
         startPreloading()
 
@@ -757,6 +771,35 @@ class TTSManager: NSObject, ObservableObject {
         playAudio(url: audioURL)
         
         // 鏇存柊閿佸睆淇℃伅
+        if currentChapterIndex < chapters.count {
+            updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
+        }
+    }
+    
+    // MARK: - 绯荤粺 TTS 鏈楄
+    private func speakWithSystemTTS(text: String) {
+        isLoading = false
+        stopKeepAlive()
+        
+        let utterance = AVSpeechUtterance(string: text)
+        
+        // 璇煶璁剧疆
+        if !UserPreferences.shared.systemVoiceId.isEmpty {
+            utterance.voice = AVSpeechSynthesisVoice(identifier: UserPreferences.shared.systemVoiceId)
+        } else {
+            utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
+        }
+        
+        // 璇€熻缃?
+        // App 100 -> 绯荤粺 0.5 (Default)
+        let rate = Float(UserPreferences.shared.speechRate / 200.0)
+        utterance.rate = max(AVSpeechUtteranceMinimumSpeechRate, min(AVSpeechUtteranceMaximumSpeechRate, rate))
+        
+        utterance.pitchMultiplier = 1.0
+        utterance.volume = 1.0
+        
+        speechSynthesizer.speak(utterance)
+        
         if currentChapterIndex < chapters.count {
             updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
         }
@@ -1005,22 +1048,23 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 鏆傚仠
     func pause() {
-        logger.log("鏀跺埌鏆傚仠鍛戒护 - isPlaying: \(isPlaying), isPaused: \(isPaused), audioPlayer: \(audioPlayer != nil)", category: "TTS")
+        logger.log("鏀跺埌鏆傚仠鍛戒护 - isPlaying: \(isPlaying), isPaused: \(isPaused)", category: "TTS")
         
         if isPlaying && !isPaused {
             isPaused = true
-            if let player = audioPlayer {
+            
+            if UserPreferences.shared.useSystemTTS {
+                speechSynthesizer.pauseSpeaking(at: .immediate)
+            } else if let player = audioPlayer {
                 player.pause()
-                isPaused = true
-                logger.log("鉁?TTS 鏆傚仠", category: "TTS")
-                
-                // 鏆傚仠鏃跺惎鍔ㄤ繚娲伙紝闃叉 App 琚寕璧?
-                startKeepAlive()
-                
-                updatePlaybackRate()
-            } else {
-                logger.log("鈿狅笍 audioPlayer 涓嶅瓨鍦紝鏃犳硶鏆傚仠", category: "TTS")
             }
+            
+            logger.log("鉁?TTS 鏆傚仠", category: "TTS")
+            
+            // 鏆傚仠鏃跺惎鍔ㄤ繚娲伙紝闃叉 App 琚寕璧?
+            startKeepAlive()
+            
+            updatePlaybackRate()
         } else if isPaused {
             logger.log("TTS 宸茬粡澶勪簬鏆傚仠鐘舵€?", category: "TTS")
         } else {
@@ -1030,21 +1074,25 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 缁х画
     func resume() {
-        logger.log("鏀跺埌鎭㈠鍛戒护 - isPlaying: \(isPlaying), isPaused: \(isPaused), audioPlayer: \(audioPlayer != nil)", category: "TTS")
+        logger.log("鏀跺埌鎭㈠鍛戒护 - isPlaying: \(isPlaying), isPaused: \(isPaused)", category: "TTS")
         
         if isPlaying && isPaused {
-            // 妫€鏌?audioPlayer 鏄惁瀛樺湪
-            if let player = audioPlayer {
+            isPaused = false
+            
+            if UserPreferences.shared.useSystemTTS {
+                if speechSynthesizer.isPaused {
+                    speechSynthesizer.continueSpeaking()
+                } else {
+                    speakNextSentence()
+                }
+            } else if let player = audioPlayer {
                 player.play()
-                isPaused = false
-                logger.log("鉁?TTS 鎭㈠鎾斁", category: "TTS")
-                updatePlaybackRate()
             } else {
-                // audioPlayer 涓嶅瓨鍦紝閲嶆柊鎾斁褰撳墠鍙ュ瓙
-                logger.log("鈿狅笍 audioPlayer 涓嶅瓨鍦紝閲嶆柊鎾斁褰撳墠鍙ュ瓙", category: "TTS")
-                isPaused = false
                 speakNextSentence()
             }
+            
+            logger.log("鉁?TTS 鎭㈠鎾斁", category: "TTS")
+            updatePlaybackRate()
         } else if !isPlaying {
             // 濡傛灉宸茬粡鍋滄锛岄噸鏂板紑濮?
             logger.log("TTS 鏈湪鎾斁锛岄噸鏂板紑濮?", category: "TTS")
@@ -1059,6 +1107,11 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 妫€鏌ュ綋鍓嶇珷鑺傛槸鍚﹂杞藉畬鎴愶紝骞堕杞戒笅涓€绔?
     private func checkAndPreloadNextChapter(force: Bool = false) {
+        // 濡傛灉鏄郴缁?TTS锛屼笉闇€瑕侀杞介煶棰?
+        if UserPreferences.shared.useSystemTTS {
+            return
+        }
+        
         // 濡傛灉宸茬粡鍦ㄩ杞戒笅涓€绔狅紝璺宠繃
         guard nextChapterSentences.isEmpty else {
             return
@@ -1091,6 +1144,9 @@ class TTSManager: NSObject, ObservableObject {
 
     // MARK: - 棰勮浇涓嬩竴绔?
     private func preloadNextChapter() {
+        // 绯荤粺 TTS 涓嶉渶瑕侀杞介煶棰?
+        if UserPreferences.shared.useSystemTTS { return }
+        
         // 濡傛灉宸茬粡鍦ㄩ杞戒笅涓€绔犳垨宸叉湁涓嬩竴绔犳暟鎹紝璺宠繃
         guard nextChapterSentences.isEmpty else { return }
         guard currentChapterIndex < chapters.count - 1 else { return }
@@ -1131,6 +1187,7 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 棰勮浇涓嬩竴绔犵殑绔犺妭鍚?
     private func preloadNextChapterTitle(chapterIndex: Int) {
+        if UserPreferences.shared.useSystemTTS { return }
         guard chapterIndex < chapters.count else { return }
         guard nextChapterCache[-1] == nil else { return }
         
@@ -1159,6 +1216,7 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 棰勮浇涓嬩竴绔犵殑闊抽
     private func preloadNextChapterAudio(at index: Int) {
+        if UserPreferences.shared.useSystemTTS { return }
         guard index < nextChapterSentences.count else { return }
         guard cachedNextChapterAudio(for: index) == nil else { return }
         
@@ -1192,6 +1250,11 @@ class TTSManager: NSObject, ObservableObject {
         stopKeepAlive()
         audioPlayer?.stop()
         audioPlayer = nil
+        
+        if speechSynthesizer.isSpeaking {
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+        
         isPlaying = false
         isPaused = false
         currentSentenceIndex = 0
@@ -1228,7 +1291,14 @@ class TTSManager: NSObject, ObservableObject {
     
     // MARK: - 鍔犺浇骞舵湕璇荤珷鑺?
     private func loadAndReadChapter() {
-        // 妫€鏌ユ槸鍚︽湁棰勮浇鐨勪笅涓€绔犳暟鎹?
+        // 鍋滄褰撳墠鎾斁
+        audioPlayer?.stop()
+        audioPlayer = nil
+        if speechSynthesizer.isSpeaking {
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+
+        // 妫€鏌ユ槸鍚︽湁棰勮浇鐨媪涓€绔犳暟鎹?
         if !nextChapterSentences.isEmpty {
             logger.log("浣跨敤宸查杞界殑涓嬩竴绔犳暟鎹?", category: "TTS")
             
@@ -1338,6 +1408,27 @@ class TTSManager: NSObject, ObservableObject {
         NotificationCenter.default.removeObserver(self)
         endBackgroundTask()
         logger.log("TTSManager 閿€姣?", category: "TTS")
+    }
+}
+
+// MARK: - AVSpeechSynthesizerDelegate
+extension TTSManager: AVSpeechSynthesizerDelegate {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async {
+            self.logger.log("绯荤粺 TTS 鏈楄瀹屾垚", category: "TTS")
+            
+            // 鎾斁闂撮殭鍚姩淇濇椿
+            self.startKeepAlive()
+
+            if self.isReadingChapterTitle {
+                self.isReadingChapterTitle = false
+                self.speakNextSentence()
+                return
+            }
+
+            self.currentSentenceIndex += 1
+            self.speakNextSentence()
+        }
     }
 }
 

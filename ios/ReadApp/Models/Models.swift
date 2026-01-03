@@ -232,6 +232,18 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(selectedTTSId, forKey: "selectedTTSId")
         }
     }
+
+    @Published var useSystemTTS: Bool {
+        didSet {
+            UserDefaults.standard.set(useSystemTTS, forKey: "useSystemTTS")
+        }
+    }
+
+    @Published var systemVoiceId: String {
+        didSet {
+            UserDefaults.standard.set(systemVoiceId, forKey: "systemVoiceId")
+        }
+    }
     
     @Published var bookshelfSortByRecent: Bool {
         didSet {
@@ -356,6 +368,8 @@ class UserPreferences: ObservableObject {
         self.username = UserDefaults.standard.string(forKey: "username") ?? ""
         self.isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
         self.selectedTTSId = UserDefaults.standard.string(forKey: "selectedTTSId") ?? ""
+        self.useSystemTTS = UserDefaults.standard.bool(forKey: "useSystemTTS")
+        self.systemVoiceId = UserDefaults.standard.string(forKey: "systemVoiceId") ?? ""
         self.narrationTTSId = UserDefaults.standard.string(forKey: "narrationTTSId") ?? ""
         self.dialogueTTSId = UserDefaults.standard.string(forKey: "dialogueTTSId") ?? ""
 

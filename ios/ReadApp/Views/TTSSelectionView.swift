@@ -43,65 +43,86 @@ struct TTSSelectionView: View {
                 } else {
                                     List {
                                         Section {
-                                            Picker("选择旁白 TTS", selection: $preferences.narrationTTSId) {
-                                                ForEach(ttsList) { tts in
-                                                    Text(tts.name).tag(tts.id)
-                                                }
-                                            }
-                                        } header: {
-                                            Text("旁白 TTS")
-                                        } footer: {
-                                            Text("章节名和旁白将使用此 TTS")
-                                                .foregroundColor(.secondary)
-                                        }
-                    
-                                        Section {
-                                            Picker("选择对话 TTS", selection: $preferences.dialogueTTSId) {
-                                                ForEach(ttsList) { tts in
-                                                    Text(tts.name).tag(tts.id)
-                                                }
-                                            }
-                                        } header: {
-                                            Text("默认对话 TTS")
-                                        } footer: {
-                                            Text("当句子包含引号时默认使用此 TTS。未选择则回落到旁白 TTS")
-                                                .foregroundColor(.secondary)
-                                        }
-                    
-                                        Section {
-                                            if speakerMappings.isEmpty {
-                                                Text("为特定发言人绑定 TTS，格式匹配“张三：\"...”或“张三说：\"...”开头的句子。")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                    .padding(.vertical, 4)
-                                            } else {
-                                                ForEach(speakerMappings.sorted(by: { $0.key < $1.key }), id: \.key) { speaker, ttsId in
-                                                    Picker(speaker, selection: Binding(
-                                                        get: { ttsId },
-                                                        set: { newId in
-                                                            updateMapping(for: speaker, ttsId: newId)
-                                                        }
-                                                    )) {
-                                                        ForEach(ttsList) { tts in
-                                                            Text(tts.name).tag(tts.id)
+                                            Toggle("使用系统内置 TTS", isOn: $preferences.useSystemTTS)
+                                            
+                                            if preferences.useSystemTTS {
+                                                Picker("系统语音", selection: $preferences.systemVoiceId) {
+                                                    Text("默认").tag("")
+                                                    ForEach(AVSpeechSynthesisVoice.speechVoices(), id: \.identifier) { voice in
+                                                        if voice.language.contains("zh") || voice.language.contains("en") {
+                                                            Text("\(voice.name) (\(voice.language))").tag(voice.identifier)
                                                         }
                                                     }
                                                 }
-                                                .onDelete(perform: deleteSpeakerMapping)
-                                            }
-                    
-                                            HStack {
-                                                TextField("新增发言人", text: $newSpeakerName)
-                                                Button("添加") {
-                                                    addSpeakerMapping()
-                                                }
-                                                .disabled(newSpeakerName.trimmingCharacters(in: .whitespaces).isEmpty)
                                             }
                                         } header: {
-                                            Text("发言人和 TTS 对应")
+                                            Text("通用设置")
                                         } footer: {
-                                            Text("对话句子会优先匹配上方绑定的发言人 TTS；未匹配时使用默认对话 TTS。")
-                                                .foregroundColor(.secondary)
+                                            Text("系统内置 TTS 支持离线使用，且响应速度更快。")
+                                        }
+
+                                        if !preferences.useSystemTTS {
+                                            Section {
+                                                Picker("选择旁白 TTS", selection: $preferences.narrationTTSId) {
+                                                    ForEach(ttsList) { tts in
+                                                        Text(tts.name).tag(tts.id)
+                                                    }
+                                                }
+                                            } header: {
+                                                Text("旁白 TTS")
+                                            } footer: {
+                                                Text("章节名和旁白将使用此 TTS")
+                                                    .foregroundColor(.secondary)
+                                            }
+                        
+                                            Section {
+                                                Picker("选择对话 TTS", selection: $preferences.dialogueTTSId) {
+                                                    ForEach(ttsList) { tts in
+                                                        Text(tts.name).tag(tts.id)
+                                                    }
+                                                }
+                                            } header: {
+                                                Text("默认对话 TTS")
+                                            } footer: {
+                                                Text("当句子包含引号时默认使用此 TTS。未选择则回落到旁白 TTS")
+                                                    .foregroundColor(.secondary)
+                                            }
+                        
+                                            Section {
+                                                if speakerMappings.isEmpty {
+                                                    Text("为特定发言人绑定 TTS，格式匹配“张三：\"...”或“张三说：\"...”开头的句子。")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                        .padding(.vertical, 4)
+                                                } else {
+                                                    ForEach(speakerMappings.sorted(by: { $0.key < $1.key }), id: \.key) { speaker, ttsId in
+                                                        Picker(speaker, selection: Binding(
+                                                            get: { ttsId },
+                                                            set: { newId in
+                                                                updateMapping(for: speaker, ttsId: newId)
+                                                            }
+                                                        )) {
+                                                            ForEach(ttsList) { tts in
+                                                                Text(tts.name).tag(tts.id)
+                                                            }
+                                                        }
+                                                    }
+                                                    .onDelete(perform: deleteSpeakerMapping)
+                                                }
+                        
+                                                HStack {
+                                                    TextField("新增发言人", text: $newSpeakerName)
+                                                    Button("添加") {
+                                                        addSpeakerMapping()
+                                                    }
+                                                    .disabled(newSpeakerName.trimmingCharacters(in: .whitespaces).isEmpty)
+                                                }
+                                            } header: {
+                                                Text("发言人和 TTS 对应")
+                                            } footer: {
+                                                Text("对话句子会优先匹配上方绑定的发言人 TTS；未匹配时使用默认对话 TTS。")
+                                                    .foregroundColor(.secondary)
+                                            }
                                         }
                                     }                }
             }
