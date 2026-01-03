@@ -5,7 +5,9 @@ import UIKit
 private struct PageTurnRequest: Equatable {
     let direction: UIPageViewController.NavigationDirection
     let animated: Bool
-    let targetIndex: Int // 用于跳转到指定页
+    let targetIndex: Int
+    let targetSnapshot: PageSnapshot? // 跨章节时携带目标快照
+    let targetChapterIndex: Int?     // 目标章节索引
     let timestamp: TimeInterval = Date().timeIntervalSince1970
     
     static func == (lhs: PageTurnRequest, rhs: PageTurnRequest) -> Bool {
@@ -382,6 +384,9 @@ struct ReadingView: View {
                                     if needsPrepare { prepareAdjacentChapters(for: currentChapterIndex) }
                                 },
                                 onAddReplaceRule: presentReplaceRuleEditor,
+                                onChapterSwitchRequest: { chapterIdx, pageIdx in
+                                    self.finalizeAnimatedChapterSwitch(targetChapter: chapterIdx, targetPage: pageIdx)
+                                },
                                 currentContentViewController: currentVC,
                                 prevContentViewController: prevVC,
                                 nextContentViewController: nextVC,
@@ -1265,18 +1270,25 @@ struct ReadingView: View {
         didApplyResumePos = true
         currentVisibleSentenceIndex = nil
         let targetIndex = currentChapterIndex - 1
+        
         if !prevCache.pages.isEmpty {
             let cached = prevCache
-            nextCache = currentCache
-            prevCache = .empty
-            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: false, jumpToLast: true, animated: animated)
-            ttsBaseIndex = 0
-            prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
-            if ttsManager.isPlaying && !ttsManager.isPaused {
-                lastTTSSentenceIndex = max(0, currentCache.paragraphStarts.count - 1)
-                requestTTSPlayback(pageIndexOverride: currentPageIndex, showControls: false)
+            if animated {
+                // 带动画：不立即更新状态，先发翻页请求
+                pageTurnRequest = PageTurnRequest(
+                    direction: .reverse,
+                    animated: true,
+                    targetIndex: max(0, cached.pages.count - 1),
+                    targetSnapshot: snapshot(from: cached),
+                    targetChapterIndex: targetIndex
+                )
+            } else {
+                // 不带动画：立即更新状态（如目录跳转）
+                nextCache = currentCache
+                prevCache = .empty
+                applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: false, jumpToLast: true, animated: false)
+                finishChapterSwitch()
             }
-            saveProgress()
             return
         }
         currentChapterIndex = targetIndex
@@ -1289,22 +1301,69 @@ struct ReadingView: View {
         didApplyResumePos = true
         currentVisibleSentenceIndex = nil
         let targetIndex = currentChapterIndex + 1
+        
         if !nextCache.pages.isEmpty {
             let cached = nextCache
-            prevCache = currentCache
-            nextCache = .empty
-            applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: true, jumpToLast: false, animated: animated)
-            ttsBaseIndex = 0
-            prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
-            if ttsManager.isPlaying && !ttsManager.isPaused {
-                lastTTSSentenceIndex = 0
-                requestTTSPlayback(pageIndexOverride: currentPageIndex, showControls: false)
+            if animated {
+                // 带动画：先发请求，不切数据
+                pageTurnRequest = PageTurnRequest(
+                    direction: .forward,
+                    animated: true,
+                    targetIndex: 0,
+                    targetSnapshot: snapshot(from: cached),
+                    targetChapterIndex: targetIndex
+                )
+            } else {
+                // 不带动画：立即更新
+                prevCache = currentCache
+                nextCache = .empty
+                applyCachedChapter(cached, chapterIndex: targetIndex, jumpToFirst: true, jumpToLast: false, animated: false)
+                finishChapterSwitch()
             }
-            saveProgress()
             return
         }
         currentChapterIndex = targetIndex
         loadChapterContent()
+        saveProgress()
+    }
+    
+    private func finalizeAnimatedChapterSwitch(targetChapter: Int, targetPage: Int) {
+        let isForward = targetChapter > currentChapterIndex
+        let cached = isForward ? nextCache : prevCache
+        guard !cached.pages.isEmpty else { return }
+        
+        // 交换缓存
+        if isForward {
+            prevCache = currentCache
+            nextCache = .empty
+        } else {
+            nextCache = currentCache
+            prevCache = .empty
+        }
+        
+        // 更新主状态
+        suppressRepaginateOnce = true
+        currentChapterIndex = targetChapter
+        currentCache = cached
+        rawContent = cached.rawContent
+        currentContent = cached.contentSentences.joined(separator: "\n")
+        contentSentences = cached.contentSentences
+        currentVisibleSentenceIndex = nil
+        pendingScrollToSentenceIndex = nil
+        
+        currentPageIndex = targetPage
+        
+        // 完成后续逻辑（TTS等）
+        finishChapterSwitch()
+    }
+    
+    private func finishChapterSwitch() {
+        ttsBaseIndex = 0
+        prepareAdjacentChaptersIfNeeded(for: currentChapterIndex)
+        if ttsManager.isPlaying && !ttsManager.isPaused {
+            lastTTSSentenceIndex = 0
+            requestTTSPlayback(pageIndexOverride: currentPageIndex, showControls: false)
+        }
         saveProgress()
     }
     
@@ -1462,6 +1521,7 @@ struct ReadingView: View {
     var onChapterChange: (Int) -> Void
     var onAdjacentPrefetch: (Int) -> Void
     var onAddReplaceRule: (String) -> Void
+    var onChapterSwitchRequest: (Int, Int) -> Void // 新增：通知父级完成状态同步
     var currentContentViewController: ReadContentViewController?
     var prevContentViewController: ReadContentViewController?
     var nextContentViewController: ReadContentViewController?
@@ -1514,7 +1574,8 @@ struct ReadingView: View {
             // 动画锁
             if isAnimating { return }
             
-            let activeSnapshot = snapshot ?? parent.snapshot
+            // 确定快照：如果请求自带快照（跨章），则用请求的；否则用当前的。
+            let activeSnapshot = request.targetSnapshot ?? snapshot ?? parent.snapshot
             guard request.targetIndex >= 0, request.targetIndex < activeSnapshot.pages.count else {
                 DispatchQueue.main.async { self.parent.pageTurnRequest = nil }
                 return
@@ -1527,7 +1588,12 @@ struct ReadingView: View {
                 self.isAnimating = false
                 if finished {
                     DispatchQueue.main.async {
-                        self.parent.currentPageIndex = request.targetIndex
+                        // 如果是跨章请求，通知父级进行真正的数据结构交换
+                        if let targetChapter = request.targetChapterIndex {
+                            self.parent.onChapterSwitchRequest(targetChapter, request.targetIndex)
+                        } else {
+                            self.parent.currentPageIndex = request.targetIndex
+                        }
                         self.parent.pageTurnRequest = nil
                     }
                 }
