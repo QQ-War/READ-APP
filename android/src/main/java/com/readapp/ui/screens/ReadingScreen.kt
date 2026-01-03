@@ -1211,6 +1211,7 @@ private fun ControlButton(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChapterListDialog(
     chapters: List<Chapter>,
@@ -1342,6 +1343,5 @@ private fun ChapterListDialog(
         shape = RoundedCornerShape(AppDimens.CornerRadiusLarge)
     )
 }
-
 
 
