@@ -15,6 +15,8 @@ struct SourceEditView: View {
     @State private var errorMessage: String?
     @State private var showSuccessMessage = false
     @State private var showDeleteConfirmation = false
+
+    private var isEditing: Bool { sourceId != nil }
     
     enum EditViewMode {
         case structured, raw
@@ -273,14 +275,14 @@ struct SearchRuleView: View {
     var body: some View {
         Form {
             Section(header: Text("列表规则")) {
-                TextField("列表规则 (bookList)", text: Binding(get: { rule?.bookList ?? "" }, set: { ensureRule().bookList = $0 }))
+                TextField("列表规则 (bookList)", text: Binding(get: { rule?.bookList ?? "" }, set: { ensureRule(); rule?.bookList = $0 }))
             }
             Section(header: Text("字段规则")) {
-                TextField("书名 (name)", text: Binding(get: { rule?.name ?? "" }, set: { ensureRule().name = $0 }))
-                TextField("作者 (author)", text: Binding(get: { rule?.author ?? "" }, set: { ensureRule().author = $0 }))
-                TextField("简介 (intro)", text: Binding(get: { rule?.intro ?? "" }, set: { ensureRule().intro = $0 }))
-                TextField("书籍 URL (bookUrl)", text: Binding(get: { rule?.bookUrl ?? "" }, set: { ensureRule().bookUrl = $0 }))
-                TextField("封面 URL (coverUrl)", text: Binding(get: { rule?.coverUrl ?? "" }, set: { ensureRule().coverUrl = $0 }))
+                TextField("书名 (name)", text: Binding(get: { rule?.name ?? "" }, set: { ensureRule(); rule?.name = $0 }))
+                TextField("作者 (author)", text: Binding(get: { rule?.author ?? "" }, set: { ensureRule(); rule?.author = $0 }))
+                TextField("简介 (intro)", text: Binding(get: { rule?.intro ?? "" }, set: { ensureRule(); rule?.intro = $0 }))
+                TextField("书籍 URL (bookUrl)", text: Binding(get: { rule?.bookUrl ?? "" }, set: { ensureRule(); rule?.bookUrl = $0 }))
+                TextField("封面 URL (coverUrl)", text: Binding(get: { rule?.coverUrl ?? "" }, set: { ensureRule(); rule?.coverUrl = $0 }))
             }
         }
         .navigationTitle("搜索规则")
@@ -298,11 +300,11 @@ struct BookInfoRuleView: View {
     var body: some View {
         Form {
             Section(header: Text("详情页字段")) {
-                TextField("书名", text: Binding(get: { rule?.name ?? "" }, set: { ensureRule().name = $0 }))
-                TextField("作者", text: Binding(get: { rule?.author ?? "" }, set: { ensureRule().author = $0 }))
-                TextField("简介", text: Binding(get: { rule?.intro ?? "" }, set: { ensureRule().intro = $0 }))
-                TextField("封面 URL", text: Binding(get: { rule?.coverUrl ?? "" }, set: { ensureRule().coverUrl = $0 }))
-                TextField("目录 URL (tocUrl)", text: Binding(get: { rule?.tocUrl ?? "" }, set: { ensureRule().tocUrl = $0 }))
+                TextField("书名", text: Binding(get: { rule?.name ?? "" }, set: { ensureRule(); rule?.name = $0 }))
+                TextField("作者", text: Binding(get: { rule?.author ?? "" }, set: { ensureRule(); rule?.author = $0 }))
+                TextField("简介", text: Binding(get: { rule?.intro ?? "" }, set: { ensureRule(); rule?.intro = $0 }))
+                TextField("封面 URL", text: Binding(get: { rule?.coverUrl ?? "" }, set: { ensureRule(); rule?.coverUrl = $0 }))
+                TextField("目录 URL (tocUrl)", text: Binding(get: { rule?.tocUrl ?? "" }, set: { ensureRule(); rule?.tocUrl = $0 }))
             }
         }
         .navigationTitle("详情页规则")
@@ -320,11 +322,11 @@ struct TocRuleView: View {
     var body: some View {
         Form {
             Section(header: Text("目录列表")) {
-                TextField("章节列表 (chapterList)", text: Binding(get: { rule?.chapterList ?? "" }, set: { ensureRule().chapterList = $0 }))
+                TextField("章节列表 (chapterList)", text: Binding(get: { rule?.chapterList ?? "" }, set: { ensureRule(); rule?.chapterList = $0 }))
             }
             Section(header: Text("章节详情")) {
-                TextField("章节名称 (chapterName)", text: Binding(get: { rule?.chapterName ?? "" }, set: { ensureRule().chapterName = $0 }))
-                TextField("章节 URL (chapterUrl)", text: Binding(get: { rule?.chapterUrl ?? "" }, set: { ensureRule().chapterUrl = $0 }))
+                TextField("章节名称 (chapterName)", text: Binding(get: { rule?.chapterName ?? "" }, set: { ensureRule(); rule?.chapterName = $0 }))
+                TextField("章节 URL (chapterUrl)", text: Binding(get: { rule?.chapterUrl ?? "" }, set: { ensureRule(); rule?.chapterUrl = $0 }))
             }
         }
         .navigationTitle("目录规则")
@@ -342,11 +344,11 @@ struct ContentRuleView: View {
     var body: some View {
         Form {
             Section(header: Text("正文内容")) {
-                TextField("正文规则 (content)", text: Binding(get: { rule?.content ?? "" }, set: { ensureRule().content = $0 }))
-                TextField("下一页 URL (nextContentUrl)", text: Binding(get: { rule?.nextContentUrl ?? "" }, set: { ensureRule().nextContentUrl = $0 }))
+                TextField("正文规则 (content)", text: Binding(get: { rule?.content ?? "" }, set: { ensureRule(); rule?.content = $0 }))
+                TextField("下一页 URL (nextContentUrl)", text: Binding(get: { rule?.nextContentUrl ?? "" }, set: { ensureRule(); rule?.nextContentUrl = $0 }))
             }
             Section(header: Text("净化规则")) {
-                TextField("替换正则 (replaceRegex)", text: Binding(get: { rule?.replaceRegex ?? "" }, set: { ensureRule().replaceRegex = $0 }))
+                TextField("替换正则 (replaceRegex)", text: Binding(get: { rule?.replaceRegex ?? "" }, set: { ensureRule(); rule?.replaceRegex = $0 }))
             }
         }
         .navigationTitle("正文规则")

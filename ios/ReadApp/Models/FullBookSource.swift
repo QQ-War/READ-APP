@@ -14,7 +14,7 @@ struct FullBookSource: Codable, Identifiable {
     var header: String?
     var loginUrl: String?
     var loginCheckJs: String?
-    var lastUpdateTime: Long = 0
+    var lastUpdateTime: Int64 = 0
     var weight: Int = 0
     var exploreUrl: String?
     var ruleExplore: ExploreRule?
@@ -24,7 +24,7 @@ struct FullBookSource: Codable, Identifiable {
     var ruleToc: TocRule?
     var ruleContent: ContentRule?
     var bookSourceComment: String?
-    var respondTime: Long = 180000
+    var respondTime: Int64 = 180000
     var enabledCookieJar: Bool? = false
 }
 
