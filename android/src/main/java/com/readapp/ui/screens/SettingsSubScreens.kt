@@ -142,9 +142,11 @@ fun ReadingSettingsScreen(
     readingMode: com.readapp.data.ReadingMode,
     fontSize: Float,
     horizontalPadding: Float,
+    isDarkMode: Boolean,
     onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onHorizontalPaddingChange: (Float) -> Unit,
+    onDarkModeChange: (Boolean) -> Unit,
     onClearCache: () -> Unit,
     onNavigateToCache: () -> Unit,
     onNavigateBack: () -> Unit
@@ -191,6 +193,14 @@ fun ReadingSettingsScreen(
                         Text("左右翻页")
                     }
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("夜间模式", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                Switch(checked = isDarkMode, onCheckedChange = onDarkModeChange)
             }
 
             Button(onClick = onNavigateToCache, modifier = Modifier.fillMaxWidth()) {

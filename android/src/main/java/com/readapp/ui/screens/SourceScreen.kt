@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
@@ -49,12 +50,14 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -220,11 +223,10 @@ fun SourceListScreen(
                 onExploreClick = { source, kind ->
                     onNavigateToExplore(source.bookSourceUrl, source.bookSourceName, kind.url, kind.title)
                 },
-                onNavigateToEdit = onNavigateToEdit,
-                onNavigateToSearch = onNavigateToSearch,
-                onToggle = { sourceViewModel.toggleSource(it) },
-                onDelete = { sourceViewModel.deleteSource(it) },
-                onRefresh = { sourceViewModel.fetchSources() }
+                onSourceClick = { onNavigateToEdit(it.bookSourceUrl) },
+                onToggleSource = { sourceViewModel.toggleSource(it) },
+                onDeleteSource = { sourceViewModel.deleteSource(it) },
+                onSearchClick = { onNavigateToSearch(it) }
             )
         }
     }

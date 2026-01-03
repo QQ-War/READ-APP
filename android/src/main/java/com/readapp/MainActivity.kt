@@ -32,7 +32,7 @@ import com.readapp.ui.screens.LoginScreen
 import com.readapp.ui.screens.ReadingScreen
 import com.readapp.ui.screens.ReplaceRuleScreen
 import com.readapp.ui.screens.SettingsScreen
-import com.readapp.ui.screens.AccountSettingsScreen
+import com.readapp.ui.screens.AccountSettingsView
 import com.readapp.ui.screens.ReadingSettingsScreen
 import com.readapp.ui.screens.TtsSettingsScreen
 import com.readapp.ui.screens.ContentSettingsScreen

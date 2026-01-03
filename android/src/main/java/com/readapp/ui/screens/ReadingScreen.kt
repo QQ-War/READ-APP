@@ -91,6 +91,10 @@ fun ReadingScreen(
     readingMode: com.readapp.data.ReadingMode = com.readapp.data.ReadingMode.Vertical,
     lockPageOnTTS: Boolean = false,
     onLockPageOnTTSChange: (Boolean) -> Unit = {},
+    pageTurningMode: com.readapp.data.PageTurningMode = com.readapp.data.PageTurningMode.Scroll,
+    onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit = {},
+    isDarkMode: Boolean = false,
+    onDarkModeChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showControls by remember { mutableStateOf(false) }
@@ -657,6 +661,10 @@ fun ReadingScreen(
                 onHorizontalPaddingChange = onReadingHorizontalPaddingChange,
                 lockPageOnTTS = lockPageOnTTS,
                 onLockPageOnTTSChange = onLockPageOnTTSChange,
+                pageTurningMode = pageTurningMode,
+                onPageTurningModeChange = onPageTurningModeChange,
+                isDarkMode = isDarkMode,
+                onDarkModeChange = onDarkModeChange,
                 onDismiss = { showFontDialog = false }
             )
         }
@@ -1126,6 +1134,7 @@ private fun BottomControlBar(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReaderOptionsDialog(
     fontSize: Float,
@@ -1215,6 +1224,35 @@ private fun ReaderOptionsDialog(
                 Text("完成")
             }
         }
+    )
+}
+
+@Composable
+private fun FontSizeDialog(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    horizontalPadding: Float,
+    onHorizontalPaddingChange: (Float) -> Unit,
+    lockPageOnTTS: Boolean,
+    onLockPageOnTTSChange: (Boolean) -> Unit,
+    pageTurningMode: com.readapp.data.PageTurningMode,
+    onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit,
+    isDarkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ReaderOptionsDialog(
+        fontSize = value,
+        onFontSizeChange = onValueChange,
+        horizontalPadding = horizontalPadding,
+        onHorizontalPaddingChange = onHorizontalPaddingChange,
+        lockPageOnTTS = lockPageOnTTS,
+        onLockPageOnTTSChange = onLockPageOnTTSChange,
+        pageTurningMode = pageTurningMode,
+        onPageTurningModeChange = onPageTurningModeChange,
+        isDarkMode = isDarkMode,
+        onDarkModeChange = onDarkModeChange,
+        onDismiss = onDismiss
     )
 }
 
@@ -1389,5 +1427,3 @@ private fun ChapterListDialog(
         shape = RoundedCornerShape(AppDimens.CornerRadiusLarge)
     )
 }
-
-
