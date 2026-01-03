@@ -668,6 +668,20 @@ struct ReadingView: View {
                 onTapLocation: { location in handleReaderTap(location: location) }
             )
         }
+        
+        // 更新高亮状态
+        if chapterOffset == 0 {
+            vc.updateHighlights(
+                index: ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex,
+                secondary: ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : [],
+                isPlaying: ttsManager.isPlaying,
+                starts: currentCache.paragraphStarts,
+                prefixLen: currentCache.chapterPrefixLen
+            )
+        } else {
+            vc.updateHighlights(index: nil, secondary: [], isPlaying: false, starts: [], prefixLen: 0)
+        }
+        
         vc.configureTK2Page(info: infos[pageIndex])
         return vc
     }
@@ -1531,6 +1545,13 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
     let onAddReplaceRule: ((String) -> Void)?
     let onTapLocation: ((ReaderTapLocation) -> Void)?
     
+    // Highlight state
+    var highlightIndex: Int?
+    var secondaryIndices: Set<Int> = []
+    var isPlayingHighlight: Bool = false
+    var paragraphStarts: [Int] = []
+    var chapterPrefixLen: Int = 0
+    
     private var tk2View: ReadContent2View?
     private var pendingPageInfo: TK2PageInfo?
     
@@ -1557,12 +1578,32 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
          v.renderStore = renderStore
          v.onTapLocation = onTapLocation
          v.onAddReplaceRule = onAddReplaceRule
+         v.highlightIndex = highlightIndex
+         v.secondaryIndices = secondaryIndices
+         v.isPlayingHighlight = isPlayingHighlight
+         v.paragraphStarts = paragraphStarts
+         v.chapterPrefixLen = chapterPrefixLen
          view.addSubview(v)
          self.tk2View = v
          if let pendingPageInfo {
              v.pageInfo = pendingPageInfo
              v.setNeedsDisplay()
          }
+    }
+    
+    func updateHighlights(index: Int?, secondary: Set<Int>, isPlaying: Bool, starts: [Int], prefixLen: Int) {
+        self.highlightIndex = index
+        self.secondaryIndices = secondary
+        self.isPlayingHighlight = isPlaying
+        self.paragraphStarts = starts
+        self.chapterPrefixLen = prefixLen
+        
+        tk2View?.highlightIndex = index
+        tk2View?.secondaryIndices = secondary
+        tk2View?.isPlayingHighlight = isPlaying
+        tk2View?.paragraphStarts = starts
+        tk2View?.chapterPrefixLen = prefixLen
+        tk2View?.setNeedsDisplay()
     }
     
     func configureTK2Page(info: TK2PageInfo) {
@@ -2128,6 +2169,11 @@ private class ReadContent2View: UIView {
     var pageInfo: TK2PageInfo?
     var onTapLocation: ((ReaderTapLocation) -> Void)?
     var onAddReplaceRule: ((String) -> Void)?
+    var highlightIndex: Int?
+    var secondaryIndices: Set<Int> = []
+    var isPlayingHighlight: Bool = false
+    var paragraphStarts: [Int] = []
+    var chapterPrefixLen: Int = 0
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -2162,6 +2208,53 @@ private class ReadContent2View: UIView {
         let pageStartOffset = info.range.location
         let pageEndOffset = NSMaxRange(info.range)
         var shouldStop = false
+        
+        // 渲染背景高亮
+        if isPlayingHighlight {
+            context?.saveGState()
+            
+            // 准备高亮范围映射
+            func getRangeForSentence(_ index: Int) -> NSRange? {
+                guard index >= 0 && index < paragraphStarts.count else { return nil }
+                let start = paragraphStarts[index] + chapterPrefixLen
+                let end = (index + 1 < paragraphStarts.count) ? (paragraphStarts[index + 1] + chapterPrefixLen) : store.attributedString.length
+                return NSRange(location: start, length: end - start)
+            }
+            
+            let highlightIndices = ([highlightIndex].compactMap { $0 }) + Array(secondaryIndices)
+            
+            for index in highlightIndices {
+                guard let sRange = getRangeForSentence(index) else { continue }
+                let intersection = NSIntersectionRange(sRange, info.range)
+                if intersection.length <= 0 { continue }
+                
+                let color = (index == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.2) : UIColor.systemGreen.withAlphaComponent(0.12)
+                context?.setFillColor(color.cgColor)
+                
+                // 找到相交行的矩形区域
+                store.layoutManager.enumerateTextLayoutFragments(from: store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: intersection.location), options: [.ensuresLayout]) { fragment in
+                    let fFrame = fragment.layoutFragmentFrame
+                    guard let fRange = TextKit2Paginator.rangeFromTextRange(fragment.rangeInElement, in: store.contentStorage) else { return true }
+                    
+                    if fRange.location >= NSMaxRange(intersection) { return false }
+                    
+                    for line in fragment.textLineFragments {
+                        let lStart = fRange.location + line.characterRange.location
+                        let lEnd = fRange.location + line.characterRange.upperBound
+                        
+                        let lInter = NSIntersectionRange(NSRange(location: lStart, length: lEnd - lStart), intersection)
+                        if lInter.length > 0 {
+                            // 计算行内具体字符的 X 偏移（简化处理：整行高亮，因为阅读器通常是按段落/句子请求音频）
+                            let lineFrame = line.typographicBounds.offsetBy(dx: fFrame.origin.x, dy: fFrame.origin.y)
+                            let highlightRect = CGRect(x: 0, y: lineFrame.minY, width: bounds.width, height: lineFrame.height)
+                            context?.fill(highlightRect)
+                        }
+                    }
+                    return true
+                }
+            }
+            context?.restoreGState()
+        }
         
         store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             if shouldStop { return false }

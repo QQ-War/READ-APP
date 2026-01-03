@@ -363,9 +363,14 @@ fun ReadingScreen(
                                     
                                     if (currentPlayingParagraph == pi.startParagraphIndex) {
                                         val builder = AnnotatedString.Builder(baseText)
-                                        // Simple highlighting for the whole paragraph in the page
-                                        // Finding relative indices
-                                        // This is a bit complex to do perfectly, so we'll just use a simple approach for now
+                                        // 计算在当前页面内的相对偏移
+                                        // 简化版：由于阅读器分页通常以段落为界或包含完整段落，这里对当前段落覆盖到的文字应用高亮
+                                        // 如果需要更精准，需要 paragraphStartIndices
+                                        builder.addStyle(
+                                            style = SpanStyle(background = Color.Blue.copy(alpha = 0.15f)),
+                                            start = 0,
+                                            end = baseText.length
+                                        )
                                         builder.toAnnotatedString()
                                     } else {
                                         baseText
