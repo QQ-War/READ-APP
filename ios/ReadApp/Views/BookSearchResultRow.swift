@@ -34,12 +34,6 @@ struct BookSearchResultRow: View {
             }
             
             Spacer()
-
-            Button(action: onAddToBookshelf) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title2)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.vertical, 8)
     }

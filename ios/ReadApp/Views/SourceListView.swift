@@ -217,45 +217,50 @@ struct GlobalSearchBar: View {
     var placeholder: String
     var onSearchButtonClicked: (() -> Void)?
     
+    @State private var isFocused = false
+    
     var body: some View {
         HStack {
-            TextField(placeholder, text: $text)
-                .padding(7)
-                .padding(.horizontal, 25)
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
-                .overlay(
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.gray)
-                            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                            .padding(.leading, 8)
-                        
-                        if !text.isEmpty {
-                            Button(action: {
-                                self.text = ""
-                            }) {
-                                Image(systemName: "multiply.circle.fill")
-                                    .foregroundColor(.gray)
-                                    .padding(.trailing, 8)
-                            }
+            TextField(placeholder, text: $text, onEditingChanged: { focused in
+                withAnimation { isFocused = focused }
+            })
+            .padding(7)
+            .padding(.horizontal, 25)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+            .overlay(
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 8)
+                    
+                    if !text.isEmpty {
+                        Button(action: {
+                            self.text = ""
+                        }) {
+                            Image(systemName: "multiply.circle.fill")
+                                .foregroundColor(.gray)
+                                .padding(.trailing, 8)
                         }
                     }
-                )
-                .submitLabel(.search)
-                .onSubmit {
-                    onSearchButtonClicked?()
                 }
+            )
+            .submitLabel(.search)
+            .onSubmit {
+                onSearchButtonClicked?()
+            }
             
-            if !text.isEmpty {
+            if isFocused || !text.isEmpty {
                 Button("取消") {
                     text = ""
+                    isFocused = false
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(.spring(), value: text.isEmpty)
+        .animation(.spring(), value: isFocused || !text.isEmpty)
     }
 }
 

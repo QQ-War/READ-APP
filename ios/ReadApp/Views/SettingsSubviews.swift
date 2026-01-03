@@ -345,15 +345,27 @@ struct DebugSettingsView: View {
 struct PreferredSourcesView: View {
     @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
+    @State private var filterText = ""
+    
+    var filteredSources: [BookSource] {
+        let enabled = apiService.availableSources.filter { $0.enabled }
+        if filterText.isEmpty {
+            return enabled
+        } else {
+            return enabled.filter { $0.bookSourceName.localizedCaseInsensitiveContains(filterText) }
+        }
+    }
     
     var body: some View {
         List {
             Section(footer: Text("未选择任何书源时，将默认搜索所有已启用的书源。")) {
-                Button(preferences.preferredSearchSourceUrls.isEmpty ? "✓ 全部启用源" : "全部启用源") {
-                    preferences.preferredSearchSourceUrls = []
+                if filterText.isEmpty {
+                    Button(preferences.preferredSearchSourceUrls.isEmpty ? "✓ 全部启用源" : "全部启用源") {
+                        preferences.preferredSearchSourceUrls = []
+                    }
                 }
                 
-                ForEach(apiService.availableSources.filter { $0.enabled }) { source in
+                ForEach(filteredSources) { source in
                     Button(action: { togglePreferredSource(source.bookSourceUrl) }) {
                         HStack {
                             Text(source.bookSourceName)
@@ -369,6 +381,7 @@ struct PreferredSourcesView: View {
             }
         }
         .navigationTitle("指定搜索源")
+        .searchable(text: $filterText, prompt: "搜索书源名称")
         .ifAvailableHideTabBar()
         .task {
             if apiService.availableSources.isEmpty {

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
 import coil.compose.AsyncImage
+import com.readapp.data.LocalCacheManager
 import com.readapp.data.model.Book
 import com.readapp.data.model.Chapter
 import com.readapp.ui.theme.AppDimens
@@ -639,6 +640,7 @@ fun ReadingScreen(
                 chapters = chapters,
                 currentChapterIndex = currentChapterIndex,
                 preloadedChapters = preloadedChapters,
+                bookUrl = book.bookUrl ?: "",
                 onChapterClick = { index ->
                     onChapterClick(index)
                     showChapterList = false
@@ -1214,9 +1216,13 @@ private fun ChapterListDialog(
     chapters: List<Chapter>,
     currentChapterIndex: Int,
     preloadedChapters: Set<Int>,
+    bookUrl: String,
     onChapterClick: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val localCache = remember { com.readapp.data.LocalCacheManager(context) }
+    
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -1231,6 +1237,7 @@ private fun ChapterListDialog(
             ) {
                 itemsIndexed(chapters) { index, chapter ->
                     val isCurrentChapter = index == currentChapterIndex
+                    val isCached = remember(bookUrl, index) { localCache.isChapterCached(bookUrl, index) }
                     
                     Surface(
                         onClick = { onChapterClick(index) },
@@ -1260,23 +1267,33 @@ private fun ChapterListDialog(
                                         MaterialTheme.colorScheme.onSurface
                                     }
                                 )
-                                
                             }
                             
-                            if (isCurrentChapter) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.customColors.gradientStart
-                                ) {
-                                    Text(
-                                        text = "褰撳墠",
-                                        modifier = Modifier.padding(
-                                            horizontal = 8.dp,
-                                            vertical = 4.dp
-                                        ),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimary
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (isCached) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "已缓存",
+                                        tint = MaterialTheme.customColors.success,
+                                        modifier = Modifier.size(16.dp).padding(end = 4.dp)
                                     )
+                                }
+                                
+                                if (isCurrentChapter) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.customColors.gradientStart
+                                    ) {
+                                        Text(
+                                            text = "褰撳墠",
+                                            modifier = Modifier.padding(
+                                                horizontal = 8.dp,
+                                                vertical = 4.dp
+                                            ),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    }
                                 }
                             }
                         }

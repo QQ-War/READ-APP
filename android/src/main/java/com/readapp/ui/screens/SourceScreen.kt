@@ -355,10 +355,6 @@ fun BookSearchResultRow(
                     Text(text = "来源: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(onClick = onAdd) {
-                Icon(Icons.Default.Add, contentDescription = "Add to Bookshelf")
-            }
         }
     }
 }

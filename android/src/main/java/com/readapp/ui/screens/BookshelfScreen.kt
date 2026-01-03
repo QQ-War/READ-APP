@@ -303,6 +303,12 @@ private fun SearchConfigDialog(
     onClearAll: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var filterQuery by remember { mutableStateOf("") }
+    val filteredSources = remember(filterQuery, availableSources) {
+        if (filterQuery.isBlank()) availableSources
+        else availableSources.filter { it.bookSourceName.contains(filterQuery, ignoreCase = true) }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("搜索设置") },
@@ -314,15 +320,25 @@ private fun SearchConfigDialog(
                 }
                 if (enabled) {
                     Divider()
+                    OutlinedTextField(
+                        value = filterQuery,
+                        onValueChange = { filterQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("搜索书源名称...") },
+                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                        singleLine = true
+                    )
                     Text("选择优先搜索源", style = MaterialTheme.typography.labelMedium)
                     LazyColumn(Modifier.heightIn(max = 300.dp)) {
-                        item {
-                            ListItem(
-                                headlineContent = { Text(if (preferredUrls.isEmpty()) "✓ 全部启用源" else "使用全部启用源") },
-                                modifier = Modifier.clickable { onClearAll() }
-                            )
+                        if (filterQuery.isBlank()) {
+                            item {
+                                ListItem(
+                                    headlineContent = { Text(if (preferredUrls.isEmpty()) "✓ 全部启用源" else "使用全部启用源") },
+                                    modifier = Modifier.clickable { onClearAll() }
+                                )
+                            }
                         }
-                        items(availableSources) { source ->
+                        items(filteredSources) { source ->
                             ListItem(
                                 headlineContent = { Text(source.bookSourceName) },
                                 trailingContent = {

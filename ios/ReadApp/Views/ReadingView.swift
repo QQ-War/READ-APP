@@ -227,7 +227,7 @@ struct ReadingView: View {
             .navigationBarBackButtonHidden(true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .sheet(isPresented: $showChapterList) { ChapterListView(chapters: chapters, currentIndex: currentChapterIndex) { index in
+        .sheet(isPresented: $showChapterList) { ChapterListView(chapters: chapters, currentIndex: currentChapterIndex, bookUrl: book.bookUrl ?? "") { index in
             currentChapterIndex = index
             pendingJumpToFirstPage = true
             loadChapterContent()
@@ -1669,6 +1669,7 @@ private struct TextKitPaginator {
 private struct ChapterListView: View {
     let chapters: [BookChapter]
     let currentIndex: Int
+    let bookUrl: String
     let onSelectChapter: (Int) -> Void
     @Environment(\.dismiss) var dismiss
     @State private var isReversed = false
@@ -1693,6 +1694,11 @@ private struct ChapterListView: View {
                                     .foregroundColor(item.offset == currentIndex ? .blue : .primary)
                                     .fontWeight(item.offset == currentIndex ? .semibold : .regular)
                                 Spacer()
+                                if LocalCacheManager.shared.isChapterCached(bookUrl: bookUrl, index: item.offset) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                        .font(.caption)
+                                }
                                 if item.offset == currentIndex {
                                     Image(systemName: "book.fill").foregroundColor(.blue).font(.caption)
                                 }
