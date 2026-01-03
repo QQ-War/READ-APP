@@ -7,7 +7,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +35,25 @@ fun ReplaceRuleScreen(
     val errorMessage by bookViewModel.errorMessage.collectAsState()
 
     var showEditDialog by remember { mutableStateOf(false) }
+    var showImportUrlDialog by remember { mutableStateOf(false) }
+    var importUrl by remember { mutableStateOf("") }
     var editingRule by remember { mutableStateOf<ReplaceRule?>(null) } // null means add new rule
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            scope.launch {
+                val content = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { it.readText() }
+                if (!content.isNullOrBlank()) {
+                    bookViewModel.saveReplaceRules(content)
+                    bookViewModel.loadReplaceRules()
+                }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         bookViewModel.loadReplaceRules()
@@ -39,6 +61,7 @@ fun ReplaceRuleScreen(
 
     Scaffold(
         topBar = {
+            var showMenu by remember { mutableStateOf(false) }
             TopAppBar(
                 title = { Text("净化规则管理") },
                 navigationIcon = {
@@ -47,11 +70,37 @@ fun ReplaceRuleScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        editingRule = null // For adding a new rule
-                        showEditDialog = true
-                    }) {
-                        Icon(Icons.Default.Add, contentDescription = "添加规则")
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("新建规则") },
+                                onClick = {
+                                    showMenu = false
+                                    editingRule = null
+                                    showEditDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Default.Add, null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("本地导入") },
+                                onClick = {
+                                    showMenu = false
+                                    filePickerLauncher.launch("*/*")
+                                },
+                                leadingIcon = { Icon(Icons.Default.Folder, null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("网络导入") },
+                                onClick = {
+                                    showMenu = false
+                                    showImportUrlDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Default.Link, null) }
+                            )
+                        }
                     }
                 }
             )
@@ -63,6 +112,34 @@ fun ReplaceRuleScreen(
                 .padding(paddingValues)
                 .padding(AppDimens.PaddingMedium)
         ) {
+            if (showImportUrlDialog) {
+                AlertDialog(
+                    onDismissRequest = { showImportUrlDialog = false },
+                    title = { Text("网络导入") },
+                    text = {
+                        OutlinedTextField(
+                            value = importUrl,
+                            onValueChange = { importUrl = it },
+                            label = { Text("输入规则 URL") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            scope.launch {
+                                val content = fetchUrlContent(importUrl)
+                                if (content != null) {
+                                    bookViewModel.saveReplaceRules(content)
+                                    bookViewModel.loadReplaceRules()
+                                }
+                                showImportUrlDialog = false
+                                importUrl = ""
+                            }
+                        }) { Text("导入") }
+                    },
+                    dismissButton = { TextButton(onClick = { showImportUrlDialog = false }) { Text("取消") } }
+                )
+            }
             if (isLoading && replaceRules.isEmpty()) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
             } else if (errorMessage != null) {
@@ -104,6 +181,19 @@ fun ReplaceRuleScreen(
                 showEditDialog = false
             }
         )
+    }
+}
+
+    }
+}
+
+private suspend fun fetchUrlContent(url: String): String? {
+    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val client = okhttp3.OkHttpClient()
+            val request = okhttp3.Request.Builder().url(url).build()
+            client.newCall(request).execute().use { it.body?.string() }
+        }.getOrNull()
     }
 }
 

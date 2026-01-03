@@ -143,6 +143,13 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
 
     suspend fun toggleReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, id: String, isEnabled: Boolean): Result<Any> =
         executeWithFailover { it.toggleReplaceRule(accessToken, id, if (isEnabled) 1 else 0) }(buildEndpoints(baseUrl, publicUrl))
+
+    suspend fun saveReplaceRules(baseUrl: String, publicUrl: String?, accessToken: String, jsonContent: String): Result<Any> {
+        val requestBody = jsonContent.toRequestBody("text/plain".toMediaTypeOrNull())
+        return executeWithFailover {
+            it.saveReplaceRules(accessToken, requestBody)
+        }(buildEndpoints(baseUrl, publicUrl))
+    }
     // endregion
 
     // region Book Sources

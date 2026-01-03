@@ -2,8 +2,13 @@ import SwiftUI
 
 struct ReplaceRuleListView: View {
     @StateObject private var viewModel = ReplaceRuleViewModel()
+    @EnvironmentObject var apiService: APIService
     @State private var showEditView = false
     @State private var selectedRule: ReplaceRule?
+    @State private var showingURLImportDialog = false
+    @State private var importURL = ""
+    @State private var showingFilePicker = false
+    @State private var errorMessageAlert: String?
 
     var body: some View {
         List {
@@ -69,10 +74,20 @@ struct ReplaceRuleListView: View {
         .ifAvailableHideTabBar()
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    self.selectedRule = nil
-                    self.showEditView = true
-                }) {
+                Menu {
+                    Button(action: {
+                        self.selectedRule = nil
+                        self.showEditView = true
+                    }) {
+                        Label("新建规则", systemImage: "pencil.and.outline")
+                    }
+                    Button(action: { showingFilePicker = true }) {
+                        Label("本地导入", systemImage: "folder")
+                    }
+                    Button(action: { showingURLImportDialog = true }) {
+                        Label("网络导入", systemImage: "link")
+                    }
+                } label: {
                     Image(systemName: "plus")
                 }
             }
@@ -80,11 +95,52 @@ struct ReplaceRuleListView: View {
         .sheet(isPresented: $showEditView) {
             ReplaceRuleEditView(viewModel: viewModel, rule: selectedRule)
         }
+        .sheet(isPresented: $showingFilePicker) {
+            DocumentPicker { url in
+                Task {
+                    if let content = try? String(contentsOf: url) {
+                        try? await apiService.saveReplaceRules(jsonContent: content)
+                        await viewModel.fetchRules()
+                    }
+                }
+            }
+        }
+        .alert("网络导入", isPresented: $showingURLImportDialog) {
+            TextField("输入规则 URL", text: $importURL)
+                .autocapitalization(.none)
+            Button("导入") {
+                Task { await importFromURL() }
+            }
+            Button("取消", role: .cancel) { importURL = "" }
+        } message: {
+            Text("请输入合法的规则 JSON 地址")
+        }
+        .alert("错误", isPresented: .constant(errorMessageAlert != nil)) {
+            Button("确定") { errorMessageAlert = nil }
+        } message: {
+            if let error = errorMessageAlert { Text(error) }
+        }
         .onAppear {
             Task {
                 await viewModel.fetchRules()
             }
         }
+    }
+
+    private func importFromURL() async {
+        guard let url = URL(string: importURL) else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let content = String(data: data, encoding: .utf8) {
+                try await apiService.saveReplaceRules(jsonContent: content)
+                await viewModel.fetchRules()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessageAlert = "导入失败: \(error.localizedDescription)"
+            }
+        }
+        importURL = ""
     }
 
     private func deleteRule(at offsets: IndexSet) {

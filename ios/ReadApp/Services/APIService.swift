@@ -429,6 +429,28 @@ class APIService: ObservableObject {
         }
     }
     
+    func saveReplaceRules(jsonContent: String) async throws {
+        guard var components = URLComponents(string: "\(baseURL)/saverules") else {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
+        }
+        components.queryItems = [URLQueryItem(name: "accessToken", value: accessToken)]
+        guard let url = components.url else {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无法构建URL"])
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jsonContent.data(using: .utf8)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: "保存规则失败"])
+        }
+        let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+        if !apiResponse.isSuccess {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "保存规则时发生未知错误"])
+        }
+    }
+    
     // MARK: - Book Import
     func importBook(from url: URL) async throws {
         guard !accessToken.isEmpty else {

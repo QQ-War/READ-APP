@@ -449,6 +449,7 @@ fun ReadAppMain() {
                 )
                 BookSearchScreen(
                     viewModel = searchViewModel,
+                    mainNavController = navController,
                     onBack = { navController.popBackStack() }
                 )
             }

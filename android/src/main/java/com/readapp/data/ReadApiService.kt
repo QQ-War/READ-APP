@@ -129,6 +129,12 @@ interface ReadApiService {
         @Query("id") id: String,
         @Query("st") status: Int
     ): Response<ApiResponse<Any>>
+
+    @POST("saverules")
+    suspend fun saveReplaceRules(
+        @Query("accessToken") accessToken: String,
+        @Body content: RequestBody
+    ): Response<ApiResponse<Any>>
     // endregion
 
     // region Book Sources

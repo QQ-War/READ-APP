@@ -13,6 +13,9 @@ struct SourceListView: View {
     @State private var expandedSourceIds: Set<String> = []
     @State private var exploreKinds: [String: [BookSource.ExploreKind]] = [:]
     @State private var loadingExploreIds: Set<String> = []
+    @State private var showingURLImportDialog = false
+    @State private var importURL = ""
+    @State private var showingFilePicker = false
 
     var body: some View {
         sourceManagementView
@@ -20,10 +23,40 @@ struct SourceListView: View {
             .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "过滤书源...")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(destination: SourceEditView()) {
+                    Menu {
+                        NavigationLink(destination: SourceEditView()) {
+                            Label("新建书源", systemImage: "pencil.and.outline")
+                        }
+                        Button(action: { showingFilePicker = true }) {
+                            Label("本地导入", systemImage: "folder")
+                        }
+                        Button(action: { showingURLImportDialog = true }) {
+                            Label("网络导入", systemImage: "link")
+                        }
+                    } label: {
                         Image(systemName: "plus")
                     }
                 }
+            }
+            .sheet(isPresented: $showingFilePicker) {
+                DocumentPicker { url in
+                    Task {
+                        if let content = try? String(contentsOf: url) {
+                            try? await apiService.saveBookSource(jsonContent: content)
+                            await viewModel.fetchSources()
+                        }
+                    }
+                }
+            }
+            .alert("网络导入", isPresented: $showingURLImportDialog) {
+                TextField("输入书源 URL", text: $importURL)
+                    .autocapitalization(.none)
+                Button("导入") {
+                    Task { await importFromURL() }
+                }
+                Button("取消", role: .cancel) { importURL = "" }
+            } message: {
+                Text("请输入合法的书源 JSON 地址")
             }
             .alert("加入书架", isPresented: $showAddResultAlert) {
                 Button("确定", role: .cancel) { }
@@ -35,6 +68,23 @@ struct SourceListView: View {
                     BookSearchView(viewModel: BookSearchViewModel(bookSource: bookSource))
                 }
             }
+    }
+    
+    private func importFromURL() async {
+        guard let url = URL(string: importURL) else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let content = String(data: data, encoding: .utf8) {
+                try await apiService.saveBookSource(jsonContent: content)
+                await viewModel.fetchSources()
+            }
+        } catch {
+            await MainActor.run {
+                addResultMessage = "导入失败: \(error.localizedDescription)"
+                showAddResultAlert = true
+            }
+        }
+        importURL = ""
     }
     
     @ViewBuilder

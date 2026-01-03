@@ -25,6 +25,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -72,15 +75,77 @@ fun SourceListScreen(
     val searchResults by sourceViewModel.searchResults.collectAsState()
     val isGlobalSearching by sourceViewModel.isGlobalSearching.collectAsState()
 
+    var showImportUrlDialog by remember { mutableStateOf(false) }
+    var importUrl by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            scope.launch {
+                val content = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { it.readText() }
+                if (!content.isNullOrBlank()) {
+                    sourceViewModel.saveSource(content)
+                    sourceViewModel.fetchSources()
+                }
+            }
+        }
+    }
+
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { onNavigateToEdit(null) }) {
-                Icon(Icons.Default.Add, contentDescription = "新建书源")
+            var showMenu by remember { mutableStateOf(false) }
+            Column(horizontalAlignment = Alignment.End) {
+                if (showMenu) {
+                    FloatingActionButton(
+                        onClick = { filePickerLauncher.launch("*/*"); showMenu = false },
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ) { Icon(Icons.Default.Folder, "本地导入") }
+                    FloatingActionButton(
+                        onClick = { showImportUrlDialog = true; showMenu = false },
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ) { Icon(Icons.Default.Link, "网络导入") }
+                }
+                FloatingActionButton(onClick = { if (showMenu) onNavigateToEdit(null) else showMenu = true }) {
+                    Icon(if (showMenu) Icons.Default.Edit else Icons.Default.Add, contentDescription = "新建书源")
+                }
             }
         }
     ) { paddingValues ->
         val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            if (showImportUrlDialog) {
+                AlertDialog(
+                    onDismissRequest = { showImportUrlDialog = false },
+                    title = { Text("网络导入") },
+                    text = {
+                        OutlinedTextField(
+                            value = importUrl,
+                            onValueChange = { importUrl = it },
+                            label = { Text("输入书源 URL") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            scope.launch {
+                                val content = fetchUrlContent(importUrl)
+                                if (content != null) {
+                                    sourceViewModel.saveSource(content)
+                                    sourceViewModel.fetchSources()
+                                }
+                                showImportUrlDialog = false
+                                importUrl = ""
+                            }
+                        }) { Text("导入") }
+                    },
+                    dismissButton = { TextButton(onClick = { showImportUrlDialog = false }) { Text("取消") } }
+                )
+            }
             Surface(
                 tonalElevation = 2.dp,
                 shadowElevation = 2.dp
@@ -157,6 +222,19 @@ fun SourceListScreen(
                 onRefresh = { sourceViewModel.fetchSources() }
             )
         }
+    }
+}
+
+    }
+}
+
+private suspend fun fetchUrlContent(url: String): String? {
+    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val client = okhttp3.OkHttpClient()
+            val request = okhttp3.Request.Builder().url(url).build()
+            client.newCall(request).execute().use { it.body?.string() }
+        }.getOrNull()
     }
 }
 

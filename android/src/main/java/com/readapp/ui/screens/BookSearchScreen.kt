@@ -34,16 +34,27 @@ import com.readapp.viewmodel.BookSearchViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.ui.platform.LocalFocusManager
+import com.readapp.Screen
+import com.readapp.data.model.BookSource
+import com.readapp.viewmodel.BookViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookSearchScreen(
     viewModel: BookSearchViewModel,
+    mainNavController: NavController,
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val searchText by viewModel.searchText.collectAsState()
     val listState = rememberLazyListState()
     val latestUiState by rememberUpdatedState(uiState)
+    val focusManager = LocalFocusManager.current
+    val bookViewModel: BookViewModel = viewModel(factory = BookViewModel.Factory)
 
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
@@ -64,31 +75,47 @@ fun BookSearchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Search in ${viewModel.bookSource.bookSourceName}") },
+                title = { Text(text = "搜索: ${viewModel.bookSource.bookSourceName}") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
                 }
             )
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            OutlinedTextField(
-                value = searchText,
-                onValueChange = {
-                    viewModel.onSearchTextChanged(it)
-                    viewModel.performSearch()
-                },
-                label = { Text("Search Books") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-            )
+            Surface(tonalElevation = 2.dp, shadowElevation = 2.dp) {
+                OutlinedTextField(
+                    value = searchText,
+                    onValueChange = {
+                        viewModel.onSearchTextChanged(it)
+                        viewModel.performSearch()
+                    },
+                    label = { Text("搜索书籍...") },
+                    singleLine = true,
+                    trailingIcon = {
+                        if (searchText.isNotEmpty()) {
+                            IconButton(onClick = { 
+                                viewModel.onSearchTextChanged("")
+                                focusManager.clearFocus()
+                            }) {
+                                Icon(Icons.Default.Clear, "清除")
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
 
             when (val state = uiState) {
                 is BookSearchUiState.Loading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
                 }
                 is BookSearchUiState.Error -> {
                     Text(text = state.message, modifier = Modifier.padding(8.dp))
@@ -96,8 +123,9 @@ fun BookSearchScreen(
                 is BookSearchUiState.Success -> {
                     LazyColumn(state = listState) {
                         items(state.books) { book ->
-                            BookSearchItem(book = book, onAdd = {
-                                viewModel.addBookToBookshelf(book)
+                            BookSearchItem(book = book, onClick = {
+                                bookViewModel.selectBook(book)
+                                mainNavController.navigate(Screen.BookDetail.route)
                             })
                         }
                         if (viewModel.isLoading) {
@@ -120,11 +148,12 @@ fun BookSearchScreen(
 }
 
 @Composable
-fun BookSearchItem(book: Book, onAdd: () -> Unit) {
+fun BookSearchItem(book: Book, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
+            .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier.padding(8.dp),
@@ -140,13 +169,9 @@ fun BookSearchItem(book: Book, onAdd: () -> Unit) {
             )
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = book.name ?: "Unknown Title", style = MaterialTheme.typography.titleMedium)
-                Text(text = book.author ?: "Unknown Author", style = MaterialTheme.typography.bodySmall)
+                Text(text = book.name ?: "未知书名", style = MaterialTheme.typography.titleMedium)
+                Text(text = book.author ?: "未知作者", style = MaterialTheme.typography.bodySmall)
                 Text(text = book.intro ?: "", style = MaterialTheme.typography.bodySmall, maxLines = 2)
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(onClick = onAdd) {
-                Icon(Icons.Default.Add, contentDescription = "Add to Bookshelf")
             }
         }
     }

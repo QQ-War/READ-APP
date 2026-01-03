@@ -722,6 +722,21 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun saveReplaceRules(jsonContent: String) {
+        viewModelScope.launch {
+            repository.saveReplaceRules(
+                currentServerEndpoint(),
+                _publicServerAddress.value.ifBlank { null },
+                _accessToken.value,
+                jsonContent
+            ).onSuccess {
+                loadReplaceRules()
+            }.onFailure {
+                _errorMessage.value = "保存规则失败: ${it.message}"
+            }
+        }
+    }
+
     fun previousParagraph() {
         val target = _currentParagraphIndex.value - 1
         if (target >= 0) {

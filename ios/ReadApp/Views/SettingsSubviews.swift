@@ -386,6 +386,14 @@ struct PreferredSourcesView: View {
         }
         .navigationTitle("指定搜索源")
         .searchable(text: $filterText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索书源名称")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("清空全部") {
+                    preferences.preferredSearchSourceUrls = []
+                }
+                .disabled(preferences.preferredSearchSourceUrls.isEmpty)
+            }
+        }
         .ifAvailableHideTabBar()
         .task {
             if apiService.availableSources.isEmpty {
