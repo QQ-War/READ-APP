@@ -14,75 +14,71 @@ struct TTSSelectionView: View {
     @State private var newSpeakerTTSId: String?
     
     var body: some View {
-        NavigationView {
-            Group {
-                if isLoading {
-                    ProgressView("加载中...")
-                } else if ttsList.isEmpty {
-                    VStack(spacing: 20) {
-                        Image(systemName: "speaker.slash.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
-                        
-                        Text("暂无 TTS 引擎")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        
-                        Text("请在后台添加 TTS 引擎配置")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                        
-                        Button("重新加载") {
-                            Task {
-                                await loadTTSList()
-                            }
+        Group {
+            if isLoading {
+                ProgressView("加载中...")
+            } else if ttsList.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "speaker.slash.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                    
+                    Text("暂无 TTS 引擎")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("请在后台添加 TTS 引擎配置")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("重新加载") {
+                        Task {
+                            await loadTTSList()
                         }
-                        .buttonStyle(.bordered)
                     }
-                    .padding()
-                } else {
-                    List {
-                        systemTTSSection
-                        if !preferences.useSystemTTS {
-                            narrationTTSSection
-                            dialogueTTSSection
-                            speakerMappingSection
-                        }
+                    .buttonStyle(.bordered)
+                }
+                .padding()
+            } else {
+                List {
+                    systemTTSSection
+                    if !preferences.useSystemTTS {
+                        narrationTTSSection
+                        dialogueTTSSection
+                        speakerMappingSection
                     }
                 }
             }
-            .navigationTitle("TTS 引擎")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+        }
+        .navigationTitle("TTS 引擎")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                HStack {
                     Button("刷新") {
                         Task {
                             await loadTTSList()
                         }
                     }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") {
-                        dismiss()
+                    NavigationLink(destination: TTSEngineListView().environmentObject(apiService)) {
+                        Text("管理")
                     }
                 }
             }
-            .task {
-                await loadTTSList()
+        }
+        .task {
+            await loadTTSList()
+        }
+        .onAppear {
+            speakerMappings = preferences.speakerTTSMapping
+        }
+        .alert("错误", isPresented: .constant(errorMessage != nil)) {
+            Button("确定") {
+                errorMessage = nil
             }
-            .onAppear {
-                speakerMappings = preferences.speakerTTSMapping
-            }
-            .alert("错误", isPresented: .constant(errorMessage != nil)) {
-                Button("确定") {
-                    errorMessage = nil
-                }
-            } message: {
-                if let error = errorMessage {
-                    Text(error)
-                }
+        } message: {
+            if let error = errorMessage {
+                Text(error)
             }
         }
     }

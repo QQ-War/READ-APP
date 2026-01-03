@@ -277,6 +277,44 @@ class APIService: ObservableObject {
         ]
         return components.url
     }
+
+    // MARK: - TTS CRUD
+    func saveTTS(tts: HttpTTS) async throws {
+        guard var components = URLComponents(string: "\(baseURL)/addtts") else {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL"])
+        }
+        components.queryItems = [URLQueryItem(name: "accessToken", value: accessToken)]
+        guard let url = components.url else {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无法构建URL"])
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(tts)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: "保存TTS失败"])
+        }
+        let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+        if !apiResponse.isSuccess {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "保存TTS时发生未知错误"])
+        }
+    }
+
+    func deleteTTS(id: String) async throws {
+        let queryItems = [
+            URLQueryItem(name: "accessToken", value: accessToken),
+            URLQueryItem(name: "id", value: id)
+        ]
+        let (data, httpResponse) = try await requestWithFailback(endpoint: "deltts", queryItems: queryItems)
+        guard httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "删除TTS失败"])
+        }
+        let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+        if !apiResponse.isSuccess {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "删除TTS时发生未知错误"])
+        }
+    }
     
     // MARK: - 其他
     func clearLocalCache() {
