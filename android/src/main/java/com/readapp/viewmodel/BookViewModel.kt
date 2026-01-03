@@ -26,6 +26,8 @@ import com.readapp.data.model.Chapter
 import com.readapp.data.model.HttpTTS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -981,6 +983,25 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             val allResults = deferredResults.awaitAll().flatten()
             _onlineSearchResults.value = allResults
             _isOnlineSearching.value = false
+        }
+    }
+
+    fun saveBookToBookshelf(book: Book) {
+        viewModelScope.launch {
+            val (baseUrl, publicUrl, token) = preferences.getCredentials()
+            if (token == null) {
+                _errorMessage.value = "Not logged in"
+                return@launch
+            }
+
+            repository.saveBook(
+                baseUrl = baseUrl,
+                publicUrl = publicUrl,
+                accessToken = token,
+                book = book
+            ).onFailure {
+                _errorMessage.value = it.message ?: "Failed to add book to bookshelf"
+            }
         }
     }
 

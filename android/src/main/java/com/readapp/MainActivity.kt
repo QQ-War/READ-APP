@@ -37,6 +37,8 @@ import com.readapp.ui.screens.ReadingSettingsScreen
 import com.readapp.ui.screens.TtsSettingsScreen
 import com.readapp.ui.screens.ContentSettingsScreen
 import com.readapp.ui.screens.DebugSettingsScreen
+import com.readapp.ui.screens.PreferredSourcesScreen
+import com.readapp.ui.screens.SourceExploreScreen
 import com.readapp.ui.screens.SourceEditScreen
 import com.readapp.ui.theme.ReadAppTheme
 import com.readapp.viewmodel.BookViewModel

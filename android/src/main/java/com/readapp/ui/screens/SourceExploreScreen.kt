@@ -70,9 +70,7 @@ fun SourceExploreScreen(
                     itemsIndexed(books) { index, book ->
                         BookSearchResultRow(
                             book = book.copy(sourceDisplayName = sourceName),
-                            onAddToBookshelf = {
-                                sourceViewModel.saveBookToBookshelf(book)
-                            },
+                            onAdd = { sourceViewModel.saveBookToBookshelf(book) },
                             modifier = Modifier.clickable {
                                 bookViewModel.selectBook(book)
                                 onNavigateToDetail()

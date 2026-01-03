@@ -1,6 +1,7 @@
 package com.readapp.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -181,7 +182,7 @@ fun StructuredSourceForm(source: FullBookSource) {
 }
 
 @Composable
-fun RuleSection(title: String, rule: Any, onUpdate: (Any) -> Unit) {
+fun <T> RuleSection(title: String, rule: T, onUpdate: (T) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(8.dp)) {

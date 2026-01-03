@@ -292,6 +292,7 @@ fun TtsSettingsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContentSettingsScreen(
     bookshelfSortByRecent: Boolean,

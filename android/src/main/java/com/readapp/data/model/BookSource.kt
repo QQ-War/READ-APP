@@ -35,7 +35,12 @@ data class BookSource(
 
     @SerializedName("respondTime")
     val respondTime: Long?
-)
+) {
+    data class ExploreKind(
+        val title: String = "",
+        val url: String = ""
+    )
+}
 
 data class BookSourcePageInfo(
     @SerializedName("page")
