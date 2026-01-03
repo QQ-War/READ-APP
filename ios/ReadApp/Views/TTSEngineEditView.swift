@@ -89,7 +89,7 @@ struct TTSEngineEditView: View {
                     } else {
                         Text(isEditing ? "保存修改" : "立即添加")
                             .frame(maxWidth: .infinity)
-                            .fontWeight(.bold)
+                            .font(.system(.body, weight: .bold))
                     }
                 }
                 .disabled(name.isEmpty || url.isEmpty || isLoading)
