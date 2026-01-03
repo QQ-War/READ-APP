@@ -362,7 +362,7 @@ struct ReadingView: View {
             .onChange(of: geometry.size) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
             .onChange(of: currentPageIndex) { newIndex in
                 if isTTSSyncingPage {
-                    isTTSSyncingPage = false
+                    // 仅更新索引，不释放锁，也不触发 handlePageIndexChange
                     if let startIndex = pageStartSentenceIndex(for: newIndex) { lastTTSSentenceIndex = startIndex }
                     return
                 }
@@ -821,7 +821,12 @@ struct ReadingView: View {
             isAutoFlipping = true // 标记为自动翻页，防止 handlePageIndexChange 重启播放
             // 使用动画请求进行 TTS 自动翻页
             pageTurnRequest = PageTurnRequest(direction: .forward, animated: true, targetIndex: pageIndex)
-            DispatchQueue.main.async { self.isTTSSyncingPage = false }
+            
+            // 延长锁定期，确保动画和状态稳定
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                self.isTTSSyncingPage = false
+                self.isAutoFlipping = false
+            }
         }
     }
     
