@@ -52,6 +52,7 @@ struct TTSSelectionView: View {
             }
         }
         .navigationTitle("TTS 引擎")
+        .ifAvailableHideTabBar()
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 HStack {

@@ -23,6 +23,7 @@ struct TTSEngineListView: View {
             .onDelete(perform: deleteTTS)
         }
         .navigationTitle("TTS 引擎管理")
+        .ifAvailableHideTabBar()
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 NavigationLink(destination: TTSEngineEditView(ttsToEdit: nil).environmentObject(apiService)) {

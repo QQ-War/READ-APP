@@ -49,6 +49,7 @@ struct TTSEngineEditView: View {
             }
         }
         .navigationTitle(isEditing ? "编辑引擎" : "新增引擎")
+        .ifAvailableHideTabBar()
         .onAppear(perform: loadInitialData)
         .alert("错误", isPresented: .constant(errorMessage != nil)) {
             Button("确定") { errorMessage = nil }

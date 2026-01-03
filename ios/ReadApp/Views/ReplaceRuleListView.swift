@@ -66,6 +66,7 @@ struct ReplaceRuleListView: View {
             }
         }
         .navigationTitle("净化规则管理")
+        .ifAvailableHideTabBar()
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {

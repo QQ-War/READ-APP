@@ -51,6 +51,7 @@ struct AccountSettingsView: View {
             }
         }
         .navigationTitle("账号管理")
+        .ifAvailableHideTabBar()
         .alert("退出登录", isPresented: $showLogoutAlert) {
             Button("取消", role: .cancel) { }
             Button("退出", role: .destructive) {
@@ -104,6 +105,7 @@ struct ReadingSettingsView: View {
             }
         }
         .navigationTitle("阅读设置")
+        .ifAvailableHideTabBar()
     }
 }
 
@@ -168,6 +170,7 @@ struct TTSSettingsView: View {
             }
         }
         .navigationTitle("听书设置")
+        .ifAvailableHideTabBar()
         .task {
             await loadTTSName()
         }
@@ -237,6 +240,7 @@ struct ContentSettingsView: View {
             }
         }
         .navigationTitle("内容设置")
+        .ifAvailableHideTabBar()
     }
 }
 
@@ -288,6 +292,7 @@ struct DebugSettingsView: View {
             }
         }
         .navigationTitle("调试工具")
+        .ifAvailableHideTabBar()
         .alert("清空日志", isPresented: $showClearLogsAlert) {
             Button("取消", role: .cancel) { }
             Button("清空", role: .destructive) {

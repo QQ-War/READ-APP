@@ -59,6 +59,7 @@ struct CacheManagementView: View {
             }
         }
         .navigationTitle("离线缓存管理")
+        .ifAvailableHideTabBar()
         .task {
             await loadCachedData()
         }
