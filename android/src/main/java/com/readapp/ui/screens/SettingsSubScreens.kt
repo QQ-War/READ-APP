@@ -268,8 +268,8 @@ fun TtsSettingsScreen(
 
             SectionHeader("播放参数")
             Column {
-                Text("语速: $speechSpeed", style = MaterialTheme.typography.titleSmall)
-                Slider(value = speechSpeed.toFloat(), onValueChange = { onSpeechSpeedChange(it.toInt()) }, valueRange = 5f..50f)
+                Text("语速: $speechSpeed%", style = MaterialTheme.typography.titleSmall)
+                Slider(value = speechSpeed.toFloat(), onValueChange = { onSpeechSpeedChange(it.toInt()) }, valueRange = 50f..300f)
             }
 
             if (!useSystemTts) {

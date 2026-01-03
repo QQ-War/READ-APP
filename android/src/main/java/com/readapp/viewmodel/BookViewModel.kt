@@ -222,7 +222,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _narrationTtsEngine.value = preferences.narrationTtsId.firstOrNull().orEmpty()
             _dialogueTtsEngine.value = preferences.dialogueTtsId.firstOrNull().orEmpty()
             _speakerTtsMapping.value = parseSpeakerMapping(preferences.speakerTtsMapping.firstOrNull().orEmpty())
-            _speechSpeed.value = (preferences.speechRate.first() * 20).toInt()
+            _speechSpeed.value = preferences.speechRate.first().toInt()
             _preloadCount.value = preferences.preloadCount.first().toInt()
             _readingFontSize.value = preferences.readingFontSize.first()
             _readingHorizontalPadding.value = preferences.readingHorizontalPadding.first()
@@ -1153,7 +1153,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { preferences.saveSpeakerTtsMapping(serializeSpeakerMapping(updated)) }
     }
     fun updateServerAddress(address: String) { _serverAddress.value = address; viewModelScope.launch { preferences.saveServerUrl(address) } }
-    fun updateSpeechSpeed(speed: Int) { _speechSpeed.value = speed.coerceIn(5, 50); viewModelScope.launch { preferences.saveSpeechRate(_speechSpeed.value / 20.0) } }
+    fun updateSpeechSpeed(speed: Int) { 
+        _speechSpeed.value = speed.coerceIn(50, 300) 
+        viewModelScope.launch { preferences.saveSpeechRate(_speechSpeed.value.toDouble()) } 
+    }
     fun updatePreloadCount(count: Int) { _preloadCount.value = count.coerceIn(1, 10); viewModelScope.launch { preferences.savePreloadCount(_preloadCount.value.toFloat()) } }
     fun updateReadingFontSize(size: Float) { _readingFontSize.value = size.coerceIn(12f, 28f); viewModelScope.launch { preferences.saveReadingFontSize(_readingFontSize.value) } }
     fun updateReadingHorizontalPadding(padding: Float) { _readingHorizontalPadding.value = padding.coerceIn(8f, 48f); viewModelScope.launch { preferences.saveReadingHorizontalPadding(_readingHorizontalPadding.value) } }
