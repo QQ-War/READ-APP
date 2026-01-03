@@ -16,6 +16,14 @@ struct SourceListView: View {
     @State private var showingURLImportDialog = false
     @State private var importURL = ""
     @State private var showingFilePicker = false
+    
+    // 分组展开状态
+    @State private var expandedGroups: Set<String> = []
+
+    var groupedSources: [(key: String, value: [BookSource])] {
+        let dict = Dictionary(grouping: viewModel.filteredSources) { $0.bookSourceGroup?.isEmpty == false ? $0.bookSourceGroup! : "未分组" }
+        return dict.sorted { $0.key < $1.key }
+    }
 
     var body: some View {
         sourceManagementView
@@ -103,91 +111,131 @@ struct SourceListView: View {
             }
             else {
                 List {
-                    ForEach(viewModel.filteredSources) { source in
-                        VStack(spacing: 0) {
-                            HStack {
-                                NavigationLink(destination: SourceEditView(sourceId: source.bookSourceUrl)) {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(source.bookSourceName)
-                                            .font(.headline)
-                                            .foregroundColor(source.enabled ? .primary : .secondary)
-                                        
-                                        if let group = source.bookSourceGroup, !group.isEmpty {
-                                            Text("分组: \(group)")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                        }
-                                        
-                                        Text(source.bookSourceUrl)
-                                            .font(.caption)
-                                            .foregroundColor(.gray)
-                                    }
-                                }
-                                
-                                Spacer()
-                                
-                                HStack(spacing: 12) {
-                                    Toggle("", isOn: Binding(
-                                        get: { source.enabled },
-                                        set: { _ in viewModel.toggleSource(source: source) }
-                                    ))
-                                    .labelsHidden()
-                                    
-                                    Button(action: { toggleExpand(source) }) {
-                                        Image(systemName: expandedSourceIds.contains(source.id) ? "chevron.down" : "chevron.right")
-                                            .foregroundColor(.blue)
-                                            .frame(width: 30, height: 30)
-                                    }
-                                    .buttonStyle(BorderlessButtonStyle())
+                    ForEach(groupedSources, id: \.key) { group in
+                        Section(header: groupHeader(name: group.key, count: group.value.count)) {
+                            if expandedGroups.contains(group.key) {
+                                ForEach(group.value) { source in
+                                    sourceRow(source)
                                 }
                             }
-                            .padding(.vertical, 4)
-                            
-                            if expandedSourceIds.contains(source.id) {
-                                if loadingExploreIds.contains(source.id) {
-                                    ProgressView().padding(.vertical, 8)
-                                } else if let kinds = exploreKinds[source.id], !kinds.isEmpty {
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 8) {
-                                            ForEach(kinds) { kind in
-                                                NavigationLink(destination: SourceExploreView(source: source, kind: kind).environmentObject(apiService)) {
-                                                    Text(kind.title)
-                                                        .font(.caption)
-                                                        .padding(.horizontal, 12)
-                                                        .padding(.vertical, 6)
-                                                        .background(Color.blue.opacity(0.1))
-                                                        .foregroundColor(.blue)
-                                                        .cornerRadius(12)
-                                                }
-                                            }
-                                        }
-                                        .padding(.vertical, 8)
-                                        .padding(.leading, 12)
-                                    }
-                                } else {
-                                    Text("该书源暂无发现配置")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                        .padding(.vertical, 4)
-                                }
-                            }
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button {
-                                selectedBookSource = source
-                                showingBookSearchView = true
-                            } label: {
-                                Label("搜索", systemImage: "magnifyingglass")
-                            }
-                            .tint(.blue)
                         }
                     }
-                    .onDelete(perform: deleteSource)
                 }
+                .listStyle(InsetGroupedListStyle())
                 .refreshable {
                     viewModel.fetchSources()
                 }
                 .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "过滤书源...")
+            }
+        }
+    }
+
+    private func groupHeader(name: String, count: Int) -> some View {
+        Button(action: {
+            withAnimation {
+                if expandedGroups.contains(name) {
+                    expandedGroups.remove(name)
+                } else {
+                    expandedGroups.insert(name)
+                }
+            }
+        }) {
+            HStack {
+                Text(name)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                Spacer()
+                Text("\(count)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .rotationEffect(.degrees(expandedGroups.contains(name) ? 90 : 0))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func sourceRow(_ source: BookSource) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                NavigationLink(destination: SourceEditView(sourceId: source.bookSourceUrl)) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(source.bookSourceName)
+                            .font(.headline)
+                            .foregroundColor(source.enabled ? .primary : .secondary)
+                        
+                        Text(source.bookSourceUrl)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 12) {
+                    Toggle("", isOn: Binding(
+                        get: { source.enabled },
+                        set: { _ in viewModel.toggleSource(source: source) }
+                    ))
+                    .labelsHidden()
+                    
+                    Button(action: { toggleExpand(source) }) {
+                        Image(systemName: expandedSourceIds.contains(source.id) ? "chevron.down" : "chevron.right")
+                            .foregroundColor(.blue)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
+                }
+            }
+            .padding(.vertical, 4)
+            
+            if expandedSourceIds.contains(source.id) {
+                if loadingExploreIds.contains(source.id) {
+                    ProgressView().padding(.vertical, 8)
+                } else if let kinds = exploreKinds[source.id], !kinds.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(kinds) { kind in
+                                NavigationLink(destination: SourceExploreView(source: source, kind: kind).environmentObject(apiService)) {
+                                    Text(kind.title)
+                                        .font(.caption)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Color.blue.opacity(0.1))
+                                        .foregroundColor(.blue)
+                                        .cornerRadius(12)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.leading, 12)
+                    }
+                } else {
+                    Text("该书源暂无发现配置")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 4)
+                }
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                selectedBookSource = source
+                showingBookSearchView = true
+            } label: {
+                Label("搜索", systemImage: "magnifyingglass")
+            }
+            .tint(.blue)
+            
+            Button(role: .destructive) {
+                viewModel.deleteSource(source: source)
+            } label: {
+                Label("删除", systemImage: "trash")
             }
         }
     }

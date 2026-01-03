@@ -240,47 +240,95 @@ private suspend fun fetchUrlContent(url: String): String? {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SourceListViewContent(
     sources: List<BookSource>,
     isLoading: Boolean,
     errorMessage: String?,
-    expandedIds: Map<String, Boolean>,
-    exploreKinds: Map<String, List<BookSource.ExploreKind>>,
-    loadingExplores: Map<String, Boolean>,
+    expandedIds: SnapshotStateMap<String, Boolean>,
+    exploreKinds: SnapshotStateMap<String, List<com.readapp.data.model.BookSource.ExploreKind>>,
+    loadingExplores: SnapshotStateMap<String, Boolean>,
     onToggleExpand: (BookSource) -> Unit,
-    onExploreClick: (BookSource, BookSource.ExploreKind) -> Unit,
-    onNavigateToEdit: (String?) -> Unit,
-    onNavigateToSearch: (BookSource) -> Unit,
-    onToggle: (BookSource) -> Unit,
-    onDelete: (BookSource) -> Unit,
-    onRefresh: () -> Unit
+    onExploreClick: (BookSource, com.readapp.data.model.BookSource.ExploreKind) -> Unit,
+    onSourceClick: (BookSource) -> Unit,
+    onToggleSource: (BookSource) -> Unit,
+    onDeleteSource: (BookSource) -> Unit,
+    onSearchClick: (BookSource) -> Unit
 ) {
+    val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
+    val groupedSources = remember(sources) {
+        sources.groupBy { it.bookSourceGroup?.takeIf { g -> g.isNotBlank() } ?: "未分组" }
+            .toSortedMap()
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (isLoading && sources.isEmpty()) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-        } else if (errorMessage != null) {
+        } else if (errorMessage != null && sources.isEmpty()) {
             Text(
                 text = errorMessage,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.align(Alignment.Center)
+                modifier = Modifier.align(Alignment.Center).padding(16.dp)
             )
         } else {
-            LazyColumn(modifier = Modifier.padding(8.dp)) {
-                items(sources, key = { it.bookSourceUrl }) { source ->
-                    BookSourceItem(
-                        source = source,
-                        isExpanded = expandedIds[source.bookSourceUrl] ?: false,
-                        exploreKinds = exploreKinds[source.bookSourceUrl],
-                        isExploreLoading = loadingExplores[source.bookSourceUrl] ?: false,
-                        onToggleExpand = { onToggleExpand(source) },
-                        onExploreClick = { kind -> onExploreClick(source, kind) },
-                        onToggle = { onToggle(source) },
-                        onDelete = { onDelete(source) },
-                        onClick = { onNavigateToEdit(source.bookSourceUrl) },
-                        onSearchClick = { onNavigateToSearch(source) }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                groupedSources.forEach { (groupName, groupSources) ->
+                    val isGroupExpanded = expandedGroups[groupName] ?: false
+                    
+                    item(key = "group_" + groupName) {
+                        Surface(
+                            onClick = { expandedGroups[groupName] = !isGroupExpanded },
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = groupName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "(" + groupSources.size + ")",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                }
+                                Icon(
+                                    imageVector = if (isGroupExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (isGroupExpanded) {
+                        items(groupSources, key = { it.bookSourceUrl }) { source ->
+                            SourceItem(
+                                source = source,
+                                isExpanded = expandedIds[source.bookSourceUrl] ?: false,
+                                exploreKinds = exploreKinds[source.bookSourceUrl],
+                                isLoadingExplore = loadingExplores[source.bookSourceUrl] ?: false,
+                                onToggleExpand = { onToggleExpand(source) },
+                                onExploreClick = { kind -> onExploreClick(source, kind) },
+                                onClick = { onSourceClick(source) },
+                                onToggle = { onToggleSource(source) },
+                                onDelete = { onDeleteSource(source) },
+                                onSearch = { onSearchClick(source) }
+                            )
+                            Divider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
+                        }
+                    }
                 }
             }
         }
@@ -288,122 +336,93 @@ fun SourceListViewContent(
 }
 
 @Composable
-fun BookSourceItem(
+fun SourceItem(
     source: BookSource,
     isExpanded: Boolean,
-    exploreKinds: List<BookSource.ExploreKind>?,
-    isExploreLoading: Boolean,
+    exploreKinds: List<com.readapp.data.model.BookSource.ExploreKind>?,
+    isLoadingExplore: Boolean,
     onToggleExpand: () -> Unit,
-    onExploreClick: (BookSource.ExploreKind) -> Unit,
+    onExploreClick: (com.readapp.data.model.BookSource.ExploreKind) -> Unit,
+    onClick: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
-    onClick: () -> Unit,
-    onSearchClick: () -> Unit
+    onSearch: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (source.enabled) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onClick)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = source.bookSourceName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (source.enabled) MaterialTheme.colorScheme.onSurface else Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    if (!source.bookSourceGroup.isNullOrBlank()) {
-                        Text(
-                            text = "分组: ${source.bookSourceGroup}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-                    }
-
-                    Text(
-                        text = source.bookSourceUrl,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
-
-                    if (!source.bookSourceComment.isNullOrBlank()) {
-                        Text(
-                            text = source.bookSourceComment,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontStyle = FontStyle.Italic,
-                            color = Color.Gray,
-                            maxLines = 2
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.width(8.dp))
-                
-                Column(horizontalAlignment = Alignment.End) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = source.enabled,
-                            onCheckedChange = { onToggle() },
-                            modifier = Modifier.scale(0.8f)
-                        )
-                        IconButton(onClick = onToggleExpand) {
-                            Icon(if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
-                        }
-                    }
-                    Row {
-                        IconButton(onClick = onSearchClick) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "搜索",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        IconButton(onClick = onDelete) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "删除",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = source.bookSourceName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (source.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
+                )
+                Text(
+                    text = source.bookSourceUrl,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
-            if (isExpanded) {
-                if (isExploreLoading) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onSearch) {
+                    Icon(Icons.Default.Search, contentDescription = "搜索", tint = MaterialTheme.colorScheme.primary)
                 }
                 
-                if (exploreKinds != null) {
-                    LazyRow(
-                        modifier = Modifier.padding(bottom = 12.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
+                Switch(
+                    checked = source.enabled,
+                    onCheckedChange = { onToggle() },
+                    modifier = Modifier.scale(0.8f)
+                )
+                
+                IconButton(onClick = onToggleExpand) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+
+        if (isExpanded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+            ) {
+                if (isLoadingExplore) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp).align(Alignment.Center))
+                } else if (!exploreKinds.isNullOrEmpty()) {
+                    androidx.compose.foundation.lazy.LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(exploreKinds) { kind ->
                             SuggestionChip(
                                 onClick = { onExploreClick(kind) },
-                                label = { Text(kind.title) }
+                                label = { Text(kind.title, style = MaterialTheme.typography.labelSmall) }
                             )
                         }
                     }
-                } else if (!isExploreLoading) {
+                } else {
                     Text(
-                        "该书源暂无发现配置", 
-                        style = MaterialTheme.typography.labelSmall, 
-                        color = Color.Gray,
-                        modifier = Modifier.padding(start = 16.dp, bottom = 12.dp)
+                        text = "该书源暂无发现配置",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
                     )
                 }
             }
