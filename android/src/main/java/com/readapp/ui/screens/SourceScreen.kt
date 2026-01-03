@@ -76,12 +76,23 @@ fun SourceListScreen(
             }
         }
     ) { paddingValues ->
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             OutlinedTextField(
                 value = searchText,
                 onValueChange = { sourceViewModel.onSearchTextChanged(it) },
                 label = { Text("搜索/过滤书源...") },
                 singleLine = true,
+                trailingIcon = {
+                    if (searchText.isNotEmpty()) {
+                        IconButton(onClick = { 
+                            sourceViewModel.onSearchTextChanged("")
+                            focusManager.clearFocus()
+                        }) {
+                            Icon(Icons.Default.Clear, "清除")
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp)

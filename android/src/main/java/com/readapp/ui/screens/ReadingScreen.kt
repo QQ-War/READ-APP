@@ -85,6 +85,7 @@ fun ReadingScreen(
     onNextParagraph: () -> Unit = {},
     onReadingFontSizeChange: (Float) -> Unit = {},
     onReadingHorizontalPaddingChange: (Float) -> Unit = {},
+    onHeaderClick: () -> Unit = {},
     onExit: () -> Unit = {},
     readingMode: com.readapp.data.ReadingMode = com.readapp.data.ReadingMode.Vertical,
     lockPageOnTTS: Boolean = false,
@@ -534,7 +535,8 @@ fun ReadingScreen(
                 } else {
                     ""
                 },
-                onNavigateBack = onNavigateBack
+                onNavigateBack = onNavigateBack,
+                onHeaderClick = onHeaderClick
             )
         }
         
@@ -935,12 +937,12 @@ private fun handleHorizontalTap(
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopControlBar(
     bookTitle: String,
     chapterTitle: String,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onHeaderClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -965,6 +967,7 @@ private fun TopControlBar(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 8.dp)
+                    .clickable(onClick = onHeaderClick)
             ) {
                 Text(
                     text = bookTitle,

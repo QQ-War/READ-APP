@@ -152,6 +152,7 @@ struct ReadingView: View {
     @State private var needsTTSRestartAfterPause = false
     @State private var lastAdjacentPrepareAt: TimeInterval = 0
     @State private var pendingTTSRequest: TTSPlayRequest?
+    @State private var showDetailFromHeader = false
     
     // Replace Rule State
     @State private var showAddReplaceRule = false
@@ -204,25 +205,28 @@ struct ReadingView: View {
 
     // MARK: - Body
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                backgroundView
-                mainContent(safeArea: proxy.safeAreaInsets)
-                
-                if showUIControls {
-                    topBar(safeArea: proxy.safeAreaInsets)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    bottomBar(safeArea: proxy.safeAreaInsets)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+        NavigationView {
+            GeometryReader { proxy in
+                ZStack {
+                    backgroundView
+                    mainContent(safeArea: proxy.safeAreaInsets)
+                    
+                    if showUIControls {
+                        topBar(safeArea: proxy.safeAreaInsets)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        bottomBar(safeArea: proxy.safeAreaInsets)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    
+                    if isLoading { loadingOverlay }
                 }
-                
-                if isLoading { loadingOverlay }
+                .animation(.easeInOut(duration: 0.2), value: showUIControls)
+                .ignoresSafeArea()
             }
-            .animation(.easeInOut(duration: 0.2), value: showUIControls)
-            .ignoresSafeArea()
             .navigationBarHidden(true)
             .navigationBarBackButtonHidden(true)
         }
+        .navigationViewStyle(StackNavigationViewStyle())
         .sheet(isPresented: $showChapterList) { ChapterListView(chapters: chapters, currentIndex: currentChapterIndex) { index in
             currentChapterIndex = index
             pendingJumpToFirstPage = true
@@ -401,10 +405,20 @@ struct ReadingView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Button("返回") { dismiss() }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
-                    Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "未知章节").font(.caption).foregroundColor(.secondary).lineLimit(1)
+                
+                Button(action: { showDetailFromHeader = true }) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
+                        Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "未知章节").font(.caption).foregroundColor(.secondary).lineLimit(1)
+                    }
                 }
+                .buttonStyle(PlainButtonStyle())
+                .background(
+                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) {
+                        EmptyView()
+                    }
+                )
+                
                 Spacer()
                 Color.clear.frame(width: 44, height: 44)
             }

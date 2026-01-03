@@ -226,6 +226,9 @@ fun ReadAppMain() {
                         onReadingHorizontalPaddingChange = { padding ->
                             bookViewModel.updateReadingHorizontalPadding(padding)
                         },
+                        onHeaderClick = {
+                            navController.navigate(Screen.BookDetail.route)
+                        },
                         onExit = {
                             bookViewModel.saveBookProgress()
                         }

@@ -246,7 +246,16 @@ struct GlobalSearchBar: View {
                 .onSubmit {
                     onSearchButtonClicked?()
                 }
+            
+            if !text.isEmpty {
+                Button("取消") {
+                    text = ""
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
+        .animation(.spring(), value: text.isEmpty)
     }
 }
 
