@@ -69,6 +69,14 @@ interface ReadApiService {
         @Query("title") title: String?,
     ): Response<ApiResponse<String>>
 
+    @GET("setBookSource")
+    suspend fun setBookSource(
+        @Query("accessToken") accessToken: String,
+        @Query("bookUrl") bookUrl: String,
+        @Query("newUrl") newUrl: String,
+        @Query("bookSourceUrl") bookSourceUrl: String
+    ): Response<ApiResponse<Book>>
+
     @GET("getalltts")
     suspend fun getAllTts(
         @Query("accessToken") accessToken: String,

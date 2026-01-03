@@ -1043,6 +1043,50 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun changeBookSource(newSourceBook: Book, onSuccess: () -> Unit) {
+        val currentBook = _selectedBook.value ?: return
+        val oldUrl = currentBook.bookUrl ?: return
+        val newUrl = newSourceBook.bookUrl ?: return
+        val newSourceUrl = newSourceBook.origin ?: return
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            val (baseUrl, publicUrl, token) = preferences.getCredentials()
+            if (token == null) {
+                _isLoading.value = false
+                return@launch
+            }
+
+            repository.setBookSource(baseUrl, publicUrl, token, oldUrl, newUrl, newSourceUrl)
+                .onSuccess { updatedBook ->
+                    refreshBooks()
+                    _selectedBook.value = updatedBook
+                    onSuccess()
+                }
+                .onFailure { _errorMessage.value = "更换源失败: ${it.message}" }
+            _isLoading.value = false
+        }
+    }
+
+    fun searchNewSource(bookName: String, author: String): Flow<List<Book>> = flow {
+        val (baseUrl, publicUrl, token) = preferences.getCredentials()
+        if (token == null) return@flow
+
+        val sources = _availableBookSources.value.filter { it.enabled }
+        val allResults = mutableListOf<Book>()
+        
+        sources.forEach { source ->
+            val query = if (author.isBlank()) bookName else "$bookName $author"
+            repository.searchBook(baseUrl, publicUrl, token, query, source.bookSourceUrl, 1)
+                .onSuccess { books ->
+                    allResults.addAll(books.map { it.copy(sourceDisplayName = source.bookSourceName) })
+                    // Sort by author match
+                    allResults.sortByDescending { it.author == author }
+                    emit(allResults.toList())
+                }
+        }
+    }
+
     fun selectBook(book: Book) {
         if (_selectedBook.value?.bookUrl == book.bookUrl) return
         stopPlayback("book_change")

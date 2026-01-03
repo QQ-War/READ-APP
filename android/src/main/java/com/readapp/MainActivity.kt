@@ -133,6 +133,12 @@ fun ReadAppMain() {
                         isInBookshelf = isInBookshelf,
                         onAddToBookshelf = { bookViewModel.saveBookToBookshelf(book) },
                         onRemoveFromBookshelf = { bookViewModel.removeFromBookshelf(book) },
+                        onSourceSwitch = { newSourceBook ->
+                            bookViewModel.changeBookSource(newSourceBook) {
+                                // 换源成功，刷新当前详情页
+                                navController.popBackStack()
+                            }
+                        },
                         onNavigateBack = { navController.popBackStack() },
                         onStartReading = {
                             navController.navigate(Screen.Reading.route)

@@ -36,6 +36,7 @@ fun BookDetailScreen(
     isInBookshelf: Boolean,
     onAddToBookshelf: () -> Unit,
     onRemoveFromBookshelf: () -> Unit,
+    onSourceSwitch: (Book) -> Unit,
     onNavigateBack: () -> Unit,
     onStartReading: () -> Unit,
     onChapterClick: (Int) -> Unit,
@@ -43,6 +44,7 @@ fun BookDetailScreen(
 ) {
     var showDownloadDialog by remember { mutableStateOf(false) }
     var showCustomRangeDialog by remember { mutableStateOf(false) }
+    var showSourceSwitchDialog by remember { mutableStateOf(false) }
     
     Scaffold(
         topBar = {
@@ -92,7 +94,8 @@ fun BookDetailScreen(
                     book = book,
                     isInBookshelf = isInBookshelf,
                     onAddToBookshelf = onAddToBookshelf,
-                    onRemoveFromBookshelf = onRemoveFromBookshelf
+                    onRemoveFromBookshelf = onRemoveFromBookshelf,
+                    onShowSourceSwitch = { showSourceSwitchDialog = true }
                 )
             }
 
@@ -257,7 +260,63 @@ fun BookDetailScreen(
                 }
             )
         }
+
+        if (showSourceSwitchDialog) {
+            SourceSwitchDialog(
+                bookName = book.name ?: "",
+                author = book.author ?: "",
+                currentSource = book.origin ?: "",
+                onSelect = { 
+                    onSourceSwitch(it)
+                    showSourceSwitchDialog = false 
+                },
+                onDismiss = { showSourceSwitchDialog = false }
+            )
+        }
     }
+}
+
+@Composable
+fun SourceSwitchDialog(
+    bookName: String,
+    author: String,
+    currentSource: String,
+    onSelect: (Book) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val bookViewModel: com.readapp.viewmodel.BookViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.readapp.viewmodel.BookViewModel.Factory)
+    val results by bookViewModel.searchNewSource(bookName, author).collectAsState(initial = emptyList())
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("换源阅读") },
+        text = {
+            if (results.isEmpty()) {
+                Box(Modifier.fillMaxWidth().height(100.dp), Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(24.dp))
+                }
+            } else {
+                LazyColumn(Modifier.heightIn(max = 400.dp)) {
+                    items(results) { resBook ->
+                        ListItem(
+                            headlineContent = { Text(resBook.sourceDisplayName ?: "未知源") },
+                            supportingContent = { Text("${resBook.name} • ${resBook.author}") },
+                            trailingContent = {
+                                if (resBook.origin == currentSource) {
+                                    Text("当前", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                                }
+                            },
+                            modifier = Modifier.clickable { onSelect(resBook) }
+                        )
+                        Divider()
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
 }
 
 @Composable
@@ -265,7 +324,8 @@ private fun BookHeaderSection(
     book: Book,
     isInBookshelf: Boolean,
     onAddToBookshelf: () -> Unit,
-    onRemoveFromBookshelf: () -> Unit
+    onRemoveFromBookshelf: () -> Unit,
+    onShowSourceSwitch: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -292,7 +352,6 @@ private fun BookHeaderSection(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(Modifier.height(4.dp))
             Text(
                 book.author ?: "未知作者",
                 style = MaterialTheme.typography.bodyMedium,
@@ -301,24 +360,23 @@ private fun BookHeaderSection(
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            if (isInBookshelf) {
-                OutlinedButton(
-                    onClick = onRemoveFromBookshelf,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Icon(Icons.Default.RemoveCircleOutline, null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("移出书架")
-                }
-            } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = onAddToBookshelf,
-                    modifier = Modifier.fillMaxWidth()
+                    onClick = onShowSourceSwitch,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
-                    Icon(Icons.Default.AddCircleOutline, null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("加入书架")
+                    Text("换源")
+                }
+                
+                if (isInBookshelf) {
+                    IconButton(onClick = onRemoveFromBookshelf) {
+                        Icon(Icons.Default.RemoveCircleOutline, null, tint = MaterialTheme.colorScheme.error)
+                    }
+                } else {
+                    IconButton(onClick = onAddToBookshelf) {
+                        Icon(Icons.Default.AddCircleOutline, null, tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
 

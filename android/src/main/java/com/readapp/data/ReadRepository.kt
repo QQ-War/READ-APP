@@ -77,6 +77,17 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
         it.saveBookProgress(accessToken, bookUrl, index, pos, title)
     }(buildEndpoints(baseUrl, publicUrl))
 
+    suspend fun setBookSource(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String,
+        bookUrl: String,
+        newUrl: String,
+        newBookSourceUrl: String
+    ): Result<Book> = executeWithFailover {
+        it.setBookSource(accessToken, bookUrl, newUrl, newBookSourceUrl)
+    }(buildEndpoints(baseUrl, publicUrl))
+
     suspend fun fetchDefaultTts(baseUrl: String, publicUrl: String?, accessToken: String): Result<String> =
         executeWithFailover { it.getDefaultTts(accessToken) }(buildEndpoints(baseUrl, publicUrl))
 
