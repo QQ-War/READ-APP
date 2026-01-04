@@ -198,8 +198,9 @@ struct ReadingView: View {
     @State private var showAddReplaceRule = false
     @State private var pendingReplaceRule: ReplaceRule?
     
-    // Page Turn Command
+    // Page Turn & Navigation State
     @State private var pageTurnRequest: PageTurnRequest? = nil
+    @State private var isExplicitlySwitchingChapter = false
 
     private var isMangaMode: Bool {
         // 漫画模式判定（对标 legado.koplugin 分类逻辑）
@@ -360,10 +361,11 @@ struct ReadingView: View {
                 }
                 .onPreferenceChange(SentenceFramePreferenceKey.self) { updateVisibleSentenceIndex(frames: $0, viewportHeight: geometry.size.height) }
                 .onChange(of: contentSentences) { _ in
-                    if preferences.readingMode == .vertical {
-                        // 章节内容变动后强制置顶
+                    if preferences.readingMode == .vertical && isExplicitlySwitchingChapter {
+                        // 仅在明确切换章节时强制置顶
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                             withAnimation { proxy.scrollTo(0, anchor: .top) }
+                            isExplicitlySwitchingChapter = false // 消费掉标记
                         }
                     }
                 }
@@ -1501,6 +1503,7 @@ struct ReadingView: View {
     
     private func previousChapter(animated: Bool = false) {
         guard currentChapterIndex > 0 else { return }
+        isExplicitlySwitchingChapter = true // 标记开始切章
         didApplyResumePos = true
         currentVisibleSentenceIndex = nil
         let targetIndex = currentChapterIndex - 1
@@ -1532,6 +1535,7 @@ struct ReadingView: View {
     
     private func nextChapter(animated: Bool = false) {
         guard currentChapterIndex < chapters.count - 1 else { return }
+        isExplicitlySwitchingChapter = true // 标记开始切章
         didApplyResumePos = true
         currentVisibleSentenceIndex = nil
         let targetIndex = currentChapterIndex + 1

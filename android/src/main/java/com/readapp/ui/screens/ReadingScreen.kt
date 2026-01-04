@@ -117,6 +117,7 @@ fun ReadingScreen(
     var isAutoScrolling by remember { mutableStateOf(false) }
     var lastAutoScrollTarget by remember { mutableStateOf<Int?>(null) }
     var resolveCurrentPageStart by remember { mutableStateOf<(() -> Pair<Int, Int>?)?>(null) }
+    var isExplicitlySwitchingChapter by remember { mutableStateOf(false) }
 
     val contentPadding = remember(readingHorizontalPadding) {
         PaddingValues(
@@ -155,9 +156,10 @@ fun ReadingScreen(
 
     // 垂直模式切章置顶
     LaunchedEffect(displayContent) {
-        if (readingMode == com.readapp.data.ReadingMode.Vertical && displayContent.isNotEmpty()) {
+        if (readingMode == com.readapp.data.ReadingMode.Vertical && displayContent.isNotEmpty() && isExplicitlySwitchingChapter) {
             kotlinx.coroutines.delay(200) 
             scrollState.scrollToItem(0)
+            isExplicitlySwitchingChapter = false // 消费掉标记
         }
     }
 
@@ -679,12 +681,14 @@ fun ReadingScreen(
                         if (readingMode == ReadingMode.Horizontal) {
                             pendingJumpToLastPageTarget = currentChapterIndex - 1
                         }
+                        isExplicitlySwitchingChapter = true // 标记开始切章动作
                         onChapterClick(currentChapterIndex - 1)
                     }
                 },
                 onNextChapter = {
                     if (currentChapterIndex < chapters.size - 1) {
                         pendingJumpToLastPageTarget = null
+                        isExplicitlySwitchingChapter = true // 标记开始切章动作
                         onChapterClick(currentChapterIndex + 1)
                     }
                 },
