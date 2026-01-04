@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import coil.request.ImageRequest
+import coil.request.ErrorResult
 
 class MangaAdapter(
     var paragraphs: List<String>,
@@ -50,9 +51,13 @@ class MangaAdapter(
                     addHeader("Referer", referer)
                 }
                 addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
-                listener(onError = { _, _ ->
-                    if (!forceProxy && proxyUrl != null) {
-                        holder.imageView.load(proxyUrl)
+                listener(object : coil.request.ImageRequest.Listener {
+                    override fun onError(request: coil.request.ImageRequest, result: coil.request.ErrorResult) {
+                        if (!forceProxy && proxyUrl != null) {
+                            holder.imageView.post {
+                                holder.imageView.load(proxyUrl)
+                            }
+                        }
                     }
                 })
             }

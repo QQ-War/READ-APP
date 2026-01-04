@@ -1,4 +1,4 @@
-// ReadingScreen.kt - 闃呰椤甸潰闆嗘垚鍚功鍔熻兘锛堟钀介珮浜級
+// ReadingScreen.kt - 阅读页面集成听书功能（段落高亮）
 package com.readapp.ui.screens
 
 import androidx.compose.animation.*
@@ -50,11 +50,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import com.readapp.data.ReadingMode
 import com.readapp.data.DarkModeConfig
 import com.readapp.ui.components.MangaNativeReader
@@ -68,7 +63,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ReadingScreen(
     book: Book,
@@ -83,13 +78,13 @@ fun ReadingScreen(
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
     onNavigateBack: () -> Unit,
-    // TTS 鐩稿叧鐘舵€?
+    // TTS 相关状态
     isPlaying: Boolean = false,
     isPaused: Boolean = false,
-    currentPlayingParagraph: Int = -1,  // 当前播放的段落索引
+    currentPlayingParagraph: Int = -1,
     currentParagraphStartOffset: Int = 0,
     playbackProgress: Float = 0f,
-    preloadedParagraphs: Set<Int> = emptySet(),  // 宸查杞界殑娈佃惤绱㈠紩
+    preloadedParagraphs: Set<Int> = emptySet(),
     preloadedChapters: Set<Int> = emptySet(),
     showTtsControls: Boolean = false,
     onPlayPauseClick: () -> Unit = {},
@@ -101,14 +96,14 @@ fun ReadingScreen(
     onReadingHorizontalPaddingChange: (Float) -> Unit = {},
     onHeaderClick: () -> Unit = {},
     onExit: () -> Unit = {},
-    readingMode: com.readapp.data.ReadingMode = com.readapp.data.ReadingMode.Vertical,
-    onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit = {},
+    readingMode: ReadingMode = ReadingMode.Vertical,
+    onReadingModeChange: (ReadingMode) -> Unit = {},
     lockPageOnTTS: Boolean = false,
     onLockPageOnTTSChange: (Boolean) -> Unit = {},
     pageTurningMode: com.readapp.data.PageTurningMode = com.readapp.data.PageTurningMode.Scroll,
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit = {},
-    darkModeConfig: com.readapp.data.DarkModeConfig = com.readapp.data.DarkModeConfig.OFF,
-    onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit = {},
+    darkModeConfig: DarkModeConfig = DarkModeConfig.OFF,
+    onDarkModeChange: (DarkModeConfig) -> Unit = {},
     firstVisibleParagraphIndex: Int = 0,
     onScrollUpdate: (Int) -> Unit = {},
     pendingScrollIndex: Int? = null,
@@ -158,7 +153,6 @@ fun ReadingScreen(
         )
     }
     
-    // 鍒嗗壊娈佃惤
     val displayContent = remember(currentChapterContent, currentChapterIndex, chapters) {
         if (currentChapterContent.isNotBlank()) {
             currentChapterContent
@@ -204,19 +198,20 @@ fun ReadingScreen(
         }
     }
 
-    // 褰撶珷鑺傜储寮曞彉鍖TargetFramework) { // 鏇存柊鍐呭
-        if (readingMode == com.readapp.data.ReadingMode.Vertical && displayContent.isNotEmpty() && isExplicitlySwitchingChapter) {
-            kotlinx.coroutines.delay(200) 
-            scrollState.scrollToItem(0)
-            isExplicitlySwitchingChapter = false // 消费掉标记
+    // 当章节索引变化时，加载内容
+    LaunchedEffect(currentChapterIndex, chapters.size) {
+        if (chapters.isNotEmpty() && currentChapterIndex in chapters.indices) {
+            onLoadChapterContent(currentChapterIndex)
+            if (!isMangaMode && readingMode == ReadingMode.Vertical) {
+                scrollState.scrollToItem(0)
+            }
         }
     }
-
-    // 褰撳墠鎾斁娈佃惤鍙樺寲鏃讹紝鑷姩婊氬姩鍒拌娈佃惤
+    
+    // 当前播放段落变化时，自动滚动
     LaunchedEffect(currentPlayingParagraph) {
         if (currentPlayingParagraph >= 0 && currentPlayingParagraph < paragraphs.size) {
             coroutineScope.launch {
-                // +1 鏄洜涓虹涓€涓?item 鏄珷鑺傛爣棰?
                 if (!isMangaMode && readingMode == ReadingMode.Vertical) {
                     scrollState.animateScrollToItem(currentPlayingParagraph + 1)
                 }
@@ -235,7 +230,6 @@ fun ReadingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 主要内容区域
         if (isMangaMode) {
             MangaNativeReader(
                 paragraphs = paragraphs,
@@ -248,13 +242,12 @@ fun ReadingScreen(
                 modifier = Modifier.fillMaxSize()
             )
             
-            // 消费滚动标记
             LaunchedEffect(pendingScrollIndex) {
                 if (pendingScrollIndex != null) {
                     onScrollConsumed()
                 }
             }
-        } else if (readingMode == com.readapp.data.ReadingMode.Vertical) {
+        } else if (readingMode == ReadingMode.Vertical) {
             LazyColumn(
                 state = scrollState,
                 modifier = Modifier
@@ -267,7 +260,6 @@ fun ReadingScreen(
                     },
                 contentPadding = contentPadding
             ) {
-                // 章节标题
                 item {
                     Text(
                         text = if (currentChapterIndex < chapters.size) {
@@ -284,36 +276,24 @@ fun ReadingScreen(
                 if (paragraphs.isEmpty()) {
                     item {
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = AppDimens.PaddingLarge),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = AppDimens.PaddingLarge),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             if (isContentLoading) {
                                 CircularProgressIndicator()
-                                Text(
-                                    text = "正在加载章节内容...",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.customColors.textSecondary,
-                                    textAlign = TextAlign.Center
-                                )
+                                Text(text = "正在加载章节内容...", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.customColors.textSecondary)
                             } else {
-                                Text(
-                                    text = displayContent.ifBlank { "暂无显示内容" },
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.customColors.textSecondary,
-                                    textAlign = TextAlign.Center
-                                )
+                                Text(text = displayContent.ifBlank { "暂无显示内容" }, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.customColors.textSecondary)
                             }
                         }
                     }
                 } else {
-                    // 章节内容（分段显示，带高亮）
                     itemsIndexed(
                         items = paragraphs,
                         key = { index, _ -> "${currentChapterIndex}_${index}" }
-                    ) { index, paragraph ->
+                    ) {
+                        index, paragraph ->
                         ParagraphItem(
                             text = paragraph,
                             isPlaying = index == currentPlayingParagraph,
@@ -322,36 +302,21 @@ fun ReadingScreen(
                             chapterUrl = currentChapterUrl,
                             serverUrl = serverUrl,
                             forceProxy = forceMangaProxy,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = AppDimens.PaddingMedium)
+                            modifier = Modifier.fillMaxWidth().padding(bottom = AppDimens.PaddingMedium)
                         )
                     }
                 }
             }
         } else { // Horizontal Pager 逻辑 (针对小说文本)
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxSize()
-            ) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val style = MaterialTheme.typography.bodyLarge.copy(
                     fontSize = readingFontSize.sp,
                     lineHeight = (readingFontSize * 1.8f).sp
                 )
                 val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title.orEmpty()
-                val headerText = if (chapterTitle.isNotBlank()) {
-                    chapterTitle + "\n\n"
-                } else {
-                    ""
-                }
+                val headerText = if (chapterTitle.isNotBlank()) chapterTitle + "\n\n" else ""
                 val headerFontSize = (readingFontSize + 6f).sp
-                val lineHeightPx = with(LocalDensity.current) {
-                    val lineHeight = style.lineHeight
-                    if (lineHeight.value.isNaN() || lineHeight.value <= 0f) {
-                        (readingFontSize * 1.8f).sp.toPx()
-                    } else {
-                        lineHeight.toPx()
-                    }
-                }
+                val lineHeightPx = with(LocalDensity.current) { style.lineHeight.toPx() }
                 val pagePadding = contentPadding
                 val density = LocalDensity.current
                 val availableConstraints = remember(constraints, pagePadding, density) {
@@ -372,7 +337,6 @@ fun ReadingScreen(
                     pageCount = { paginatedPages.pages.size.coerceAtLeast(1) }
                 )
 
-                // 处理挂起的滚动请求 (水平模式)
                 LaunchedEffect(pendingScrollIndex, paginatedPages) {
                     if (pendingScrollIndex != null && paginatedPages.pages.isNotEmpty()) {
                         val targetPage = paginatedPages.pages.indexOfFirst { it.startParagraphIndex >= pendingScrollIndex }
@@ -382,12 +346,13 @@ fun ReadingScreen(
                     }
                 }
 
+                val viewConfiguration = LocalViewConfiguration.current
                 HorizontalPager(
                     state = pagerState,
                     userScrollEnabled = !(isPlaying && lockPageOnTTS),
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(showControls, paginatedPages, currentChapterIndex, isPlaying, lockPageOnTTS) { // 移除不必要的参数
+                        .pointerInput(showControls, paginatedPages, currentChapterIndex, isPlaying, lockPageOnTTS) {
                             detectTapGesturesWithoutConsuming(viewConfiguration) { offset, size ->
                                 if (isPlaying && lockPageOnTTS) {
                                     val width = size.width.toFloat()
@@ -414,7 +379,7 @@ fun ReadingScreen(
                 ) { page ->
                     val pageInfo = paginatedPages.getOrNull(page)
                     val pageText = pageInfo?.let { pi ->
-                        remember(pi, currentPlayingParagraph, paginatedPages.fullText) { // 移除不必要的参数
+                        remember(pi, currentPlayingParagraph, paginatedPages.fullText) {
                             val baseText = paginatedPages.fullText.subSequence(
                                 pi.start.coerceAtLeast(0),
                                 pi.end.coerceAtMost(paginatedPages.fullText.text.length)
@@ -434,7 +399,6 @@ fun ReadingScreen(
                     }
                 }
 
-                // 上报翻页后的进度
                 LaunchedEffect(pagerState.currentPage) {
                     if (paginatedPages.pages.isNotEmpty()) {
                         paginatedPages.getOrNull(pagerState.currentPage)?.let {
@@ -445,7 +409,6 @@ fun ReadingScreen(
             }
         }
         
-        // 椤堕儴鎺у埗鏍忥紙鍔ㄧ敾鏄剧ず/闅愯棌锛?
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn() + slideInVertically(),
@@ -454,17 +417,12 @@ fun ReadingScreen(
         ) {
             TopControlBar(
                 bookTitle = book.title,
-                chapterTitle = if (currentChapterIndex < chapters.size) {
-                    chapters[currentChapterIndex].title
-                } else {
-                    ""
-                },
+                chapterTitle = if (currentChapterIndex < chapters.size) chapters[currentChapterIndex].title else "",
                 onNavigateBack = onNavigateBack,
                 onHeaderClick = onHeaderClick
             )
         }
         
-        // 搴曢儴鎺у埗鏍忥紙鍔ㄧ敾鏄剧ず/闅愯棌锛?
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
@@ -475,91 +433,30 @@ fun ReadingScreen(
                 isPlaying = isPlaying,
                 onPreviousChapter = {
                     if (currentChapterIndex > 0) {
-                        if (readingMode == ReadingMode.Horizontal) {
-                            pendingJumpToLastPageTarget = currentChapterIndex - 1
-                        }
-                        isExplicitlySwitchingChapter = true // 标记开始切章动作
+                        if (readingMode == ReadingMode.Horizontal) pendingJumpToLastPageTarget = currentChapterIndex - 1
+                        isExplicitlySwitchingChapter = true
                         onChapterClick(currentChapterIndex - 1)
                     }
                 },
                 onNextChapter = {
                     if (currentChapterIndex < chapters.size - 1) {
                         pendingJumpToLastPageTarget = null
-                        isExplicitlySwitchingChapter = true // 标记开始切章动作
+                        isExplicitlySwitchingChapter = true
                         onChapterClick(currentChapterIndex + 1)
                     }
                 },
-                onShowChapterList = {
-                    showChapterList = true
-                },
-                onPlayPause = {
-                    if (isPlaying) {
-                        val pageStart = if (readingMode == ReadingMode.Horizontal) {
-                            resolveCurrentPageStart?.invoke()?.first ?: currentPageStartIndex
-                        } else {
-                            (scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0)
-                        }
-                        val pageStartOffset = if (readingMode == ReadingMode.Horizontal) {
-                            resolveCurrentPageStart?.invoke()?.second ?: currentPageStartOffset
-                        } else {
-                            0
-                        }
-                        pausedPageStartIndex = pageStart
-                        pausedPageStartOffset = pageStartOffset
-                        onPlayPauseClick()
-                    } else if (isPaused) {
-                        val pageStart = if (readingMode == ReadingMode.Horizontal) {
-                            resolveCurrentPageStart?.invoke()?.first ?: currentPageStartIndex
-                        } else {
-                            (scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0)
-                        }
-                        val pageStartOffset = if (readingMode == ReadingMode.Horizontal) {
-                            resolveCurrentPageStart?.invoke()?.second ?: currentPageStartOffset
-                        } else {
-                            0
-                        }
-                        if (pausedPageStartIndex == pageStart && pausedPageStartOffset == pageStartOffset) {
-                            onPlayPauseClick()
-                        } else {
-                            onStartListening(pageStart, pageStartOffset)
-                        }
-                    } else {
-                        val pageStart = if (readingMode == ReadingMode.Horizontal) {
-                            resolveCurrentPageStart?.invoke()?.first ?: currentPageStartIndex
-                        } else {
-                            (scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0)
-                        }
-                        val pageStartOffset = if (readingMode == ReadingMode.Horizontal) {
-                            resolveCurrentPageStart?.invoke()?.second ?: currentPageStartOffset
-                        } else {
-                            0
-                        }
-                        onStartListening(pageStart, pageStartOffset)
-                    }
-                },
+                onShowChapterList = { showChapterList = true },
+                onPlayPause = { onPlayPauseClick() },
                 onStopListening = onStopListening,
                 onPreviousParagraph = onPreviousParagraph,
                 onNextParagraph = onNextParagraph,
                 onFontSettings = { showFontDialog = true },
                 canGoPrevious = currentChapterIndex > 0,
                 canGoNext = currentChapterIndex < chapters.size - 1,
-                showTtsControls = showTtsControls  // 浠呭湪瀹為檯鎾斁/淇濇寔鎾斁鏃舵樉绀?TTS 鎺у埗
+                showTtsControls = showTtsControls
             )
         }
 
-        if (isContentLoading && paragraphs.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .size(40.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(modifier = Modifier.fillMaxSize(), strokeWidth = 3.dp)
-            }
-        }
-
-        // 绔犺妭鍒楄〃寮圭獥
         if (showChapterList) {
             ChapterListDialog(
                 chapters = chapters,
@@ -596,9 +493,6 @@ fun ReadingScreen(
     }
 }
 
-/**
- * 娈佃惤椤圭粍浠?- 甯﹂珮浜晥鏋?
- */
 @Composable
 private fun ZoomableImage(
     model: Any,
@@ -609,14 +503,8 @@ private fun ZoomableImage(
     var offset by remember { mutableStateOf(Offset.Zero) }
     val state = rememberTransformableState { zoomChange, offsetChange, _ ->
         scale = (scale * zoomChange).coerceIn(1f, 4f)
-        // 只有在放大时才允许偏移
-        if (scale > 1f) {
-            offset += offsetChange
-        } else {
-            offset = Offset.Zero
-        }
+        if (scale > 1f) offset += offsetChange else offset = Offset.Zero
     }
-
     Box(
         modifier = modifier
             .clip(RectangleShape)
@@ -628,17 +516,10 @@ private fun ZoomableImage(
                 })
             }
     ) {
-        coil.compose.AsyncImage(
+        AsyncImage(
             model = model,
             contentDescription = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
-                    translationY = offset.y
-                ),
+            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y),
             contentScale = contentScale
         )
     }
@@ -655,92 +536,34 @@ private fun ParagraphItem(
     forceProxy: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // ... (backgroundColor logic unchanged)
     val backgroundColor = when {
         isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
         isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)
         else -> Color.Transparent
     }
-    
-    Surface(
-        modifier = modifier,
-        color = backgroundColor,
-        shape = RoundedCornerShape(8.dp)
-    ) {
+    Surface(modifier = modifier, color = backgroundColor, shape = RoundedCornerShape(8.dp)) {
         val imgUrl = remember(text) {
-            val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)(["'>\s\n]+)["']?"""\.toRegex()
+            val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""".toRegex()
             pattern.find(text)?.groupValues?.get(1)
         }
-
         if (imgUrl != null) {
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val finalUrl = remember(imgUrl, serverUrl) {
-                if (imgUrl.startsWith("http")) imgUrl
-                else {
-                    val base = serverUrl.replace("/api/5", "")
-                    if (imgUrl.startsWith("/")) "$base$imgUrl" else "$base/$imgUrl"
-                }
-            }
-            
-            val proxyUrl = remember(finalUrl, serverUrl) {
-                android.net.Uri.parse(serverUrl).buildUpon()
-                    .path("api/5/proxypng")
-                    .appendQueryParameter("url", finalUrl)
-                    .appendQueryParameter("accessToken", "")
-                    .build().toString()
-            }
-
-            val finalReferer = remember(chapterUrl) {
-                chapterUrl?.replace("http://", "https://")?.let {
-                    if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
-                }
-            }
-
-            var currentRequestUrl by remember(finalUrl, forceProxy) { 
-                mutableStateOf(if (forceProxy) proxyUrl else finalUrl) 
-            }
-            var hasTriedProxy by remember(finalUrl, forceProxy) { 
-                mutableStateOf(forceProxy) 
-            }
-
-            val imageRequest = coil.request.ImageRequest.Builder(context)
-                .data(currentRequestUrl)
-                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
-                .apply { if (finalReferer != null) addHeader("Referer", finalReferer) }
-                .listener(onError = { _, _ -> 
-                    if (!hasTriedProxy && proxyUrl != null) {
-                        currentRequestUrl = proxyUrl
-                        hasTriedProxy = true
-                    }
-                })
-                .crossfade(true)
-                .build()
-
-            coil.compose.AsyncImage(
-                model = imageRequest,
+            AsyncImage(
+                model = imgUrl,
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 contentScale = ContentScale.FillWidth
             )
         } else {
-            // ... (text rendering unchanged)
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
                 color = MaterialTheme.colorScheme.onSurface,
                 lineHeight = (fontSize * 1.8f).sp,
-                modifier = Modifier.padding(
-                    horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp,
-                    vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp
-                )
+                modifier = Modifier.padding(horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp, vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp)
             )
         }
     }
 }
-
-
 
 @Composable
 private fun rememberPaginatedText(
@@ -752,417 +575,146 @@ private fun rememberPaginatedText(
     headerFontSize: TextUnit
 ): PaginationResult {
     val textMeasurer = rememberTextMeasurer()
-
     return remember(paragraphs, style, constraints, lineHeightPx, headerText, headerFontSize) {
         if (paragraphs.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) {
             return@remember PaginationResult(emptyList(), AnnotatedString(""))
         }
-
         val paragraphStartIndices = paragraphStartIndices(paragraphs, headerText.length)
         val fullText = fullContent(paragraphs, headerText, headerFontSize)
-        val layout = textMeasurer.measure(
-            text = fullText,
-            style = style,
-            constraints = Constraints(
-                maxWidth = constraints.maxWidth,
-                maxHeight = Constraints.Infinity
-            )
-        )
-        if (layout.lineCount == 0) {
-            return@remember PaginationResult(emptyList(), fullText)
-        }
-        val minPageHeight = if (lineHeightPx > 0f) lineHeightPx else 1f
-        val pageHeight = constraints.maxHeight.toFloat().coerceAtLeast(minPageHeight)
+        val layout = textMeasurer.measure(text = fullText, style = style, constraints = Constraints(maxWidth = constraints.maxWidth))
+        if (layout.lineCount == 0) return@remember PaginationResult(emptyList(), fullText)
+        val pageHeight = constraints.maxHeight.toFloat()
         val pages = mutableListOf<PaginatedPage>()
         var startLine = 0
         while (startLine < layout.lineCount) {
             val pageTop = layout.getLineTop(startLine)
             var endLine = startLine
-            while (endLine + 1 < layout.lineCount) {
-                val nextBottom = layout.getLineBottom(endLine + 1)
-                if (nextBottom - pageTop <= pageHeight) {
-                    endLine++
-                } else {
-                    break
-                }
+            while (endLine + 1 < layout.lineCount && layout.getLineBottom(endLine + 1) - pageTop <= pageHeight) {
+                endLine++
             }
             val startOffset = layout.getLineStart(startLine)
             val endOffset = layout.getLineEnd(endLine, visibleEnd = true)
-            if (endOffset <= startOffset) {
-                break
-            }
             val adjustedOffset = (startOffset - headerText.length).coerceAtLeast(0)
             val normalizedOffset = normalizePageOffset(fullText.text, adjustedOffset, headerText.length)
             val startParagraphIndex = paragraphIndexForOffset(normalizedOffset, paragraphStartIndices)
             val paragraphStart = paragraphStartIndices.getOrElse(startParagraphIndex) { 0 }
-            val startOffsetInParagraph = (normalizedOffset - paragraphStart).coerceAtLeast(0)
-            pages.add(
-                PaginatedPage(
-                    start = startOffset,
-                    end = endOffset,
-                    startParagraphIndex = startParagraphIndex,
-                    startOffsetInParagraph = startOffsetInParagraph
-                )
-            )
+            pages.add(PaginatedPage(startOffset, endOffset, startParagraphIndex, (normalizedOffset - paragraphStart).coerceAtLeast(0)))
             startLine = endLine + 1
         }
         PaginationResult(pages, fullText)
     }
 }
 
-private data class PaginatedPage(
-    val start: Int,
-    val end: Int,
-    val startParagraphIndex: Int,
-    val startOffsetInParagraph: Int
-)
-
-private data class PaginationResult(
-    val pages: List<PaginatedPage>,
-    val fullText: AnnotatedString
-) {
-    val indices: IntRange
-        get() = pages.indices
-
-    val lastIndex: Int
-        get() = pages.lastIndex
-
+private data class PaginatedPage(val start: Int, val end: Int, val startParagraphIndex: Int, val startOffsetInParagraph: Int)
+private data class PaginationResult(val pages: List<PaginatedPage>, val fullText: AnnotatedString) {
+    val indices: IntRange get() = pages.indices
     fun isEmpty(): Boolean = pages.isEmpty()
-
     fun getOrNull(index: Int): PaginatedPage? = pages.getOrNull(index)
-
-    operator fun get(index: Int): PaginatedPage = pages[index]
 }
 
 private fun fullContent(paragraphs: List<String>, headerText: String, headerFontSize: TextUnit): AnnotatedString {
     val body = paragraphs.joinToString(separator = "\n\n") { it.trim() }
-    val builder = AnnotatedString.Builder()
-    if (headerText.isNotBlank()) {
-        builder.pushStyle(SpanStyle(fontSize = headerFontSize, fontWeight = FontWeight.Bold))
-        builder.append(headerText)
-        builder.pop()
-    }
-    builder.append(body)
-    return builder.toAnnotatedString()
+    return AnnotatedString.Builder().apply {
+        if (headerText.isNotBlank()) {
+            pushStyle(SpanStyle(fontSize = headerFontSize, fontWeight = FontWeight.Bold))
+            append(headerText)
+            pop()
+        }
+        append(body)
+    }.toAnnotatedString()
 }
 
 private fun paragraphStartIndices(paragraphs: List<String>, prefixLength: Int): List<Int> {
     val starts = mutableListOf<Int>()
     var currentIndex = prefixLength
-    paragraphs.forEachIndexed { index, paragraph ->
+    paragraphs.forEachIndexed {
+        index, paragraph ->
         starts.add(currentIndex)
-        currentIndex += paragraph.trim().length
-        if (index < paragraphs.lastIndex) {
-            currentIndex += 2
-        }
+        currentIndex += paragraph.trim().length + if (index < paragraphs.lastIndex) 2 else 0
     }
     return starts
 }
 
-private fun paragraphIndexForOffset(offset: Int, starts: List<Int>): Int {
-    return starts.indexOfLast { it <= offset }.coerceAtLeast(0)
-}
+private fun paragraphIndexForOffset(offset: Int, starts: List<Int>): Int = starts.indexOfLast { it <= offset }.coerceAtLeast(0)
 
 private fun normalizePageOffset(fullText: String, bodyOffset: Int, headerLength: Int): Int {
     if (bodyOffset <= 0) return 0
-    val absoluteStart = (bodyOffset + headerLength).coerceIn(0, fullText.length)
-    var absoluteOffset = absoluteStart
-    while (absoluteOffset < fullText.length) {
-        val ch = fullText[absoluteOffset]
-        if (ch != '\n' && ch != '\r') {
-            break
-        }
+    var absoluteOffset = (bodyOffset + headerLength).coerceIn(0, fullText.length)
+    while (absoluteOffset < fullText.length && (fullText[absoluteOffset] == '\n' || fullText[absoluteOffset] == '\r')) {
         absoluteOffset++
     }
     return (absoluteOffset - headerLength).coerceAtLeast(0)
 }
 
-private fun lastVisibleOffset(result: androidx.compose.ui.text.TextLayoutResult): Int {
-    if (result.lineCount == 0) {
-        return 0
-    }
-    return result.getLineEnd(result.lineCount - 1, visibleEnd = true)
-}
-
-private fun adjustedConstraints(
-    constraints: Constraints,
-    paddingValues: PaddingValues,
-    density: Density
-): Constraints {
-    val horizontalPaddingPx = with(density) {
-        paddingValues.calculateLeftPadding(LayoutDirection.Ltr).toPx() +
-            paddingValues.calculateRightPadding(LayoutDirection.Ltr).toPx()
-    }
-    val verticalPaddingPx = with(density) {
-        paddingValues.calculateTopPadding().toPx() +
-            paddingValues.calculateBottomPadding().toPx()
-    }
-    val maxWidth = (constraints.maxWidth - horizontalPaddingPx).toInt().coerceAtLeast(0)
-    val maxHeight = (constraints.maxHeight - verticalPaddingPx).toInt().coerceAtLeast(0)
-    return Constraints(
-        minWidth = 0,
-        maxWidth = maxWidth,
-        minHeight = 0,
-        maxHeight = maxHeight
-    )
+private fun adjustedConstraints(constraints: Constraints, paddingValues: PaddingValues, density: Density): Constraints {
+    val hPadding = with(density) { (paddingValues.calculateLeftPadding(LayoutDirection.Ltr) + paddingValues.calculateRightPadding(LayoutDirection.Ltr)).toPx() }
+    val vPadding = with(density) { (paddingValues.calculateTopPadding() + paddingValues.calculateBottomPadding()).toPx() }
+    return Constraints(maxWidth = (constraints.maxWidth - hPadding).toInt().coerceAtLeast(0), maxHeight = (constraints.maxHeight - vPadding).toInt().coerceAtLeast(0))
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectTapGesturesWithoutConsuming(
-    viewConfiguration: androidx.compose.ui.platform.ViewConfiguration,
-    onTap: (Offset, IntSize) -> Unit
-) {
+private suspend fun PointerInputScope.detectTapGesturesWithoutConsuming(viewConfiguration: androidx.compose.ui.platform.ViewConfiguration, onTap: (Offset, IntSize) -> Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         var isTap = true
         var tapPosition = down.position
-        val slop = viewConfiguration.touchSlop
         while (true) {
             val event = awaitPointerEvent()
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-            if (change.positionChanged()) {
-                val distance = (change.position - down.position).getDistance()
-                if (distance > slop) {
-                    isTap = false
-                }
-            }
-            if (change.changedToUp()) {
-                tapPosition = change.position
-                break
-            }
+            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) isTap = false
+            if (change.changedToUp()) { tapPosition = change.position; break }
         }
-        if (isTap) {
-            onTap(tapPosition, size)
-        }
+        if (isTap) onTap(tapPosition, size)
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-private fun handleHorizontalTap(
-    offset: Offset,
-    size: IntSize,
-    showControls: Boolean,
-    pagerState: androidx.compose.foundation.pager.PagerState,
-    paginatedPages: List<PaginatedPage>,
-    onPreviousChapter: () -> Unit,
-    onNextChapter: () -> Unit,
-    coroutineScope: kotlinx.coroutines.CoroutineScope,
-    onToggleControls: (Boolean) -> Unit
-) {
-    if (showControls) {
-        onToggleControls(false)
-        return
-    }
-
+private fun handleHorizontalTap(offset: Offset, size: IntSize, showControls: Boolean, pagerState: androidx.compose.foundation.pager.PagerState, paginatedPages: List<PaginatedPage>, onPreviousChapter: () -> Unit, onNextChapter: () -> Unit, coroutineScope: kotlinx.coroutines.CoroutineScope, onToggleControls: (Boolean) -> Unit) {
+    if (showControls) { onToggleControls(false); return }
     val width = size.width.toFloat()
     when {
-        offset.x < width / 3f -> {
-            coroutineScope.launch {
-                if (pagerState.currentPage > 0) {
-                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                } else {
-                    onPreviousChapter()
-                }
-            }
-        }
-        offset.x < width * 2f / 3f -> {
-            onToggleControls(true)
-        }
-        else -> {
-            coroutineScope.launch {
-                if (pagerState.currentPage < paginatedPages.lastIndex) {
-                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                } else {
-                    onNextChapter()
-                }
-            }
-        }
+        offset.x < width / 3f -> coroutineScope.launch { if (pagerState.currentPage > 0) pagerState.animateScrollToPage(pagerState.currentPage - 1) else onPreviousChapter() }
+        offset.x < width * 2f / 3f -> onToggleControls(true)
+        else -> coroutineScope.launch { if (pagerState.currentPage < paginatedPages.lastIndex) pagerState.animateScrollToPage(pagerState.currentPage + 1) else onNextChapter() }
     }
 }
 
+private val List<*>.lastIndex: Int get() = size - 1
 
 @Composable
-private fun TopControlBar(
-    bookTitle: String,
-    chapterTitle: String,
-    onNavigateBack: () -> Unit,
-    onHeaderClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-        shadowElevation = 4.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = AppDimens.PaddingMedium, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onNavigateBack) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "杩斿洖",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp)
-                    .clickable(onClick = onHeaderClick)
-            ) {
-                Text(
-                    text = bookTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1
-                )
-                
-                Text(
-                    text = chapterTitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.customColors.textSecondary,
-                    maxLines = 1
-                )
+private fun TopControlBar(bookTitle: String, chapterTitle: String, onNavigateBack: () -> Unit, onHeaderClick: () -> Unit) {
+    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), shadowElevation = 4.dp) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = AppDimens.PaddingMedium, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "返回") }
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp).clickable(onClick = onHeaderClick)) {
+                Text(text = bookTitle, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Text(text = chapterTitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.customColors.textSecondary, maxLines = 1)
             }
         }
     }
 }
 
 @Composable
-private fun BottomControlBar(
-    isPlaying: Boolean,
-    onPreviousChapter: () -> Unit,
-    onNextChapter: () -> Unit,
-    onShowChapterList: () -> Unit,
-    onPlayPause: () -> Unit,
-    onStopListening: () -> Unit,
-    onPreviousParagraph: () -> Unit,
-    onNextParagraph: () -> Unit,
-    onFontSettings: () -> Unit,
-    canGoPrevious: Boolean,
-    canGoNext: Boolean,
-    showTtsControls: Boolean
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-        shadowElevation = 8.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(AppDimens.PaddingMedium)
-        ) {
-            // TTS 娈佃惤鎺у埗锛堟挱鏀炬椂鏄剧ず锛?
+private fun BottomControlBar(isPlaying: Boolean, onPreviousChapter: () -> Unit, onNextChapter: () -> Unit, onShowChapterList: () -> Unit, onPlayPause: () -> Unit, onStopListening: () -> Unit, onPreviousParagraph: () -> Unit, onNextParagraph: () -> Unit, onFontSettings: () -> Unit, canGoPrevious: Boolean, canGoNext: Boolean, showTtsControls: Boolean) {
+    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), shadowElevation = 8.dp) {
+        Column(modifier = Modifier.fillMaxWidth().padding(AppDimens.PaddingMedium)) {
             if (showTtsControls) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 涓婁竴娈?
-                    IconButton(onClick = onPreviousParagraph) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = "\u4e0a\u4e00\u6bb5",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    
-                    // 鎾斁/鏆傚仠
-                    FloatingActionButton(
-                        onClick = onPlayPause,
-                        containerColor = MaterialTheme.customColors.gradientStart,
-                        modifier = Modifier.size(56.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "\u6688\u505c" else "\u64ad\u653e",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    
-                    // 涓嬩竴娈?
-                    IconButton(onClick = onNextParagraph) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "\u4e0b\u4e00\u6bb5",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    
-                    // 鍋滄鍚功
-                    IconButton(onClick = onStopListening) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "\u505c\u6b62",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onPreviousParagraph) { Icon(Icons.Default.KeyboardArrowUp, "上一段") }
+                    FloatingActionButton(onClick = onPlayPause, containerColor = MaterialTheme.customColors.gradientStart, modifier = Modifier.size(56.dp)) { Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp)) }
+                    IconButton(onClick = onNextParagraph) { Icon(Icons.Default.KeyboardArrowDown, "下一段") }
+                    IconButton(onClick = onStopListening) { Icon(Icons.Default.Stop, "停止", tint = MaterialTheme.colorScheme.error) }
                 }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                Divider(color = MaterialTheme.customColors.border)
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp)); Divider(color = MaterialTheme.customColors.border); Spacer(modifier = Modifier.height(8.dp))
             }
-            
-            // 鍩虹闃呰鎺у埗
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 涓婁竴绔?
-                ControlButton(
-                    icon = Icons.Default.SkipPrevious,
-                    label = "\u4e0a\u4e00\u7ae0",
-                    onClick = onPreviousChapter,
-                    enabled = canGoPrevious
-                )
-                
-                // 鐩綍
-                ControlButton(
-                    icon = Icons.Default.List,
-                    label = "\u76ee\u5f55",
-                    onClick = onShowChapterList
-                )
-                
-                // 鍚功鎸夐挳锛堟湭鎾斁鏃舵樉绀猴級
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                ControlButton(icon = Icons.Default.SkipPrevious, label = "上一章", onClick = onPreviousChapter, enabled = canGoPrevious)
+                ControlButton(icon = Icons.Default.List, label = "目录", onClick = onShowChapterList)
                 if (!showTtsControls) {
-                    FloatingActionButton(
-                        onClick = onPlayPause,
-                        containerColor = MaterialTheme.customColors.gradientStart,
-                        elevation = FloatingActionButtonDefaults.elevation(
-                            defaultElevation = 6.dp
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.VolumeUp,
-                            contentDescription = "\u542c\u4e66",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
+                    FloatingActionButton(onClick = onPlayPause, containerColor = MaterialTheme.customColors.gradientStart, elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)) { Icon(Icons.Default.VolumeUp, "听书", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp)) }
                 }
-                
-                // 涓嬩竴绔?
-                ControlButton(
-                    icon = Icons.Default.FormatSize,
-                    label = "\u5b57\u4f53",
-                    onClick = onFontSettings
-                )
-                
-                // 瀛椾綋澶у皬锛圱ODO锛?
-                ControlButton(
-                    icon = Icons.Default.SkipNext,
-                    label = "\u4e0b\u4e00\u7ae0",
-                    onClick = onNextChapter,
-                    enabled = canGoNext
-                )
+                ControlButton(icon = Icons.Default.FormatSize, label = "字体", onClick = onFontSettings)
+                ControlButton(icon = Icons.Default.SkipNext, label = "下一章", onClick = onNextChapter, enabled = canGoNext)
             }
         }
     }
@@ -1170,358 +722,83 @@ private fun BottomControlBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReaderOptionsDialog(
-    fontSize: Float,
-    onFontSizeChange: (Float) -> Unit,
-    horizontalPadding: Float,
-    onHorizontalPaddingChange: (Float) -> Unit,
-    lockPageOnTTS: Boolean,
-    onLockPageOnTTSChange: (Boolean) -> Unit,
-    pageTurningMode: com.readapp.data.PageTurningMode,
-    onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit,
-    darkModeConfig: com.readapp.data.DarkModeConfig,
-    onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit,
-    forceMangaProxy: Boolean,
-    onForceMangaProxyChange: (Boolean) -> Unit,
-    readingMode: com.readapp.data.ReadingMode,
-    onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "阅读选项") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // 阅读模式
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("阅读模式", style = MaterialTheme.typography.labelMedium)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        com.readapp.data.ReadingMode.values().forEach { mode ->
-                            val isSelected = readingMode == mode
-                            val label = when(mode) {
-                                com.readapp.data.ReadingMode.Vertical -> "上下滚动"
-                                com.readapp.data.ReadingMode.Horizontal -> "左右翻页"
-                            }
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { onReadingModeChange(mode) },
-                                label = { Text(label) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+private fun ReaderOptionsDialog(fontSize: Float, onFontSizeChange: (Float) -> Unit, horizontalPadding: Float, onHorizontalPaddingChange: (Float) -> Unit, lockPageOnTTS: Boolean, onLockPageOnTTSChange: (Boolean) -> Unit, pageTurningMode: com.readapp.data.PageTurningMode, onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit, darkModeConfig: DarkModeConfig, onDarkModeChange: (DarkModeConfig) -> Unit, forceMangaProxy: Boolean, onForceMangaProxyChange: (Boolean) -> Unit, readingMode: ReadingMode, onReadingModeChange: (ReadingMode) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("阅读选项") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("阅读模式", style = MaterialTheme.typography.labelMedium)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReadingMode.values().forEach { mode ->
+                        FilterChip(selected = readingMode == mode, onClick = { onReadingModeChange(mode) }, label = { Text(if (mode == ReadingMode.Vertical) "上下滚动" else "左右翻页") }, modifier = Modifier.weight(1f))
                     }
-                }
-
-                Divider()
-
-                // 夜间模式 (三状态)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("夜间模式", style = MaterialTheme.typography.labelMedium)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        com.readapp.data.DarkModeConfig.values().forEach { config ->
-                            val isSelected = darkModeConfig == config
-                            val label = when(config) {
-                                com.readapp.data.DarkModeConfig.ON -> "开启"
-                                com.readapp.data.DarkModeConfig.OFF -> "关闭"
-                                com.readapp.data.DarkModeConfig.AUTO -> "跟随系统"
-                            }
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { onDarkModeChange(config) },
-                                label = { Text(label) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-
-                // 强制代理
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable { onForceMangaProxyChange(!forceMangaProxy) }
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("强制服务器代理", style = MaterialTheme.typography.bodyLarge)
-                        Text("如果漫画图片无法加载，请开启此项", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Switch(checked = forceMangaProxy, onCheckedChange = onForceMangaProxyChange)
-                }
-
-                Divider()
-
-                // 字体大小
-                Column {
-                    Text(text = "字体大小: ${fontSize.toInt()}sp", style = MaterialTheme.typography.labelMedium)
-                    Slider(
-                        value = fontSize,
-                        onValueChange = onFontSizeChange,
-                        valueRange = 12f..30f
-                    )
-                }
-
-                // 左右间距
-                Column {
-                    Text(text = "页面边距: ${horizontalPadding.toInt()}dp", style = MaterialTheme.typography.labelMedium)
-                    Slider(
-                        value = horizontalPadding,
-                        onValueChange = onHorizontalPaddingChange,
-                        valueRange = 0f..50f
-                    )
-                }
-
-                Divider()
-
-                // 翻页效果
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("翻页动画 (仅限左右翻页)", style = MaterialTheme.typography.labelMedium)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        com.readapp.data.PageTurningMode.values().forEach { mode ->
-                            val isSelected = pageTurningMode == mode
-                            val label = when(mode) {
-                                com.readapp.data.PageTurningMode.Scroll -> "平滑滑动"
-                                com.readapp.data.PageTurningMode.Simulation -> "仿真翻页"
-                            }
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { onPageTurningModeChange(mode) },
-                                label = { Text(label) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable { onLockPageOnTTSChange(!lockPageOnTTS) }
-                ) {
-                    Checkbox(checked = lockPageOnTTS, onCheckedChange = onLockPageOnTTSChange)
-                    Text("播放时锁定翻页", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("完成")
+            Divider()
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("夜间模式", style = MaterialTheme.typography.labelMedium)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    DarkModeConfig.values().forEach { config ->
+                        FilterChip(selected = darkModeConfig == config, onClick = { onDarkModeChange(config) }, label = { Text(when(config){ DarkModeConfig.ON->"开启"; DarkModeConfig.OFF->"关闭"; DarkModeConfig.AUTO->"系统"}) }, modifier = Modifier.weight(1f))
+                    }
+                }
             }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onForceMangaProxyChange(!forceMangaProxy) }) {
+                Column(modifier = Modifier.weight(1f)) { Text("强制服务器代理", style = MaterialTheme.typography.bodyLarge); Text("如果漫画图片无法加载，请开启此项", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline) }
+                Switch(checked = forceMangaProxy, onCheckedChange = onForceMangaProxyChange)
+            }
+            Divider()
+            Column { Text("字体大小: ${fontSize.toInt()}sp", style = MaterialTheme.typography.labelMedium); Slider(value = fontSize, onValueChange = onFontSizeChange, valueRange = 12f..30f) }
+            Column { Text("页面边距: ${horizontalPadding.toInt()}dp", style = MaterialTheme.typography.labelMedium); Slider(value = horizontalPadding, onValueChange = onHorizontalPaddingChange, valueRange = 0f..50f) }
+            Divider()
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onLockPageOnTTSChange(!lockPageOnTTS) }) { Checkbox(checked = lockPageOnTTS, onCheckedChange = onLockPageOnTTSChange); Text("播放时锁定翻页", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium) }
         }
-    )
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } })
 }
 
 @Composable
-private fun FontSizeDialog(
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    horizontalPadding: Float,
-    onHorizontalPaddingChange: (Float) -> Unit,
-    lockPageOnTTS: Boolean,
-    onLockPageOnTTSChange: (Boolean) -> Unit,
-    pageTurningMode: com.readapp.data.PageTurningMode,
-    onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit,
-    darkModeConfig: com.readapp.data.DarkModeConfig,
-    onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit,
-    forceMangaProxy: Boolean,
-    onForceMangaProxyChange: (Boolean) -> Unit,
-    readingMode: com.readapp.data.ReadingMode,
-    onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit,
-    onDismiss: () -> Unit
-) {
-    ReaderOptionsDialog(
-        fontSize = value,
-        onFontSizeChange = onValueChange,
-        horizontalPadding = horizontalPadding,
-        onHorizontalPaddingChange = onHorizontalPaddingChange,
-        lockPageOnTTS = lockPageOnTTS,
-        onLockPageOnTTSChange = onLockPageOnTTSChange,
-        pageTurningMode = pageTurningMode,
-        onPageTurningModeChange = onPageTurningModeChange,
-        darkModeConfig = darkModeConfig,
-        onDarkModeChange = onDarkModeChange,
-        forceMangaProxy = forceMangaProxy,
-        onForceMangaProxyChange = onForceMangaProxyChange,
-        readingMode = readingMode,
-        onReadingModeChange = onReadingModeChange,
-        onDismiss = onDismiss
-    )
+private fun FontSizeDialog(value: Float, onValueChange: (Float) -> Unit, horizontalPadding: Float, onHorizontalPaddingChange: (Float) -> Unit, lockPageOnTTS: Boolean, onLockPageOnTTSChange: (Boolean) -> Unit, pageTurningMode: com.readapp.data.PageTurningMode, onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit, darkModeConfig: DarkModeConfig, onDarkModeChange: (DarkModeConfig) -> Unit, forceMangaProxy: Boolean, onForceMangaProxyChange: (Boolean) -> Unit, readingMode: ReadingMode, onReadingModeChange: (ReadingMode) -> Unit, onDismiss: () -> Unit) {
+    ReaderOptionsDialog(fontSize = value, onFontSizeChange = onValueChange, horizontalPadding = horizontalPadding, onHorizontalPaddingChange = onHorizontalPaddingChange, lockPageOnTTS = lockPageOnTTS, onLockPageOnTTSChange = onLockPageOnTTSChange, pageTurningMode = pageTurningMode, onPageTurningModeChange = onPageTurningModeChange, darkModeConfig = darkModeConfig, onDarkModeChange = onDarkModeChange, forceMangaProxy = forceMangaProxy, onForceMangaProxyChange = onForceMangaProxyChange, readingMode = readingMode, onReadingModeChange = onReadingModeChange, onDismiss = onDismiss)
 }
 
 @Composable
-private fun ControlButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        IconButton(
-            onClick = onClick,
-            enabled = enabled
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.customColors.textSecondary.copy(alpha = 0.3f)
-                },
-                modifier = Modifier.size(24.dp)
-            )
-        }
-        
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (enabled) {
-                MaterialTheme.customColors.textSecondary
-            } else {
-                MaterialTheme.customColors.textSecondary.copy(alpha = 0.3f)
-            }
-        )
+private fun ControlButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        IconButton(onClick = onClick, enabled = enabled) { Icon(imageVector = icon, contentDescription = label, tint = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.customColors.textSecondary.copy(alpha = 0.3f), modifier = Modifier.size(24.dp)) }
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = if (enabled) MaterialTheme.customColors.textSecondary else MaterialTheme.customColors.textSecondary.copy(alpha = 0.3f))
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChapterListDialog(
-    chapters: List<Chapter>,
-    currentChapterIndex: Int,
-    preloadedChapters: Set<Int>,
-    bookUrl: String,
-    onChapterClick: (Int) -> Unit,
-    onDismiss: () -> Unit
-) {
+private fun ChapterListDialog(chapters: List<Chapter>, currentChapterIndex: Int, preloadedChapters: Set<Int>, bookUrl: String, onChapterClick: (Int) -> Unit, onDismiss: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val localCache = remember { com.readapp.data.LocalCacheManager(context) }
-    var currentGroupIndex by remember(chapters.size) {
-        mutableStateOf(currentChapterIndex / 50)
-    }
+    val localCache = remember { LocalCacheManager(context) }
+    var currentGroupIndex by remember(chapters.size) { mutableStateOf(currentChapterIndex / 50) }
     val groupCount = (chapters.size + 49) / 50
-    
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "章节列表 (${chapters.size})",
-                style = MaterialTheme.typography.titleLarge
-            )
-        },
-        text = {
-            Column {
-                if (groupCount > 1) {
-                    androidx.compose.foundation.lazy.LazyRow(
-                        modifier = Modifier.padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(groupCount) {
-                            val start = it * 50 + 1
-                            val end = minOf((it + 1) * 50, chapters.size)
-                            FilterChip(
-                                selected = currentGroupIndex == it,
-                                onClick = { currentGroupIndex = it },
-                                label = { Text("$start-$end") }
-                            )
-                        }
-                    }
-                }
-                
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
-                ) {
-                    val start = currentGroupIndex * 50
-                    val end = minOf((currentGroupIndex + 1) * 50, chapters.size)
-                    val visibleChapters = chapters.subList(start, end)
-                    
-                    itemsIndexed(visibleChapters) { relativeIndex, chapter ->
-                        val index = start + relativeIndex
-                        val isCurrentChapter = index == currentChapterIndex
-                        val isCached = remember(bookUrl, index) { localCache.isChapterCached(bookUrl, index) }
-                        
-                        Surface(
-                            onClick = { onChapterClick(index) },
-                            color = if (isCurrentChapter) {
-                                MaterialTheme.customColors.gradientStart.copy(alpha = 0.25f)
-                            } else if (preloadedChapters.contains(index)) {
-                                MaterialTheme.customColors.success.copy(alpha = 0.12f)
-                            } else {
-                                MaterialTheme.colorScheme.surface
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 12.dp, horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = chapter.title,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = if (isCurrentChapter) {
-                                            MaterialTheme.customColors.gradientStart
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
-                                        }
-                                    )
-                                }
-                                
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (isCached) {
-                                        Icon(
-                                            imageVector = Icons.Default.CheckCircle,
-                                            contentDescription = "已缓存",
-                                            tint = MaterialTheme.customColors.success,
-                                            modifier = Modifier.size(16.dp).padding(end = 4.dp)
-                                        )
-                                    }
-                                    
-                                    if (isCurrentChapter) {
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = MaterialTheme.customColors.gradientStart
-                                        ) {
-                                            Text(
-                                                text = "当前",
-                                                modifier = Modifier.padding(
-                                                    horizontal = 8.dp,
-                                                    vertical = 4.dp
-                                                ),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        if (index < chapters.size - 1) {
-                            Divider(color = MaterialTheme.customColors.border)
-                        }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("章节列表 (${chapters.size})", style = MaterialTheme.typography.titleLarge) }, text = {
+        Column {
+            if (groupCount > 1) {
+                androidx.compose.foundation.lazy.LazyRow(modifier = Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(groupCount) { 
+                        val start = it * 50 + 1; val end = minOf((it + 1) * 50, chapters.size)
+                        FilterChip(selected = currentGroupIndex == it, onClick = { currentGroupIndex = it }, label = { Text("$start-$end") })
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("关闭")
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                val start = currentGroupIndex * 50; val end = minOf((currentGroupIndex + 1) * 50, chapters.size)
+                itemsIndexed(chapters.subList(start, end)) { relativeIndex, chapter ->
+                    val index = start + relativeIndex
+                    val isCurrent = index == currentChapterIndex
+                    Surface(onClick = { onChapterClick(index) }, color = if (isCurrent) MaterialTheme.customColors.gradientStart.copy(alpha = 0.25f) else if (preloadedChapters.contains(index)) MaterialTheme.customColors.success.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = chapter.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = if (isCurrent) MaterialTheme.customColors.gradientStart else MaterialTheme.colorScheme.onSurface)
+                            if (isCurrent) Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.customColors.gradientStart) { Text("当前", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary) }
+                        }
+                    }
+                    if (index < chapters.size - 1) Divider(color = MaterialTheme.customColors.border)
+                }
             }
-        },
-        shape = RoundedCornerShape(AppDimens.CornerRadiusLarge)
-    )
+        }
+    }, confirmButton = {}, dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } }, shape = RoundedCornerShape(AppDimens.CornerRadiusLarge))
 }
