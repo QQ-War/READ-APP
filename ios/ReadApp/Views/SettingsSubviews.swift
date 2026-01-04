@@ -351,11 +351,16 @@ struct ContentSettingsView: View {
     }
 }
 
+// MARK: - Helper for URL sharing
+struct URLIdentifier: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 struct DebugSettingsView: View {
     @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
-    @State private var showShareSheet = false
-    @State private var logFileURL: URL?
+    @State private var logURLToShare: URLIdentifier? = nil
     @State private var showClearLogsAlert = false
     @State private var showClearCacheAlert = false
     @State private var showLogViewer = false
@@ -421,36 +426,22 @@ struct DebugSettingsView: View {
         .sheet(isPresented: $showLogViewer) {
             LogView()
         }
+        .sheet(item: $logURLToShare) { ident in
+            ShareSheet(items: [ident.url])
+        }
         .alert("清空日志", isPresented: $showClearLogsAlert) {
             Button("取消", role: .cancel) { }
-            Button("清空", role: .destructive) {
-                LogManager.shared.clearLogs()
-            }
-        } message: {
-            Text("确定要清空所有日志吗？")
+            Button("清空", role: .destructive) { LogManager.shared.clearLogs() }
         }
-        .alert("清除本地缓存", isPresented: $showClearCacheAlert) {
+        .alert("清除缓存", isPresented: $showClearCacheAlert) {
             Button("取消", role: .cancel) { }
-            Button("清除", role: .destructive) {
-                apiService.clearLocalCache()
-            }
-        } message: {
-            Text("确定要清除所有本地章节内容缓存吗？")
-        }
-        .sheet(isPresented: $showShareSheet) {
-            if let url = logFileURL {
-                ShareSheet(items: [url])
-            }
+            Button("清除", role: .destructive) { apiService.clearLocalCache() }
         }
     }
-    
+
     private func exportLogs() {
         if let url = LogManager.shared.exportLogs() {
-            self.logFileURL = url
-            // 给一丁点时间让 URL 状态同步
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.showShareSheet = true
-            }
+            self.logURLToShare = URLIdentifier(url: url)
         }
     }
 }

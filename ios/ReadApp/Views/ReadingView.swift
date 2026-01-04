@@ -208,19 +208,13 @@ struct ReadingView: View {
         // 3. 或者内容中包含图片且段落总数较少（说明是图集）
         // 4. 或者图片占比超过 10%
         if let url = book.bookUrl, preferences.manualMangaUrls.contains(url) {
-            if preferences.isVerboseLoggingEnabled { logger.log("触发漫画模式: 手动标记为漫画", category: "漫画调试") }
             return true
         }
         
         let imageCount = contentSentences.filter { $0.hasPrefix("__IMG__") }.count
         if imageCount > 0 {
             let ratio = Double(imageCount) / Double(contentSentences.count)
-            let isManga = book.type == 2 || contentSentences.count < 50 || ratio > 0.1
-            
-            if preferences.isVerboseLoggingEnabled {
-                logger.log("判定漫画模式: 图片数=\(imageCount), 总段落=\(contentSentences.count), 比例=\(String(format: "%.2f", ratio)), 结果=\(isManga)", category: "漫画调试")
-            }
-            return isManga
+            return book.type == 2 || contentSentences.count < 50 || ratio > 0.1
         }
         
         return false
@@ -804,6 +798,7 @@ struct ReadingView: View {
                 pageIndex: pageIndex, 
                 renderStore: snapshot.renderStore, 
                 sentences: snapshot.contentSentences,
+                chapterUrl: snapshot.chapterUrl, // 关键修复：传递章节 URL
                 chapterOffset: chapterOffset,
                 onAddReplaceRule: { selectedText in presentReplaceRuleEditor(selectedText: selectedText) },
                 onTapLocation: { location in handleReaderTap(location: location) }

@@ -48,7 +48,18 @@ struct BookListView: View {
     }
     
     var body: some View {
-        Group {
+        ZStack {
+            // 隐式导航触发器
+            if let book = selectedBookForDetail {
+                NavigationLink(
+                    destination: BookDetailView(book: book).environmentObject(apiService),
+                    isActive: Binding(
+                        get: { selectedBookForDetail != nil },
+                        set: { if !$0 { selectedBookForDetail = nil } }
+                    )
+                ) { EmptyView() }
+            }
+
             List {
                 if !searchText.isEmpty {
                     if !filteredAndSortedBooks.isEmpty {
@@ -107,19 +118,6 @@ struct BookListView: View {
         .fullScreenCover(item: $selectedBook) { book in
             ReadingView(book: book).environmentObject(apiService)
         }
-        .background(
-            Group {
-                if let book = selectedBookForDetail {
-                    NavigationLink(
-                        destination: BookDetailView(book: book).environmentObject(apiService),
-                        isActive: Binding(
-                            get: { selectedBookForDetail != nil },
-                            set: { if !$0 { selectedBookForDetail = nil } }
-                        )
-                    ) { EmptyView() }
-                }
-            }
-        )
         .task { 
             if apiService.books.isEmpty { await loadBooks() }
             if apiService.availableSources.isEmpty { _ = try? await apiService.fetchBookSources() }
