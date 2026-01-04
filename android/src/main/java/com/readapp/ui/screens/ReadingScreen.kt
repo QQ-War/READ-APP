@@ -224,13 +224,30 @@ fun ReadingScreen(
         ) {
             // 鍐呭鍖哄煙
             if (readingMode == com.readapp.data.ReadingMode.Vertical) {
-                LazyColumn(
-                    state = scrollState,
+                var zoomScale by remember { mutableStateOf(1f) }
+                var zoomOffset by remember { mutableStateOf(Offset.Zero) }
+                val zoomState = rememberTransformableState { zoomChange, offsetChange, _ ->
+                    zoomScale = (zoomScale * zoomChange).coerceIn(1f, 4f)
+                    if (zoomScale > 1f) zoomOffset += offsetChange else zoomOffset = Offset.Zero
+                }
+
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .weight(1f),
-                    contentPadding = contentPadding
+                        .weight(1f)
+                        .graphicsLayer(
+                            scaleX = zoomScale,
+                            scaleY = zoomScale,
+                            translationX = zoomOffset.x,
+                            translationY = zoomOffset.y
+                        )
+                        .transformable(state = zoomState)
                 ) {
+                    LazyColumn(
+                        state = scrollState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = contentPadding
+                    ) {
                     // 绔犺妭鏍囬
                     item {
                         Text(

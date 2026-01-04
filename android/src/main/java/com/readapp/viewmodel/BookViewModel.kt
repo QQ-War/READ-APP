@@ -1328,7 +1328,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         
         for (line in lines) {
             // 过滤：如果一段内容仅仅是 URL 且没有识别标记，说明是 HTML 剥离后的杂质
-            if (line.lowercase().startsWith("http") && !line.contains("__IMG__")) {
+            val lowerLine = line.lowercase()
+            val isRawUrl = lowerLine.startsWith("http") || lowerLine.startsWith("//")
+            val isHighEntropy = line.length > 40 && !line.contains(" ")
+            
+            if ((isRawUrl || isHighEntropy) && !line.contains("__IMG__")) {
                 continue
             }
 

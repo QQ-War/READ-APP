@@ -335,31 +335,27 @@ struct ReadingView: View {
             geometry in
             ScrollViewReader {
                 proxy in
-                ScrollView {
-                    let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
-                    let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
-                    RichTextView(
-                        sentences: contentSentences,
-                        fontSize: preferences.fontSize,
-                        lineSpacing: preferences.lineSpacing,
-                        highlightIndex: primaryHighlight,
-                        secondaryIndices: secondaryHighlights,
-                        isPlayingHighlight: ttsManager.isPlaying,
-                        scrollProxy: scrollProxy,
-                        chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
-                    )
-                    .padding()
+                // 全局缩放容器：允许对整个章节进行双指缩放
+                ZoomableScrollView {
+                    ScrollView {
+                        let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
+                        let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
+                        RichTextView(
+                            sentences: contentSentences,
+                            fontSize: preferences.fontSize,
+                            lineSpacing: preferences.lineSpacing,
+                            highlightIndex: primaryHighlight,
+                            secondaryIndices: secondaryHighlights,
+                            isPlayingHighlight: ttsManager.isPlaying,
+                            scrollProxy: scrollProxy,
+                            chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
+                        )
+                        .padding(.horizontal, preferences.pageHorizontalMargin)
+                        .padding(.vertical, 10)
+                    }
                 }
                 .id("chapter_\(currentChapterIndex)") // 关键：强制刷新视图防止内容卡死
                 .coordinateSpace(name: "scroll")
-                .contentShape(Rectangle())
-                .onTapGesture { handleReaderTap(location: .middle) }
-                .onChange(of: ttsManager.currentSentenceIndex) { newIndex in
-                    if ttsManager.isPlaying, !contentSentences.isEmpty {
-                        let absoluteIndex = newIndex + ttsBaseIndex
-                        withAnimation { proxy.scrollTo(absoluteIndex, anchor: .center) }
-                    }
-                }
                 .onPreferenceChange(SentenceFramePreferenceKey.self) { updateVisibleSentenceIndex(frames: $0, viewportHeight: geometry.size.height) }
                 .onChange(of: contentSentences) { _ in
                     if preferences.readingMode == .vertical && isExplicitlySwitchingChapter {
@@ -1261,7 +1257,12 @@ struct ReadingView: View {
             if trimmed.isEmpty { continue }
             
             // 过滤：如果一段内容仅仅是 URL 且没有识别标记，说明是 HTML 剥离后的杂质
-            if trimmed.lowercased().hasPrefix("http") && !trimmed.contains("__IMG__") {
+            let lowerTrimmed = trimmed.lowercased()
+            let isRawUrl = lowerTrimmed.hasPrefix("http") || lowerTrimmed.hasPrefix("//")
+            // 高熵文本拦截：很长的连续字母数字串（无空格）通常是杂质
+            let isHighEntropy = trimmed.count > 40 && !trimmed.contains(" ")
+            
+            if (isRawUrl || isHighEntropy) && !trimmed.contains("__IMG__") {
                 continue
             }
             
