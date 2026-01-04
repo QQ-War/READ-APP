@@ -273,8 +273,11 @@ fun ReadingScreen(
                             }
                         }
                     } else {
-                        // 绔犺妭鍐呭锛堝垎娈垫樉绀猴紝甯﹂珮浜級
-                        itemsIndexed(paragraphs) { index, paragraph ->
+                        // 章节内容（分段显示，带高亮）
+                        itemsIndexed(
+                            items = paragraphs,
+                            key = { index, _ -> "${currentChapterIndex}_${index}" }
+                        ) { index, paragraph ->
                             ParagraphItem(
                                 text = paragraph,
                                 isPlaying = index == currentPlayingParagraph,
@@ -336,8 +339,13 @@ fun ReadingScreen(
                         book.type == 2 || (paragraphs.isNotEmpty() && imageCount.toFloat() / paragraphs.size > 0.1f)
                     }
 
+                    // 使用 contentKey 强制刷新 Pager 状态
+                    val contentKey = remember(currentChapterIndex, isMangaMode) { 
+                        "${currentChapterIndex}_${isMangaMode}" 
+                    }
+
                     val pageTextCache = remember { mutableStateMapOf<Int, AnnotatedString>() }
-                    val pagerState = rememberPagerState { 
+                    val pagerState = rememberPagerState(key = { contentKey }) { 
                         if (isMangaMode) paragraphs.size.coerceAtLeast(1)
                         else paginatedPages.pages.size.coerceAtLeast(1) 
                     }
@@ -924,12 +932,13 @@ private fun ParagraphItem(
                 .crossfade(true)
                 .build()
 
-            ZoomableImage(
+            coil.compose.AsyncImage(
                 model = imageRequest,
+                contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 200.dp, max = 800.dp)
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 4.dp),
+                contentScale = ContentScale.FillWidth
             )
         } else {
             // ... (text rendering unchanged)
@@ -1439,8 +1448,8 @@ private fun ReaderOptionsDialog(
                     modifier = Modifier.fillMaxWidth().clickable { onForceMangaProxyChange(!forceMangaProxy) }
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("强制服务器代理")
-                        Text("如果漫画无法加载，请开启此项", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        Text("强制服务器代理", style = MaterialTheme.typography.bodyLarge)
+                        Text("如果漫画图片无法加载，请开启此项", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                     }
                     Switch(checked = forceMangaProxy, onCheckedChange = onForceMangaProxyChange)
                 }
@@ -1469,9 +1478,9 @@ private fun ReaderOptionsDialog(
 
                 Divider()
 
-                // 翻页模式
+                // 翻页效果
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("翻页效果", style = MaterialTheme.typography.labelMedium)
+                    Text("翻页动画 (仅限左右翻页)", style = MaterialTheme.typography.labelMedium)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)

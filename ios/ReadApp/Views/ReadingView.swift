@@ -350,6 +350,7 @@ struct ReadingView: View {
                     )
                     .padding()
                 }
+                .id("chapter_\(currentChapterIndex)") // 关键：强制刷新视图防止内容卡死
                 .coordinateSpace(name: "scroll")
                 .contentShape(Rectangle())
                 .onTapGesture { handleReaderTap(location: .middle) }
@@ -1252,7 +1253,6 @@ struct ReadingView: View {
     }
     
     private func splitIntoParagraphs(_ text: String) -> [String] {
-        // 先按换行符拆分
         let lines = text.components(separatedBy: "\n")
         var finalParagraphs: [String] = []
         
@@ -1260,8 +1260,12 @@ struct ReadingView: View {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty { continue }
             
+            // 过滤：如果一段内容仅仅是 URL 且没有识别标记，说明是 HTML 剥离后的杂质
+            if trimmed.lowercased().hasPrefix("http") && !trimmed.contains("__IMG__") {
+                continue
+            }
+            
             // 进一步拆分，确保 __IMG__ 独立成行
-            // 使用正则拆分，保留分隔符
             let parts = trimmed.components(separatedBy: "__IMG__")
             if parts.count > 1 {
                 for (i, part) in parts.enumerated() {
@@ -1269,9 +1273,6 @@ struct ReadingView: View {
                     if i == 0 {
                         if !p.isEmpty { finalParagraphs.append(p) }
                     } else {
-                        // 提取 URL 部分（到下一个空白或结尾）
-                        // 由于之前我们用 \n__IMG__url\n 格式，通常这里会包含完整的 URL
-                        // 我们寻找第一个潜在的杂质字符
                         let urlAndText = part
                         let urlParts = urlAndText.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
                         let url = String(urlParts[0]).trimmingCharacters(in: .whitespaces)
@@ -2293,36 +2294,81 @@ private struct RichTextView: View {
 }
 
 private struct MangaImageView: View {
+
     let url: String
+
     let referer: String?
+
     @EnvironmentObject var apiService: APIService
+
     @StateObject private var preferences = UserPreferences.shared
+
     private let logger = LogManager.shared
+
     
+
     var body: some View {
+
         let finalURL = resolveURL(url)
-        ZoomableScrollView {
-            RemoteImageView(url: finalURL, refererOverride: referer)
-                .onAppear {
-                    if preferences.isVerboseLoggingEnabled {
-                        let logReferer = referer?.replacingOccurrences(of: "http://", with: "https://") ?? "无"
-                        logger.log("准备加载图片: \(finalURL?.lastPathComponent ?? "无效"), 来源: \(logReferer)", category: "漫画调试")
-                    }
+
+        
+
+        Group {
+
+            if preferences.readingMode == .vertical {
+
+                // 垂直模式：禁用单独缩放，确保全宽显示
+
+                RemoteImageView(url: finalURL, refererOverride: referer)
+
+                    .frame(maxWidth: .infinity)
+
+            } else {
+
+                // 水平翻页模式：保留缩放，适应屏幕
+
+                ZoomableScrollView {
+
+                    RemoteImageView(url: finalURL, refererOverride: referer)
+
                 }
+
+            }
+
         }
-        .frame(maxWidth: .infinity)
-        // 给一个初始高度估计值，或者根据图片比例动态调整
-        .frame(minHeight: 300) 
+
+        .onAppear {
+
+            if preferences.isVerboseLoggingEnabled {
+
+                let logReferer = referer?.replacingOccurrences(of: "http://", with: "https://") ?? "无"
+
+                logger.log("准备加载图片: \(finalURL?.lastPathComponent ?? "无效"), 来源: \(logReferer)", category: "漫画调试")
+
+            }
+
+        }
+
     }
+
     
+
     private func resolveURL(_ original: String) -> URL? {
+
         if original.hasPrefix("http") {
+
             return URL(string: original)
+
         }
+
         let baseURL = apiService.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "")
+
         let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
+
         return URL(string: resolved)
+
     }
+
 }
 
 // MARK: - Zoomable ScrollView for Manga
@@ -2762,9 +2808,11 @@ private struct ReaderOptionsSheet: View {
                     .padding(.vertical, 4)
                     
                     Toggle("听书时锁定翻页", isOn: $preferences.lockPageOnTTS)
-                    
+                }
+                
+                Section(header: Text("漫画/图片加载")) {
                     Toggle("强制服务器代理", isOn: $preferences.forceMangaProxy)
-                    Text("如果漫画图片无法加载，请尝试开启此项")
+                    Text("如果图片无法加载（403拒绝等），请开启此项由服务器中转")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }

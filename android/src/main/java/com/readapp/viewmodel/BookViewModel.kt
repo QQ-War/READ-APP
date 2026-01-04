@@ -1327,6 +1327,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val finalParagraphs = mutableListOf<String>()
         
         for (line in lines) {
+            // 过滤：如果一段内容仅仅是 URL 且没有识别标记，说明是 HTML 剥离后的杂质
+            if (line.lowercase().startsWith("http") && !line.contains("__IMG__")) {
+                continue
+            }
+
             if (line.contains("__IMG__")) {
                 // 更细致地分割，处理同行有文字和图片的情况
                 val parts = line.split("__IMG__")
