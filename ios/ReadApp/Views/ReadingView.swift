@@ -206,14 +206,22 @@ struct ReadingView: View {
         // 3. 或者内容中包含图片且段落总数较少（说明是图集）
         // 4. 或者图片占比超过 10%
         if let url = book.bookUrl, preferences.manualMangaUrls.contains(url) {
+            if preferences.isVerboseLoggingEnabled { logger.log("触发漫画模式: 手动标记为漫画", category: "漫画调试") }
             return true
         }
         
         let imageCount = contentSentences.filter { $0.hasPrefix("__IMG__") }.count
-        guard imageCount > 0 else { return false }
+        if imageCount > 0 {
+            let ratio = Double(imageCount) / Double(contentSentences.count)
+            let isManga = book.type == 2 || contentSentences.count < 50 || ratio > 0.1
+            
+            if preferences.isVerboseLoggingEnabled {
+                logger.log("判定漫画模式: 图片数=\(imageCount), 总段落=\(contentSentences.count), 比例=\(String(format: "%.2f", ratio)), 结果=\(isManga)", category: "漫画调试")
+            }
+            return isManga
+        }
         
-        let ratio = Double(imageCount) / Double(contentSentences.count)
-        return book.type == 2 || contentSentences.count < 50 || ratio > 0.1
+        return false
     }
 
     private struct PaginationKey: Hashable {
@@ -1176,6 +1184,10 @@ struct ReadingView: View {
     }
 
     private func removeHTMLAndSVG(_ text: String) -> String {
+        if preferences.isVerboseLoggingEnabled {
+            logger.log("开始处理内容，原始长度: \(text.count)", category: "漫画调试")
+        }
+        
         var result = text
         // 移除脚本和样式
         result = result.replacingOccurrences(of: "<script[^>]*>.*?</script>", with: "", options: [.regularExpression, .caseInsensitive])
@@ -1183,10 +1195,27 @@ struct ReadingView: View {
         // 移除 SVG
         result = result.replacingOccurrences(of: "<svg[^>]*>.*?</svg>", with: "", options: [.regularExpression, .caseInsensitive])
         
-        // 增强的图片解析正则：提取 src 内容
-        // 兼容: <img src="url">, <img src='url'>, <img src=url>, <img data-src="url"> 等
+        // 增强的图片解析正则
         let imgPattern = "<img[^>]+(?:src|data-src)\\s*=\\s*[\"']?([^\"'\\s>]+)[\"']?[^>]*>"
         if let regex = try? NSRegularExpression(pattern: imgPattern, options: .caseInsensitive) {
+            let nsString = result as NSString
+            let matches = regex.matches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count))
+            
+            if preferences.isVerboseLoggingEnabled {
+                logger.log("找到 \(matches.count) 个 img 标签", category: "漫画调试")
+            }
+            
+            // 反向遍历替换，防止索引错乱
+            var offset = 0
+            for match in matches {
+                if let urlRange = Range(match.range(at: 1), in: result) {
+                    let url = String(result[urlRange])
+                    if preferences.isVerboseLoggingEnabled {
+                        logger.log("解析到图片 URL: \(url)", category: "漫画调试")
+                    }
+                }
+            }
+            
             let range = NSRange(location: 0, length: result.utf16.count)
             result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "\n__IMG__$1\n")
         }
@@ -2161,6 +2190,8 @@ private struct RichTextView: View {
 private struct MangaImageView: View {
     let url: String
     @EnvironmentObject var apiService: APIService
+    @StateObject private var preferences = UserPreferences.shared
+    private let logger = LogManager.shared
     
     var body: some View {
         let finalURL = resolveURL(url)
@@ -2173,11 +2204,21 @@ private struct MangaImageView: View {
                     Spacer()
                 }
                 .frame(minHeight: 200)
+                .onAppear {
+                    if preferences.isVerboseLoggingEnabled {
+                        logger.log("正在加载图片: \(finalURL?.absoluteString ?? "无效URL")", category: "漫画调试")
+                    }
+                }
             case .success(let image):
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: .infinity)
+                    .onAppear {
+                        if preferences.isVerboseLoggingEnabled {
+                            logger.log("图片加载成功: \(url.prefix(30))...", category: "漫画调试")
+                        }
+                    }
             case .failure(let error):
                 VStack(spacing: 8) {
                     Image(systemName: "photo.fill")
@@ -2194,6 +2235,11 @@ private struct MangaImageView: View {
                 .frame(minHeight: 150)
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(8)
+                .onAppear {
+                    if preferences.isVerboseLoggingEnabled {
+                        logger.log("图片加载失败: \(error.localizedDescription), URL: \(finalURL?.absoluteString ?? "无效")", category: "漫画调试")
+                    }
+                }
             @unknown default:
                 EmptyView()
             }
@@ -2207,10 +2253,18 @@ private struct MangaImageView: View {
         
         // 尝试补全相对路径
         let baseURL = apiService.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "")
+        let resolved: String
         if original.hasPrefix("/") {
-            return URL(string: baseURL + original)
+            resolved = baseURL + original
+        } else {
+            resolved = baseURL + "/" + original
         }
-        return URL(string: baseURL + "/" + original)
+        
+        if preferences.isVerboseLoggingEnabled {
+            logger.log("补全相对路径: \(original) -> \(resolved)", category: "漫画调试")
+        }
+        
+        return URL(string: resolved)
     }
 }
 

@@ -326,6 +326,13 @@ class UserPreferences: ObservableObject {
         }
     }
     
+    /// 是否开启详细日志（用于调试漫画等问题）
+    @Published var isVerboseLoggingEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isVerboseLoggingEnabled, forKey: "isVerboseLoggingEnabled")
+        }
+    }
+    
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex)
     private var ttsProgress: [String: (Int, Int)] {
         get {
@@ -406,6 +413,8 @@ class UserPreferences: ObservableObject {
         
         let savedManualMangaUrls = UserDefaults.standard.stringArray(forKey: "manualMangaUrls") ?? []
         self.manualMangaUrls = Set(savedManualMangaUrls)
+        
+        self.isVerboseLoggingEnabled = UserDefaults.standard.bool(forKey: "isVerboseLoggingEnabled")
         
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 100.0 : savedSpeechRate

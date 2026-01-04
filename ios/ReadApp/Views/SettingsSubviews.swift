@@ -353,6 +353,7 @@ struct ContentSettingsView: View {
 
 struct DebugSettingsView: View {
     @EnvironmentObject var apiService: APIService
+    @StateObject private var preferences = UserPreferences.shared
     @State private var showShareSheet = false
     @State private var logFileURL: URL?
     @State private var showClearLogsAlert = false
@@ -361,6 +362,13 @@ struct DebugSettingsView: View {
 
     var body: some View {
         Form {
+            Section(header: Text("调试选项")) {
+                Toggle("详细日志模式", isOn: $preferences.isVerboseLoggingEnabled)
+                Text("开启后将记录更详细的内容解析与图片加载过程")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
             Section(header: Text("日志")) {
                 HStack {
                     Text("日志记录")
