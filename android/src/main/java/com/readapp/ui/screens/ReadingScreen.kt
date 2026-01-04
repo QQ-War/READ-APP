@@ -502,7 +502,7 @@ fun ReadingScreen(
                                             text = text,
                                             style = style,
                                             color = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.padding(pagePadding)
+                                            modifier = Modifier.fillMaxSize().padding(pagePadding)
                                         )
                                     }
                                 }

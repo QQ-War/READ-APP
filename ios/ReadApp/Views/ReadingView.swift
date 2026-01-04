@@ -2032,7 +2032,10 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
         let isImage = content.hasPrefix("__IMG__")
         let view: AnyView
         if isImage {
-            view = AnyView(MangaImageView(url: String(content.dropFirst(7)), referer: chapterUrl).padding(4))
+            view = AnyView(
+                MangaImageView(url: String(content.dropFirst(7)), referer: chapterUrl)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity) // 强制撑满
+            )
         } else {
             view = AnyView(
                 Text(content)
@@ -2049,6 +2052,10 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
         self.addChild(hostingController)
         self.view.addSubview(hostingController.view)
         hostingController.didMove(toParent: self)
+        
+        // 确保子视图也撑满
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = true
+        hostingController.view.frame = self.view.bounds
         
         // 添加点击手势透传
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
@@ -2308,50 +2315,29 @@ private struct MangaImageView: View {
 
     
 
-    var body: some View {
-
-        let finalURL = resolveURL(url)
-
-        
-
-        Group {
-
-            if preferences.readingMode == .vertical {
-
-                // 垂直模式：禁用单独缩放，确保全宽显示
-
-                RemoteImageView(url: finalURL, refererOverride: referer)
-
-                    .frame(maxWidth: .infinity)
-
-            } else {
-
-                // 水平翻页模式：保留缩放，适应屏幕
-
-                ZoomableScrollView {
-
+        var body: some View {
+            let finalURL = resolveURL(url)
+            
+            Group {
+                if preferences.readingMode == .vertical {
+                    // 垂直模式：禁用单独缩放，确保全宽显示
                     RemoteImageView(url: finalURL, refererOverride: referer)
-
+                        .frame(maxWidth: .infinity)
+                } else {
+                    // 水平翻页模式：保留缩放，强制占满全屏空间
+                    ZoomableScrollView {
+                        RemoteImageView(url: finalURL, refererOverride: referer)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-
             }
-
-        }
-
-        .onAppear {
-
-            if preferences.isVerboseLoggingEnabled {
-
-                let logReferer = referer?.replacingOccurrences(of: "http://", with: "https://") ?? "无"
-
-                logger.log("准备加载图片: \(finalURL?.lastPathComponent ?? "无效"), 来源: \(logReferer)", category: "漫画调试")
-
+            .onAppear {
+                if preferences.isVerboseLoggingEnabled {
+                    let logReferer = referer?.replacingOccurrences(of: "http://", with: "https://") ?? "无"
+                    logger.log("准备加载图片: \(finalURL?.lastPathComponent ?? "无效"), 来源: \(logReferer)", category: "漫画调试")
+                }
             }
-
         }
-
-    }
-
     
 
     private func resolveURL(_ original: String) -> URL? {
