@@ -785,6 +785,8 @@ fun ReadingScreen(
                 onPageTurningModeChange = onPageTurningModeChange,
                 isDarkMode = isDarkMode,
                 onDarkModeChange = onDarkModeChange,
+                forceMangaProxy = forceMangaProxy,
+                onForceMangaProxyChange = onForceMangaProxyChange,
                 onDismiss = { showFontDialog = false }
             )
         }
@@ -837,6 +839,14 @@ private fun ParagraphItem(
                 chapterUrl?.replace("http://", "https://")?.let {
                     if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
                 }
+            }
+
+            val proxyUrl = remember(finalUrl, serverUrl) {
+                android.net.Uri.parse(serverUrl).buildUpon()
+                    .path("api/5/proxypng")
+                    .appendQueryParameter("url", finalUrl)
+                    .appendQueryParameter("accessToken", "")
+                    .build().toString()
             }
 
             var currentRequestUrl by remember(finalUrl, forceProxy) { 
@@ -1434,6 +1444,8 @@ private fun FontSizeDialog(
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit,
     isDarkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit,
+    forceMangaProxy: Boolean,
+    onForceMangaProxyChange: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     ReaderOptionsDialog(
