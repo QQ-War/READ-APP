@@ -2294,22 +2294,26 @@ struct RemoteImageView: View {
         var request = URLRequest(url: targetURL)
         request.timeoutInterval = 15
         request.httpShouldHandleCookies = true
+        request.cachePolicy = .returnCacheDataElseLoad
         
-        // 模拟更真实的 iOS Safari 请求头
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        // 1:1 模拟真实移动端浏览器请求头
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
         request.setValue("image/webp,image/avif,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
-        request.setValue("zh-CN,zh;q=0.9", forHTTPHeaderField: "Accept-Language")
+        request.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
         request.setValue("no-cors", forHTTPHeaderField: "Sec-Fetch-Mode")
         request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
         request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
         
-        // 设置 Referer
+        // 关键：Referer 镜像策略 (对标日志中的行为)
         if let customReferer = refererOverride, !customReferer.isEmpty {
             request.setValue(customReferer, forHTTPHeaderField: "Referer")
-        } else if let host = targetURL.host, host.contains("kkmh") || host.contains("kuaikan") {
-            request.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
         } else if let host = targetURL.host {
-            request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
+            if host.contains("kkmh") || host.contains("kuaikan") {
+                request.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
+            } else {
+                request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
+            }
         }
 
         URLSession.shared.dataTask(with: request) { data, response, error in
@@ -2318,20 +2322,24 @@ struct RemoteImageView: View {
                    let data = data, !data.isEmpty, let loadedImage = UIImage(data: data) {
                     self.image = loadedImage
                     self.isLoading = false
-                    if preferences.isVerboseLoggingEnabled { logger.log("图片加载成功\(useProxy ? "(通过代理)" : ""): \(targetURL.lastPathComponent)", category: "漫画调试") }
+                    if preferences.isVerboseLoggingEnabled { logger.log("图片加载成功: \(targetURL.lastPathComponent)", category: "漫画调试") }
                     return
                 }
 
                 // 如果直接加载失败 (403/404/错误)，且还没试过代理，则尝试服务器代理
-                if !useProxy, let proxyURL = buildProxyURL(for: targetURL) {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if !useProxy && (code == 403 || code == 404 || error != nil), 
+                   let proxyURL = buildProxyURL(for: targetURL) {
                     if preferences.isVerboseLoggingEnabled {
-                        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
                         logger.log("直接请求失败(Code:\(code))，尝试代理...", category: "漫画调试")
                     }
                     self.fetchImage(from: proxyURL, useProxy: true)
                 } else {
                     self.isLoading = false
-                    self.errorMessage = "加载失败"
+                    self.errorMessage = code == 403 ? "403 禁止访问" : "加载失败"
+                    if preferences.isVerboseLoggingEnabled {
+                        logger.log("图片彻底加载失败 (Proxy:\(useProxy), Code:\(code))", category: "漫画调试")
+                    }
                 }
             }
         }.resume()
