@@ -202,6 +202,7 @@ struct ReadingView: View {
     @State private var pageTurnRequest: PageTurnRequest? = nil
     @State private var isExplicitlySwitchingChapter = false
     @State private var currentChapterIsManga = false
+    @State private var lastEffectiveMode: ReadingMode? = nil
 
     private struct PaginationKey: Hashable {
         let width: Int
@@ -248,6 +249,11 @@ struct ReadingView: View {
         _initialServerChapterIndex = State(initialValue: serverIndex)
     }
 
+    private var effectiveReadingMode: ReadingMode {
+        if currentChapterIsManga { return .vertical }
+        return preferences.readingMode
+    }
+
     // MARK: - Body
     var body: some View {
         NavigationView {
@@ -256,15 +262,6 @@ struct ReadingView: View {
                     backgroundView
                     mainContent(safeArea: proxy.safeAreaInsets)
                     
-                    // 紧急控制层：确保在任何情况下都能唤起菜单返回
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .frame(width: proxy.size.width * 0.4, height: proxy.size.height * 0.6)
-                        .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-                        .onTapGesture {
-                            withAnimation { showUIControls.toggle() }
-                        }
-
                     if showUIControls {
                         topBar(safeArea: proxy.safeAreaInsets)
                             .transition(.move(edge: .top).combined(with: .opacity))
@@ -281,6 +278,39 @@ struct ReadingView: View {
             .navigationBarBackButtonHidden(true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .onChange(of: effectiveReadingMode) { newMode in
+            guard let oldMode = lastEffectiveMode, oldMode != newMode else {
+                lastEffectiveMode = newMode
+                return
+            }
+            
+            // 执行进度同步
+            if oldMode == .vertical && newMode == .horizontal {
+                // 垂直 -> 水平：找到当前看到的段落，跳转到包含该段落的页
+                if let targetSentence = currentVisibleSentenceIndex {
+                    let pStarts = currentCache.paragraphStarts
+                    let prefixLen = currentCache.chapterPrefixLen
+                    if targetSentence < pStarts.count {
+                        let charOffset = pStarts[targetSentence] + prefixLen
+                        if let pageIdx = currentCache.pages.firstIndex(where: { NSLocationInRange(charOffset, $0.globalRange) }) {
+                            self.currentPageIndex = pageIdx
+                            self.pageTurnRequest = PageTurnRequest(direction: .forward, animated: false, targetIndex: pageIdx)
+                        }
+                    }
+                }
+            } else if oldMode == .horizontal && newMode == .vertical {
+                // 水平 -> 垂直：获取当前页起始段落，滚动到该段落
+                if let targetSentence = pageStartSentenceIndex(for: currentPageIndex) {
+                    self.pendingScrollToSentenceIndex = targetSentence
+                    self.handlePendingScroll()
+                }
+            }
+            
+            lastEffectiveMode = newMode
+        }
+        .onAppear {
+            lastEffectiveMode = effectiveReadingMode
+        }
         .sheet(isPresented: $showChapterList) { ChapterListView(chapters: chapters, currentIndex: currentChapterIndex, bookUrl: book.bookUrl ?? "") { index in
             currentChapterIndex = index
             pendingJumpToFirstPage = true
@@ -314,25 +344,13 @@ struct ReadingView: View {
 
     @ViewBuilder
     private func mainContent(safeArea: EdgeInsets) -> some View {
-        ZStack {
-            // 基础阅读器层
-            Group {
-                if currentChapterIsManga {
-                    verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
-                } else if preferences.readingMode == .horizontal {
-                    horizontalReader(safeArea: safeArea)
-                } else {
-                    verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
-                }
+        // 基础阅读器层
+        Group {
+            if effectiveReadingMode == .horizontal {
+                horizontalReader(safeArea: safeArea)
+            } else {
+                verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
             }
-            
-            // 紧急控制层：确保在任何情况下都能唤起菜单返回
-            Color.black.opacity(0.001)
-                .frame(width: 150, height: 300)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation { showUIControls.toggle() }
-                }
         }
     }
     
@@ -369,24 +387,32 @@ struct ReadingView: View {
             geometry in
             ScrollViewReader {
                 proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // 置顶锚点
-                        Color.clear.frame(height: 1).id("top_marker")
-                        
-                        let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
-                        let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
-                        RichTextView(
-                            sentences: contentSentences,
-                            fontSize: preferences.fontSize,
-                            lineSpacing: preferences.lineSpacing,
-                            highlightIndex: primaryHighlight,
-                            secondaryIndices: secondaryHighlights,
-                            isPlayingHighlight: ttsManager.isPlaying,
-                            scrollProxy: scrollProxy,
-                            chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
-                        )
-                        .padding(.horizontal, currentChapterIsManga ? 0 : preferences.pageHorizontalMargin)
+                // 全局缩放容器：允许对整个章节进行双指缩放
+                ZoomableScrollView {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // 置顶锚点
+                            Color.clear.frame(height: 1).id("top_marker")
+                            
+                            let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
+                            let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
+                            
+                            RichTextView(
+                                sentences: contentSentences,
+                                fontSize: preferences.fontSize,
+                                lineSpacing: preferences.lineSpacing,
+                                highlightIndex: primaryHighlight,
+                                secondaryIndices: secondaryHighlights,
+                                isPlayingHighlight: ttsManager.isPlaying,
+                                scrollProxy: scrollProxy,
+                                chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
+                            )
+                            .padding(.horizontal, currentChapterIsManga ? 0 : preferences.pageHorizontalMargin)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation { showUIControls.toggle() }
+                        }
                     }
                 }
                 .id("v_reader_scroll_\(currentChapterIndex)") // 强制刷新视图防止内容卡死
