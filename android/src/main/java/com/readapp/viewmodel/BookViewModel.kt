@@ -193,6 +193,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val preferredSearchSourceUrls: StateFlow<Set<String>> = _preferredSearchSourceUrls.asStateFlow()
     private val _manualMangaUrls = MutableStateFlow<Set<String>>(emptySet())
     val manualMangaUrls: StateFlow<Set<String>> = _manualMangaUrls.asStateFlow()
+    private val _forceMangaProxy = MutableStateFlow(false)
+    val forceMangaProxy: StateFlow<Boolean> = _forceMangaProxy.asStateFlow()
     private val _readingMode = MutableStateFlow(com.readapp.data.ReadingMode.Vertical)
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = _readingMode.asStateFlow()
     private val _lockPageOnTTS = MutableStateFlow(false)
@@ -252,6 +254,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
             val mUrls = preferences.manualMangaUrls.first()
             _manualMangaUrls.value = if (mUrls.isBlank()) emptySet() else mUrls.split(";").toSet()
+            _forceMangaProxy.value = preferences.forceMangaProxy.first()
             _readingMode.value = preferences.readingMode.first()
             _lockPageOnTTS.value = preferences.lockPageOnTTS.first()
             _pageTurningMode.value = preferences.pageTurningMode.first()
@@ -1406,6 +1409,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         if (current.contains(url)) current.remove(url) else current.add(url)
         _manualMangaUrls.value = current
         viewModelScope.launch { preferences.saveManualMangaUrls(current.joinToString(";")) }
+    }
+    fun updateForceMangaProxy(enabled: Boolean) {
+        _forceMangaProxy.value = enabled
+        viewModelScope.launch { preferences.saveForceMangaProxy(enabled) }
     }
     fun clearCache() {
         viewModelScope.launch {

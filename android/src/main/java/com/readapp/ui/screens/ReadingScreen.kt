@@ -96,6 +96,8 @@ fun ReadingScreen(
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit = {},
     isDarkMode: Boolean = false,
     onDarkModeChange: (Boolean) -> Unit = {},
+    forceMangaProxy: Boolean = false,
+    onForceMangaProxyChange: (Boolean) -> Unit = {},
     manualMangaUrls: Set<String> = emptySet(),
     serverUrl: String = "",
     modifier: Modifier = Modifier
@@ -258,7 +260,9 @@ fun ReadingScreen(
                                 isPlaying = index == currentPlayingParagraph,
                                 isPreloaded = preloadedParagraphs.contains(index),
                                 fontSize = readingFontSize,
+                                chapterUrl = currentChapterUrl,
                                 serverUrl = serverUrl,
+                                forceProxy = forceMangaProxy,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(bottom = AppDimens.PaddingMedium)
@@ -394,21 +398,51 @@ fun ReadingScreen(
                                         if (imgUrl.startsWith("/")) "$base$imgUrl" else "$base/$imgUrl"
                                     }
                                 }
+                                
+                                val finalReferer = remember(currentChapterUrl) {
+                                    currentChapterUrl?.replace("http://", "https://")?.let {
+                                        if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
+                                    }
+                                }
+
+                                val proxyUrl = remember(finalUrl, serverUrl) {
+                                    if (finalUrl == null) null
+                                    else android.net.Uri.parse(serverUrl).buildUpon()
+                                        .path("api/5/proxypng")
+                                        .appendQueryParameter("url", finalUrl)
+                                        .appendQueryParameter("accessToken", "")
+                                        .build().toString()
+                                }
+
+                                var currentRequestUrl by remember(finalUrl, forceMangaProxy) { 
+                                    mutableStateOf(if (forceMangaProxy) proxyUrl else finalUrl) 
+                                }
+                                var hasTriedProxy by remember(finalUrl, forceMangaProxy) { 
+                                    mutableStateOf(forceMangaProxy) 
+                                }
 
                                 Box(
                                     modifier = Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (finalUrl != null) {
-                                        val imageRequest = remember(finalUrl) {
+                                    if (currentRequestUrl != null) {
+                                        val imageRequest = remember(currentRequestUrl, finalReferer) {
                                             coil.request.ImageRequest.Builder(context)
-                                                .data(finalUrl)
+                                                .data(currentRequestUrl)
                                                 .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
                                                 .apply {
-                                                    android.net.Uri.parse(finalUrl).host?.let { host ->
-                                                        addHeader("Referer", "https://$host/")
+                                                    if (finalReferer != null) {
+                                                        addHeader("Referer", finalReferer)
                                                     }
                                                 }
+                                                .listener(
+                                                    onError = { _, _ ->
+                                                        if (!hasTriedProxy && proxyUrl != null) {
+                                                            currentRequestUrl = proxyUrl
+                                                            hasTriedProxy = true
+                                                        }
+                                                    }
+                                                )
                                                 .crossfade(true)
                                                 .build()
                                         }
@@ -756,6 +790,7 @@ private fun ParagraphItem(
     fontSize: Float,
     chapterUrl: String?,
     serverUrl: String,
+    forceProxy: Boolean,
     modifier: Modifier = Modifier
 ) {
     val backgroundColor = when {
@@ -776,6 +811,7 @@ private fun ParagraphItem(
 
         if (imgUrl != null) {
             val context = androidx.compose.ui.platform.LocalContext.current
+            // 构造基础 URL 和代理 URL
             val finalUrl = remember(imgUrl, serverUrl) {
                 if (imgUrl.startsWith("http")) imgUrl
                 else {
@@ -784,15 +820,20 @@ private fun ParagraphItem(
                 }
             }
             
-            // 构造 Referer：强制 HTTPS，对标 iOS 逻辑
-            val finalReferer = remember(chapterUrl) {
-                chapterUrl?.replace("http://", "https://")?.let {
-                    if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
-                }
+            val proxyUrl = remember(finalUrl, serverUrl) {
+                android.net.Uri.parse(serverUrl).buildUpon()
+                    .path("api/5/proxypng")
+                    .appendQueryParameter("url", finalUrl)
+                    .appendQueryParameter("accessToken", "")
+                    .build().toString()
             }
 
-            var currentRequestUrl by remember(finalUrl) { mutableStateOf(finalUrl) }
-            var useProxy by remember(finalUrl) { mutableStateOf(false) }
+            var currentRequestUrl by remember(finalUrl, forceProxy) { 
+                mutableStateOf(if (forceProxy) proxyUrl else finalUrl) 
+            }
+            var hasTriedProxy by remember(finalUrl, forceProxy) { 
+                mutableStateOf(forceProxy) 
+            }
 
             val imageRequest = remember(currentRequestUrl, finalReferer) {
                 coil.request.ImageRequest.Builder(context)
@@ -1286,6 +1327,8 @@ private fun ReaderOptionsDialog(
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit,
     isDarkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit,
+    forceMangaProxy: Boolean,
+    onForceMangaProxyChange: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1300,6 +1343,18 @@ private fun ReaderOptionsDialog(
                 ) {
                     Text("夜间模式", modifier = Modifier.weight(1f))
                     Switch(checked = isDarkMode, onCheckedChange = onDarkModeChange)
+                }
+
+                // 强制代理
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable { onForceMangaProxyChange(!forceMangaProxy) }
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("强制服务器代理")
+                        Text("如果漫画无法加载，请开启此项", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    Switch(checked = forceMangaProxy, onCheckedChange = onForceMangaProxyChange)
                 }
 
                 Divider()
@@ -1391,6 +1446,8 @@ private fun FontSizeDialog(
         onPageTurningModeChange = onPageTurningModeChange,
         isDarkMode = isDarkMode,
         onDarkModeChange = onDarkModeChange,
+        forceMangaProxy = forceMangaProxy,
+        onForceMangaProxyChange = onForceMangaProxyChange,
         onDismiss = onDismiss
     )
 }

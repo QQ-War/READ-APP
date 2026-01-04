@@ -332,6 +332,13 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(isVerboseLoggingEnabled, forKey: "isVerboseLoggingEnabled")
         }
     }
+
+    /// 是否强制使用服务器代理加载漫画图片
+    @Published var forceMangaProxy: Bool {
+        didSet {
+            UserDefaults.standard.set(forceMangaProxy, forKey: "forceMangaProxy")
+        }
+    }
     
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex)
     private var ttsProgress: [String: (Int, Int)] {
@@ -415,6 +422,7 @@ class UserPreferences: ObservableObject {
         self.manualMangaUrls = Set(savedManualMangaUrls)
         
         self.isVerboseLoggingEnabled = UserDefaults.standard.bool(forKey: "isVerboseLoggingEnabled")
+        self.forceMangaProxy = UserDefaults.standard.bool(forKey: "forceMangaProxy")
         
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 100.0 : savedSpeechRate

@@ -171,6 +171,7 @@ fun ReadAppMain() {
                 val lockPageOnTTS by bookViewModel.lockPageOnTTS.collectAsState()
                 val pageTurningMode by bookViewModel.pageTurningMode.collectAsState()
                 val isDarkMode by bookViewModel.isDarkMode.collectAsState()
+                val forceMangaProxy by bookViewModel.forceMangaProxy.collectAsState()
                 val manualMangaUrls by bookViewModel.manualMangaUrls.collectAsState()
                 val serverUrl by bookViewModel.serverAddress.collectAsState()
 
@@ -200,6 +201,8 @@ fun ReadAppMain() {
                         onPageTurningModeChange = { bookViewModel.updatePageTurningMode(it) },
                         isDarkMode = isDarkMode,
                         onDarkModeChange = { bookViewModel.updateDarkMode(it) },
+                        forceMangaProxy = forceMangaProxy,
+                        onForceMangaProxyChange = { bookViewModel.updateForceMangaProxy(it) },
                         manualMangaUrls = manualMangaUrls,
                         serverUrl = serverUrl,
                         onClearError = { bookViewModel.clearError() },

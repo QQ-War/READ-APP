@@ -202,19 +202,19 @@ struct ReadingView: View {
     @State private var pageTurnRequest: PageTurnRequest? = nil
 
     private var isMangaMode: Bool {
-        // 漫画模式判定：
-        // 1. 书籍被手动标记为漫画
-        // 2. 书籍类型明确标记为漫画 (2)
-        // 3. 或者内容中包含图片且段落总数较少（说明是图集）
-        // 4. 或者图片占比超过 10%
-        if let url = book.bookUrl, preferences.manualMangaUrls.contains(url) {
-            return true
-        }
+        // 漫画模式判定（对标 legado.koplugin 分类逻辑）
+        // 1. 手动强制
+        if let url = book.bookUrl, preferences.manualMangaUrls.contains(url) { return true }
+        // 2. 纯图片章节 (内容极短且包含图片占位符)
+        if rawContent.count < 500 && rawContent.contains("__IMG__") { return true }
+        // 3. 漫画书类型 (2)
+        if book.type == 2 { return true }
         
         let imageCount = contentSentences.filter { $0.hasPrefix("__IMG__") }.count
         if imageCount > 0 {
             let ratio = Double(imageCount) / Double(contentSentences.count)
-            return book.type == 2 || contentSentences.count < 50 || ratio > 0.1
+            // 4. 高密度图片 (15% 以上)
+            return ratio > 0.15
         }
         
         return false
@@ -2310,7 +2310,13 @@ struct RemoteImageView: View {
         isLoading = true
         errorMessage = nil
 
-        fetchImage(from: url, useProxy: false)
+        // 如果开启了强制代理，则直接跳过直接请求，进入代理逻辑
+        if preferences.forceMangaProxy, let proxyURL = buildProxyURL(for: url) {
+            if preferences.isVerboseLoggingEnabled { logger.log("开启强制代理模式，直接中转...", category: "漫画调试") }
+            fetchImage(from: proxyURL, useProxy: true)
+        } else {
+            fetchImage(from: url, useProxy: false)
+        }
     }
 
         private func fetchImage(from targetURL: URL, useProxy: Bool) {
