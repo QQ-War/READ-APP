@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import SDWebImage
 
 struct MangaNativeReader: UIViewRepresentable {
     let sentences: [String]
@@ -116,13 +115,18 @@ struct MangaNativeReader: UIViewRepresentable {
                     ])
                     
                     if let url = URL(string: urlString) {
-                        imageView.sd_setImage(with: url) { [weak imageView, weak heightConstraint] image, _, _, _ in
-                            guard let image = image, let iv = imageView, let hc = heightConstraint else { return }
-                            let ratio = image.size.height / image.size.width
-                            hc.isActive = false
-                            iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
-                            iv.layoutIfNeeded()
-                        }
+                        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 30)
+                        URLSession.shared.dataTask(with: request) { [weak imageView, weak heightConstraint] data, _, _ in
+                            guard let data = data, let image = UIImage(data: data),
+                                  let iv = imageView, let hc = heightConstraint else { return }
+                            DispatchQueue.main.async {
+                                iv.image = image
+                                let ratio = image.size.height / image.size.width
+                                hc.isActive = false
+                                iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
+                                iv.layoutIfNeeded()
+                            }
+                        }.resume()
                     }
                     stack.addArrangedSubview(container)
                 } else {
