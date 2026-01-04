@@ -363,9 +363,18 @@ fun ReadingScreen(
                     }
 
                     val pageTextCache = remember { mutableStateMapOf<Int, AnnotatedString>() }
-                    val pagerState = rememberPagerState(key = { contentKey }) { 
-                        if (isMangaMode) paragraphs.size.coerceAtLeast(1)
-                        else paginatedPages.pages.size.coerceAtLeast(1) 
+                    val pagerState = rememberPagerState(
+                        initialPage = 0,
+                        pageCount = {
+                            if (isMangaMode) {
+                                paragraphs.size.coerceAtLeast(1)
+                            } else {
+                                paginatedPages.pages.size.coerceAtLeast(1)
+                            }
+                        }
+                    )
+                    LaunchedEffect(contentKey) {
+                        pagerState.scrollToPage(0)
                     }
                     
                     resolveCurrentPageStart = {
@@ -569,7 +578,9 @@ fun ReadingScreen(
                         LaunchedEffect(pagerState, paginatedPages, isPlaying, lockPageOnTTS) {
                             snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
                                 .distinctUntilChanged()
-                                .collect { (page, isScrolling) ->
+                                .collect { pair ->
+                                    val page = pair.first
+                                    val isScrolling = pair.second
                                     val pageInfo = paginatedPages.getOrNull(page)
                                     if (pageInfo != null) {
                                         currentPageStartIndex = pageInfo.startParagraphIndex
@@ -640,7 +651,7 @@ fun ReadingScreen(
                             }
                             val current = pagerState.currentPage
                             val indices = listOf(current - 1, current, current + 1)
-                                .filter { it in paginatedPages.indices }
+                                .filter { index -> index in paginatedPages.indices }
                                 .toSet()
                             for (index in indices) {
                                 if (!pageTextCache.containsKey(index)) {
