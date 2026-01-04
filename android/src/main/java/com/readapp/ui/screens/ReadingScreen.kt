@@ -938,20 +938,6 @@ private fun ParagraphItem(
         }
     }
 }
-            // ... (rest of Text rendering unchanged)
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
-                color = MaterialTheme.colorScheme.onSurface,
-                lineHeight = (fontSize * 1.8f).sp,
-                modifier = Modifier.padding(
-                    horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp,
-                    vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp
-                )
-            )
-        }
-    }
-}
 
 
 
