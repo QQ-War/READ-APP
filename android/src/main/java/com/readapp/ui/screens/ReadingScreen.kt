@@ -154,8 +154,9 @@ fun ReadingScreen(
     }
 
     // 垂直模式切章置顶
-    LaunchedEffect(currentChapterIndex, displayContent) {
-        if (readingMode == com.readapp.data.ReadingMode.Vertical) {
+    LaunchedEffect(displayContent) {
+        if (readingMode == com.readapp.data.ReadingMode.Vertical && displayContent.isNotEmpty()) {
+            kotlinx.coroutines.delay(200) 
             scrollState.scrollToItem(0)
         }
     }
@@ -396,7 +397,7 @@ fun ReadingScreen(
                             if (isMangaMode) {
                                 val text = paragraphs.getOrNull(page) ?: ""
                                 val imgUrl = remember(text) {
-                                    val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s]+)["']?""".toRegex()
+                                    val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""".toRegex()
                                     pattern.find(text)?.groupValues?.get(1)
                                 }
                                 
@@ -815,14 +816,15 @@ private fun ParagraphItem(
         color = backgroundColor,
         shape = RoundedCornerShape(8.dp)
     ) {
+        // 改进的正则表达式：确保只提取 __IMG__ 标记后的 URL 部分
         val imgUrl = remember(text) {
-            val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s]+)["']?""".toRegex()
+            val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""".toRegex()
             pattern.find(text)?.groupValues?.get(1)
         }
 
         if (imgUrl != null) {
             val context = androidx.compose.ui.platform.LocalContext.current
-            // 构造基础 URL 和代理 URL
+            // ... (rest of image loading logic)
             val finalUrl = remember(imgUrl, serverUrl) {
                 if (imgUrl.startsWith("http")) imgUrl
                 else {
@@ -831,14 +833,6 @@ private fun ParagraphItem(
                 }
             }
             
-            val proxyUrl = remember(finalUrl, serverUrl) {
-                android.net.Uri.parse(serverUrl).buildUpon()
-                    .path("api/5/proxypng")
-                    .appendQueryParameter("url", finalUrl)
-                    .appendQueryParameter("accessToken", "")
-                    .build().toString()
-            }
-
             val finalReferer = remember(chapterUrl) {
                 chapterUrl?.replace("http://", "https://")?.let {
                     if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
@@ -852,35 +846,19 @@ private fun ParagraphItem(
                 mutableStateOf(forceProxy) 
             }
 
-            val imageRequest = remember(currentRequestUrl, finalReferer) {
-                coil.request.ImageRequest.Builder(context)
+            coil.compose.AsyncImage(
+                model = coil.request.ImageRequest.Builder(context)
                     .data(currentRequestUrl)
                     .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
-                    .apply {
-                        if (finalReferer != null) {
-                            addHeader("Referer", finalReferer)
+                    .apply { if (finalReferer != null) addHeader("Referer", finalReferer) }
+                    .listener(onError = { _, _ -> 
+                        if (!hasTriedProxy && proxyUrl != null) {
+                            currentRequestUrl = proxyUrl
+                            hasTriedProxy = true
                         }
-                    }
-                    .listener(
-                        onError = { _, _ ->
-                            // 如果直接请求失败且没用过代理，尝试切换代理
-                            if (!hasTriedProxy) {
-                                val proxyUrl = android.net.Uri.parse(serverUrl).buildUpon()
-                                    .path("api/5/proxypng")
-                                    .appendQueryParameter("url", finalUrl)
-                                    .appendQueryParameter("accessToken", "") // 会被拦截器自动填充
-                                    .build().toString()
-                                currentRequestUrl = proxyUrl
-                                hasTriedProxy = true
-                            }
-                        }
-                    )
+                    })
                     .crossfade(true)
-                    .build()
-            }
-
-            coil.compose.AsyncImage(
-                model = imageRequest,
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1362,16 +1340,22 @@ private fun ReaderOptionsDialog(
                     Switch(checked = isDarkMode, onCheckedChange = onDarkModeChange)
                 }
 
-                // 强制代理
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable { onForceMangaProxyChange(!forceMangaProxy) }
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("强制服务器代理")
-                        Text("如果漫画无法加载，请开启此项", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                Divider()
+
+                // 漫画高级设置
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("漫画设置", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { onForceMangaProxyChange(!forceMangaProxy) }
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("强制服务器代理", style = MaterialTheme.typography.bodyMedium)
+                            Text("如果图片加载失败（403等）请开启", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        }
+                        Switch(checked = forceMangaProxy, onCheckedChange = onForceMangaProxyChange)
                     }
-                    Switch(checked = forceMangaProxy, onCheckedChange = onForceMangaProxyChange)
                 }
 
                 Divider()

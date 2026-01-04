@@ -19,6 +19,7 @@ struct SourceListView: View {
     
     // 分组展开状态
     @State private var expandedGroups: Set<String> = []
+    @State private var sourceIdToEdit: String? = nil
 
     var groupedSources: [(key: String, value: [BookSource])] {
         let dict = Dictionary(grouping: viewModel.filteredSources) { $0.bookSourceGroup?.isEmpty == false ? $0.bookSourceGroup! : "未分组" }
@@ -26,9 +27,21 @@ struct SourceListView: View {
     }
 
     var body: some View {
-        sourceManagementView
-            .navigationTitle("书源管理")
-            .toolbar {
+        ZStack {
+            if let id = sourceIdToEdit {
+                NavigationLink(
+                    destination: SourceEditView(sourceId: id),
+                    isActive: Binding(
+                        get: { sourceIdToEdit != nil },
+                        set: { if !$0 { sourceIdToEdit = nil } }
+                    )
+                ) { EmptyView() }
+            }
+            
+            sourceManagementView
+        }
+        .navigationTitle("书源管理")
+        .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         NavigationLink(destination: SourceEditView()) {
@@ -180,26 +193,29 @@ struct SourceListView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 
-                Spacer()
-                
-                HStack(spacing: 16) {
+                // 右侧功能区：开关 + 编辑图标
+                HStack(spacing: 12) {
                     // 启用开关
                     Toggle("", isOn: Binding(
                         get: { source.enabled },
                         set: { _ in viewModel.toggleSource(source: source) }
                     ))
                     .labelsHidden()
-                    .scaleEffect(0.8)
+                    .scaleEffect(0.7)
                     
-                    // 右侧：点击进入编辑
-                    NavigationLink(destination: SourceEditView(sourceId: source.bookSourceUrl)) {
+                    // 右侧：点击进入编辑 (使用普通按钮，不占满宽度，防止触发 List 默认箭头)
+                    Button(action: { sourceIdToEdit = source.bookSourceUrl }) {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.secondary)
+                            .padding(.leading, 4)
                     }
+                    .buttonStyle(BorderlessButtonStyle())
                 }
+                .padding(.trailing, 4)
             }
             .padding(.vertical, 8)
+            .contentShape(Rectangle())
             
             if expandedSourceIds.contains(source.id) {
                 if loadingExploreIds.contains(source.id) {

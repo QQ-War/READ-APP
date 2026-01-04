@@ -1308,7 +1308,34 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         currentSentences = currentParagraphs
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
     }
-    private fun parseParagraphs(content: String): List<String> = content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+    private fun parseParagraphs(content: String): List<String> {
+        val lines = content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+        val finalParagraphs = mutableListOf<String>()
+        
+        for (line in lines) {
+            if (line.contains("__IMG__")) {
+                // 更细致地分割，处理同行有文字和图片的情况
+                val parts = line.split("__IMG__")
+                for ((index, part) in parts.withIndex()) {
+                    val p = part.trim()
+                    if (index == 0) {
+                        if (p.isNotEmpty()) finalParagraphs.add(p)
+                    } else {
+                        // 提取 URL 部分（假设 URL 后面跟着空格或直接结束）
+                        val urlParts = p.split(" ", limit = 2)
+                        val url = urlParts[0].trim()
+                        if (url.isNotEmpty()) finalParagraphs.add("__IMG__$url")
+                        if (urlParts.size > 1 && urlParts[1].trim().isNotEmpty()) {
+                            finalParagraphs.add(urlParts[1].trim())
+                        }
+                    }
+                }
+            } else {
+                finalParagraphs.add(line)
+            }
+        }
+        return finalParagraphs
+    }
     private fun cleanChapterContent(raw: String): String {
         if (raw.isBlank()) return ""
 

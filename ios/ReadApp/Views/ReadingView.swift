@@ -359,6 +359,14 @@ struct ReadingView: View {
                     }
                 }
                 .onPreferenceChange(SentenceFramePreferenceKey.self) { updateVisibleSentenceIndex(frames: $0, viewportHeight: geometry.size.height) }
+                .onChange(of: contentSentences) { _ in
+                    if preferences.readingMode == .vertical {
+                        // 章节内容变动后强制置顶
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            withAnimation { proxy.scrollTo(0, anchor: .top) }
+                        }
+                    }
+                }
                 .onAppear {
                     scrollProxy = proxy
                     handlePendingScroll()
@@ -1241,7 +1249,41 @@ struct ReadingView: View {
     }
     
     private func splitIntoParagraphs(_ text: String) -> [String] {
-        return text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        // 先按换行符拆分
+        let lines = text.components(separatedBy: "\n")
+        var finalParagraphs: [String] = []
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+            
+            // 进一步拆分，确保 __IMG__ 独立成行
+            // 使用正则拆分，保留分隔符
+            let parts = trimmed.components(separatedBy: "__IMG__")
+            if parts.count > 1 {
+                for (i, part) in parts.enumerated() {
+                    let p = part.trimmingCharacters(in: .whitespaces)
+                    if i == 0 {
+                        if !p.isEmpty { finalParagraphs.append(p) }
+                    } else {
+                        // 提取 URL 部分（到下一个空白或结尾）
+                        // 由于之前我们用 \n__IMG__url\n 格式，通常这里会包含完整的 URL
+                        // 我们寻找第一个潜在的杂质字符
+                        let urlAndText = part
+                        let urlParts = urlAndText.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
+                        let url = String(urlParts[0]).trimmingCharacters(in: .whitespaces)
+                        if !url.isEmpty { finalParagraphs.append("__IMG__" + url) }
+                        if urlParts.count > 1 {
+                            let remaining = String(urlParts[1]).trimmingCharacters(in: .whitespaces)
+                            if !remaining.isEmpty { finalParagraphs.append(remaining) }
+                        }
+                    }
+                }
+            } else {
+                finalParagraphs.append(trimmed)
+            }
+        }
+        return finalParagraphs
     }
     
     private func loadChapters() async {
@@ -2195,8 +2237,9 @@ private struct RichTextView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: fontSize * 0.8) {
             ForEach(Array(sentences.enumerated()), id: \.offset) { index, sentence in
-                if sentence.hasPrefix("__IMG__") {
-                    let urlString = String(sentence.dropFirst(7))
+                if sentence.contains("__IMG__") {
+                    // 提取第一个有效的 URL
+                    let urlString = extractImageUrl(from: sentence)
                     MangaImageView(url: urlString, referer: chapterUrl)
                         .id(index)
                         .padding(.vertical, 4)
@@ -2220,6 +2263,15 @@ private struct RichTextView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { scrollProxy.scrollTo(highlightIndex, anchor: .center) } }
             }
         }
+    }
+    
+    private func extractImageUrl(from text: String) -> String {
+        // 查找 __IMG__ 标记后的内容，直到遇到空格或结尾
+        guard let range = text.range(of: "__IMG__") else { return "" }
+        let urlPart = text[range.upperBound...]
+        // 提取连续的 URL 字符，遇到换行或空格停止
+        let url = urlPart.prefix { !$0.isWhitespace }
+        return String(url)
     }
 
     private func highlightColor(for index: Int) -> Color {
@@ -2645,6 +2697,11 @@ private struct ReaderOptionsSheet: View {
                     .padding(.vertical, 4)
                     
                     Toggle("听书时锁定翻页", isOn: $preferences.lockPageOnTTS)
+                    
+                    Toggle("强制服务器代理", isOn: $preferences.forceMangaProxy)
+                    Text("如果漫画图片无法加载，请尝试开启此项")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
             }
             .navigationTitle("阅读选项")
