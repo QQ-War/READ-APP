@@ -206,7 +206,7 @@ class APIService: ObservableObject {
     }
     
     // MARK: - 获取章节内容
-    func fetchChapterContent(bookUrl: String, bookSourceUrl: String?, index: Int) async throws -> String {
+    func fetchChapterContent(bookUrl: String, bookSourceUrl: String?, index: Int, contentType: Int = 0) async throws -> String {
         // 1. 优先尝试从本地磁盘缓存读取
         if let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
             return cachedContent
@@ -223,7 +223,7 @@ class APIService: ObservableObject {
             URLQueryItem(name: "accessToken", value: accessToken),
             URLQueryItem(name: "url", value: bookUrl),
             URLQueryItem(name: "index", value: "\(index)"),
-            URLQueryItem(name: "type", value: "0")
+            URLQueryItem(name: "type", value: "\(contentType)")
         ]
         if let bookSourceUrl = bookSourceUrl {
             queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))

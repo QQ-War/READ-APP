@@ -348,7 +348,8 @@ struct ReadingView: View {
                         highlightIndex: primaryHighlight,
                         secondaryIndices: secondaryHighlights,
                         isPlayingHighlight: ttsManager.isPlaying,
-                        scrollProxy: scrollProxy
+                        scrollProxy: scrollProxy,
+                        chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
                     )
                     .padding()
                 }
@@ -1102,7 +1103,7 @@ struct ReadingView: View {
     }
 
     private func paginateChapter(at index: Int, forGate: Bool, fromEnd: Bool = false) async -> ChapterCache? {
-        guard let content = try? await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index) else { return nil }
+        guard let content = try? await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: book.type ?? 0) else { return nil }
         
         let cleaned = removeHTMLAndSVG(content)
         let processed = applyReplaceRules(to: cleaned)
@@ -1314,7 +1315,7 @@ struct ReadingView: View {
         
         Task {
             do {
-                let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapterIndex)
+                let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapterIndex, contentType: book.type ?? 0)
                 
                 // 1. Heavy processing on background thread
                 let cleaned = removeHTMLAndSVG(content)
@@ -1889,6 +1890,7 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
     let pageIndex: Int
     let renderStore: TextKit2RenderStore?
     let sentences: [String]?
+    let chapterUrl: String? // 新增
     let chapterOffset: Int
     let onAddReplaceRule: ((String) -> Void)?
     let onTapLocation: ((ReaderTapLocation) -> Void)?
@@ -1903,10 +1905,11 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
     private var tk2View: ReadContent2View?
     private var pendingPageInfo: TK2PageInfo?
     
-    init(pageIndex: Int, renderStore: TextKit2RenderStore?, sentences: [String]? = nil, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
+    init(pageIndex: Int, renderStore: TextKit2RenderStore?, sentences: [String]? = nil, chapterUrl: String? = nil, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
         self.pageIndex = pageIndex
         self.renderStore = renderStore
         self.sentences = sentences
+        self.chapterUrl = chapterUrl
         self.chapterOffset = chapterOffset
         self.onAddReplaceRule = onAddReplaceRule
         self.onTapLocation = onTapLocation
@@ -1948,7 +1951,7 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
         let isImage = content.hasPrefix("__IMG__")
         let view: AnyView
         if isImage {
-            view = AnyView(MangaImageView(url: String(content.dropFirst(7))).padding(4))
+            view = AnyView(MangaImageView(url: String(content.dropFirst(7)), referer: chapterUrl).padding(4))
         } else {
             view = AnyView(
                 Text(content)
@@ -2158,13 +2161,14 @@ private struct RichTextView: View {
     let secondaryIndices: Set<Int>
     let isPlayingHighlight: Bool
     let scrollProxy: ScrollViewProxy?
+    var chapterUrl: String? = nil // 新增
     
     var body: some View {
         VStack(alignment: .leading, spacing: fontSize * 0.8) {
             ForEach(Array(sentences.enumerated()), id: \.offset) { index, sentence in
                 if sentence.hasPrefix("__IMG__") {
                     let urlString = String(sentence.dropFirst(7))
-                    MangaImageView(url: urlString)
+                    MangaImageView(url: urlString, referer: chapterUrl)
                         .id(index)
                         .padding(.vertical, 4)
                 } else {
@@ -2201,17 +2205,18 @@ private struct RichTextView: View {
 
 private struct MangaImageView: View {
     let url: String
+    let referer: String? // 新增：支持自定义来源页
     @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
     private let logger = LogManager.shared
     
     var body: some View {
         let finalURL = resolveURL(url)
-        RemoteImageView(url: finalURL)
+        RemoteImageView(url: finalURL, refererOverride: referer)
             .frame(maxWidth: .infinity)
             .onAppear {
                 if preferences.isVerboseLoggingEnabled {
-                    logger.log("开始请求图片: \(finalURL?.absoluteString ?? "无效")", category: "漫画调试")
+                    logger.log("开始请求图片: \(finalURL?.absoluteString ?? "无效"), 来源: \(referer ?? "无")", category: "漫画调试")
                 }
             }
     }
@@ -2230,6 +2235,7 @@ private struct MangaImageView: View {
 // MARK: - 支持 Header 的高性能图片加载组件
 struct RemoteImageView: View {
     let url: URL?
+    let refererOverride: String? // 新增：强制来源页覆盖
     @State private var image: UIImage? = nil
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
@@ -2297,8 +2303,10 @@ struct RemoteImageView: View {
         request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
         request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
         
-        // 针对快看的专项 Referer 优化
-        if let host = targetURL.host, host.contains("kkmh") || host.contains("kuaikan") {
+        // 设置 Referer
+        if let customReferer = refererOverride, !customReferer.isEmpty {
+            request.setValue(customReferer, forHTTPHeaderField: "Referer")
+        } else if let host = targetURL.host, host.contains("kkmh") || host.contains("kuaikan") {
             request.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
         } else if let host = targetURL.host {
             request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
@@ -2318,16 +2326,12 @@ struct RemoteImageView: View {
                 if !useProxy, let proxyURL = buildProxyURL(for: targetURL) {
                     if preferences.isVerboseLoggingEnabled {
                         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                        logger.log("直接请求失败(Code:\(code))，切换服务器代理...", category: "漫画调试")
+                        logger.log("直接请求失败(Code:\(code))，尝试代理...", category: "漫画调试")
                     }
                     self.fetchImage(from: proxyURL, useProxy: true)
                 } else {
                     self.isLoading = false
                     self.errorMessage = "加载失败"
-                    if preferences.isVerboseLoggingEnabled {
-                        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                        logger.log("图片加载彻底失败 (Proxy:\(useProxy), Code:\(code))", category: "漫画调试")
-                    }
                 }
             }
         }.resume()
