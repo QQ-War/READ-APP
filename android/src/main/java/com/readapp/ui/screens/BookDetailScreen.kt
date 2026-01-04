@@ -107,9 +107,6 @@ fun BookDetailScreen(
                 // ... intro ...
             }
             // ... rest of screen ...
-        }
-    }
-}
 
             // Chapter List Header
             item {
