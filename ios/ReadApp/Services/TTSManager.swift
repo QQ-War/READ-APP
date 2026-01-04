@@ -205,7 +205,7 @@ class TTSManager: NSObject, ObservableObject {
         nowPlayingInfo[MPMediaItemPropertyArtist] = bookTitle
         nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Double(currentSentenceIndex)
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying && !isPaused ? 1.0 : 0.0
-        if totalSentences > 0 { nowPlayingInfo[MPMediaItemPropertyDuration] = Double(totalSentences) }
+        if totalSentences > 0 { nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackDuration] = Double(totalSentences) }
         if let artwork = coverArtwork { nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
@@ -300,7 +300,14 @@ class TTSManager: NSObject, ObservableObject {
     private func createSilentAudioUrl() -> URL? {
         let fileUrl = FileManager.default.temporaryDirectory.appendingPathComponent("silent_keep_alive.wav")
         if FileManager.default.fileExists(atPath: fileUrl.path) { return fileUrl }
-        let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 44100.0, AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16, AVLinearPCMIsBigEndian: false, AVLinearPCMIsFloatKey: false]
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 44100.0,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsFloatKey: false
+        ]
         do {
             let audioFile = try AVAudioFile(forWriting: fileUrl, settings: settings)
             if let format = AVAudioFormat(settings: settings), let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 44100) {
@@ -349,7 +356,7 @@ class TTSManager: NSObject, ObservableObject {
         if let regex = try? NSRegularExpression(pattern: imgPattern, options: [.caseInsensitive]) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
         }
-        result = result.replacingOccurrences(of: "__IMG__[^\\s\\n]+", with: "", options: .regularExpression)
+        result = result.replacingOccurrences(of: "__IMG__[^\\\\s\\\\n]+", with: "", options: .regularExpression)
         let htmlPattern = "<[^>]+>"
         if let regex = try? NSRegularExpression(pattern: htmlPattern, options: []) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
