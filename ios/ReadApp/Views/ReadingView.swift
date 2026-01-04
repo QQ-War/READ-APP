@@ -1208,7 +1208,7 @@ struct ReadingView: View {
                 if let urlRange = Range(match.range(at: 1), in: result) {
                     let url = String(result[urlRange])
                     // 2. 在代码中过滤：排除网页链接，保留图片格式或带签名参数的链接
-                    let isWebPage = url.contains("/mobile/comics/") || url.contains("/chapter/")
+                    let isWebPage = url.contains("/mobile/comics/") || url.contains("/chapter/") || url.contains("/comics/")
                     let isImageExt = url.contains(".webp") || url.contains(".jpg") || url.contains(".png") || url.contains(".jpeg") || url.contains("image")
                     
                     if !isWebPage && (isImageExt || url.contains("?")) {
@@ -2300,13 +2300,17 @@ struct RemoteImageView: View {
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
         request.setValue("image/webp,image/avif,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
         request.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
+        request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
         request.setValue("keep-alive", forHTTPHeaderField: "Connection")
         request.setValue("no-cors", forHTTPHeaderField: "Sec-Fetch-Mode")
         request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
         request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
         
-        // 关键：Referer 镜像策略 (对标日志中的行为)
-        if let customReferer = refererOverride, !customReferer.isEmpty {
+        // 关键：Referer 镜像策略 (对标日志中的行为，强制使用 HTTPS)
+        if var customReferer = refererOverride, !customReferer.isEmpty {
+            if customReferer.hasPrefix("http://") {
+                customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
+            }
             request.setValue(customReferer, forHTTPHeaderField: "Referer")
         } else if let host = targetURL.host {
             if host.contains("kkmh") || host.contains("kuaikan") {
