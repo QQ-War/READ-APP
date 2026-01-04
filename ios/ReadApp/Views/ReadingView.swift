@@ -2334,7 +2334,7 @@ struct RemoteImageView: View {
     }
     
     private func buildProxyURL(for original: URL) -> URL? {
-        let baseURL = apiService.baseURL
+        let baseURL = APIService.shared.baseURL
         var components = URLComponents(string: "\(baseURL)/proxypng")
         components?.queryItems = [
             URLQueryItem(name: "url", value: original.absoluteString),

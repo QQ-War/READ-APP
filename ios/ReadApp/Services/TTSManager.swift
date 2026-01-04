@@ -348,7 +348,7 @@ class TTSManager: NSObject, ObservableObject {
     
     private func removeSVGTags(_ text: String) -> String {
         var result = text
-        let svgPattern = "<svg[^>]*>.*?<\\/svg>"
+        let svgPattern = #"<svg[^>]*>.*?</svg>"#
         if let regex = try? NSRegularExpression(pattern: svgPattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
         }
@@ -356,7 +356,7 @@ class TTSManager: NSObject, ObservableObject {
         if let regex = try? NSRegularExpression(pattern: imgPattern, options: [.caseInsensitive]) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
         }
-        result = result.replacingOccurrences(of: "__IMG__[^\\\\s\\\\n]+", with: "", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"__IMG__[^\s\n]+"#, with: "", options: .regularExpression)
         let htmlPattern = "<[^>]+>"
         if let regex = try? NSRegularExpression(pattern: htmlPattern, options: []) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
