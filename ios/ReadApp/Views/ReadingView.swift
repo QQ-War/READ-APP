@@ -194,10 +194,6 @@ struct ReadingView: View {
     @State private var timerActive = false
     @State private var sleepTimer: Timer? = nil
     
-    // Zoom & Scaling
-    @State private var zoomScale: CGFloat = 1.0
-    @GestureState private var magnifyBy = 1.0
-
     // Replace Rule State
     @State private var showAddReplaceRule = false
     @State private var pendingReplaceRule: ReplaceRule?
@@ -348,13 +344,25 @@ struct ReadingView: View {
 
     @ViewBuilder
     private func mainContent(safeArea: EdgeInsets) -> some View {
-        // 基础阅读器层
-        Group {
-            if effectiveReadingMode == .horizontal {
-                horizontalReader(safeArea: safeArea)
-            } else {
-                verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
-            }
+        if currentChapterIsManga {
+            // 路径 1: 原生 UIKit 漫画模式
+            MangaNativeReader(
+                sentences: contentSentences,
+                chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil,
+                showUIControls: $showUIControls,
+                currentVisibleIndex: Binding(
+                    get: { currentVisibleSentenceIndex ?? 0 },
+                    set: { currentVisibleSentenceIndex = $0 }
+                ),
+                pendingScrollIndex: $pendingScrollToSentenceIndex
+            )
+            .ignoresSafeArea()
+        } else if preferences.readingMode == .horizontal {
+            // 路径 2: 水平翻页模式 (小说)
+            horizontalReader(safeArea: safeArea)
+        } else {
+            // 路径 3: 垂直滚动模式 (小说)
+            verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
         }
     }
     
@@ -407,19 +415,11 @@ struct ReadingView: View {
                             secondaryIndices: secondaryHighlights,
                             isPlayingHighlight: ttsManager.isPlaying,
                             scrollProxy: scrollProxy,
-                            zoomScale: zoomScale, // 传入缩放比例
                             chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
                         )
-                        .padding(.horizontal, currentChapterIsManga ? 0 : preferences.pageHorizontalMargin)
+                        .padding(.horizontal, preferences.pageHorizontalMargin)
                     }
                     .contentShape(Rectangle())
-                    .gesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                let delta = value / magnifyBy
-                                zoomScale = min(max(zoomScale * delta, 1.0), 4.0)
-                            }
-                    )
                     .onTapGesture {
                         withAnimation { showUIControls.toggle() }
                     }
@@ -2276,11 +2276,10 @@ private struct RichTextView: View {
     let secondaryIndices: Set<Int>
     let isPlayingHighlight: Bool
     let scrollProxy: ScrollViewProxy?
-    let zoomScale: CGFloat // 新增：缩放比例
     var chapterUrl: String? = nil
     
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: fontSize * 0.8) {
+        VStack(alignment: .leading, spacing: fontSize * 0.8) {
             ForEach(Array(sentences.enumerated()), id: \.offset) { index, sentence in
                 if sentence.contains("__IMG__") {
                     let urlString = extractImageUrl(from: sentence)
@@ -2301,7 +2300,6 @@ private struct RichTextView: View {
                 }
             }
         }
-        .scaleEffect(zoomScale, anchor: .top) // 应用全局缩放
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             if let highlightIndex = highlightIndex, let scrollProxy = scrollProxy {
