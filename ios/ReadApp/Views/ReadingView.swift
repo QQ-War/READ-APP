@@ -2776,10 +2776,10 @@ private struct ReaderOptionsSheet: View {
                     }
                 }
                 
-                Section(header: Text("外观主题")) {
+                Section(header: Text("夜间模式")) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("深色模式").font(.subheadline).foregroundColor(.secondary)
-                        Picker("深色模式", selection: $preferences.darkMode) {
+                        Text("模式切换").font(.subheadline).foregroundColor(.secondary)
+                        Picker("夜间模式", selection: $preferences.darkMode) {
                             ForEach(DarkModeConfig.allCases) { config in
                                 Text(config.localizedName).tag(config)
                             }
