@@ -205,7 +205,7 @@ class TTSManager: NSObject, ObservableObject {
         nowPlayingInfo[MPMediaItemPropertyArtist] = bookTitle
         nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Double(currentSentenceIndex)
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying && !isPaused ? 1.0 : 0.0
-        if totalSentences > 0 { nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackDuration] = Double(totalSentences) }
+        if totalSentences > 0 { nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = Double(totalSentences) }
         if let artwork = coverArtwork { nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
@@ -348,7 +348,7 @@ class TTSManager: NSObject, ObservableObject {
     
     private func removeSVGTags(_ text: String) -> String {
         var result = text
-        let svgPattern = "<svg[^>]*>.*?<\/svg>"
+        let svgPattern = "<svg[^>]*>.*?<\\/svg>"
         if let regex = try? NSRegularExpression(pattern: svgPattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
         }
