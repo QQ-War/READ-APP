@@ -377,8 +377,9 @@ struct ReadingView: View {
     private func horizontalReader(safeArea: EdgeInsets) -> some View {
         GeometryReader {
             geometry in
-            let horizontalMargin: CGFloat = preferences.pageHorizontalMargin
-            let verticalMargin: CGFloat = 10
+            // 如果是漫画模式，强制 0 边距以占满屏幕
+            let horizontalMargin: CGFloat = isMangaMode ? 0 : preferences.pageHorizontalMargin
+            let verticalMargin: CGFloat = isMangaMode ? 0 : 10
             
             let availableSize = CGSize(
                 width: max(0, geometry.size.width - safeArea.leading - safeArea.trailing - horizontalMargin * 2),
@@ -386,7 +387,7 @@ struct ReadingView: View {
             )
 
             let contentSize = availableSize
-            horizontalReaderBody(geometry: geometry, safeArea: safeArea, availableSize: availableSize, contentSize: contentSize)
+            horizontalReaderBody(geometry: geometry, safeArea: safeArea, availableSize: availableSize, contentSize: contentSize, hMargin: horizontalMargin)
             .onAppear { if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
             .onChange(of: contentSentences) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
             .onChange(of: preferences.fontSize) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
@@ -404,11 +405,11 @@ struct ReadingView: View {
         }
     }
 
-    private func horizontalReaderBody(geometry: GeometryProxy, safeArea: EdgeInsets, availableSize: CGSize, contentSize: CGSize) -> some View {
+    private func horizontalReaderBody(geometry: GeometryProxy, safeArea: EdgeInsets, availableSize: CGSize, contentSize: CGSize, hMargin: CGFloat) -> some View {
         VStack(spacing: 0) {
-            Spacer().frame(height: safeArea.top + 10)
+            Spacer().frame(height: safeArea.top + (isMangaMode ? 0 : 10))
             HStack(spacing: 0) {
-                Color.clear.frame(width: safeArea.leading + preferences.pageHorizontalMargin).contentShape(Rectangle()).onTapGesture { handleReaderTap(location: .left) }
+                Color.clear.frame(width: safeArea.leading + hMargin).contentShape(Rectangle()).onTapGesture { handleReaderTap(location: .left) }
                 
                 if availableSize.width > 0 {
                     if hasInitialPagination {
@@ -419,9 +420,9 @@ struct ReadingView: View {
                             let nextVC = makeContentViewController(snapshot: snapshot(from: nextCache), pageIndex: 0, chapterOffset: 1)
 
                             ReadPageViewController(
-                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.renderStore, pageInfos: currentCache.pageInfos, contentSentences: currentCache.contentSentences, chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil),
-                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.renderStore, pageInfos: prevCache.pageInfos, contentSentences: prevCache.contentSentences, chapterUrl: chapters.indices.contains(currentChapterIndex - 1) ? chapters[currentChapterIndex - 1].url : nil),
-                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.renderStore, pageInfos: nextCache.pageInfos, contentSentences: nextCache.contentSentences, chapterUrl: chapters.indices.contains(currentChapterIndex + 1) ? chapters[currentChapterIndex + 1].url : nil),
+                                snapshot: snapshot(from: currentCache),
+                                prevSnapshot: snapshot(from: prevCache),
+                                nextSnapshot: snapshot(from: nextCache),
                                 currentPageIndex: $currentPageIndex,
                                 pageTurnRequest: $pageTurnRequest,
                                 pageSpacing: preferences.pageInterSpacing,
@@ -442,10 +443,10 @@ struct ReadingView: View {
                                 nextContentViewController: nextVC,
                                 makeViewController: makeContentViewController
                             )
-                            .id("\(preferences.pageInterSpacing)_\(preferences.pageTurningMode.rawValue)")
+                            .id("\(preferences.pageInterSpacing)_\(preferences.pageTurningMode.rawValue)_\(isMangaMode)")
                             .frame(width: contentSize.width, height: contentSize.height)
 
-                            if !showUIControls && currentCache.pages.count > 0 {
+                            if !showUIControls && currentCache.pages.count > 0 && !isMangaMode {
                                 let displayCurrent = currentPageIndex + 1
                                 Group {
                                     if currentCache.isFullyPaginated {
@@ -470,9 +471,9 @@ struct ReadingView: View {
                     Rectangle().fill(Color.clear)
                 }
                 
-                Color.clear.frame(width: safeArea.trailing + preferences.pageHorizontalMargin).contentShape(Rectangle()).onTapGesture { handleReaderTap(location: .right) }
+                Color.clear.frame(width: safeArea.trailing + hMargin).contentShape(Rectangle()).onTapGesture { handleReaderTap(location: .right) }
             }
-            Spacer().frame(height: safeArea.bottom + 10)
+            Spacer().frame(height: safeArea.bottom + (isMangaMode ? 0 : 10))
         }
         .frame(width: geometry.size.width, height: geometry.size.height)
     }
@@ -2426,7 +2427,6 @@ struct RemoteImageView: View {
                     ProgressView()
                     Spacer()
                 }
-                .frame(height: 200)
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "photo.fill")
@@ -2440,7 +2440,6 @@ struct RemoteImageView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 150)
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(8)
             }
