@@ -78,8 +78,13 @@ struct ReadingSettingsView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("通用设置")) {
-                Toggle("夜间模式", isOn: $preferences.isDarkMode)
+            Section(header: Text("外观主题")) {
+                Picker("深色模式", selection: $preferences.darkMode) {
+                    ForEach(DarkModeConfig.allCases) { config in
+                        Text(config.localizedName).tag(config)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
             
             Section(header: Text("显示设置")) {

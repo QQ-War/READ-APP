@@ -166,6 +166,21 @@ enum PageTurningMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum DarkModeConfig: String, CaseIterable, Identifiable {
+    case off = "Off"
+    case on = "On"
+    case system = "System"
+    
+    var id: String { self.rawValue }
+    var localizedName: String {
+        switch self {
+        case .off: return "关闭"
+        case .on: return "开启"
+        case .system: return "跟随系统"
+        }
+    }
+}
+
 class UserPreferences: ObservableObject {
     static let shared = UserPreferences()
     
@@ -306,9 +321,9 @@ class UserPreferences: ObservableObject {
         }
     }
 
-    @Published var isDarkMode: Bool {
+    @Published var darkMode: DarkModeConfig {
         didSet {
-            UserDefaults.standard.set(isDarkMode, forKey: "isDarkMode")
+            UserDefaults.standard.set(darkMode.rawValue, forKey: "darkMode")
         }
     }
     
@@ -465,7 +480,12 @@ class UserPreferences: ObservableObject {
             self.pageTurningMode = .simulation // iOS 默认推荐仿真
         }
 
-        self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
+        if let savedDarkModeString = UserDefaults.standard.string(forKey: "darkMode"),
+           let savedDarkMode = DarkModeConfig(rawValue: savedDarkModeString) {
+            self.darkMode = savedDarkMode
+        } else {
+            self.darkMode = .system
+        }
 
         // 兼容旧版：如果没有单独设置旁白/对话 TTS，则使用原有的 selectedTTSId
         if narrationTTSId.isEmpty { narrationTTSId = selectedTTSId }

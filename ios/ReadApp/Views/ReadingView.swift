@@ -201,25 +201,7 @@ struct ReadingView: View {
     // Page Turn & Navigation State
     @State private var pageTurnRequest: PageTurnRequest? = nil
     @State private var isExplicitlySwitchingChapter = false
-
-    private var isMangaMode: Bool {
-        // 漫画模式判定（对标 legado.koplugin 分类逻辑）
-        // 1. 手动强制
-        if let url = book.bookUrl, preferences.manualMangaUrls.contains(url) { return true }
-        // 2. 纯图片章节 (内容极短且包含图片占位符)
-        if rawContent.count < 500 && rawContent.contains("__IMG__") { return true }
-        // 3. 漫画书类型 (2)
-        if book.type == 2 { return true }
-        
-        let imageCount = contentSentences.filter { $0.hasPrefix("__IMG__") }.count
-        if imageCount > 0 {
-            let ratio = Double(imageCount) / Double(contentSentences.count)
-            // 4. 高密度图片 (15% 以上)
-            return ratio > 0.15
-        }
-        
-        return false
-    }
+    @State private var currentChapterIsManga = false
 
     private struct PaginationKey: Hashable {
         let width: Int
@@ -274,6 +256,15 @@ struct ReadingView: View {
                     backgroundView
                     mainContent(safeArea: proxy.safeAreaInsets)
                     
+                    // 紧急控制层：确保在任何情况下都能唤起菜单返回
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .frame(width: proxy.size.width * 0.4, height: proxy.size.height * 0.6)
+                        .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+                        .onTapGesture {
+                            withAnimation { showUIControls.toggle() }
+                        }
+
                     if showUIControls {
                         topBar(safeArea: proxy.safeAreaInsets)
                             .transition(.move(edge: .top).combined(with: .opacity))
@@ -323,13 +314,53 @@ struct ReadingView: View {
 
     @ViewBuilder
     private func mainContent(safeArea: EdgeInsets) -> some View {
-        // 核心改动：如果是漫画模式，强制使用垂直滚动视图
-        if isMangaMode {
-            verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
-        } else if preferences.readingMode == .horizontal {
-            horizontalReader(safeArea: safeArea)
+        ZStack {
+            // 基础阅读器层
+            Group {
+                if currentChapterIsManga {
+                    verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
+                } else if preferences.readingMode == .horizontal {
+                    horizontalReader(safeArea: safeArea)
+                } else {
+                    verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
+                }
+            }
+            
+            // 紧急控制层：确保在任何情况下都能唤起菜单返回
+            Color.black.opacity(0.001)
+                .frame(width: 150, height: 300)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation { showUIControls.toggle() }
+                }
+        }
+    }
+    
+    private func updateMangaModeState() {
+        // 漫画模式判定（对标 legado.koplugin 分类逻辑）
+        // 1. 手动强制
+        if let url = book.bookUrl, preferences.manualMangaUrls.contains(url) {
+            currentChapterIsManga = true
+            return
+        }
+        // 2. 纯图片章节 (内容极短且包含图片占位符)
+        if rawContent.count < 500 && rawContent.contains("__IMG__") {
+            currentChapterIsManga = true
+            return
+        }
+        // 3. 漫画书类型 (2)
+        if book.type == 2 {
+            currentChapterIsManga = true
+            return
+        }
+        
+        let imageCount = contentSentences.filter { $0.hasPrefix("__IMG__") }.count
+        if imageCount > 0 {
+            let ratio = Double(imageCount) / Double(contentSentences.count)
+            // 4. 高密度图片 (15% 以上)
+            currentChapterIsManga = ratio > 0.15
         } else {
-            verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
+            currentChapterIsManga = false
         }
     }
     
@@ -338,11 +369,10 @@ struct ReadingView: View {
             geometry in
             ScrollViewReader {
                 proxy in
-                // 全局缩放容器：允许对整个章节进行双指缩放
-                ZoomableScrollView {
-                    ScrollView {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
                         // 置顶锚点
-                        Color.clear.frame(height: 1).id("top_marker_\(currentChapterIndex)")
+                        Color.clear.frame(height: 1).id("top_marker")
                         
                         let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
                         let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
@@ -356,18 +386,17 @@ struct ReadingView: View {
                             scrollProxy: scrollProxy,
                             chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
                         )
-                        .padding(.horizontal, preferences.pageHorizontalMargin)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, currentChapterIsManga ? 0 : preferences.pageHorizontalMargin)
                     }
                 }
-                .id("chapter_\(currentChapterIndex)") // 关键：强制刷新视图防止内容卡死
+                .id("v_reader_scroll_\(currentChapterIndex)") // 强制刷新视图防止内容卡死
                 .coordinateSpace(name: "scroll")
                 .onPreferenceChange(SentenceFramePreferenceKey.self) { updateVisibleSentenceIndex(frames: $0, viewportHeight: geometry.size.height) }
                 .onChange(of: contentSentences) { _ in
                     if preferences.readingMode == .vertical && isExplicitlySwitchingChapter {
                         // 强制置顶到锚点
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            withAnimation { proxy.scrollTo("top_marker_\(currentChapterIndex)", anchor: .top) }
+                            withAnimation { proxy.scrollTo("top_marker", anchor: .top) }
                             isExplicitlySwitchingChapter = false
                         }
                     }
@@ -384,8 +413,8 @@ struct ReadingView: View {
         GeometryReader {
             geometry in
             // 如果是漫画模式，强制 0 边距以占满屏幕
-            let horizontalMargin: CGFloat = isMangaMode ? 0 : preferences.pageHorizontalMargin
-            let verticalMargin: CGFloat = isMangaMode ? 0 : 10
+            let horizontalMargin: CGFloat = currentChapterIsManga ? 0 : preferences.pageHorizontalMargin
+            let verticalMargin: CGFloat = currentChapterIsManga ? 0 : 10
             
             let availableSize = CGSize(
                 width: max(0, geometry.size.width - safeArea.leading - safeArea.trailing - horizontalMargin * 2),
@@ -413,7 +442,7 @@ struct ReadingView: View {
 
     private func horizontalReaderBody(geometry: GeometryProxy, safeArea: EdgeInsets, availableSize: CGSize, contentSize: CGSize, hMargin: CGFloat) -> some View {
         VStack(spacing: 0) {
-            Spacer().frame(height: safeArea.top + (isMangaMode ? 0 : 10))
+            Spacer().frame(height: safeArea.top + (currentChapterIsManga ? 0 : 10))
             HStack(spacing: 0) {
                 Color.clear.frame(width: safeArea.leading + hMargin).contentShape(Rectangle()).onTapGesture { handleReaderTap(location: .left) }
                 
@@ -449,10 +478,10 @@ struct ReadingView: View {
                                 nextContentViewController: nextVC,
                                 makeViewController: makeContentViewController
                             )
-                            .id("\(preferences.pageInterSpacing)_\(preferences.pageTurningMode.rawValue)_\(isMangaMode)")
+                            .id("\(preferences.pageInterSpacing)_\(preferences.pageTurningMode.rawValue)_\(currentChapterIsManga)")
                             .frame(width: contentSize.width, height: contentSize.height)
 
-                            if !showUIControls && currentCache.pages.count > 0 && !isMangaMode {
+                            if !showUIControls && currentCache.pages.count > 0 && !currentChapterIsManga {
                                 let displayCurrent = currentPageIndex + 1
                                 Group {
                                     if currentCache.isFullyPaginated {
@@ -479,7 +508,7 @@ struct ReadingView: View {
                 
                 Color.clear.frame(width: safeArea.trailing + hMargin).contentShape(Rectangle()).onTapGesture { handleReaderTap(location: .right) }
             }
-            Spacer().frame(height: safeArea.bottom + (isMangaMode ? 0 : 10))
+            Spacer().frame(height: safeArea.bottom + (currentChapterIsManga ? 0 : 10))
         }
         .frame(width: geometry.size.width, height: geometry.size.height)
     }
@@ -1147,6 +1176,7 @@ struct ReadingView: View {
         let content = isEffectivelyEmpty ? "章节内容为空" : processedContent
         currentContent = content
         contentSentences = splitIntoParagraphs(content)
+        updateMangaModeState() // 更新模式
         
         if shouldApplyResumeOnce && !didApplyResumePos {
             applyResumeProgressIfNeeded(sentences: contentSentences)
@@ -1259,6 +1289,9 @@ struct ReadingView: View {
         let lines = text.components(separatedBy: "\n")
         var finalParagraphs: [String] = []
         
+        // 启发式判断：如果全文包含图片且文本较少，极可能是漫画，开启更强过滤
+        let likelyManga = text.contains("__IMG__") && text.count < 5000
+        
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty { continue }
@@ -1266,8 +1299,9 @@ struct ReadingView: View {
             // 过滤：如果一段内容仅仅是 URL 且没有识别标记，说明是 HTML 剥离后的杂质
             let lowerTrimmed = trimmed.lowercased()
             let isRawUrl = lowerTrimmed.hasPrefix("http") || lowerTrimmed.hasPrefix("//")
-            // 高熵文本拦截：很长的连续字母数字串（无空格）通常是杂质（仅在漫画模式下开启，防止误伤小说长词）
-            let isHighEntropy = isMangaMode && trimmed.count > 40 && !trimmed.contains(" ")
+            // 高熵文本拦截：很长的连续字母数字串（无空格）通常是杂质
+            // 在可能为漫画的章节中，开启更严格的拦截（长度 > 30 且无空格）
+            let isHighEntropy = likelyManga && trimmed.count > 30 && !trimmed.contains(" ")
             
             if (isRawUrl || isHighEntropy) && !trimmed.contains("__IMG__") {
                 continue
@@ -1437,6 +1471,7 @@ struct ReadingView: View {
                     self.rawContent = cleaned
                     if let cache = initialCache {
                         self.contentSentences = sentences
+                        updateMangaModeState() // 关键：更新模式
                         self.currentContent = processed
                         self.currentCache = cache
                         
@@ -2206,7 +2241,7 @@ private struct RichTextView: View {
     let secondaryIndices: Set<Int>
     let isPlayingHighlight: Bool
     let scrollProxy: ScrollViewProxy?
-    var chapterUrl: String? = nil // 新增
+    var chapterUrl: String? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: fontSize * 0.8) {
@@ -2713,6 +2748,19 @@ private struct ReaderOptionsSheet: View {
                             .font(.subheadline)
                         Slider(value: $preferences.pageInterSpacing, in: 0...30, step: 1)
                     }
+                }
+                
+                Section(header: Text("外观主题")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("深色模式").font(.subheadline).foregroundColor(.secondary)
+                        Picker("深色模式", selection: $preferences.darkMode) {
+                            ForEach(DarkModeConfig.allCases) { config in
+                                Text(config.localizedName).tag(config)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .padding(.vertical, 4)
                 }
                 
                 Section(header: Text("交互设置")) {
