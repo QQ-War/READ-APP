@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.SelectionContainer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -721,7 +722,6 @@ fun ReadingScreen(
 /**
  * 娈佃惤椤圭粍浠?- 甯﹂珮浜晥鏋?
  */
-@Composable
 @Composable
 private fun ParagraphItem(
     text: String,
