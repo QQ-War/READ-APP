@@ -396,9 +396,9 @@ struct ReadingView: View {
                             let nextVC = makeContentViewController(snapshot: snapshot(from: nextCache), pageIndex: 0, chapterOffset: 1)
 
                             ReadPageViewController(
-                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.renderStore, pageInfos: currentCache.pageInfos),
-                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.renderStore, pageInfos: prevCache.pageInfos),
-                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.renderStore, pageInfos: nextCache.pageInfos),
+                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.renderStore, pageInfos: currentCache.pageInfos, contentSentences: currentCache.contentSentences),
+                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.renderStore, pageInfos: prevCache.pageInfos, contentSentences: prevCache.contentSentences),
+                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.renderStore, pageInfos: nextCache.pageInfos, contentSentences: nextCache.contentSentences),
                                 currentPageIndex: $currentPageIndex,
                                 pageTurnRequest: $pageTurnRequest,
                                 pageSpacing: preferences.pageInterSpacing,
