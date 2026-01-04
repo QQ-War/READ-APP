@@ -446,9 +446,11 @@ struct DebugSettingsView: View {
     
     private func exportLogs() {
         if let url = LogManager.shared.exportLogs() {
-            logFileURL = url
-            showShareSheet = true
-            LogManager.shared.log("导出日志文件: \(url.lastPathComponent)", category: "系统")
+            self.logFileURL = url
+            // 给一丁点时间让 URL 状态同步
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.showShareSheet = true
+            }
         }
     }
 }

@@ -627,8 +627,9 @@ struct ReadingView: View {
             pendingJumpToLastPage = false
             pendingJumpToFirstPage = false
             
-            // 漫画模式下不使用 renderStore
-            currentCache = ChapterCache(pages: pages, renderStore: nil, pageInfos: nil, contentSentences: sentences, rawContent: rawContent, attributedText: NSAttributedString(string: sentences.joined(separator: "\n")), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: true, chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil)
+            // 确保此处传入了 chapterUrl
+            let currentUrl = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
+            currentCache = ChapterCache(pages: pages, renderStore: nil, pageInfos: nil, contentSentences: sentences, rawContent: rawContent, attributedText: NSAttributedString(string: sentences.joined(separator: "\n")), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: true, chapterUrl: currentUrl)
             hasInitialPagination = true
             return
         }
