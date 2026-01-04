@@ -57,6 +57,7 @@ class MangaAdapter(
                 })
             }
         } else {
+            // 如果不是图片，清空图片
             holder.imageView.setImageDrawable(null)
         }
     }

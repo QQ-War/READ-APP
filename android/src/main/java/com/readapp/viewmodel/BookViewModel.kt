@@ -18,6 +18,8 @@ import com.google.common.util.concurrent.MoreExecutors
 import com.readapp.data.ReadApiService
 import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
+import com.readapp.data.ReadingMode
+import com.readapp.data.DarkModeConfig
 import com.readapp.data.LocalCacheManager
 import com.readapp.media.AudioCache
 import com.readapp.media.ReadAudioService

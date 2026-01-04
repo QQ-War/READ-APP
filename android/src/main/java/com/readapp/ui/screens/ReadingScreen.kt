@@ -50,6 +50,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import com.readapp.data.ReadingMode
 import com.readapp.data.DarkModeConfig
 import com.readapp.ui.components.MangaNativeReader

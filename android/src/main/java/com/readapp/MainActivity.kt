@@ -42,6 +42,8 @@ import com.readapp.ui.screens.SourceExploreScreen
 import com.readapp.ui.screens.SourceEditScreen
 import com.readapp.ui.theme.ReadAppTheme
 import com.readapp.viewmodel.BookViewModel
+import com.readapp.data.ReadingMode
+import com.readapp.data.DarkModeConfig
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.navigation.NavType

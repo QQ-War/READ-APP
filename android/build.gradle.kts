@@ -118,7 +118,11 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
     // Coil for image loading
+    implementation("io.coil-kt:coil:2.5.0")
     implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // RecyclerView for high-performance native scrolling
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
 
     // ExoPlayer for audio playback
     val media3Version = "1.3.1"
