@@ -1352,7 +1352,12 @@ struct ReadingView: View {
         
         // Capture all necessary resume state
         let resumePos = pendingResumePos
-        // ... rest of parameters ...
+        let resumeLocalBodyIndex = pendingResumeLocalBodyIndex
+        let resumeLocalChapterIndex = pendingResumeLocalChapterIndex
+        let resumeLocalPageIndex = pendingResumeLocalPageIndex
+        let capturedTTSIndex = lastTTSSentenceIndex
+        let jumpFirst = pendingJumpToFirstPage
+        let jumpLast = pendingJumpToLastPage
         let shouldResume = shouldApplyResumeOnce
         
         if currentCache.pages.isEmpty { isLoading = true }
@@ -2310,7 +2315,14 @@ private struct MangaImageView: View {
         .frame(minHeight: 300) 
     }
     
-    // ... resolveURL ...
+    private func resolveURL(_ original: String) -> URL? {
+        if original.hasPrefix("http") {
+            return URL(string: original)
+        }
+        let baseURL = apiService.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "")
+        let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
+        return URL(string: resolved)
+    }
 }
 
 // MARK: - Zoomable ScrollView for Manga
