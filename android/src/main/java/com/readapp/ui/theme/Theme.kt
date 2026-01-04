@@ -14,7 +14,7 @@ object AppColors {
     val PrimaryVariant = Color(0xFF9333EA)
     val Secondary = Color(0xFF8B5CF6)
     
-    // 深色模式
+    // 夜间模式
     val DarkBackground = Color(0xFF111827)
     val DarkSurface = Color(0xFF1F2937)
     val DarkCard = Color(0xFF374151)

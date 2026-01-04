@@ -24,6 +24,12 @@ enum class PageTurningMode {
     Simulation
 }
 
+enum class DarkModeConfig {
+    ON,
+    OFF,
+    AUTO
+}
+
 class UserPreferences(private val context: Context) {
 
     private object Keys {
@@ -39,7 +45,7 @@ class UserPreferences(private val context: Context) {
         val ReadingHorizontalPadding = floatPreferencesKey("readingHorizontalPadding")
         val ReadingMode = stringPreferencesKey("readingMode")
         val PageTurningMode = stringPreferencesKey("pageTurningMode")
-        val IsDarkMode = booleanPreferencesKey("isDarkMode")
+        val DarkMode = stringPreferencesKey("darkMode")
         val SpeechRate = doublePreferencesKey("speechRate")
         val PreloadCount = floatPreferencesKey("preloadCount")
         val LoggingEnabled = stringPreferencesKey("loggingEnabled")
@@ -86,8 +92,8 @@ class UserPreferences(private val context: Context) {
     val pageTurningMode: Flow<PageTurningMode> = context.dataStore.data.map {
         PageTurningMode.valueOf(it[Keys.PageTurningMode] ?: PageTurningMode.Scroll.name)
     }
-    val isDarkMode: Flow<Boolean> = context.dataStore.data.map {
-        it[Keys.IsDarkMode] ?: false
+    val darkMode: Flow<DarkModeConfig> = context.dataStore.data.map {
+        DarkModeConfig.valueOf(it[Keys.DarkMode] ?: DarkModeConfig.OFF.name)
     }
 
     suspend fun saveReadingMode(value: ReadingMode) {
@@ -102,9 +108,9 @@ class UserPreferences(private val context: Context) {
         }
     }
 
-    suspend fun saveIsDarkMode(value: Boolean) {
+    suspend fun saveDarkMode(value: DarkModeConfig) {
         context.dataStore.edit { prefs: MutablePreferences ->
-            prefs[Keys.IsDarkMode] = value
+            prefs[Keys.DarkMode] = value.name
         }
     }
 

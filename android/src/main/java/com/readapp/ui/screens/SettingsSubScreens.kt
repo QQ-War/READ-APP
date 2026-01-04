@@ -142,11 +142,11 @@ fun ReadingSettingsScreen(
     readingMode: com.readapp.data.ReadingMode,
     fontSize: Float,
     horizontalPadding: Float,
-    isDarkMode: Boolean,
+    darkModeConfig: com.readapp.data.DarkModeConfig,
     onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onHorizontalPaddingChange: (Float) -> Unit,
-    onDarkModeChange: (Boolean) -> Unit,
+    onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit,
     onClearCache: () -> Unit,
     onNavigateToCache: () -> Unit,
     onNavigateBack: () -> Unit
@@ -195,12 +195,27 @@ fun ReadingSettingsScreen(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("夜间模式", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                Switch(checked = isDarkMode, onCheckedChange = onDarkModeChange)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("夜间模式", style = MaterialTheme.typography.titleSmall)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    com.readapp.data.DarkModeConfig.values().forEach { config ->
+                        val isSelected = darkModeConfig == config
+                        val label = when(config) {
+                            com.readapp.data.DarkModeConfig.ON -> "开启"
+                            com.readapp.data.DarkModeConfig.OFF -> "关闭"
+                            com.readapp.data.DarkModeConfig.AUTO -> "系统"
+                        }
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { onDarkModeChange(config) },
+                            label = { Text(label) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
 
             Button(onClick = onNavigateToCache, modifier = Modifier.fillMaxWidth()) {

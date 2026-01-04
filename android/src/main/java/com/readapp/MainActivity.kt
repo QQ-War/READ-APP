@@ -59,16 +59,24 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         setContent {
-            ReadAppTheme {
-                ReadAppMain()
+            val bookViewModel: BookViewModel = viewModel(factory = BookViewModel.Factory)
+            val darkModeConfig by bookViewModel.darkMode.collectAsState()
+            
+            val isDarkTheme = when (darkModeConfig) {
+                com.readapp.data.DarkModeConfig.ON -> true
+                com.readapp.data.DarkModeConfig.OFF -> false
+                com.readapp.data.DarkModeConfig.AUTO -> androidx.compose.foundation.isSystemInDarkTheme()
+            }
+
+            ReadAppTheme(darkTheme = isDarkTheme) {
+                ReadAppMain(bookViewModel)
             }
         }
     }
 }
 @Composable
-fun ReadAppMain() {
+fun ReadAppMain(bookViewModel: BookViewModel) {
     val navController = rememberNavController()
-    val bookViewModel: BookViewModel = viewModel()
     val accessToken by bookViewModel.accessToken.collectAsState()
     val isInitialized by bookViewModel.isInitialized.collectAsState()
     val isLoading by bookViewModel.isLoading.collectAsState()
@@ -170,10 +178,14 @@ fun ReadAppMain() {
                 val readingMode by bookViewModel.readingMode.collectAsState()
                 val lockPageOnTTS by bookViewModel.lockPageOnTTS.collectAsState()
                 val pageTurningMode by bookViewModel.pageTurningMode.collectAsState()
-                val isDarkMode by bookViewModel.isDarkMode.collectAsState()
+                val darkModeConfig by bookViewModel.darkMode.collectAsState()
                 val forceMangaProxy by bookViewModel.forceMangaProxy.collectAsState()
                 val manualMangaUrls by bookViewModel.manualMangaUrls.collectAsState()
                 val serverUrl by bookViewModel.serverAddress.collectAsState()
+
+                // 进度同步状态
+                val firstVisibleParagraphIndex by bookViewModel.firstVisibleParagraphIndex.collectAsState()
+                val pendingScrollIndex by bookViewModel.pendingScrollIndex.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
@@ -200,8 +212,12 @@ fun ReadAppMain() {
                         onLockPageOnTTSChange = { bookViewModel.updateLockPageOnTTS(it) },
                         pageTurningMode = pageTurningMode,
                         onPageTurningModeChange = { bookViewModel.updatePageTurningMode(it) },
-                        isDarkMode = isDarkMode,
-                        onDarkModeChange = { bookViewModel.updateDarkMode(it) },
+                        darkModeConfig = darkModeConfig,
+                        onDarkModeChange = { bookViewModel.updateDarkModeConfig(it) },
+                        firstVisibleParagraphIndex = firstVisibleParagraphIndex,
+                        onScrollUpdate = { bookViewModel.updateFirstVisibleParagraphIndex(it) },
+                        pendingScrollIndex = pendingScrollIndex,
+                        onScrollConsumed = { bookViewModel.clearPendingScrollIndex() },
                         forceMangaProxy = forceMangaProxy,
                         onForceMangaProxyChange = { bookViewModel.updateForceMangaProxy(it) },
                         manualMangaUrls = manualMangaUrls,
@@ -290,16 +306,16 @@ fun ReadAppMain() {
                 val readingMode by bookViewModel.readingMode.collectAsState()
                 val readingFontSize by bookViewModel.readingFontSize.collectAsState()
                 val readingHorizontalPadding by bookViewModel.readingHorizontalPadding.collectAsState()
-                val isDarkMode by bookViewModel.isDarkMode.collectAsState()
+                val darkModeConfig by bookViewModel.darkMode.collectAsState()
                 ReadingSettingsScreen(
                     readingMode = readingMode,
                     fontSize = readingFontSize,
                     horizontalPadding = readingHorizontalPadding,
-                    isDarkMode = isDarkMode,
+                    darkModeConfig = darkModeConfig,
                     onReadingModeChange = bookViewModel::updateReadingMode,
                     onFontSizeChange = bookViewModel::updateReadingFontSize,
                     onHorizontalPaddingChange = bookViewModel::updateReadingHorizontalPadding,
-                    onDarkModeChange = bookViewModel::updateDarkMode,
+                    onDarkModeChange = bookViewModel::updateDarkModeConfig,
                     onClearCache = { bookViewModel.clearCache() },
                     onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                     onNavigateBack = { navController.popBackStack() }

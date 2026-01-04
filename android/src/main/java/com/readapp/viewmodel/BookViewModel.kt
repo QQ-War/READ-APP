@@ -114,6 +114,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _currentParagraphIndex = MutableStateFlow(-1)
     val currentParagraphIndex: StateFlow<Int> = _currentParagraphIndex.asStateFlow()
+    private val _firstVisibleParagraphIndex = MutableStateFlow(0)
+    val firstVisibleParagraphIndex: StateFlow<Int> = _firstVisibleParagraphIndex.asStateFlow()
+    private val _pendingScrollIndex = MutableStateFlow<Int?>(null)
+    val pendingScrollIndex: StateFlow<Int?> = _pendingScrollIndex.asStateFlow()
+
     private val _currentParagraphStartOffset = MutableStateFlow(0)
     val currentParagraphStartOffset: StateFlow<Int> = _currentParagraphStartOffset.asStateFlow()
 
@@ -201,8 +206,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val lockPageOnTTS: StateFlow<Boolean> = _lockPageOnTTS.asStateFlow()
     private val _pageTurningMode = MutableStateFlow(com.readapp.data.PageTurningMode.Scroll)
     val pageTurningMode: StateFlow<com.readapp.data.PageTurningMode> = _pageTurningMode.asStateFlow()
-    private val _isDarkMode = MutableStateFlow(false)
-    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+    private val _darkMode = MutableStateFlow(com.readapp.data.DarkModeConfig.OFF)
+    val darkMode: StateFlow<com.readapp.data.DarkModeConfig> = _darkMode.asStateFlow()
     private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080/api/5")
     val serverAddress: StateFlow<String> = _serverAddress.asStateFlow()
     private val _publicServerAddress = MutableStateFlow("")
@@ -258,7 +263,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _readingMode.value = preferences.readingMode.first()
             _lockPageOnTTS.value = preferences.lockPageOnTTS.first()
             _pageTurningMode.value = preferences.pageTurningMode.first()
-            _isDarkMode.value = preferences.isDarkMode.first()
+            _darkMode.value = preferences.darkMode.first()
 
             if (_accessToken.value.isNotBlank()) {
                 _isLoading.value = true
@@ -1436,10 +1441,26 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updateReadingHorizontalPadding(padding: Float) { _readingHorizontalPadding.value = padding.coerceIn(8f, 48f); viewModelScope.launch { preferences.saveReadingHorizontalPadding(_readingHorizontalPadding.value) } }
     fun updateLoggingEnabled(enabled: Boolean) { _loggingEnabled.value = enabled; viewModelScope.launch { preferences.saveLoggingEnabled(enabled) } }
     fun updateBookshelfSortByRecent(enabled: Boolean) { _bookshelfSortByRecent.value = enabled; viewModelScope.launch { preferences.saveBookshelfSortByRecent(enabled); applyBooksFilterAndSort() } }
-    fun updateReadingMode(mode: com.readapp.data.ReadingMode) { _readingMode.value = mode; viewModelScope.launch { preferences.saveReadingMode(mode) } }
+    fun updateFirstVisibleParagraphIndex(index: Int) {
+        _firstVisibleParagraphIndex.value = index
+    }
+
+    fun clearPendingScrollIndex() {
+        _pendingScrollIndex.value = null
+    }
+
+    fun updateReadingMode(mode: com.readapp.data.ReadingMode) {
+        val oldMode = _readingMode.value
+        if (oldMode != mode) {
+            // 模式切换时，同步当前看到的位置
+            _pendingScrollIndex.value = _firstVisibleParagraphIndex.value
+            _readingMode.value = mode
+            viewModelScope.launch { preferences.saveReadingMode(mode) }
+        }
+    }
     fun updateLockPageOnTTS(enabled: Boolean) { _lockPageOnTTS.value = enabled; viewModelScope.launch { preferences.saveLockPageOnTTS(enabled) } }
     fun updatePageTurningMode(mode: com.readapp.data.PageTurningMode) { _pageTurningMode.value = mode; viewModelScope.launch { preferences.savePageTurningMode(mode) } }
-    fun updateDarkMode(enabled: Boolean) { _isDarkMode.value = enabled; viewModelScope.launch { preferences.saveIsDarkMode(enabled) } }
+    fun updateDarkModeConfig(config: com.readapp.data.DarkModeConfig) { _darkMode.value = config; viewModelScope.launch { preferences.saveDarkMode(config) } }
     fun updateSearchSourcesFromBookshelf(enabled: Boolean) { 
         _searchSourcesFromBookshelf.value = enabled
         viewModelScope.launch { 

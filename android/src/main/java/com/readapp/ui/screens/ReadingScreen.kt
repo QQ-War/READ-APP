@@ -1,4 +1,4 @@
-﻿// ReadingScreen.kt - 闃呰椤甸潰闆嗘垚鍚功鍔熻兘锛堟钀介珮浜級
+// ReadingScreen.kt - 闃呰椤甸潰闆嗘垚鍚功鍔熻兘锛堟钀介珮浜級
 package com.readapp.ui.screens
 
 import androidx.compose.animation.*
@@ -51,6 +51,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.readapp.data.ReadingMode
+import com.readapp.data.DarkModeConfig
+import com.readapp.ui.components.MangaNativeReader
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -100,8 +102,12 @@ fun ReadingScreen(
     onLockPageOnTTSChange: (Boolean) -> Unit = {},
     pageTurningMode: com.readapp.data.PageTurningMode = com.readapp.data.PageTurningMode.Scroll,
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit = {},
-    isDarkMode: Boolean = false,
-    onDarkModeChange: (Boolean) -> Unit = {},
+    darkModeConfig: com.readapp.data.DarkModeConfig = com.readapp.data.DarkModeConfig.OFF,
+    onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit = {},
+    firstVisibleParagraphIndex: Int = 0,
+    onScrollUpdate: (Int) -> Unit = {},
+    pendingScrollIndex: Int? = null,
+    onScrollConsumed: () -> Unit = {},
     forceMangaProxy: Boolean = false,
     onForceMangaProxyChange: (Boolean) -> Unit = {},
     manualMangaUrls: Set<String> = emptySet(),
@@ -160,15 +166,6 @@ fun ReadingScreen(
         chapters.getOrNull(currentChapterIndex)?.url
     }
 
-    // 垂直模式切章置顶
-    LaunchedEffect(displayContent) {
-        if (readingMode == com.readapp.data.ReadingMode.Vertical && displayContent.isNotEmpty() && isExplicitlySwitchingChapter) {
-            kotlinx.coroutines.delay(200) 
-            scrollState.scrollToItem(0)
-            isExplicitlySwitchingChapter = false // 消费掉标记
-        }
-    }
-
     val paragraphs = remember(displayContent) {
         if (displayContent.isNotEmpty()) {
             displayContent
@@ -180,20 +177,44 @@ fun ReadingScreen(
         }
     }
 
-    // 褰撶珷鑺傜储寮曞彉鍖栨垨绔犺妭鍒楄〃鍔犺浇瀹屾垚鏃讹紝鑷姩鍔犺浇绔犺妭鍐呭骞跺洖鍒伴《閮?
-    LaunchedEffect(currentChapterIndex, chapters.size) {
-        if (chapters.isNotEmpty() && currentChapterIndex in chapters.indices) {
-            onLoadChapterContent(currentChapterIndex)
-            scrollState.scrollToItem(0)
+    val isMangaMode = remember(paragraphs, book.type, manualMangaUrls) {
+        if (manualMangaUrls.contains(book.bookUrl)) return@remember true
+        val imageCount = paragraphs.count { it.contains("__IMG__") }
+        book.type == 2 || (paragraphs.isNotEmpty() && imageCount.toFloat() / paragraphs.size > 0.1f)
+    }
+
+    // 监听滚动，上报可见进度
+    LaunchedEffect(scrollState.firstVisibleItemIndex) {
+        if (readingMode == ReadingMode.Vertical && !isMangaMode) {
+            val index = (scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0)
+            onScrollUpdate(index)
         }
     }
-    
+
+    // 处理挂起的滚动请求 (垂直模式)
+    LaunchedEffect(pendingScrollIndex, isMangaMode, readingMode) {
+        if (readingMode == ReadingMode.Vertical && !isMangaMode && pendingScrollIndex != null) {
+            scrollState.scrollToItem(pendingScrollIndex + 1)
+            onScrollConsumed()
+        }
+    }
+
+    // 褰撶珷鑺傜储寮曞彉鍖TargetFramework) { // 鏇存柊鍐呭
+        if (readingMode == com.readapp.data.ReadingMode.Vertical && displayContent.isNotEmpty() && isExplicitlySwitchingChapter) {
+            kotlinx.coroutines.delay(200) 
+            scrollState.scrollToItem(0)
+            isExplicitlySwitchingChapter = false // 消费掉标记
+        }
+    }
+
     // 褰撳墠鎾斁娈佃惤鍙樺寲鏃讹紝鑷姩婊氬姩鍒拌娈佃惤
     LaunchedEffect(currentPlayingParagraph) {
         if (currentPlayingParagraph >= 0 && currentPlayingParagraph < paragraphs.size) {
             coroutineScope.launch {
                 // +1 鏄洜涓虹涓€涓?item 鏄珷鑺傛爣棰?
-                scrollState.animateScrollToItem(currentPlayingParagraph + 1)
+                if (!isMangaMode && readingMode == ReadingMode.Vertical) {
+                    scrollState.animateScrollToItem(currentPlayingParagraph + 1)
+                }
             }
         }
     }
@@ -209,482 +230,211 @@ fun ReadingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 涓昏鍐呭鍖哄煙锛氭樉绀虹珷鑺傛鏂?
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    enabled = readingMode == ReadingMode.Vertical,
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) {
-                    // 鐐瑰嚮鍒囨崲鎺у埗鏍忔樉绀?闅愯棌
-                    showControls = !showControls
+        // 主要内容区域
+        if (isMangaMode) {
+            MangaNativeReader(
+                paragraphs = paragraphs,
+                serverUrl = serverUrl,
+                chapterUrl = currentChapterUrl,
+                forceProxy = forceMangaProxy,
+                pendingScrollIndex = pendingScrollIndex,
+                onToggleControls = { showControls = !showControls },
+                onScroll = { onScrollUpdate(it) },
+                modifier = Modifier.fillMaxSize()
+            )
+            
+            // 消费滚动标记
+            LaunchedEffect(pendingScrollIndex) {
+                if (pendingScrollIndex != null) {
+                    onScrollConsumed()
                 }
-        ) {
-            // 鍐呭鍖哄煙
-            if (readingMode == com.readapp.data.ReadingMode.Vertical) {
-                var zoomScale by remember { mutableStateOf(1f) }
-                var zoomOffset by remember { mutableStateOf(Offset.Zero) }
-                val zoomState = rememberTransformableState { zoomChange, offsetChange, _ ->
-                    zoomScale = (zoomScale * zoomChange).coerceIn(1f, 4f)
-                    if (zoomScale > 1f) zoomOffset += offsetChange else zoomOffset = Offset.Zero
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f)
-                        .graphicsLayer(
-                            scaleX = zoomScale,
-                            scaleY = zoomScale,
-                            translationX = zoomOffset.x,
-                            translationY = zoomOffset.y
-                        )
-                        .transformable(state = zoomState)
-                ) {
-                    LazyColumn(
-                        state = scrollState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = contentPadding
+            }
+        } else if (readingMode == com.readapp.data.ReadingMode.Vertical) {
+            LazyColumn(
+                state = scrollState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
                     ) {
-                    // 绔犺妭鏍囬
-                    item {
-                        Text(
-                            text = if (currentChapterIndex < chapters.size) {
-                                chapters[currentChapterIndex].title
-                            } else {
-                                "章节"
-                            },
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(bottom = AppDimens.PaddingLarge)
-                        )
-                    }
+                        showControls = !showControls
+                    },
+                contentPadding = contentPadding
+            ) {
+                // 章节标题
+                item {
+                    Text(
+                        text = if (currentChapterIndex < chapters.size) {
+                            chapters[currentChapterIndex].title
+                        } else {
+                            "章节"
+                        },
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = AppDimens.PaddingLarge)
+                    )
+                }
 
-                    if (paragraphs.isEmpty()) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = AppDimens.PaddingLarge),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                if (isContentLoading) {
-                                    CircularProgressIndicator()
-                                    Text(
-                                        text = "正在加载章节内容...",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.customColors.textSecondary,
-                                        textAlign = TextAlign.Center
-                                    )
-                                } else {
-                                    Text(
-                                        text = displayContent.ifBlank { "暂无显示内容" },
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.customColors.textSecondary,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
+                if (paragraphs.isEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = AppDimens.PaddingLarge),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (isContentLoading) {
+                                CircularProgressIndicator()
+                                Text(
+                                    text = "正在加载章节内容...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.customColors.textSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                Text(
+                                    text = displayContent.ifBlank { "暂无显示内容" },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.customColors.textSecondary,
+                                    textAlign = TextAlign.Center
+                                )
                             }
                         }
-                    } else {
-                        // 章节内容（分段显示，带高亮）
-                        itemsIndexed(
-                            items = paragraphs,
-                            key = { index, _ -> "${currentChapterIndex}_${index}" }
-                        ) { index, paragraph ->
-                            ParagraphItem(
-                                text = paragraph,
-                                isPlaying = index == currentPlayingParagraph,
-                                isPreloaded = preloadedParagraphs.contains(index),
-                                fontSize = readingFontSize,
-                                chapterUrl = currentChapterUrl,
-                                serverUrl = serverUrl,
-                                forceProxy = forceMangaProxy,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = AppDimens.PaddingMedium)
-                            )
-                        }
+                    }
+                } else {
+                    // 章节内容（分段显示，带高亮）
+                    itemsIndexed(
+                        items = paragraphs,
+                        key = { index, _ -> "${currentChapterIndex}_${index}" }
+                    ) { index, paragraph ->
+                        ParagraphItem(
+                            text = paragraph,
+                            isPlaying = index == currentPlayingParagraph,
+                            isPreloaded = preloadedParagraphs.contains(index),
+                            fontSize = readingFontSize,
+                            chapterUrl = currentChapterUrl,
+                            serverUrl = serverUrl,
+                            forceProxy = forceMangaProxy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = AppDimens.PaddingMedium)
+                        )
                     }
                 }
             }
-            } else {
-                BoxWithConstraints(
+        } else { // Horizontal Pager 逻辑 (针对小说文本)
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = readingFontSize.sp,
+                    lineHeight = (readingFontSize * 1.8f).sp
+                )
+                val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title.orEmpty()
+                val headerText = if (chapterTitle.isNotBlank()) {
+                    chapterTitle + "\n\n"
+                } else {
+                    ""
+                }
+                val headerFontSize = (readingFontSize + 6f).sp
+                val lineHeightPx = with(LocalDensity.current) {
+                    val lineHeight = style.lineHeight
+                    if (lineHeight.value.isNaN() || lineHeight.value <= 0f) {
+                        (readingFontSize * 1.8f).sp.toPx()
+                    } else {
+                        lineHeight.toPx()
+                    }
+                }
+                val pagePadding = contentPadding
+                val density = LocalDensity.current
+                val availableConstraints = remember(constraints, pagePadding, density) {
+                    adjustedConstraints(constraints, pagePadding, density)
+                }
+                
+                val paginatedPages = rememberPaginatedText(
+                    paragraphs = paragraphs,
+                    style = style,
+                    constraints = availableConstraints,
+                    lineHeightPx = lineHeightPx,
+                    headerText = headerText,
+                    headerFontSize = headerFontSize
+                )
+                
+                val pagerState = rememberPagerState(
+                    initialPage = 0,
+                    pageCount = { paginatedPages.pages.size.coerceAtLeast(1) }
+                )
+
+                // 处理挂起的滚动请求 (水平模式)
+                LaunchedEffect(pendingScrollIndex, paginatedPages) {
+                    if (pendingScrollIndex != null && paginatedPages.pages.isNotEmpty()) {
+                        val targetPage = paginatedPages.pages.indexOfFirst { it.startParagraphIndex >= pendingScrollIndex }
+                            .coerceAtLeast(0)
+                        pagerState.scrollToPage(targetPage)
+                        onScrollConsumed()
+                    }
+                }
+
+                HorizontalPager(
+                    state = pagerState,
+                    userScrollEnabled = !(isPlaying && lockPageOnTTS),
                     modifier = Modifier
                         .fillMaxSize()
-                        .weight(1f)
-                ) {
-                    val style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = readingFontSize.sp,
-                        lineHeight = (readingFontSize * 1.8f).sp
-                    )
-                    val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title.orEmpty()
-                    val headerText = if (chapterTitle.isNotBlank()) {
-                        chapterTitle + "\n\n"
-                    } else {
-                        ""
-                    }
-                    val headerFontSize = (readingFontSize + 6f).sp
-                    val lineHeightPx = with(LocalDensity.current) {
-                        val lineHeight = style.lineHeight
-                        if (lineHeight.value.isNaN() || lineHeight.value <= 0f) {
-                            (readingFontSize * 1.8f).sp.toPx()
-                        } else {
-                            lineHeight.toPx()
-                        }
-                    }
-                    val pagePadding = contentPadding
-                    val density = LocalDensity.current
-                    val availableConstraints = remember(constraints, pagePadding, density) {
-                        adjustedConstraints(constraints, pagePadding, density)
-                    }
-                    
-                    val paginatedPages = rememberPaginatedText(
-                        paragraphs = paragraphs,
-                        style = style,
-                        constraints = availableConstraints,
-                        lineHeightPx = lineHeightPx,
-                        headerText = headerText,
-                        headerFontSize = headerFontSize
-                    )
-                    
-                    val isMangaMode = remember(paragraphs, book.type, manualMangaUrls) {
-                        if (manualMangaUrls.contains(book.bookUrl)) return@remember true
-                        val imageCount = paragraphs.count { it.contains("<img") || it.contains("__IMG__") }
-                        book.type == 2 || (paragraphs.isNotEmpty() && imageCount.toFloat() / paragraphs.size > 0.1f)
-                    }
-
-                    // 使用 contentKey 强制刷新 Pager 状态
-                    val contentKey = remember(currentChapterIndex, isMangaMode) { 
-                        "${currentChapterIndex}_${isMangaMode}" 
-                    }
-
-                    val pageTextCache = remember { mutableStateMapOf<Int, AnnotatedString>() }
-                    val pagerState = rememberPagerState(
-                        initialPage = 0,
-                        pageCount = {
-                            if (isMangaMode) {
-                                paragraphs.size.coerceAtLeast(1)
-                            } else {
-                                paginatedPages.pages.size.coerceAtLeast(1)
+                        .pointerInput(showControls, paginatedPages, currentChapterIndex, isPlaying, lockPageOnTTS) { // 移除不必要的参数
+                            detectTapGesturesWithoutConsuming(viewConfiguration) { offset, size ->
+                                if (isPlaying && lockPageOnTTS) {
+                                    val width = size.width.toFloat()
+                                    if (offset.x in (width / 3f)..(width * 2f / 3f)) showControls = !showControls
+                                    return@detectTapGesturesWithoutConsuming
+                                }
+                                handleHorizontalTap(
+                                    offset = offset,
+                                    size = size,
+                                    showControls = showControls,
+                                    pagerState = pagerState,
+                                    paginatedPages = paginatedPages.pages,
+                                    onPreviousChapter = {
+                                        if (currentChapterIndex > 0) onChapterClick(currentChapterIndex - 1)
+                                    },
+                                    onNextChapter = {
+                                        if (currentChapterIndex < chapters.size - 1) onChapterClick(currentChapterIndex + 1)
+                                    },
+                                    coroutineScope = coroutineScope,
+                                    onToggleControls = { showControls = it }
+                                )
                             }
                         }
-                    )
-                    LaunchedEffect(contentKey) {
-                        pagerState.scrollToPage(0)
-                    }
-                    
-                    resolveCurrentPageStart = {
-                        if (isMangaMode) {
-                            pagerState.currentPage to 0
-                        } else {
-                            paginatedPages.getOrNull(pagerState.currentPage)?.let {
-                                it.startParagraphIndex to it.startOffsetInParagraph
-                            }
-                        }
-                    }
-                    val viewConfiguration = LocalViewConfiguration.current
-                    val onPreviousChapterFromPager = {
-                        if (currentChapterIndex > 0) {
-                            pendingJumpToLastPageTarget = currentChapterIndex - 1
-                            onChapterClick(currentChapterIndex - 1)
-                        }
-                    }
-                    val onNextChapterFromPager = {
-                        if (currentChapterIndex < chapters.size - 1) {
-                            pendingJumpToLastPageTarget = null
-                            onChapterClick(currentChapterIndex + 1)
-                        }
-                    }
-                    
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        HorizontalPager(
-                            state = pagerState,
-                            userScrollEnabled = !(isPlaying && lockPageOnTTS),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .pointerInput(
-                                    showControls,
-                                    paginatedPages,
-                                    currentChapterIndex,
-                                    viewConfiguration,
-                                    isPlaying,
-                                    lockPageOnTTS
-                                ) {
-                                    detectTapGesturesWithoutConsuming(viewConfiguration) { offset, size ->
-                                        if (isPlaying && lockPageOnTTS) {
-                                            val width = size.width.toFloat()
-                                            val isMiddle = offset.x in (width / 3f)..(width * 2f / 3f)
-                                            if (isMiddle) {
-                                                showControls = !showControls
-                                            }
-                                            return@detectTapGesturesWithoutConsuming
-                                        }
-                                        handleHorizontalTap(
-                                            offset = offset,
-                                            size = size,
-                                            showControls = showControls,
-                                            pagerState = pagerState,
-                                            paginatedPages = paginatedPages.pages,
-                                            onPreviousChapter = onPreviousChapterFromPager,
-                                            onNextChapter = onNextChapterFromPager,
-                                            coroutineScope = coroutineScope,
-                                            onToggleControls = { showControls = it }
-                                        )
-                                    }
-                                }
-                        ) { page ->
-                            if (isMangaMode) {
-                                val text = paragraphs.getOrNull(page) ?: ""
-                                val imgUrl = remember(text) {
-                                    val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""".toRegex()
-                                    pattern.find(text)?.groupValues?.get(1)
-                                }
-                                
-                                val context = androidx.compose.ui.platform.LocalContext.current
-                                val finalUrl = remember(imgUrl, serverUrl) {
-                                    if (imgUrl == null) null
-                                    else if (imgUrl.startsWith("http")) imgUrl
-                                    else {
-                                        val base = serverUrl.replace("/api/5", "")
-                                        if (imgUrl.startsWith("/")) "$base$imgUrl" else "$base/$imgUrl"
-                                    }
-                                }
-                                
-                                val finalReferer = remember(currentChapterUrl) {
-                                    currentChapterUrl?.replace("http://", "https://")?.let {
-                                        if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
-                                    }
-                                }
-
-                                val proxyUrl = remember(finalUrl, serverUrl) {
-                                    if (finalUrl == null) null
-                                    else android.net.Uri.parse(serverUrl).buildUpon()
-                                        .path("api/5/proxypng")
-                                        .appendQueryParameter("url", finalUrl)
-                                        .appendQueryParameter("accessToken", "")
-                                        .build().toString()
-                                }
-
-                                var currentRequestUrl by remember(finalUrl, forceMangaProxy) { 
-                                    mutableStateOf(if (forceMangaProxy) proxyUrl else finalUrl) 
-                                }
-                                var hasTriedProxy by remember(finalUrl, forceMangaProxy) { 
-                                    mutableStateOf(forceMangaProxy) 
-                                }
-
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (currentRequestUrl != null) {
-                                        val imageRequest = remember(currentRequestUrl, finalReferer) {
-                                            coil.request.ImageRequest.Builder(context)
-                                                .data(currentRequestUrl)
-                                                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
-                                                .apply {
-                                                    if (finalReferer != null) {
-                                                        addHeader("Referer", finalReferer)
-                                                    }
-                                                }
-                                                .listener(
-                                                    onError = { _, _ ->
-                                                        if (!hasTriedProxy && proxyUrl != null) {
-                                                            currentRequestUrl = proxyUrl
-                                                            hasTriedProxy = true
-                                                        }
-                                                    }
-                                                )
-                                                .crossfade(true)
-                                                .build()
-                                        }
-                                        ZoomableImage(
-                                            model = imageRequest,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Fit
-                                        )
-                                    } else {
-                                        Text(
-                                            text = text,
-                                            style = style,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.fillMaxSize().padding(pagePadding)
-                                        )
-                                    }
-                                }
-                            } else {
-                                val pageInfo = paginatedPages.getOrNull(page)
-                                val pageText = pageInfo?.let { pi ->
-                                    remember(pi, currentPlayingParagraph, currentParagraphStartOffset, playbackProgress, paginatedPages.fullText) {
-                                        val baseText = paginatedPages.fullText.subSequence(
-                                            pi.start.coerceAtLeast(0),
-                                            pi.end.coerceAtMost(paginatedPages.fullText.text.length)
-                                        )
-                                        
-                                        if (currentPlayingParagraph == pi.startParagraphIndex) {
-                                            val builder = AnnotatedString.Builder(baseText)
-                                            // 计算在当前页面内的相对偏移
-                                            // 简化版：由于阅读器分页通常以段落为界或包含完整段落，这里对当前段落覆盖到的文字应用高亮
-                                            // 如果需要更精准，需要 paragraphStartIndices
-                                            builder.addStyle(
-                                                style = SpanStyle(background = Color.Blue.copy(alpha = 0.15f)),
-                                                start = 0,
-                                                end = baseText.length
-                                            )
-                                            builder.toAnnotatedString()
-                                        } else {
-                                            baseText
-                                        }
-                                    }
-                                } ?: AnnotatedString("")
-                                
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(pagePadding)
-                                ) {
-                                    SelectionContainer {
-                                        Text(
-                                            text = pageText,
-                                            style = style,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    
-                        if (!showControls && pagerState.pageCount > 0) {
-                            val percentage = ((pagerState.currentPage + 1) * 100) / pagerState.pageCount
-                            Text(
-                                text = "${pagerState.currentPage + 1}/${pagerState.pageCount} ($percentage%)",
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                                        RoundedCornerShape(8.dp)
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface
+                ) { page ->
+                    val pageInfo = paginatedPages.getOrNull(page)
+                    val pageText = pageInfo?.let { pi ->
+                        remember(pi, currentPlayingParagraph, paginatedPages.fullText) { // 移除不必要的参数
+                            val baseText = paginatedPages.fullText.subSequence(
+                                pi.start.coerceAtLeast(0),
+                                pi.end.coerceAtMost(paginatedPages.fullText.text.length)
                             )
+                            if (currentPlayingParagraph == pi.startParagraphIndex) {
+                                AnnotatedString.Builder(baseText).apply {
+                                    addStyle(SpanStyle(background = Color.Blue.copy(alpha = 0.15f)), 0, baseText.length)
+                                }.toAnnotatedString()
+                            } else baseText
                         }
+                    } ?: AnnotatedString("")
                     
-                        LaunchedEffect(pagerState, paginatedPages, isPlaying, lockPageOnTTS) {
-                            snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
-                                .distinctUntilChanged()
-                                .collect { pair ->
-                                    val page = pair.first
-                                    val isScrolling = pair.second
-                                    val pageInfo = paginatedPages.getOrNull(page)
-                                    if (pageInfo != null) {
-                                        currentPageStartIndex = pageInfo.startParagraphIndex
-                                        currentPageStartOffset = pageInfo.startOffsetInParagraph
+                    Box(modifier = Modifier.fillMaxSize().padding(pagePadding)) {
+                        SelectionContainer {
+                            Text(text = pageText, style = style, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                }
 
-                                        if (isPlaying && !isPaused && !lockPageOnTTS && !isAutoScrolling && isScrolling) {
-                                            if (!lockPageOnTTS) {
-                                                onStopListening()
-                                                onStartListening(pageInfo.startParagraphIndex, pageInfo.startOffsetInParagraph)
-                                            }
-                                        }
-                                        lastAutoScrollTarget = null
-                                        isAutoScrolling = false
-                                    }
-                                }
+                // 上报翻页后的进度
+                LaunchedEffect(pagerState.currentPage) {
+                    if (paginatedPages.pages.isNotEmpty()) {
+                        paginatedPages.getOrNull(pagerState.currentPage)?.let {
+                            onScrollUpdate(it.startParagraphIndex)
                         }
-
-                        LaunchedEffect(
-                            currentPlayingParagraph,
-                            currentParagraphStartOffset,
-                            playbackProgress,
-                            paginatedPages,
-                            readingMode,
-                            isPlaying
-                        ) {
-                            if (readingMode != ReadingMode.Horizontal) return@LaunchedEffect
-                            if (!isPlaying) return@LaunchedEffect
-                            if (currentPlayingParagraph < 0 || paginatedPages.isEmpty()) return@LaunchedEffect
-                            if (pagerState.currentPageOffsetFraction != 0f) return@LaunchedEffect
-                            val paragraph = paragraphs.getOrNull(currentPlayingParagraph) ?: return@LaunchedEffect
-                            val paragraphLength = paragraph.length
-                            if (paragraphLength <= 0) return@LaunchedEffect
-                            val startOffset = currentParagraphStartOffset.coerceIn(0, paragraphLength)
-                            val playableLength = (paragraphLength - startOffset).coerceAtLeast(1)
-                            val offsetInParagraph =
-                                startOffset + (playbackProgress.coerceIn(0f, 1f) * playableLength).toInt()
-                            val pagesForParagraph = paginatedPages.pages.withIndex()
-                                .filter { it.value.startParagraphIndex == currentPlayingParagraph }
-                            if (pagesForParagraph.isEmpty()) return@LaunchedEffect
-                            var targetPage = pagesForParagraph.first().index
-                            for (i in pagesForParagraph.indices) {
-                                val entry = pagesForParagraph[i]
-                                val start = entry.value.startOffsetInParagraph
-                                val nextStart = pagesForParagraph.getOrNull(i + 1)?.value?.startOffsetInParagraph
-                                val inThisPage = if (nextStart == null || nextStart <= start) {
-                                    offsetInParagraph >= start
-                                } else {
-                                    offsetInParagraph >= start && offsetInParagraph < nextStart
-                                }
-                                if (inThisPage) {
-                                    targetPage = entry.index
-                                    break
-                                }
-                            }
-                            if (targetPage != pagerState.currentPage) {
-                                if (pagerState.isScrollInProgress) return@LaunchedEffect
-                                if (lastAutoScrollTarget == targetPage) return@LaunchedEffect
-                                lastAutoScrollTarget = targetPage
-                                isAutoScrolling = true
-                                pagerState.scrollToPage(targetPage)
-                            }
-                        }
-                        
-                        LaunchedEffect(pagerState.currentPage, paginatedPages.fullText) {
-                            if (paginatedPages.isEmpty()) {
-                                pageTextCache.clear()
-                                return@LaunchedEffect
-                            }
-                            val current = pagerState.currentPage
-                            val indices = listOf(current - 1, current, current + 1)
-                                .filter { index -> index in paginatedPages.indices }
-                                .toSet()
-                            for (index in indices) {
-                                if (!pageTextCache.containsKey(index)) {
-                                    val pageInfo = paginatedPages[index]
-                                    val safeStart = pageInfo.start.coerceAtLeast(0)
-                                    val safeEnd = pageInfo.end.coerceAtMost(paginatedPages.fullText.text.length)
-                                    val text = if (safeEnd > safeStart) {
-                                        paginatedPages.fullText.subSequence(safeStart, safeEnd)
-                                    } else {
-                                        AnnotatedString("")
-                                    }
-                                    pageTextCache[index] = text
-                                }
-                            }
-                            val staleKeys = pageTextCache.keys.filter { it !in indices }
-                            for (key in staleKeys) {
-                                pageTextCache.remove(key)
-                            }
-                        }
-                    
-                        LaunchedEffect(pendingJumpToLastPageTarget, paginatedPages, currentChapterIndex) {
-                            if (paginatedPages.isEmpty()) return@LaunchedEffect
-                            if (currentChapterIndex == lastHandledChapterIndex) return@LaunchedEffect
-                            val target = pendingJumpToLastPageTarget
-                            if (target != null && currentChapterIndex == target) {
-                                pagerState.scrollToPage(paginatedPages.lastIndex)
-                            } else {
-                                pagerState.scrollToPage(0)
-                            }
-                            lastHandledChapterIndex = currentChapterIndex
-                            pendingJumpToLastPageTarget = null
-                        }
-                    
                     }
                 }
             }
@@ -829,7 +579,7 @@ fun ReadingScreen(
                 onLockPageOnTTSChange = onLockPageOnTTSChange,
                 pageTurningMode = pageTurningMode,
                 onPageTurningModeChange = onPageTurningModeChange,
-                isDarkMode = isDarkMode,
+                darkModeConfig = darkModeConfig,
                 onDarkModeChange = onDarkModeChange,
                 forceMangaProxy = forceMangaProxy,
                 onForceMangaProxyChange = onForceMangaProxyChange,
@@ -913,7 +663,7 @@ private fun ParagraphItem(
         shape = RoundedCornerShape(8.dp)
     ) {
         val imgUrl = remember(text) {
-            val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""".toRegex()
+            val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)(["'>\s\n]+)["']?"""\.toRegex()
             pattern.find(text)?.groupValues?.get(1)
         }
 
@@ -1325,7 +1075,7 @@ private fun BottomControlBar(
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "\u6682\u505c" else "\u64ad\u653e",
+                            contentDescription = if (isPlaying) "\u6688\u505c" else "\u64ad\u653e",
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(28.dp)
                         )
@@ -1424,8 +1174,8 @@ private fun ReaderOptionsDialog(
     onLockPageOnTTSChange: (Boolean) -> Unit,
     pageTurningMode: com.readapp.data.PageTurningMode,
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit,
-    isDarkMode: Boolean,
-    onDarkModeChange: (Boolean) -> Unit,
+    darkModeConfig: com.readapp.data.DarkModeConfig,
+    onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit,
     forceMangaProxy: Boolean,
     onForceMangaProxyChange: (Boolean) -> Unit,
     readingMode: com.readapp.data.ReadingMode,
@@ -1462,13 +1212,28 @@ private fun ReaderOptionsDialog(
 
                 Divider()
 
-                // 夜间模式
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable { onDarkModeChange(!isDarkMode) }
-                ) {
-                    Text("夜间模式", modifier = Modifier.weight(1f))
-                    Switch(checked = isDarkMode, onCheckedChange = onDarkModeChange)
+                // 夜间模式 (三状态)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("夜间模式", style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        com.readapp.data.DarkModeConfig.values().forEach { config ->
+                            val isSelected = darkModeConfig == config
+                            val label = when(config) {
+                                com.readapp.data.DarkModeConfig.ON -> "开启"
+                                com.readapp.data.DarkModeConfig.OFF -> "关闭"
+                                com.readapp.data.DarkModeConfig.AUTO -> "跟随系统"
+                            }
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { onDarkModeChange(config) },
+                                label = { Text(label) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
 
                 // 强制代理
@@ -1557,8 +1322,8 @@ private fun FontSizeDialog(
     onLockPageOnTTSChange: (Boolean) -> Unit,
     pageTurningMode: com.readapp.data.PageTurningMode,
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit,
-    isDarkMode: Boolean,
-    onDarkModeChange: (Boolean) -> Unit,
+    darkModeConfig: com.readapp.data.DarkModeConfig,
+    onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit,
     forceMangaProxy: Boolean,
     onForceMangaProxyChange: (Boolean) -> Unit,
     readingMode: com.readapp.data.ReadingMode,
@@ -1574,7 +1339,7 @@ private fun FontSizeDialog(
         onLockPageOnTTSChange = onLockPageOnTTSChange,
         pageTurningMode = pageTurningMode,
         onPageTurningModeChange = onPageTurningModeChange,
-        isDarkMode = isDarkMode,
+        darkModeConfig = darkModeConfig,
         onDarkModeChange = onDarkModeChange,
         forceMangaProxy = forceMangaProxy,
         onForceMangaProxyChange = onForceMangaProxyChange,
