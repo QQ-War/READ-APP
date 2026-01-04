@@ -89,7 +89,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private var isReadingChapterTitle = false
     private var currentSearchQuery = ""
     private var allBooks: List<Book> = emptyList()
-    private val chapterContentCache = mutableMapOf<Int, String>()
+    private val chapterContentCache = mutableMapOf<String, String>()
     private val logFile = File(appContext.filesDir, LOG_FILE_NAME)
 
     private val _books = MutableStateFlow<List<Book>>(emptyList())
