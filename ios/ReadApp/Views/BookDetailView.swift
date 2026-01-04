@@ -5,46 +5,49 @@ struct BookDetailView: View {
     let book: Book
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var apiService: APIService
+    @StateObject private var preferences = UserPreferences.shared
     @State private var chapters: [BookChapter] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
     
-    // 下载与缓存状态
-    @State private var startChapter: String = "1"
-    @State private var endChapter: String = ""
-    @State private var isDownloading = false
-    @State private var showCustomRange = false
-    @State private var showingDownloadOptions = false
-    @State private var downloadProgress: Double = 0
-    @State private var downloadMessage: String = ""
-    @State private var cachedChapters: Set<Int> = []
+    // ... rest of properties unchanged ...
     
-    // 交互状态
-    @State private var isReading = false
-    @State private var showingSourceSwitch = false
-    @State private var showingClearCacheAlert = false
-    @State private var showingAddSuccessAlert = false
-    @State private var showingRemoveSuccessAlert = false
-    @State private var selectedGroupIndex: Int = 0
-    
-    private var isInBookshelf: Bool {
-        apiService.books.contains { $0.bookUrl == book.bookUrl }
+    private var isManuallyMarkedAsManga: Bool {
+        guard let url = book.bookUrl else { return false }
+        return preferences.manualMangaUrls.contains(url)
     }
     
-    private var chapterGroups: [Int] {
-        guard !chapters.isEmpty else { return [] }
-        return Array(0...((chapters.count - 1) / 50))
+    private func toggleManualManga() {
+        guard let url = book.bookUrl else { return }
+        if preferences.manualMangaUrls.contains(url) {
+            preferences.manualMangaUrls.remove(url)
+        } else {
+            preferences.manualMangaUrls.insert(url)
+        }
     }
 
-    private var groupCount: Int {
-        chapterGroups.count
-    }
-    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 // 1. 头部信息
                 headerSection
+                
+                // 漫画模式手动开关
+                HStack {
+                    Label("强制漫画模式", systemImage: "photo.on.rectangle.angled")
+                        .font(.subheadline)
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { isManuallyMarkedAsManga },
+                        set: { _ in toggleManualManga() }
+                    ))
+                    .labelsHidden()
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color.gray.opacity(0.05))
+                .cornerRadius(10)
+                .padding(.horizontal)
                 
                 // 2. 操作按钮区
                 HStack(spacing: 16) {

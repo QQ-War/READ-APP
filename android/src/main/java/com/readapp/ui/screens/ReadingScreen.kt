@@ -96,6 +96,7 @@ fun ReadingScreen(
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit = {},
     isDarkMode: Boolean = false,
     onDarkModeChange: (Boolean) -> Unit = {},
+    manualMangaUrls: Set<String> = emptySet(),
     modifier: Modifier = Modifier
 ) {
     var showControls by remember { mutableStateOf(false) }
@@ -303,9 +304,10 @@ fun ReadingScreen(
                         headerFontSize = headerFontSize
                     )
                     
-                    val isMangaMode = remember(paragraphs, book.type) {
+                    val isMangaMode = remember(paragraphs, book.type, manualMangaUrls) {
+                        if (manualMangaUrls.contains(book.bookUrl)) return@remember true
                         val imageCount = paragraphs.count { it.contains("<img") || it.contains("__IMG__") }
-                        book.type == 2 || (paragraphs.isNotEmpty() && imageCount.toFloat() / paragraphs.size > 0.3f)
+                        book.type == 2 || (paragraphs.isNotEmpty() && imageCount.toFloat() / paragraphs.size > 0.1f)
                     }
 
                     val pageTextCache = remember { mutableStateMapOf<Int, AnnotatedString>() }

@@ -357,6 +357,7 @@ struct DebugSettingsView: View {
     @State private var logFileURL: URL?
     @State private var showClearLogsAlert = false
     @State private var showClearCacheAlert = false
+    @State private var showLogViewer = false
 
     var body: some View {
         Form {
@@ -366,6 +367,15 @@ struct DebugSettingsView: View {
                     Spacer()
                     Text("\(LogManager.shared.getLogCount()) 条")
                         .foregroundColor(.secondary)
+                }
+
+                Button(action: { showLogViewer = true }) {
+                    HStack {
+                        Image(systemName: "list.bullet.rectangle.portrait")
+                        Text("查看日志")
+                        Spacer()
+                    }
+                    .foregroundColor(.blue)
                 }
 
                 Button(action: exportLogs) {
@@ -400,6 +410,9 @@ struct DebugSettingsView: View {
         }
         .navigationTitle("调试工具")
         .ifAvailableHideTabBar()
+        .sheet(isPresented: $showLogViewer) {
+            LogView()
+        }
         .alert("清空日志", isPresented: $showClearLogsAlert) {
             Button("取消", role: .cancel) { }
             Button("清空", role: .destructive) {

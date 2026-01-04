@@ -318,6 +318,14 @@ class UserPreferences: ObservableObject {
         }
     }
     
+    /// 手动标记为漫画的书籍 URL 集合
+    @Published var manualMangaUrls: Set<String> {
+        didSet {
+            let array = Array(manualMangaUrls)
+            UserDefaults.standard.set(array, forKey: "manualMangaUrls")
+        }
+    }
+    
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex)
     private var ttsProgress: [String: (Int, Int)] {
         get {
@@ -395,6 +403,9 @@ class UserPreferences: ObservableObject {
         self.pageInterSpacing = savedInterSpacing == 0 ? 12 : savedInterSpacing
         
         self.lockPageOnTTS = UserDefaults.standard.bool(forKey: "lockPageOnTTS")
+        
+        let savedManualMangaUrls = UserDefaults.standard.stringArray(forKey: "manualMangaUrls") ?? []
+        self.manualMangaUrls = Set(savedManualMangaUrls)
         
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 100.0 : savedSpeechRate

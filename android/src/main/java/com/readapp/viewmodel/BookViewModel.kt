@@ -191,6 +191,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val searchSourcesFromBookshelf: StateFlow<Boolean> = _searchSourcesFromBookshelf.asStateFlow()
     private val _preferredSearchSourceUrls = MutableStateFlow<Set<String>>(emptySet())
     val preferredSearchSourceUrls: StateFlow<Set<String>> = _preferredSearchSourceUrls.asStateFlow()
+    private val _manualMangaUrls = MutableStateFlow<Set<String>>(emptySet())
+    val manualMangaUrls: StateFlow<Set<String>> = _manualMangaUrls.asStateFlow()
     private val _readingMode = MutableStateFlow(com.readapp.data.ReadingMode.Vertical)
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = _readingMode.asStateFlow()
     private val _lockPageOnTTS = MutableStateFlow(false)
@@ -248,6 +250,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _searchSourcesFromBookshelf.value = preferences.searchSourcesFromBookshelf.first()
             val urls = preferences.preferredSearchSourceUrls.first()
             _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
+            val mUrls = preferences.manualMangaUrls.first()
+            _manualMangaUrls.value = if (mUrls.isBlank()) emptySet() else mUrls.split(";").toSet()
             _readingMode.value = preferences.readingMode.first()
             _lockPageOnTTS.value = preferences.lockPageOnTTS.first()
             _pageTurningMode.value = preferences.pageTurningMode.first()
@@ -1396,6 +1400,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun clearPreferredSearchSources() {
         _preferredSearchSourceUrls.value = emptySet()
         viewModelScope.launch { preferences.savePreferredSearchSourceUrls("") }
+    }
+    fun toggleManualManga(url: String) {
+        val current = _manualMangaUrls.value.toMutableSet()
+        if (current.contains(url)) current.remove(url) else current.add(url)
+        _manualMangaUrls.value = current
+        viewModelScope.launch { preferences.saveManualMangaUrls(current.joinToString(";")) }
     }
     fun clearCache() {
         viewModelScope.launch {

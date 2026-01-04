@@ -123,6 +123,7 @@ fun ReadAppMain() {
                 val chapters by bookViewModel.chapters.collectAsState()
                 val isChaptersLoading by bookViewModel.isChapterListLoading.collectAsState()
                 val bookshelfBooks by bookViewModel.books.collectAsState()
+                val manualMangaUrls by bookViewModel.manualMangaUrls.collectAsState()
                 
                 selectedBook?.let { book ->
                     val isInBookshelf = bookshelfBooks.any { it.bookUrl == book.bookUrl }
@@ -131,6 +132,8 @@ fun ReadAppMain() {
                         chapters = chapters,
                         isChaptersLoading = isChaptersLoading,
                         isInBookshelf = isInBookshelf,
+                        manualMangaUrls = manualMangaUrls,
+                        onToggleManualManga = { bookViewModel.toggleManualManga(it) },
                         onAddToBookshelf = { bookViewModel.saveBookToBookshelf(book) },
                         onRemoveFromBookshelf = { bookViewModel.removeFromBookshelf(book) },
                         onSourceSwitch = { newSourceBook ->
@@ -168,6 +171,7 @@ fun ReadAppMain() {
                 val lockPageOnTTS by bookViewModel.lockPageOnTTS.collectAsState()
                 val pageTurningMode by bookViewModel.pageTurningMode.collectAsState()
                 val isDarkMode by bookViewModel.isDarkMode.collectAsState()
+                val manualMangaUrls by bookViewModel.manualMangaUrls.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
@@ -195,6 +199,7 @@ fun ReadAppMain() {
                         onPageTurningModeChange = { bookViewModel.updatePageTurningMode(it) },
                         isDarkMode = isDarkMode,
                         onDarkModeChange = { bookViewModel.updateDarkMode(it) },
+                        manualMangaUrls = manualMangaUrls,
                         onClearError = { bookViewModel.clearError() },
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)

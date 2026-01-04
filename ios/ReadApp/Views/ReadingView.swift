@@ -201,9 +201,14 @@ struct ReadingView: View {
 
     private var isMangaMode: Bool {
         // 漫画模式判定：
-        // 1. 书籍类型明确标记为漫画 (2)
-        // 2. 或者内容中包含图片且段落总数较少（说明是图集）
-        // 3. 或者图片占比超过 10%
+        // 1. 书籍被手动标记为漫画
+        // 2. 书籍类型明确标记为漫画 (2)
+        // 3. 或者内容中包含图片且段落总数较少（说明是图集）
+        // 4. 或者图片占比超过 10%
+        if let url = book.bookUrl, preferences.manualMangaUrls.contains(url) {
+            return true
+        }
+        
         let imageCount = contentSentences.filter { $0.hasPrefix("__IMG__") }.count
         guard imageCount > 0 else { return false }
         
