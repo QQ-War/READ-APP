@@ -200,9 +200,15 @@ struct ReadingView: View {
     @State private var pageTurnRequest: PageTurnRequest? = nil
 
     private var isMangaMode: Bool {
-        // 如果书籍类型是漫画 (2) 或者 内容中包含较多图片占位符
+        // 漫画模式判定：
+        // 1. 书籍类型明确标记为漫画 (2)
+        // 2. 或者内容中包含图片且段落总数较少（说明是图集）
+        // 3. 或者图片占比超过 10%
         let imageCount = contentSentences.filter { $0.hasPrefix("__IMG__") }.count
-        return book.type == 2 || (contentSentences.count > 0 && imageCount > 0 && Double(imageCount) / Double(contentSentences.count) > 0.3)
+        guard imageCount > 0 else { return false }
+        
+        let ratio = Double(imageCount) / Double(contentSentences.count)
+        return book.type == 2 || contentSentences.count < 50 || ratio > 0.1
     }
 
     private struct PaginationKey: Hashable {
@@ -1166,18 +1172,21 @@ struct ReadingView: View {
 
     private func removeHTMLAndSVG(_ text: String) -> String {
         var result = text
+        // 移除脚本和样式
+        result = result.replacingOccurrences(of: "<script[^>]*>.*?</script>", with: "", options: [.regularExpression, .caseInsensitive])
+        result = result.replacingOccurrences(of: "<style[^>]*>.*?</style>", with: "", options: [.regularExpression, .caseInsensitive])
         // 移除 SVG
         result = result.replacingOccurrences(of: "<svg[^>]*>.*?</svg>", with: "", options: [.regularExpression, .caseInsensitive])
         
-        // 提取 img src 并替换为特殊占位符 __IMG__url
-        // 匹配 <img ... src="url" ...> 或 <img ... src='url' ...>
-        let imgPattern = "<img[^>]+src\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>"
+        // 增强的图片解析正则：提取 src 内容
+        // 兼容: <img src="url">, <img src='url'>, <img src=url>, <img data-src="url"> 等
+        let imgPattern = "<img[^>]+(?:src|data-src)\\s*=\\s*[\"']?([^\"'\\s>]+)[\"']?[^>]*>"
         if let regex = try? NSRegularExpression(pattern: imgPattern, options: .caseInsensitive) {
             let range = NSRange(location: 0, length: result.utf16.count)
             result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "\n__IMG__$1\n")
         }
         
-        // 移除所有其他 HTML 标签，替换为换行以保持分段
+        // 移除所有其他 HTML 标签
         result = result.replacingOccurrences(of: "<[^>]+>", with: "\n", options: .regularExpression)
         
         return result
@@ -2146,9 +2155,11 @@ private struct RichTextView: View {
 
 private struct MangaImageView: View {
     let url: String
+    @EnvironmentObject var apiService: APIService
     
     var body: some View {
-        AsyncImage(url: URL(string: url)) { phase in
+        let finalURL = resolveURL(url)
+        AsyncImage(url: finalURL) { phase in
             switch phase {
             case .empty:
                 HStack {
@@ -2156,27 +2167,45 @@ private struct MangaImageView: View {
                     ProgressView()
                     Spacer()
                 }
-                .frame(height: 200)
+                .frame(minHeight: 200)
             case .success(let image):
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: .infinity)
-            case .failure:
-                VStack {
+            case .failure(let error):
+                VStack(spacing: 8) {
                     Image(systemName: "photo.fill")
+                        .font(.largeTitle)
                         .foregroundColor(.gray)
                     Text("图片加载失败")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    #if DEBUG
+                    Text(url).font(.system(size: 8)).lineLimit(2)
+                    #endif
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 100)
+                .frame(minHeight: 150)
                 .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
             @unknown default:
                 EmptyView()
             }
         }
+    }
+    
+    private func resolveURL(_ original: String) -> URL? {
+        if original.hasPrefix("http") {
+            return URL(string: original)
+        }
+        
+        // 尝试补全相对路径
+        let baseURL = apiService.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "")
+        if original.hasPrefix("/") {
+            return URL(string: baseURL + original)
+        }
+        return URL(string: baseURL + "/" + original)
     }
 }
 
