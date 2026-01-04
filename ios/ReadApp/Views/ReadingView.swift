@@ -1199,38 +1199,39 @@ struct ReadingView: View {
         let imgPattern = "<img[^>]+(?:src|data-src)\\s*=\\s*[\"']?([^\"'\\s>]+)[\"']?[^>]*>"
         
         if let regex = try? NSRegularExpression(pattern: imgPattern, options: .caseInsensitive) {
-            let nsString = result as NSString
             let matches = regex.matches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count))
             
-            var validImageUrls: [String] = []
-            
-            for match in matches {
+            // 倒序替换，防止偏移量失效
+            for match in matches.reversed() {
                 if let urlRange = Range(match.range(at: 1), in: result) {
                     let url = String(result[urlRange])
-                    // 2. 在代码中过滤：排除网页链接，保留图片格式或带签名参数的链接
-                    let isWebPage = url.contains("/mobile/comics/") || url.contains("/chapter/") || url.contains("/comics/")
-                    let isImageExt = url.contains(".webp") || url.contains(".jpg") || url.contains(".png") || url.contains(".jpeg") || url.contains("image")
                     
-                    if !isWebPage && (isImageExt || url.contains("?")) {
-                        validImageUrls.append(url)
+                    // 2. 严格过滤：排除网页链接，保留图片链接
+                    let lowerUrl = url.lowercased()
+                    let isWebPage = lowerUrl.contains("/mobile/comics/") || lowerUrl.contains("/chapter/") || lowerUrl.contains("/comics/")
+                    let isImageHost = lowerUrl.contains("image") || lowerUrl.contains("img") || lowerUrl.contains("tn1")
+                    let isImageExt = lowerUrl.contains(".webp") || lowerUrl.contains(".jpg") || lowerUrl.contains(".png") || lowerUrl.contains(".jpeg") || lowerUrl.contains(".gif")
+                    
+                    // 特殊逻辑：如果是主站域名但完全不含 image/img/tn1 标识，且没有图片后缀，基本确定是网页
+                    let isKuaikanPage = lowerUrl.contains("kuaikanmanhua.com") && !isImageHost && !isImageExt
+                    
+                    if !isWebPage && !isKuaikanPage && (isImageExt || url.contains("?")) {
+                        // 有效图片：替换为占位符
+                        if let fullRange = Range(match.range, in: result) {
+                            result.replaceSubrange(fullRange, with: "\n__IMG__\(url)\n")
+                        }
+                    } else {
+                        // 无效图片/网页链接：直接删除该标签
+                        if let fullRange = Range(match.range, in: result) {
+                            result.removeSubrange(fullRange)
+                        }
                     }
                 }
             }
             
             if preferences.isVerboseLoggingEnabled {
-                logger.log("找到 \(matches.count) 个标签，过滤后保留 \(validImageUrls.count) 个图片", category: "漫画调试")
+                logger.log("完成图片标签清洗，保留了有效的图片占位符", category: "漫画调试")
             }
-            
-            // 执行替换
-            var currentContent = result
-            for url in validImageUrls {
-                // 将原始标签替换为占位符（简单处理，实际可根据索引替换更佳）
-                // 这里为了保持逻辑简单，先用占位符标记
-            }
-            
-            // 重新执行正则替换以应用占位符
-            let range = NSRange(location: 0, length: result.utf16.count)
-            result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "\n__IMG__$1\n")
         }
         
         // 移除所有其他 HTML 标签
@@ -1319,6 +1320,13 @@ struct ReadingView: View {
                 
                 // 1. Heavy processing on background thread
                 let cleaned = removeHTMLAndSVG(content)
+                
+                // 获取当前章节 URL 并尝试“Cookie 预热”
+                let chapterUrl = chapters[chapterIndex].url
+                if book.type == 2 || cleaned.contains("__IMG__") {
+                    prewarmCookies(for: chapterUrl)
+                }
+                
                 let processed = applyReplaceRules(to: cleaned)
                 let sentences = splitIntoParagraphs(processed)
                 
@@ -1542,6 +1550,20 @@ struct ReadingView: View {
             requestTTSPlayback(pageIndexOverride: currentPageIndex, showControls: false)
         }
         saveProgress()
+    }
+    
+    private func prewarmCookies(for urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        if preferences.isVerboseLoggingEnabled { logger.log("正在预热 Cookie: \(urlString)", category: "漫画调试") }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD" // 轻量级请求
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        
+        URLSession.shared.dataTask(with: request) { _, _, _ in
+            // 仅需请求发生，系统会自动处理 Set-Cookie
+            if self.preferences.isVerboseLoggingEnabled { self.logger.log("Cookie 预热完成", category: "漫画调试") }
+        }.resume()
     }
     
     private func toggleTTS() {
@@ -2216,7 +2238,8 @@ private struct MangaImageView: View {
             .frame(maxWidth: .infinity)
             .onAppear {
                 if preferences.isVerboseLoggingEnabled {
-                    logger.log("开始请求图片: \(finalURL?.absoluteString ?? "无效"), 来源: \(referer ?? "无")", category: "漫画调试")
+                    let logReferer = referer?.replacingOccurrences(of: "http://", with: "https://") ?? "无"
+                    logger.log("准备加载图片: \(finalURL?.lastPathComponent ?? "无效"), 来源: \(logReferer)", category: "漫画调试")
                 }
             }
     }
@@ -2308,8 +2331,13 @@ struct RemoteImageView: View {
         
         // 关键：Referer 镜像策略 (对标日志中的行为，强制使用 HTTPS)
         if var customReferer = refererOverride, !customReferer.isEmpty {
+            // 强制 HTTPS 协议
             if customReferer.hasPrefix("http://") {
                 customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
+            }
+            // 快看漫画 Referer 必须带结尾斜杠才稳
+            if customReferer.contains("kuaikanmanhua.com") && !customReferer.hasSuffix("/") {
+                customReferer += "/"
             }
             request.setValue(customReferer, forHTTPHeaderField: "Referer")
         } else if let host = targetURL.host {
