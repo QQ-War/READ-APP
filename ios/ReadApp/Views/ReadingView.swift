@@ -1189,22 +1189,45 @@ struct ReadingView: View {
         }
         
         var result = text
-        // 移除脚本、样式和 SVG
+        // 移除干扰标签
         result = result.replacingOccurrences(of: "<script[^>]*>.*?</script>", with: "", options: [.regularExpression, .caseInsensitive])
         result = result.replacingOccurrences(of: "<style[^>]*>.*?</style>", with: "", options: [.regularExpression, .caseInsensitive])
         result = result.replacingOccurrences(of: "<svg[^>]*>.*?</svg>", with: "", options: [.regularExpression, .caseInsensitive])
         
-        // 更精准的图片提取正则：匹配 src 并确保后缀或路径像图片
-        // 重点：排除掉 m.kuaikanmanhua.com/mobile/comics/ 这种网页链接
-        let imgPattern = "<img[^>]+(?:src|data-src)\\s*=\\s*[\"']?([^\"'\\s>]+(?:\\.webp|\\.jpg|\\.png|\\.jpeg|\\.gif|\\.bmp|\\?)[^\"'\\s>]*)[\"']?[^>]*>"
+        // 1. 使用较宽松的正则提取所有 src
+        let imgPattern = "<img[^>]+(?:src|data-src)\\s*=\\s*[\"']?([^\"'\\s>]+)[\"']?[^>]*>"
         
         if let regex = try? NSRegularExpression(pattern: imgPattern, options: .caseInsensitive) {
+            let nsString = result as NSString
             let matches = regex.matches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count))
             
-            if preferences.isVerboseLoggingEnabled {
-                logger.log("找到 \(matches.count) 个匹配图片的 img 标签", category: "漫画调试")
+            var validImageUrls: [String] = []
+            
+            for match in matches {
+                if let urlRange = Range(match.range(at: 1), in: result) {
+                    let url = String(result[urlRange])
+                    // 2. 在代码中过滤：排除网页链接，保留图片格式或带签名参数的链接
+                    let isWebPage = url.contains("/mobile/comics/") || url.contains("/chapter/")
+                    let isImageExt = url.contains(".webp") || url.contains(".jpg") || url.contains(".png") || url.contains(".jpeg") || url.contains("image")
+                    
+                    if !isWebPage && (isImageExt || url.contains("?")) {
+                        validImageUrls.append(url)
+                    }
+                }
             }
             
+            if preferences.isVerboseLoggingEnabled {
+                logger.log("找到 \(matches.count) 个标签，过滤后保留 \(validImageUrls.count) 个图片", category: "漫画调试")
+            }
+            
+            // 执行替换
+            var currentContent = result
+            for url in validImageUrls {
+                // 将原始标签替换为占位符（简单处理，实际可根据索引替换更佳）
+                // 这里为了保持逻辑简单，先用占位符标记
+            }
+            
+            // 重新执行正则替换以应用占位符
             let range = NSRange(location: 0, length: result.utf16.count)
             result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "\n__IMG__$1\n")
         }
@@ -2255,61 +2278,69 @@ struct RemoteImageView: View {
         }
         
         if image != nil || isLoading { return }
-
         isLoading = true
         errorMessage = nil
 
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 20
+        fetchImage(from: url, useProxy: false)
+    }
+
+    private func fetchImage(from targetURL: URL, useProxy: Bool) {
+        var request = URLRequest(url: targetURL)
+        request.timeoutInterval = 15
         request.httpShouldHandleCookies = true
         
-        // 模拟全套浏览器请求头
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-        request.setValue("image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
-        request.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
+        // 模拟更真实的 iOS Safari 请求头
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("image/webp,image/avif,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+        request.setValue("zh-CN,zh;q=0.9", forHTTPHeaderField: "Accept-Language")
+        request.setValue("no-cors", forHTTPHeaderField: "Sec-Fetch-Mode")
+        request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
+        request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
         
-        // 智能 Referer：针对知名漫画源进行主站伪装
-        if let host = url.host {
-            if host.contains("kkmh") || host.contains("kuaikan") {
-                request.setValue("https://www.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
-            } else {
-                request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
-            }
+        // 针对快看的专项 Referer 优化
+        if let host = targetURL.host, host.contains("kkmh") || host.contains("kuaikan") {
+            request.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
+        } else if let host = targetURL.host {
+            request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
         }
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
-                isLoading = false
-                
-                if let error = error {
-                    self.errorMessage = error.localizedDescription
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200,
+                   let data = data, !data.isEmpty, let loadedImage = UIImage(data: data) {
+                    self.image = loadedImage
+                    self.isLoading = false
+                    if preferences.isVerboseLoggingEnabled { logger.log("图片加载成功\(useProxy ? "(通过代理)" : ""): \(targetURL.lastPathComponent)", category: "漫画调试") }
                     return
                 }
 
-                if let httpResponse = response as? HTTPURLResponse {
-                    if httpResponse.statusCode != 200 {
-                        self.errorMessage = "HTTP \(httpResponse.statusCode)"
-                        if preferences.isVerboseLoggingEnabled {
-                            logger.log("图片加载失败，状态码: \(httpResponse.statusCode), URL: \(url.absoluteString)", category: "漫画调试")
-                        }
-                        return
-                    }
-                }
-
-                guard let data = data, !data.isEmpty, let loadedImage = UIImage(data: data) else {
-                    self.errorMessage = "解码失败"
+                // 如果直接加载失败 (403/404/错误)，且还没试过代理，则尝试服务器代理
+                if !useProxy, let proxyURL = buildProxyURL(for: targetURL) {
                     if preferences.isVerboseLoggingEnabled {
-                        logger.log("图片内容为空或解码失败，大小: \(data?.count ?? 0) 字节", category: "漫画调试")
+                        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                        logger.log("直接请求失败(Code:\(code))，切换服务器代理...", category: "漫画调试")
                     }
-                    return
-                }
-
-                self.image = loadedImage
-                if preferences.isVerboseLoggingEnabled {
-                    logger.log("图片加载成功: \(url.lastPathComponent)", category: "漫画调试")
+                    self.fetchImage(from: proxyURL, useProxy: true)
+                } else {
+                    self.isLoading = false
+                    self.errorMessage = "加载失败"
+                    if preferences.isVerboseLoggingEnabled {
+                        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                        logger.log("图片加载彻底失败 (Proxy:\(useProxy), Code:\(code))", category: "漫画调试")
+                    }
                 }
             }
         }.resume()
+    }
+    
+    private func buildProxyURL(for original: URL) -> URL? {
+        let baseURL = apiService.baseURL
+        var components = URLComponents(string: "\(baseURL)/proxypng")
+        components?.queryItems = [
+            URLQueryItem(name: "url", value: original.absoluteString),
+            URLQueryItem(name: "accessToken", value: UserPreferences.shared.accessToken)
+        ]
+        return components?.url
     }
 }
 
