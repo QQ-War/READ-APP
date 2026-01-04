@@ -1189,31 +1189,20 @@ struct ReadingView: View {
         }
         
         var result = text
-        // 移除脚本和样式
+        // 移除脚本、样式和 SVG
         result = result.replacingOccurrences(of: "<script[^>]*>.*?</script>", with: "", options: [.regularExpression, .caseInsensitive])
         result = result.replacingOccurrences(of: "<style[^>]*>.*?</style>", with: "", options: [.regularExpression, .caseInsensitive])
-        // 移除 SVG
         result = result.replacingOccurrences(of: "<svg[^>]*>.*?</svg>", with: "", options: [.regularExpression, .caseInsensitive])
         
-        // 增强的图片解析正则
-        let imgPattern = "<img[^>]+(?:src|data-src)\\s*=\\s*[\"']?([^\"'\\s>]+)[\"']?[^>]*>"
+        // 更精准的图片提取正则：匹配 src 并确保后缀或路径像图片
+        // 重点：排除掉 m.kuaikanmanhua.com/mobile/comics/ 这种网页链接
+        let imgPattern = "<img[^>]+(?:src|data-src)\\s*=\\s*[\"']?([^\"'\\s>]+(?:\\.webp|\\.jpg|\\.png|\\.jpeg|\\.gif|\\.bmp|\\?)[^\"'\\s>]*)[\"']?[^>]*>"
+        
         if let regex = try? NSRegularExpression(pattern: imgPattern, options: .caseInsensitive) {
-            let nsString = result as NSString
             let matches = regex.matches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count))
             
             if preferences.isVerboseLoggingEnabled {
-                logger.log("找到 \(matches.count) 个 img 标签", category: "漫画调试")
-            }
-            
-            // 反向遍历替换，防止索引错乱
-            var offset = 0
-            for match in matches {
-                if let urlRange = Range(match.range(at: 1), in: result) {
-                    let url = String(result[urlRange])
-                    if preferences.isVerboseLoggingEnabled {
-                        logger.log("解析到图片 URL: \(url)", category: "漫画调试")
-                    }
-                }
+                logger.log("找到 \(matches.count) 个匹配图片的 img 标签", category: "漫画调试")
             }
             
             let range = NSRange(location: 0, length: result.utf16.count)
@@ -2265,19 +2254,27 @@ struct RemoteImageView: View {
             return
         }
         
-        // 如果已经加载过，不再重复加载（除非 URL 变了）
         if image != nil || isLoading { return }
 
         isLoading = true
         errorMessage = nil
 
         var request = URLRequest(url: url)
-        // 关键：模拟浏览器请求头，绕过防盗链
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 20
+        request.httpShouldHandleCookies = true
         
-        // 自动设置 Referer 为图片所在域名或主站
+        // 模拟全套浏览器请求头
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+        request.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
+        
+        // 智能 Referer：针对知名漫画源进行主站伪装
         if let host = url.host {
-            request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
+            if host.contains("kkmh") || host.contains("kuaikan") {
+                request.setValue("https://www.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
+            } else {
+                request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
+            }
         }
 
         URLSession.shared.dataTask(with: request) { data, response, error in
@@ -2286,23 +2283,30 @@ struct RemoteImageView: View {
                 
                 if let error = error {
                     self.errorMessage = error.localizedDescription
-                    if preferences.isVerboseLoggingEnabled {
-                        logger.log("网络请求错误: \(error.localizedDescription)", category: "漫画调试")
-                    }
                     return
                 }
 
-                guard let data = data, let loadedImage = UIImage(data: data) else {
-                    self.errorMessage = "数据解析失败"
+                if let httpResponse = response as? HTTPURLResponse {
+                    if httpResponse.statusCode != 200 {
+                        self.errorMessage = "HTTP \(httpResponse.statusCode)"
+                        if preferences.isVerboseLoggingEnabled {
+                            logger.log("图片加载失败，状态码: \(httpResponse.statusCode), URL: \(url.absoluteString)", category: "漫画调试")
+                        }
+                        return
+                    }
+                }
+
+                guard let data = data, !data.isEmpty, let loadedImage = UIImage(data: data) else {
+                    self.errorMessage = "解码失败"
                     if preferences.isVerboseLoggingEnabled {
-                        logger.log("图片数据解码失败，大小: \(data?.count ?? 0) 字节", category: "漫画调试")
+                        logger.log("图片内容为空或解码失败，大小: \(data?.count ?? 0) 字节", category: "漫画调试")
                     }
                     return
                 }
 
                 self.image = loadedImage
                 if preferences.isVerboseLoggingEnabled {
-                    logger.log("图片加载成功: \(url.host ?? "")", category: "漫画调试")
+                    logger.log("图片加载成功: \(url.lastPathComponent)", category: "漫画调试")
                 }
             }
         }.resume()
