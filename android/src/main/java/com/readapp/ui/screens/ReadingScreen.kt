@@ -310,6 +310,7 @@ fun ReadingScreen(
                         }
                     }
                 }
+            }
             } else {
                 BoxWithConstraints(
                     modifier = Modifier
