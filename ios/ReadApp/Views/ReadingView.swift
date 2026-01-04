@@ -648,7 +648,7 @@ struct ReadingView: View {
         let chapterTitle = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : nil
 
         // 如果是漫画模式，每张图片（或每段文字）作为一页
-        if isMangaMode {
+        if currentChapterIsManga {
             var pages: [PaginatedPage] = []
             var currentOffset = 0
             for (idx, sentence) in sentences.enumerated() {
