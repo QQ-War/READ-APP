@@ -418,9 +418,9 @@ struct ReadingView: View {
                             let nextVC = makeContentViewController(snapshot: snapshot(from: nextCache), pageIndex: 0, chapterOffset: 1)
 
                             ReadPageViewController(
-                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.renderStore, pageInfos: currentCache.pageInfos, contentSentences: currentCache.contentSentences),
-                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.renderStore, pageInfos: prevCache.pageInfos, contentSentences: prevCache.contentSentences),
-                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.renderStore, pageInfos: nextCache.pageInfos, contentSentences: nextCache.contentSentences),
+                                snapshot: PageSnapshot(pages: currentCache.pages, renderStore: currentCache.renderStore, pageInfos: currentCache.pageInfos, contentSentences: currentCache.contentSentences, chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil),
+                                prevSnapshot: PageSnapshot(pages: prevCache.pages, renderStore: prevCache.renderStore, pageInfos: prevCache.pageInfos, contentSentences: prevCache.contentSentences, chapterUrl: chapters.indices.contains(currentChapterIndex - 1) ? chapters[currentChapterIndex - 1].url : nil),
+                                nextSnapshot: PageSnapshot(pages: nextCache.pages, renderStore: nextCache.renderStore, pageInfos: nextCache.pageInfos, contentSentences: nextCache.contentSentences, chapterUrl: chapters.indices.contains(currentChapterIndex + 1) ? chapters[currentChapterIndex + 1].url : nil),
                                 currentPageIndex: $currentPageIndex,
                                 pageTurnRequest: $pageTurnRequest,
                                 pageSpacing: preferences.pageInterSpacing,
