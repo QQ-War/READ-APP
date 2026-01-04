@@ -194,6 +194,10 @@ struct ReadingView: View {
     @State private var timerActive = false
     @State private var sleepTimer: Timer? = nil
     
+    // Zoom & Scaling
+    @State private var zoomScale: CGFloat = 1.0
+    @GestureState private var magnifyBy = 1.0
+
     // Replace Rule State
     @State private var showAddReplaceRule = false
     @State private var pendingReplaceRule: ReplaceRule?
@@ -387,32 +391,37 @@ struct ReadingView: View {
             geometry in
             ScrollViewReader {
                 proxy in
-                // 全局缩放容器：允许对整个章节进行双指缩放
-                ZoomableScrollView {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            // 置顶锚点
-                            Color.clear.frame(height: 1).id("top_marker")
-                            
-                            let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
-                            let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
-                            
-                            RichTextView(
-                                sentences: contentSentences,
-                                fontSize: preferences.fontSize,
-                                lineSpacing: preferences.lineSpacing,
-                                highlightIndex: primaryHighlight,
-                                secondaryIndices: secondaryHighlights,
-                                isPlayingHighlight: ttsManager.isPlaying,
-                                scrollProxy: scrollProxy,
-                                chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
-                            )
-                            .padding(.horizontal, currentChapterIsManga ? 0 : preferences.pageHorizontalMargin)
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation { showUIControls.toggle() }
-                        }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // 置顶锚点
+                        Color.clear.frame(height: 1).id("top_marker")
+                        
+                        let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
+                        let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
+                        
+                        RichTextView(
+                            sentences: contentSentences,
+                            fontSize: preferences.fontSize,
+                            lineSpacing: preferences.lineSpacing,
+                            highlightIndex: primaryHighlight,
+                            secondaryIndices: secondaryHighlights,
+                            isPlayingHighlight: ttsManager.isPlaying,
+                            scrollProxy: scrollProxy,
+                            zoomScale: zoomScale, // 传入缩放比例
+                            chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
+                        )
+                        .padding(.horizontal, currentChapterIsManga ? 0 : preferences.pageHorizontalMargin)
+                    }
+                    .contentShape(Rectangle())
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                let delta = value / magnifyBy
+                                zoomScale = min(max(zoomScale * delta, 1.0), 4.0)
+                            }
+                    )
+                    .onTapGesture {
+                        withAnimation { showUIControls.toggle() }
                     }
                 }
                 .id("v_reader_scroll_\(currentChapterIndex)") // 强制刷新视图防止内容卡死
@@ -2267,13 +2276,13 @@ private struct RichTextView: View {
     let secondaryIndices: Set<Int>
     let isPlayingHighlight: Bool
     let scrollProxy: ScrollViewProxy?
+    let zoomScale: CGFloat // 新增：缩放比例
     var chapterUrl: String? = nil
     
     var body: some View {
-        VStack(alignment: .leading, spacing: fontSize * 0.8) {
+        LazyVStack(alignment: .leading, spacing: fontSize * 0.8) {
             ForEach(Array(sentences.enumerated()), id: \.offset) { index, sentence in
                 if sentence.contains("__IMG__") {
-                    // 提取第一个有效的 URL
                     let urlString = extractImageUrl(from: sentence)
                     MangaImageView(url: urlString, referer: chapterUrl)
                         .id(index)
@@ -2292,6 +2301,7 @@ private struct RichTextView: View {
                 }
             }
         }
+        .scaleEffect(zoomScale, anchor: .top) // 应用全局缩放
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             if let highlightIndex = highlightIndex, let scrollProxy = scrollProxy {
