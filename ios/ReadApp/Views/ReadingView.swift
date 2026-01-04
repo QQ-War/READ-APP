@@ -2195,55 +2195,13 @@ private struct MangaImageView: View {
     
     var body: some View {
         let finalURL = resolveURL(url)
-        AsyncImage(url: finalURL) { phase in
-            switch phase {
-            case .empty:
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
+        RemoteImageView(url: finalURL)
+            .frame(maxWidth: .infinity)
+            .onAppear {
+                if preferences.isVerboseLoggingEnabled {
+                    logger.log("开始请求图片: \(finalURL?.absoluteString ?? "无效")", category: "漫画调试")
                 }
-                .frame(minHeight: 200)
-                .onAppear {
-                    if preferences.isVerboseLoggingEnabled {
-                        logger.log("正在加载图片: \(finalURL?.absoluteString ?? "无效URL")", category: "漫画调试")
-                    }
-                }
-            case .success(let image):
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-                    .onAppear {
-                        if preferences.isVerboseLoggingEnabled {
-                            logger.log("图片加载成功: \(url.prefix(30))...", category: "漫画调试")
-                        }
-                    }
-            case .failure(let error):
-                VStack(spacing: 8) {
-                    Image(systemName: "photo.fill")
-                        .font(.largeTitle)
-                        .foregroundColor(.gray)
-                    Text("图片加载失败")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    #if DEBUG
-                    Text(url).font(.system(size: 8)).lineLimit(2)
-                    #endif
-                }
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 150)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(8)
-                .onAppear {
-                    if preferences.isVerboseLoggingEnabled {
-                        logger.log("图片加载失败: \(error.localizedDescription), URL: \(finalURL?.absoluteString ?? "无效")", category: "漫画调试")
-                    }
-                }
-            @unknown default:
-                EmptyView()
             }
-        }
     }
     
     private func resolveURL(_ original: String) -> URL? {
@@ -2251,20 +2209,103 @@ private struct MangaImageView: View {
             return URL(string: original)
         }
         
-        // 尝试补全相对路径
         let baseURL = apiService.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "")
-        let resolved: String
-        if original.hasPrefix("/") {
-            resolved = baseURL + original
-        } else {
-            resolved = baseURL + "/" + original
-        }
-        
-        if preferences.isVerboseLoggingEnabled {
-            logger.log("补全相对路径: \(original) -> \(resolved)", category: "漫画调试")
-        }
-        
+        let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
         return URL(string: resolved)
+    }
+}
+
+// MARK: - 支持 Header 的高性能图片加载组件
+struct RemoteImageView: View {
+    let url: URL?
+    @State private var image: UIImage? = nil
+    @State private var isLoading = false
+    @State private var errorMessage: String? = nil
+    @StateObject private var preferences = UserPreferences.shared
+    private let logger = LogManager.shared
+
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else if isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+                .frame(height: 200)
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: "photo.fill")
+                        .font(.largeTitle)
+                        .foregroundColor(.gray)
+                    Text(errorMessage ?? "图片加载失败")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    if let url = url {
+                        Text(url.absoluteString).font(.system(size: 8)).lineLimit(1).foregroundColor(.gray)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 150)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
+            }
+        }
+        .onAppear(perform: loadImage)
+        .onChange(of: url) { _ in loadImage() }
+    }
+
+    private func loadImage() {
+        guard let url = url else {
+            errorMessage = "URL 无效"
+            return
+        }
+        
+        // 如果已经加载过，不再重复加载（除非 URL 变了）
+        if image != nil || isLoading { return }
+
+        isLoading = true
+        errorMessage = nil
+
+        var request = URLRequest(url: url)
+        // 关键：模拟浏览器请求头，绕过防盗链
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        
+        // 自动设置 Referer 为图片所在域名或主站
+        if let host = url.host {
+            request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                isLoading = false
+                
+                if let error = error {
+                    self.errorMessage = error.localizedDescription
+                    if preferences.isVerboseLoggingEnabled {
+                        logger.log("网络请求错误: \(error.localizedDescription)", category: "漫画调试")
+                    }
+                    return
+                }
+
+                guard let data = data, let loadedImage = UIImage(data: data) else {
+                    self.errorMessage = "数据解析失败"
+                    if preferences.isVerboseLoggingEnabled {
+                        logger.log("图片数据解码失败，大小: \(data?.count ?? 0) 字节", category: "漫画调试")
+                    }
+                    return
+                }
+
+                self.image = loadedImage
+                if preferences.isVerboseLoggingEnabled {
+                    logger.log("图片加载成功: \(url.host ?? "")", category: "漫画调试")
+                }
+            }
+        }.resume()
     }
 }
 
