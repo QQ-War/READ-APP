@@ -341,6 +341,9 @@ struct ReadingView: View {
                 // 全局缩放容器：允许对整个章节进行双指缩放
                 ZoomableScrollView {
                     ScrollView {
+                        // 置顶锚点
+                        Color.clear.frame(height: 1).id("top_marker_\(currentChapterIndex)")
+                        
                         let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
                         let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
                         RichTextView(
@@ -362,10 +365,10 @@ struct ReadingView: View {
                 .onPreferenceChange(SentenceFramePreferenceKey.self) { updateVisibleSentenceIndex(frames: $0, viewportHeight: geometry.size.height) }
                 .onChange(of: contentSentences) { _ in
                     if preferences.readingMode == .vertical && isExplicitlySwitchingChapter {
-                        // 仅在明确切换章节时强制置顶
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            withAnimation { proxy.scrollTo(0, anchor: .top) }
-                            isExplicitlySwitchingChapter = false // 消费掉标记
+                        // 强制置顶到锚点
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation { proxy.scrollTo("top_marker_\(currentChapterIndex)", anchor: .top) }
+                            isExplicitlySwitchingChapter = false
                         }
                     }
                 }
@@ -1263,8 +1266,8 @@ struct ReadingView: View {
             // 过滤：如果一段内容仅仅是 URL 且没有识别标记，说明是 HTML 剥离后的杂质
             let lowerTrimmed = trimmed.lowercased()
             let isRawUrl = lowerTrimmed.hasPrefix("http") || lowerTrimmed.hasPrefix("//")
-            // 高熵文本拦截：很长的连续字母数字串（无空格）通常是杂质
-            let isHighEntropy = trimmed.count > 40 && !trimmed.contains(" ")
+            // 高熵文本拦截：很长的连续字母数字串（无空格）通常是杂质（仅在漫画模式下开启，防止误伤小说长词）
+            let isHighEntropy = isMangaMode && trimmed.count > 40 && !trimmed.contains(" ")
             
             if (isRawUrl || isHighEntropy) && !trimmed.contains("__IMG__") {
                 continue
@@ -2352,6 +2355,7 @@ struct RemoteImageView: View {
                     ProgressView()
                     Spacer()
                 }
+                .frame(minHeight: 200) // 基础高度占位，防止容器塌陷
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "photo.fill")
@@ -2365,6 +2369,7 @@ struct RemoteImageView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .frame(minHeight: 200) // 失败也要保持高度
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(8)
             }

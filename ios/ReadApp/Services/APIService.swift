@@ -21,6 +21,10 @@ class APIService: ObservableObject {
     
     // 章节内容缓存
     private var contentCache: [String: String] = [:]
+    private var cacheKeysOrder: [String] = []
+    private let maxCacheSize = 50
+    
+    // ... rest of property declarations ...
     
     var baseURL: String {
         let serverURL = UserPreferences.shared.serverURL
@@ -193,7 +197,8 @@ class APIService: ObservableObject {
                 // 保存目录到本地缓存
                 LocalCacheManager.shared.saveChapterList(bookUrl: bookUrl, chapters: chapters)
                 return chapters
-            } else {
+            }
+            else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节列表失败"])
             }
         } catch {
@@ -213,7 +218,7 @@ class APIService: ObservableObject {
         }
         
         // 2. 尝试从内存缓存读取
-        let cacheKey = "\(bookUrl)_\(index)"
+        let cacheKey = "\(bookUrl)_\(index)_\(contentType)"
         if let cachedContent = contentCache[cacheKey] {
             return cachedContent
         }
@@ -235,8 +240,17 @@ class APIService: ObservableObject {
         }
         let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
         if apiResponse.isSuccess, let content = apiResponse.data {
-            // 存入内存缓存
-            contentCache[cacheKey] = content
+            // 存入内存缓存并执行容量管理
+            await MainActor.run {
+                if contentCache.count >= maxCacheSize {
+                    if !cacheKeysOrder.isEmpty {
+                        let oldestKey = cacheKeysOrder.removeFirst()
+                        contentCache.removeValue(forKey: oldestKey)
+                    }
+                }
+                contentCache[cacheKey] = content
+                cacheKeysOrder.append(cacheKey)
+            }
             // 同步存入磁盘缓存
             LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
             return content

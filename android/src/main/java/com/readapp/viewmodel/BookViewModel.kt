@@ -1323,6 +1323,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
     }
     private fun parseParagraphs(content: String): List<String> {
+        val book = _selectedBook.value
+        val isMangaMode = _manualMangaUrls.value.contains(book?.bookUrl) || book?.type == 2
+        
         val lines = content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
         val finalParagraphs = mutableListOf<String>()
         
@@ -1330,7 +1333,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             // 过滤：如果一段内容仅仅是 URL 且没有识别标记，说明是 HTML 剥离后的杂质
             val lowerLine = line.lowercase()
             val isRawUrl = lowerLine.startsWith("http") || lowerLine.startsWith("//")
-            val isHighEntropy = line.length > 40 && !line.contains(" ")
+            // 高熵文本拦截：很长的连续字母数字串（无空格）通常是杂质（仅在漫画模式开启）
+            val isHighEntropy = isMangaMode && line.length > 40 && !line.contains(" ")
             
             if ((isRawUrl || isHighEntropy) && !line.contains("__IMG__")) {
                 continue
