@@ -2380,7 +2380,22 @@ struct RemoteImageView: View {
                             if preferences.isVerboseLoggingEnabled { logger.log("Referer 受阻(403)，降级重试...", category: "漫画调试") }
                             var retryRequest = request
                             retryRequest.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
-                            self.performRetry(with: retryRequest)
+                            URLSession.shared.dataTask(with: retryRequest) { data, response, _ in
+                                DispatchQueue.main.async {
+                                    let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                                    if code == 200, let data = data, !data.isEmpty, let loadedImage = UIImage(data: data) {
+                                        self.image = loadedImage
+                                        self.isLoading = false
+                                        if preferences.isVerboseLoggingEnabled { logger.log("图片重试成功: \(targetURL.lastPathComponent)", category: "漫画调试") }
+                                    } else if let proxyURL = buildProxyURL(for: targetURL) {
+                                        if preferences.isVerboseLoggingEnabled { logger.log("重试失败(Code:\(code))，切换代理...", category: "漫画调试") }
+                                        self.fetchImage(from: proxyURL, useProxy: true)
+                                    } else {
+                                        self.isLoading = false
+                                        self.errorMessage = "加载失败"
+                                    }
+                                }
+                            }.resume()
                         } else if let proxyURL = buildProxyURL(for: targetURL) {
                             if preferences.isVerboseLoggingEnabled { logger.log("直接请求失败(Code:\(statusCode))，尝试代理...", category: "漫画调试") }
                             self.fetchImage(from: proxyURL, useProxy: true)
