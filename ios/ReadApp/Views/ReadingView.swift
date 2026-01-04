@@ -54,9 +54,10 @@ private struct ChapterCache {
     let paragraphStarts: [Int]
     let chapterPrefixLen: Int
     let isFullyPaginated: Bool
+    let chapterUrl: String? // 新增
     
     static var empty: ChapterCache {
-        ChapterCache(pages: [], renderStore: nil, pageInfos: nil, contentSentences: [], rawContent: "", attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false)
+        ChapterCache(pages: [], renderStore: nil, pageInfos: nil, contentSentences: [], rawContent: "", attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false, chapterUrl: nil)
     }
 }
 
@@ -101,6 +102,7 @@ private struct PageSnapshot {
     let renderStore: TextKit2RenderStore?
     let pageInfos: [TK2PageInfo]?
     let contentSentences: [String]? // 新增：保存原始句子用于漫画渲染
+    let chapterUrl: String? // 新增
 }
 
 // MARK: - ReadingView
@@ -626,7 +628,7 @@ struct ReadingView: View {
             pendingJumpToFirstPage = false
             
             // 漫画模式下不使用 renderStore
-            currentCache = ChapterCache(pages: pages, renderStore: nil, pageInfos: nil, contentSentences: sentences, rawContent: rawContent, attributedText: NSAttributedString(string: sentences.joined(separator: "\n")), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: true)
+            currentCache = ChapterCache(pages: pages, renderStore: nil, pageInfos: nil, contentSentences: sentences, rawContent: rawContent, attributedText: NSAttributedString(string: sentences.joined(separator: "\n")), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: true, chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil)
             hasInitialPagination = true
             return
         }
@@ -673,7 +675,7 @@ struct ReadingView: View {
         if result.pages.isEmpty { currentPageIndex = 0 }
         else if currentPageIndex >= result.pages.count { currentPageIndex = result.pages.count - 1 }
         
-        currentCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: rawContent, attributedText: newAttrText, paragraphStarts: newPStarts, chapterPrefixLen: newPrefixLen, isFullyPaginated: true)
+        currentCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: rawContent, attributedText: newAttrText, paragraphStarts: newPStarts, chapterPrefixLen: newPrefixLen, isFullyPaginated: true, chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil)
         if !hasInitialPagination, !result.pages.isEmpty { hasInitialPagination = true }
         
         if let localPage = pendingResumeLocalPageIndex, pendingResumeLocalChapterIndex == currentChapterIndex, result.pages.indices.contains(localPage) {
@@ -830,7 +832,7 @@ struct ReadingView: View {
     }
 
     private func snapshot(from cache: ChapterCache) -> PageSnapshot {
-        PageSnapshot(pages: cache.pages, renderStore: cache.renderStore, pageInfos: cache.pageInfos, contentSentences: cache.contentSentences)
+        PageSnapshot(pages: cache.pages, renderStore: cache.renderStore, pageInfos: cache.pageInfos, contentSentences: cache.contentSentences, chapterUrl: cache.chapterUrl)
     }
 
     private func scheduleRepaginate(in size: CGSize) {
@@ -1026,7 +1028,8 @@ struct ReadingView: View {
                 attributedText: currentCache.attributedText,
                 paragraphStarts: currentCache.paragraphStarts,
                 chapterPrefixLen: currentCache.chapterPrefixLen,
-                isFullyPaginated: result.reachedEnd
+                isFullyPaginated: result.reachedEnd,
+                chapterUrl: currentCache.chapterUrl
             )
             return
         }
@@ -1042,7 +1045,8 @@ struct ReadingView: View {
             attributedText: currentCache.attributedText,
             paragraphStarts: currentCache.paragraphStarts,
             chapterPrefixLen: currentCache.chapterPrefixLen,
-            isFullyPaginated: result.reachedEnd
+            isFullyPaginated: result.reachedEnd,
+            chapterUrl: currentCache.chapterUrl
         )
     }
 
@@ -1120,7 +1124,7 @@ struct ReadingView: View {
         let inset = max(8, min(18, preferences.fontSize * 0.6))
         let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: pageSize, paragraphStarts: pStarts, prefixLen: prefixLen, contentInset: inset, maxPages: limit)
         
-        return ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: cleaned, attributedText: attrText, paragraphStarts: pStarts, chapterPrefixLen: prefixLen, isFullyPaginated: result.reachedEnd)
+        return ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: cleaned, attributedText: attrText, paragraphStarts: pStarts, chapterPrefixLen: prefixLen, isFullyPaginated: result.reachedEnd, chapterUrl: chapters[index].url)
     }
 
     // MARK: - Logic & Actions
@@ -1337,7 +1341,7 @@ struct ReadingView: View {
                         let inset = max(8, min(18, fontSize * 0.6))
                         let result = TextKit2Paginator.paginate(renderStore: tk2Store, pageSize: targetPageSize, paragraphStarts: pStarts, prefixLen: prefixLen, contentInset: inset)
                         
-                        initialCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: cleaned, attributedText: attrText, paragraphStarts: pStarts, chapterPrefixLen: prefixLen, isFullyPaginated: result.reachedEnd)
+                        initialCache = ChapterCache(pages: result.pages, renderStore: tk2Store, pageInfos: result.pageInfos, contentSentences: sentences, rawContent: cleaned, attributedText: attrText, paragraphStarts: pStarts, chapterPrefixLen: prefixLen, isFullyPaginated: result.reachedEnd, chapterUrl: chapterTitle.isEmpty ? book.bookUrl : chapters[chapterIndex].url)
                         
                         // Determine where to land
                         if jumpLast {
