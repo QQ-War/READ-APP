@@ -49,7 +49,7 @@ struct BookListView: View {
     
     var body: some View {
         ZStack {
-            // 隐式导航触发器
+            // 隐式导航触发器：必须放在这里
             if let book = selectedBookForDetail {
                 NavigationLink(
                     destination: BookDetailView(book: book).environmentObject(apiService),
@@ -61,6 +61,7 @@ struct BookListView: View {
             }
 
             List {
+                // ... rest of list content ...
                 if !searchText.isEmpty {
                     if !filteredAndSortedBooks.isEmpty {
                         Section(header: Text("书架书籍")) {

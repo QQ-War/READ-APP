@@ -2313,70 +2313,75 @@ struct RemoteImageView: View {
         fetchImage(from: url, useProxy: false)
     }
 
-    private func fetchImage(from targetURL: URL, useProxy: Bool) {
-        var request = URLRequest(url: targetURL)
-        request.timeoutInterval = 15
-        request.httpShouldHandleCookies = true
-        request.cachePolicy = .returnCacheDataElseLoad
-        
-        // 1:1 模拟真实移动端浏览器请求头
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-        request.setValue("image/webp,image/avif,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
-        request.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
-        request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
-        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
-        request.setValue("no-cors", forHTTPHeaderField: "Sec-Fetch-Mode")
-        request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
-        request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
-        
-        // 关键：Referer 镜像策略 (对标日志中的行为，强制使用 HTTPS)
-        if var customReferer = refererOverride, !customReferer.isEmpty {
-            // 强制 HTTPS 协议
-            if customReferer.hasPrefix("http://") {
-                customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
-            }
-            // 快看漫画 Referer 必须带结尾斜杠才稳
-            if customReferer.contains("kuaikanmanhua.com") && !customReferer.hasSuffix("/") {
-                customReferer += "/"
-            }
-            request.setValue(customReferer, forHTTPHeaderField: "Referer")
-        } else if let host = targetURL.host {
-            if host.contains("kkmh") || host.contains("kuaikan") {
-                request.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
-            } else {
-                request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
-            }
-        }
-
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200,
-                   let data = data, !data.isEmpty, let loadedImage = UIImage(data: data) {
-                    self.image = loadedImage
-                    self.isLoading = false
-                    if preferences.isVerboseLoggingEnabled { logger.log("图片加载成功: \(targetURL.lastPathComponent)", category: "漫画调试") }
-                    return
+        private func fetchImage(from targetURL: URL, useProxy: Bool) {
+            var request = URLRequest(url: targetURL)
+            request.timeoutInterval = 15
+            request.httpShouldHandleCookies = true
+            request.cachePolicy = .returnCacheDataElseLoad
+            
+            // 1:1 模拟真实移动端浏览器请求头
+            request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+            request.setValue("image/webp,image/avif,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+            request.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
+            request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
+            request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+            request.setValue("no-cors", forHTTPHeaderField: "Sec-Fetch-Mode")
+            request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
+            request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
+            
+            // 核心修正：Referer 精准策略
+            var finalReferer = "https://m.kuaikanmanhua.com/" // 基础兜底
+            
+            if var customReferer = refererOverride, !customReferer.isEmpty {
+                // 协议对齐
+                if customReferer.hasPrefix("http://") {
+                    customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
                 }
-
-                // 如果直接加载失败 (403/404/错误)，且还没试过代理，则尝试服务器代理
-                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                if !useProxy && (code == 403 || code == 404 || error != nil), 
-                   let proxyURL = buildProxyURL(for: targetURL) {
-                    if preferences.isVerboseLoggingEnabled {
-                        logger.log("直接请求失败(Code:\(code))，尝试代理...", category: "漫画调试")
-                    }
-                    self.fetchImage(from: proxyURL, useProxy: true)
-                } else {
-                    self.isLoading = false
-                    self.errorMessage = code == 403 ? "403 禁止访问" : "加载失败"
-                    if preferences.isVerboseLoggingEnabled {
-                        logger.log("图片彻底加载失败 (Proxy:\(useProxy), Code:\(code))", category: "漫画调试")
-                    }
+                // 补全斜杠
+                if !customReferer.hasSuffix("/") {
+                    customReferer += "/"
                 }
+                finalReferer = customReferer
+            } else if let host = targetURL.host {
+                // 自动推断兜底
+                finalReferer = "https://\(host)/"
             }
-        }.resume()
-    }
+            
+            request.setValue(finalReferer, forHTTPHeaderField: "Referer")
     
+            URLSession.shared.dataTask(with: request) { data, response, error in
+                DispatchQueue.main.async {
+                    let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    
+                    if statusCode == 200, let data = data, !data.isEmpty, let loadedImage = UIImage(data: data) {
+                        self.image = loadedImage
+                        self.isLoading = false
+                        if preferences.isVerboseLoggingEnabled { logger.log("图片加载成功: \(targetURL.lastPathComponent)", category: "漫画调试") }
+                        return
+                    }
+    
+                    // 错误处理与重试逻辑
+                    if !useProxy {
+                        if (statusCode == 403 || statusCode == 401) {
+                            // 如果因为 Referer 被拒，尝试最简主站 Referer 重试
+                            if preferences.isVerboseLoggingEnabled { logger.log("Referer 受阻(403)，降级重试...", category: "漫画调试") }
+                            var retryRequest = request
+                            retryRequest.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
+                            self.performRetry(with: retryRequest)
+                        } else if let proxyURL = buildProxyURL(for: targetURL) {
+                            if preferences.isVerboseLoggingEnabled { logger.log("直接请求失败(Code:\(statusCode))，尝试代理...", category: "漫画调试") }
+                            self.fetchImage(from: proxyURL, useProxy: true)
+                        } else {
+                            self.isLoading = false
+                            self.errorMessage = "加载失败"
+                        }
+                    } else {
+                        self.isLoading = false
+                        self.errorMessage = "加载失败"
+                    }
+                }
+            }.resume()
+        }    
     private func buildProxyURL(for original: URL) -> URL? {
         let baseURL = APIService.shared.baseURL
         var components = URLComponents(string: "\(baseURL)/proxypng")

@@ -754,6 +754,7 @@ private fun ParagraphItem(
     isPlaying: Boolean,
     isPreloaded: Boolean,
     fontSize: Float,
+    chapterUrl: String?,
     serverUrl: String,
     modifier: Modifier = Modifier
 ) {
@@ -783,15 +784,39 @@ private fun ParagraphItem(
                 }
             }
             
-            val imageRequest = remember(finalUrl) {
+            // 构造 Referer：强制 HTTPS，对标 iOS 逻辑
+            val finalReferer = remember(chapterUrl) {
+                chapterUrl?.replace("http://", "https://")?.let {
+                    if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
+                }
+            }
+
+            var currentRequestUrl by remember(finalUrl) { mutableStateOf(finalUrl) }
+            var useProxy by remember(finalUrl) { mutableStateOf(false) }
+
+            val imageRequest = remember(currentRequestUrl, finalReferer) {
                 coil.request.ImageRequest.Builder(context)
-                    .data(finalUrl)
+                    .data(currentRequestUrl)
                     .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
                     .apply {
-                        android.net.Uri.parse(finalUrl).host?.let { host ->
-                            addHeader("Referer", "https://$host/")
+                        if (finalReferer != null) {
+                            addHeader("Referer", finalReferer)
                         }
                     }
+                    .listener(
+                        onError = { _, _ ->
+                            // 如果直接请求失败且没用过代理，尝试切换代理
+                            if (!useProxy) {
+                                val proxyUrl = android.net.Uri.parse(serverUrl).buildUpon()
+                                    .path("api/5/proxypng")
+                                    .appendQueryParameter("url", finalUrl)
+                                    .appendQueryParameter("accessToken", "") // 会被拦截器自动填充
+                                    .build().toString()
+                                currentRequestUrl = proxyUrl
+                                useProxy = true
+                            }
+                        }
+                    )
                     .crossfade(true)
                     .build()
             }
@@ -805,6 +830,7 @@ private fun ParagraphItem(
                 contentScale = ContentScale.Fit
             )
         } else {
+            // ... (rest of Text rendering unchanged)
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
