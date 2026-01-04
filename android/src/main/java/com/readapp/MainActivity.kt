@@ -172,6 +172,7 @@ fun ReadAppMain() {
                 val pageTurningMode by bookViewModel.pageTurningMode.collectAsState()
                 val isDarkMode by bookViewModel.isDarkMode.collectAsState()
                 val manualMangaUrls by bookViewModel.manualMangaUrls.collectAsState()
+                val serverUrl by bookViewModel.serverAddress.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
@@ -200,6 +201,7 @@ fun ReadAppMain() {
                         isDarkMode = isDarkMode,
                         onDarkModeChange = { bookViewModel.updateDarkMode(it) },
                         manualMangaUrls = manualMangaUrls,
+                        serverUrl = serverUrl,
                         onClearError = { bookViewModel.clearError() },
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)

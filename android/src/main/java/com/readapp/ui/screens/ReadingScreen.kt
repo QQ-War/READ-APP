@@ -97,6 +97,7 @@ fun ReadingScreen(
     isDarkMode: Boolean = false,
     onDarkModeChange: (Boolean) -> Unit = {},
     manualMangaUrls: Set<String> = emptySet(),
+    serverUrl: String = "",
     modifier: Modifier = Modifier
 ) {
     var showControls by remember { mutableStateOf(false) }
@@ -257,6 +258,7 @@ fun ReadingScreen(
                                 isPlaying = index == currentPlayingParagraph,
                                 isPreloaded = preloadedParagraphs.contains(index),
                                 fontSize = readingFontSize,
+                                serverUrl = serverUrl,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(bottom = AppDimens.PaddingMedium)
@@ -379,17 +381,39 @@ fun ReadingScreen(
                             if (isMangaMode) {
                                 val text = paragraphs.getOrNull(page) ?: ""
                                 val imgUrl = remember(text) {
-                                    val pattern = """(?:__IMG__|<img[^>]+src=["'])([^"'>]+)""".toRegex()
+                                    val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s]+)["']?""".toRegex()
                                     pattern.find(text)?.groupValues?.get(1)
                                 }
                                 
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                val finalUrl = remember(imgUrl, serverUrl) {
+                                    if (imgUrl == null) null
+                                    else if (imgUrl.startsWith("http")) imgUrl
+                                    else {
+                                        val base = serverUrl.replace("/api/5", "")
+                                        if (imgUrl.startsWith("/")) "$base$imgUrl" else "$base/$imgUrl"
+                                    }
+                                }
+
                                 Box(
                                     modifier = Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (imgUrl != null) {
+                                    if (finalUrl != null) {
+                                        val imageRequest = remember(finalUrl) {
+                                            coil.request.ImageRequest.Builder(context)
+                                                .data(finalUrl)
+                                                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                                                .apply {
+                                                    android.net.Uri.parse(finalUrl).host?.let { host ->
+                                                        addHeader("Referer", "https://$host/")
+                                                    }
+                                                }
+                                                .crossfade(true)
+                                                .build()
+                                        }
                                         coil.compose.AsyncImage(
-                                            model = imgUrl,
+                                            model = imageRequest,
                                             contentDescription = null,
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Fit
@@ -730,11 +754,12 @@ private fun ParagraphItem(
     isPlaying: Boolean,
     isPreloaded: Boolean,
     fontSize: Float,
+    serverUrl: String,
     modifier: Modifier = Modifier
 ) {
     val backgroundColor = when {
-        isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)  // 褰撳墠鎾斁锛氭繁钃濊壊楂樹寒
-        isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)  // 宸查杞斤細娴呯豢鑹叉爣璁?
+        isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+        isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)
         else -> Color.Transparent
     }
     
@@ -743,15 +768,36 @@ private fun ParagraphItem(
         color = backgroundColor,
         shape = RoundedCornerShape(8.dp)
     ) {
-        // 检查是否包含图片占位符或标签
         val imgUrl = remember(text) {
-            val pattern = """(?:__IMG__|<img[^>]+src=["'])([^"'>]+)""".toRegex()
+            val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s]+)["']?""".toRegex()
             pattern.find(text)?.groupValues?.get(1)
         }
 
         if (imgUrl != null) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val finalUrl = remember(imgUrl, serverUrl) {
+                if (imgUrl.startsWith("http")) imgUrl
+                else {
+                    val base = serverUrl.replace("/api/5", "")
+                    if (imgUrl.startsWith("/")) "$base$imgUrl" else "$base/$imgUrl"
+                }
+            }
+            
+            val imageRequest = remember(finalUrl) {
+                coil.request.ImageRequest.Builder(context)
+                    .data(finalUrl)
+                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                    .apply {
+                        android.net.Uri.parse(finalUrl).host?.let { host ->
+                            addHeader("Referer", "https://$host/")
+                        }
+                    }
+                    .crossfade(true)
+                    .build()
+            }
+
             coil.compose.AsyncImage(
-                model = imgUrl,
+                model = imageRequest,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
