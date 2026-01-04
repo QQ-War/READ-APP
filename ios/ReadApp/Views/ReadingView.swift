@@ -323,7 +323,10 @@ struct ReadingView: View {
 
     @ViewBuilder
     private func mainContent(safeArea: EdgeInsets) -> some View {
-        if preferences.readingMode == .horizontal {
+        // 核心改动：如果是漫画模式，强制使用垂直滚动视图
+        if isMangaMode {
+            verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
+        } else if preferences.readingMode == .horizontal {
             horizontalReader(safeArea: safeArea)
         } else {
             verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
@@ -2005,8 +2008,6 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
         view.backgroundColor = UIColor.systemBackground
         if let store = renderStore {
             setupTK2View(store: store)
-        } else if let sentences = sentences, pageIndex < sentences.count {
-            setupMangaView(content: sentences[pageIndex])
         }
     }
     
@@ -2027,54 +2028,6 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
              v.pageInfo = pendingPageInfo
              v.setNeedsDisplay()
          }
-    }
-
-    private func setupMangaView(content: String) {
-        let isImage = content.hasPrefix("__IMG__")
-        let view: AnyView
-        if isImage {
-            view = AnyView(
-                MangaImageView(url: String(content.dropFirst(7)), referer: chapterUrl)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity) // 强制撑满
-            )
-        } else {
-            view = AnyView(
-                Text(content)
-                    .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            )
-        }
-        
-        let hostingController = UIHostingController(rootView: view)
-        hostingController.view.backgroundColor = .clear
-        hostingController.view.frame = self.view.bounds
-        hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        
-        self.addChild(hostingController)
-        self.view.addSubview(hostingController.view)
-        hostingController.didMove(toParent: self)
-        
-        // 确保子视图也撑满
-        hostingController.view.translatesAutoresizingMaskIntoConstraints = true
-        hostingController.view.frame = self.view.bounds
-        
-        // 添加点击手势透传
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
-        hostingController.view.addGestureRecognizer(tap)
-    }
-
-    @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
-        let x = gesture.location(in: view).x
-        let width = view.bounds.width
-        let location: ReaderTapLocation
-        if x < width * 0.3 {
-            location = .left
-        } else if x > width * 0.7 {
-            location = .right
-        } else {
-            location = .middle
-        }
-        onTapLocation?(location)
     }
     
     func updateHighlights(index: Int?, secondary: Set<Int>, isPlaying: Bool, starts: [Int], prefixLen: Int) {
@@ -2303,60 +2256,32 @@ private struct RichTextView: View {
 }
 
 private struct MangaImageView: View {
-
     let url: String
-
     let referer: String?
-
     @EnvironmentObject var apiService: APIService
-
     @StateObject private var preferences = UserPreferences.shared
-
     private let logger = LogManager.shared
-
     
-
-        var body: some View {
-            let finalURL = resolveURL(url)
-            
-            Group {
-                if preferences.readingMode == .vertical {
-                    // 垂直模式：禁用单独缩放，确保全宽显示
-                    RemoteImageView(url: finalURL, refererOverride: referer)
-                        .frame(maxWidth: .infinity)
-                } else {
-                    // 水平翻页模式：保留缩放，强制占满全屏空间
-                    ZoomableScrollView {
-                        RemoteImageView(url: finalURL, refererOverride: referer)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
+    var body: some View {
+        let finalURL = resolveURL(url)
+        RemoteImageView(url: finalURL, refererOverride: referer)
+            .frame(maxWidth: .infinity)
             .onAppear {
                 if preferences.isVerboseLoggingEnabled {
                     let logReferer = referer?.replacingOccurrences(of: "http://", with: "https://") ?? "无"
                     logger.log("准备加载图片: \(finalURL?.lastPathComponent ?? "无效"), 来源: \(logReferer)", category: "漫画调试")
                 }
             }
-        }
-    
-
-    private func resolveURL(_ original: String) -> URL? {
-
-        if original.hasPrefix("http") {
-
-            return URL(string: original)
-
-        }
-
-        let baseURL = apiService.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "")
-
-        let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
-
-        return URL(string: resolved)
-
     }
-
+    
+    private func resolveURL(_ original: String) -> URL? {
+        if original.hasPrefix("http") {
+            return URL(string: original)
+        }
+        let baseURL = apiService.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "")
+        let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
+        return URL(string: resolved)
+    }
 }
 
 // MARK: - Zoomable ScrollView for Manga
