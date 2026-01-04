@@ -118,13 +118,6 @@ fun ReadingScreen(
     var lastAutoScrollTarget by remember { mutableStateOf<Int?>(null) }
     var resolveCurrentPageStart by remember { mutableStateOf<(() -> Pair<Int, Int>?)?>(null) }
 
-    // 垂直模式切章置顶
-    LaunchedEffect(currentChapterIndex, displayContent) {
-        if (readingMode == com.readapp.data.ReadingMode.Vertical) {
-            scrollState.scrollToItem(0)
-        }
-    }
-
     val contentPadding = remember(readingHorizontalPadding) {
         PaddingValues(
             start = readingHorizontalPadding.dp,
@@ -153,6 +146,17 @@ fun ReadingScreen(
             currentChapterContent
         } else {
             chapters.getOrNull(currentChapterIndex)?.content.orEmpty()
+        }
+    }
+
+    val currentChapterUrl = remember(currentChapterIndex, chapters) {
+        chapters.getOrNull(currentChapterIndex)?.url
+    }
+
+    // 垂直模式切章置顶
+    LaunchedEffect(currentChapterIndex, displayContent) {
+        if (readingMode == com.readapp.data.ReadingMode.Vertical) {
+            scrollState.scrollToItem(0)
         }
     }
 
@@ -835,6 +839,12 @@ private fun ParagraphItem(
                     .build().toString()
             }
 
+            val finalReferer = remember(chapterUrl) {
+                chapterUrl?.replace("http://", "https://")?.let {
+                    if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
+                }
+            }
+
             var currentRequestUrl by remember(finalUrl, forceProxy) { 
                 mutableStateOf(if (forceProxy) proxyUrl else finalUrl) 
             }
@@ -854,14 +864,14 @@ private fun ParagraphItem(
                     .listener(
                         onError = { _, _ ->
                             // 如果直接请求失败且没用过代理，尝试切换代理
-                            if (!useProxy) {
+                            if (!hasTriedProxy) {
                                 val proxyUrl = android.net.Uri.parse(serverUrl).buildUpon()
                                     .path("api/5/proxypng")
                                     .appendQueryParameter("url", finalUrl)
                                     .appendQueryParameter("accessToken", "") // 会被拦截器自动填充
                                     .build().toString()
                                 currentRequestUrl = proxyUrl
-                                useProxy = true
+                                hasTriedProxy = true
                             }
                         }
                     )
