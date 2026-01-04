@@ -460,9 +460,8 @@ fun ReadingScreen(
                                                 .crossfade(true)
                                                 .build()
                                         }
-                                        coil.compose.AsyncImage(
+                                        ZoomableImage(
                                             model = imageRequest,
-                                            contentDescription = null,
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Fit
                                         )
@@ -801,6 +800,51 @@ fun ReadingScreen(
  * 娈佃惤椤圭粍浠?- 甯﹂珮浜晥鏋?
  */
 @Composable
+private fun ZoomableImage(
+    model: Any,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Fit
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val state = rememberTransformableState { zoomChange, offsetChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 4f)
+        // 只有在放大时才允许偏移
+        if (scale > 1f) {
+            offset += offsetChange
+        } else {
+            offset = Offset.Zero
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .clip(RectangleShape)
+            .transformable(state = state)
+            .pointerInput(Unit) {
+                detectTapGestures(onDoubleTap = {
+                    scale = if (scale > 1f) 1f else 2f
+                    offset = Offset.Zero
+                })
+            }
+    ) {
+        coil.compose.AsyncImage(
+            model = model,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                ),
+            contentScale = contentScale
+        )
+    }
+}
+
+@Composable
 private fun ParagraphItem(
     text: String,
     isPlaying: Boolean,
@@ -811,6 +855,7 @@ private fun ParagraphItem(
     forceProxy: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // ... (backgroundColor logic unchanged)
     val backgroundColor = when {
         isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
         isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)
@@ -822,7 +867,6 @@ private fun ParagraphItem(
         color = backgroundColor,
         shape = RoundedCornerShape(8.dp)
     ) {
-        // 改进的正则表达式：确保只提取 __IMG__ 标记后的 URL 部分
         val imgUrl = remember(text) {
             val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""".toRegex()
             pattern.find(text)?.groupValues?.get(1)
@@ -830,7 +874,6 @@ private fun ParagraphItem(
 
         if (imgUrl != null) {
             val context = androidx.compose.ui.platform.LocalContext.current
-            // ... (rest of image loading logic)
             val finalUrl = remember(imgUrl, serverUrl) {
                 if (imgUrl.startsWith("http")) imgUrl
                 else {
@@ -839,18 +882,18 @@ private fun ParagraphItem(
                 }
             }
             
-            val finalReferer = remember(chapterUrl) {
-                chapterUrl?.replace("http://", "https://")?.let {
-                    if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
-                }
-            }
-
             val proxyUrl = remember(finalUrl, serverUrl) {
                 android.net.Uri.parse(serverUrl).buildUpon()
                     .path("api/5/proxypng")
                     .appendQueryParameter("url", finalUrl)
                     .appendQueryParameter("accessToken", "")
                     .build().toString()
+            }
+
+            val finalReferer = remember(chapterUrl) {
+                chapterUrl?.replace("http://", "https://")?.let {
+                    if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
+                }
             }
 
             var currentRequestUrl by remember(finalUrl, forceProxy) { 
@@ -860,26 +903,41 @@ private fun ParagraphItem(
                 mutableStateOf(forceProxy) 
             }
 
-            coil.compose.AsyncImage(
-                model = coil.request.ImageRequest.Builder(context)
-                    .data(currentRequestUrl)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
-                    .apply { if (finalReferer != null) addHeader("Referer", finalReferer) }
-                    .listener(onError = { _, _ -> 
-                        if (!hasTriedProxy && proxyUrl != null) {
-                            currentRequestUrl = proxyUrl
-                            hasTriedProxy = true
-                        }
-                    })
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
+            val imageRequest = coil.request.ImageRequest.Builder(context)
+                .data(currentRequestUrl)
+                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                .apply { if (finalReferer != null) addHeader("Referer", finalReferer) }
+                .listener(onError = { _, _ -> 
+                    if (!hasTriedProxy && proxyUrl != null) {
+                        currentRequestUrl = proxyUrl
+                        hasTriedProxy = true
+                    }
+                })
+                .crossfade(true)
+                .build()
+
+            ZoomableImage(
+                model = imageRequest,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                contentScale = ContentScale.Fit
+                    .heightIn(min = 200.dp, max = 800.dp)
+                    .padding(vertical = 4.dp)
             )
         } else {
+            // ... (text rendering unchanged)
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                lineHeight = (fontSize * 1.8f).sp,
+                modifier = Modifier.padding(
+                    horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp,
+                    vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp
+                )
+            )
+        }
+    }
+}
             // ... (rest of Text rendering unchanged)
             Text(
                 text = text,
@@ -1338,6 +1396,8 @@ private fun ReaderOptionsDialog(
     onDarkModeChange: (Boolean) -> Unit,
     forceMangaProxy: Boolean,
     onForceMangaProxyChange: (Boolean) -> Unit,
+    readingMode: com.readapp.data.ReadingMode,
+    onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1345,6 +1405,31 @@ private fun ReaderOptionsDialog(
         title = { Text(text = "阅读选项") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // 阅读模式
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("阅读模式", style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        com.readapp.data.ReadingMode.values().forEach { mode ->
+                            val isSelected = readingMode == mode
+                            val label = when(mode) {
+                                com.readapp.data.ReadingMode.Vertical -> "上下滚动"
+                                com.readapp.data.ReadingMode.Horizontal -> "左右翻页"
+                            }
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { onReadingModeChange(mode) },
+                                label = { Text(label) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                Divider()
+
                 // 夜间模式
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1354,22 +1439,16 @@ private fun ReaderOptionsDialog(
                     Switch(checked = isDarkMode, onCheckedChange = onDarkModeChange)
                 }
 
-                Divider()
-
-                // 漫画高级设置
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("漫画设置", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                    
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().clickable { onForceMangaProxyChange(!forceMangaProxy) }
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("强制服务器代理", style = MaterialTheme.typography.bodyMedium)
-                            Text("如果图片加载失败（403等）请开启", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                        }
-                        Switch(checked = forceMangaProxy, onCheckedChange = onForceMangaProxyChange)
+                // 强制代理
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable { onForceMangaProxyChange(!forceMangaProxy) }
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("强制服务器代理")
+                        Text("如果漫画无法加载，请开启此项", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                     }
+                    Switch(checked = forceMangaProxy, onCheckedChange = onForceMangaProxyChange)
                 }
 
                 Divider()
@@ -1450,6 +1529,8 @@ private fun FontSizeDialog(
     onDarkModeChange: (Boolean) -> Unit,
     forceMangaProxy: Boolean,
     onForceMangaProxyChange: (Boolean) -> Unit,
+    readingMode: com.readapp.data.ReadingMode,
+    onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit,
     onDismiss: () -> Unit
 ) {
     ReaderOptionsDialog(
@@ -1465,6 +1546,8 @@ private fun FontSizeDialog(
         onDarkModeChange = onDarkModeChange,
         forceMangaProxy = forceMangaProxy,
         onForceMangaProxyChange = onForceMangaProxyChange,
+        readingMode = readingMode,
+        onReadingModeChange = onReadingModeChange,
         onDismiss = onDismiss
     )
 }

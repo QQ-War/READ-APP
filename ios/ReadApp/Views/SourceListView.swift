@@ -175,78 +175,85 @@ struct SourceListView: View {
 
     @ViewBuilder
     private func sourceRow(_ source: BookSource) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                // 左侧：点击展开/隐藏频道
-                Button(action: { withAnimation { toggleExpand(source) } }) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(source.bookSourceName)
-                            .font(.headline)
-                            .foregroundColor(source.enabled ? .primary : .secondary)
-                        
-                        Text(source.bookSourceUrl)
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                // 右侧功能区：开关 + 编辑图标
+        ZStack {
+            // 解决 disclosure arrow 的隐式跳转
+            // 通过把 NavigationLink 放在 background 且不带 Label 来隐藏系统自带的浅色箭头
+            NavigationLink(destination: SourceEditView(sourceId: source.bookSourceUrl)) {
+                EmptyView()
+            }
+            .opacity(0)
+
+            VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    // 启用开关
-                    Toggle("", isOn: Binding(
-                        get: { source.enabled },
-                        set: { _ in viewModel.toggleSource(source: source) }
-                    ))
-                    .labelsHidden()
-                    .scaleEffect(0.7)
+                    // 左侧：点击展开/隐藏频道
+                    Button(action: { withAnimation { toggleExpand(source) } }) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(source.bookSourceName)
+                                .font(.headline)
+                                .foregroundColor(source.enabled ? .primary : .secondary)
+                            
+                            Text(source.bookSourceUrl)
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                     
-                    // 右侧：点击进入编辑 (使用普通按钮，不占满宽度，防止触发 List 默认箭头)
-                    Button(action: { sourceIdToEdit = source.bookSourceUrl }) {
+                    // 右侧功能区：开关 + 编辑图标
+                    HStack(spacing: 12) {
+                        // 启用开关
+                        Toggle("", isOn: Binding(
+                            get: { source.enabled },
+                            set: { _ in viewModel.toggleSource(source: source) }
+                        ))
+                        .labelsHidden()
+                        .scaleEffect(0.7)
+                        
+                        // 右侧编辑图标（仅用于视觉提示，实际点击整个 Row 或背景 Link 均可跳转）
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.secondary)
                             .padding(.leading, 4)
                     }
-                    .buttonStyle(BorderlessButtonStyle())
+                    .padding(.trailing, 4)
                 }
-                .padding(.trailing, 4)
-            }
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            
-            if expandedSourceIds.contains(source.id) {
-                if loadingExploreIds.contains(source.id) {
-                    ProgressView().padding(.vertical, 8)
-                } else if let kinds = exploreKinds[source.id], !kinds.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(kinds) { kind in
-                                NavigationLink(destination: SourceExploreView(source: source, kind: kind).environmentObject(apiService)) {
-                                    Text(kind.title)
-                                        .font(.caption)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.blue.opacity(0.1))
-                                        .foregroundColor(.blue)
-                                        .cornerRadius(12)
+                .padding(.vertical, 8)
+                
+                if expandedSourceIds.contains(source.id) {
+                    // ... Explore channels code ...
+                    if loadingExploreIds.contains(source.id) {
+                        ProgressView().padding(.vertical, 8)
+                    } else if let kinds = exploreKinds[source.id], !kinds.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(kinds) { kind in
+                                    NavigationLink(destination: SourceExploreView(source: source, kind: kind).environmentObject(apiService)) {
+                                        Text(kind.title)
+                                            .font(.caption)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(Color.blue.opacity(0.1))
+                                            .foregroundColor(.blue)
+                                            .cornerRadius(12)
+                                    }
                                 }
                             }
+                            .padding(.vertical, 8)
+                            .padding(.leading, 4)
                         }
-                        .padding(.vertical, 8)
-                        .padding(.leading, 4)
+                    } else {
+                        Text("该书源暂无发现配置")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 4)
                     }
-                } else {
-                    Text("该书源暂无发现配置")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .padding(.vertical, 4)
                 }
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            // ... swipe actions ...
             Button {
                 selectedBookSource = source
                 showingBookSearchView = true

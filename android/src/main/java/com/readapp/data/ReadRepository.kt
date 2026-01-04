@@ -67,8 +67,9 @@ class ReadRepository(private val apiFactory: (String) -> ReadApiService) {
         bookUrl: String,
         bookSourceUrl: String?,
         index: Int,
+        contentType: Int = 0
     ): Result<String> = executeWithFailover {
-        it.getBookContent(accessToken, bookUrl, index, 0, bookSourceUrl)
+        it.getBookContent(accessToken, bookUrl, index, contentType, bookSourceUrl)
     }(buildEndpoints(baseUrl, publicUrl))
 
     suspend fun saveBookProgress(

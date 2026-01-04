@@ -195,6 +195,7 @@ fun ReadAppMain() {
                         readingHorizontalPadding = readingHorizontalPadding,
                         errorMessage = errorMessage,
                         readingMode = readingMode,
+                        onReadingModeChange = { bookViewModel.updateReadingMode(it) },
                         lockPageOnTTS = lockPageOnTTS,
                         onLockPageOnTTSChange = { bookViewModel.updateLockPageOnTTS(it) },
                         pageTurningMode = pageTurningMode,

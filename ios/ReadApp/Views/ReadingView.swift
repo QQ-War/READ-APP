@@ -1113,7 +1113,8 @@ struct ReadingView: View {
     }
 
     private func paginateChapter(at index: Int, forGate: Bool, fromEnd: Bool = false) async -> ChapterCache? {
-        guard let content = try? await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: book.type ?? 0) else { return nil }
+        let effectiveType = (book.bookUrl.map { preferences.manualMangaUrls.contains($0) } == true) ? 2 : (book.type ?? 0)
+        guard let content = try? await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: effectiveType) else { return nil }
         
         let cleaned = removeHTMLAndSVG(content)
         let processed = applyReplaceRules(to: cleaned)
@@ -1346,21 +1347,19 @@ struct ReadingView: View {
         let lineSpacing = preferences.lineSpacing
         let margin = preferences.pageHorizontalMargin
         
+        // 判断是否为漫画模式（考虑手动标记）
+        let effectiveType = (book.bookUrl.map { preferences.manualMangaUrls.contains($0) } == true) ? 2 : (book.type ?? 0)
+        
         // Capture all necessary resume state
         let resumePos = pendingResumePos
-        let resumeLocalBodyIndex = pendingResumeLocalBodyIndex
-        let resumeLocalChapterIndex = pendingResumeLocalChapterIndex
-        let resumeLocalPageIndex = pendingResumeLocalPageIndex
-        let capturedTTSIndex = lastTTSSentenceIndex
-        let jumpFirst = pendingJumpToFirstPage
-        let jumpLast = pendingJumpToLastPage
+        // ... rest of parameters ...
         let shouldResume = shouldApplyResumeOnce
         
         if currentCache.pages.isEmpty { isLoading = true }
         
         Task {
             do {
-                let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapterIndex, contentType: book.type ?? 0)
+                let content = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapterIndex, contentType: effectiveType)
                 
                 // 1. Heavy processing on background thread
                 let cleaned = removeHTMLAndSVG(content)
@@ -2290,31 +2289,73 @@ private struct RichTextView: View {
 
 private struct MangaImageView: View {
     let url: String
-    let referer: String? // 新增：支持自定义来源页
+    let referer: String?
     @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
     private let logger = LogManager.shared
     
     var body: some View {
         let finalURL = resolveURL(url)
-        RemoteImageView(url: finalURL, refererOverride: referer)
-            .frame(maxWidth: .infinity)
-            .onAppear {
-                if preferences.isVerboseLoggingEnabled {
-                    let logReferer = referer?.replacingOccurrences(of: "http://", with: "https://") ?? "无"
-                    logger.log("准备加载图片: \(finalURL?.lastPathComponent ?? "无效"), 来源: \(logReferer)", category: "漫画调试")
+        ZoomableScrollView {
+            RemoteImageView(url: finalURL, refererOverride: referer)
+                .onAppear {
+                    if preferences.isVerboseLoggingEnabled {
+                        let logReferer = referer?.replacingOccurrences(of: "http://", with: "https://") ?? "无"
+                        logger.log("准备加载图片: \(finalURL?.lastPathComponent ?? "无效"), 来源: \(logReferer)", category: "漫画调试")
+                    }
                 }
-            }
+        }
+        .frame(maxWidth: .infinity)
+        // 给一个初始高度估计值，或者根据图片比例动态调整
+        .frame(minHeight: 300) 
     }
     
-    private func resolveURL(_ original: String) -> URL? {
-        if original.hasPrefix("http") {
-            return URL(string: original)
+    // ... resolveURL ...
+}
+
+// MARK: - Zoomable ScrollView for Manga
+struct ZoomableScrollView<Content: View>: UIViewRepresentable {
+    private var content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.delegate = context.coordinator
+        scrollView.maximumZoomScale = 4.0
+        scrollView.minimumZoomScale = 1.0
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.backgroundColor = .clear
+
+        let hostedView = UIHostingController(rootView: content)
+        hostedView.view.translatesAutoresizingMaskIntoConstraints = false
+        hostedView.view.backgroundColor = .clear
+        scrollView.addSubview(hostedView.view)
+
+        NSLayoutConstraint.activate([
+            hostedView.view.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+            hostedView.view.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            hostedView.view.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            hostedView.view.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            hostedView.view.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor)
+        ])
+
+        return scrollView
+    }
+
+    func updateUIView(_ uiView: UIScrollView, context: Context) { }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator: NSObject, UIScrollViewDelegate {
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+            return scrollView.subviews.first
         }
-        
-        let baseURL = apiService.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "")
-        let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
-        return URL(string: resolved)
     }
 }
 
@@ -2664,7 +2705,15 @@ private struct ReaderOptionsSheet: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("字体与间距")) {
+                Section(header: Text("显示设置")) {
+                    Picker("阅读模式", selection: $preferences.readingMode) {
+                        ForEach(ReadingMode.allCases) { mode in
+                            Text(mode.localizedName).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.vertical, 4)
+
                     VStack(alignment: .leading, spacing: 8) {
                         Text("字体大小: \(String(format: "%.0f", preferences.fontSize))")
                             .font(.subheadline)

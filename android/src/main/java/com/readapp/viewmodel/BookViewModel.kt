@@ -1199,6 +1199,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val actualEnd = endIndex.coerceIn(actualStart, chapters.lastIndex)
         val count = actualEnd - actualStart + 1
 
+        // 判断是否为漫画模式
+        val isManga = _manualMangaUrls.value.contains(book.bookUrl) || book.type == 2
+        val effectiveType = if (isManga) 2 else 0
+
         viewModelScope.launch(Dispatchers.IO) {
             for (i in actualStart..actualEnd) {
                 if (!localCache.isChapterCached(book.bookUrl ?: "", i)) {
@@ -1209,7 +1213,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                         _accessToken.value,
                         book.bookUrl ?: "",
                         book.origin,
-                        chapter.index
+                        chapter.index,
+                        effectiveType
                     ).onSuccess { content ->
                         val cleaned = cleanChapterContent(content.orEmpty())
                         localCache.saveChapter(book.bookUrl ?: "", i, cleaned)
@@ -1258,8 +1263,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val chapter = _chapters.value.getOrNull(index) ?: return null
         val bookUrl = book.bookUrl ?: return null
         
-        // 1. Check Memory Cache
-        val cachedInMemory = chapterContentCache[index]
+        // 判断是否为漫画模式
+        val isManga = _manualMangaUrls.value.contains(bookUrl) || book.type == 2
+        val effectiveType = if (isManga) 2 else 0
+        
+        // 1. Check Memory Cache (key 包含类型)
+        val cacheKey = "${index}_${effectiveType}"
+        val cachedInMemory = chapterContentCache[cacheKey]
         if (!cachedInMemory.isNullOrBlank()) {
             updateChapterContent(index, cachedInMemory)
             return cachedInMemory
@@ -1268,8 +1278,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         // 2. Check Disk Cache
         val cachedOnDisk = localCache.loadChapter(bookUrl, index)
         if (!cachedOnDisk.isNullOrBlank()) {
-            updateChapterContent(index, cachedOnDisk)
-            return cachedOnDisk
+            // 如果开启了漫画模式但缓存中没有图片标记，则认为缓存过期
+            val needsRefresh = isManga && !cachedOnDisk.contains("__IMG__")
+            if (!needsRefresh) {
+                updateChapterContent(index, cachedOnDisk)
+                return cachedOnDisk
+            }
         }
 
         if (_isChapterContentLoading.value) {
@@ -1277,7 +1291,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
         _isChapterContentLoading.value = true
         return try {
-            val result = repository.fetchChapterContent(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, bookUrl, book.origin, chapter.index)
+            val result = repository.fetchChapterContent(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, bookUrl, book.origin, chapter.index, effectiveType)
             result.onSuccess { content ->
                 val cleaned = cleanChapterContent(content.orEmpty())
                 val resolved = when {
@@ -1287,6 +1301,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 // Save to disk cache
                 localCache.saveChapter(bookUrl, index, resolved)
+                chapterContentCache[cacheKey] = resolved
                 updateChapterContent(index, resolved)
             }.onFailure { error ->
                 _errorMessage.value = "加载失败: ${error.message}"
@@ -1303,7 +1318,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     private fun updateChapterContent(index: Int, content: String) {
         _currentChapterContent.value = content
-        chapterContentCache[index] = content
         currentParagraphs = parseParagraphs(content)
         currentSentences = currentParagraphs
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
