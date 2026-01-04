@@ -100,6 +100,7 @@ private struct PageSnapshot {
     let pages: [PaginatedPage]
     let renderStore: TextKit2RenderStore?
     let pageInfos: [TK2PageInfo]?
+    let contentSentences: [String]? // 新增：保存原始句子用于漫画渲染
 }
 
 // MARK: - ReadingView
@@ -162,6 +163,9 @@ struct ReadingView: View {
     @StateObject private var contentControllerCache = ReadContentViewControllerCache()
     @State private var hasInitialPagination = false
     
+    // 漫画模式占位符，用于缓存 key 保持稳定
+    private let mangaPlaceholderStore = TextKit2RenderStore(attributedString: NSAttributedString(), layoutWidth: 1)
+    
     // Repagination Control
     @State private var isRepaginateQueued = false
     @State private var lastPaginationKey: PaginationKey?
@@ -194,6 +198,12 @@ struct ReadingView: View {
     
     // Page Turn Command
     @State private var pageTurnRequest: PageTurnRequest? = nil
+
+    private var isMangaMode: Bool {
+        // 如果书籍类型是漫画 (2) 或者 内容中包含较多图片占位符
+        let imageCount = contentSentences.filter { $0.hasPrefix("__IMG__") }.count
+        return book.type == 2 || (contentSentences.count > 0 && imageCount > 0 && Double(imageCount) / Double(contentSentences.count) > 0.3)
+    }
 
     private struct PaginationKey: Hashable {
         let width: Int
@@ -566,7 +576,7 @@ struct ReadingView: View {
     
     private var cacheRefresher: some View {
         Group {
-            let stores: [TextKit2RenderStore?] = [currentCache.renderStore, prevCache.renderStore, nextCache.renderStore]
+            let stores: [TextKit2RenderStore?] = [currentCache.renderStore, prevCache.renderStore, nextCache.renderStore, mangaPlaceholderStore]
             let _ = contentControllerCache.retainActive(stores: stores)
         }
         .frame(width: 0, height: 0)
@@ -577,6 +587,29 @@ struct ReadingView: View {
     private func repaginateContent(in size: CGSize, with newContentSentences: [String]? = nil) {
         let sentences = newContentSentences ?? contentSentences
         let chapterTitle = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : nil
+
+        // 如果是漫画模式，每张图片（或每段文字）作为一页
+        if isMangaMode {
+            var pages: [PaginatedPage] = []
+            var currentOffset = 0
+            for (idx, sentence) in sentences.enumerated() {
+                let len = sentence.utf16.count
+                pages.append(PaginatedPage(globalRange: NSRange(location: currentOffset, length: len), startSentenceIndex: idx))
+                currentOffset += len + 1
+            }
+            
+            if pendingJumpToLastPage { currentPageIndex = max(0, pages.count - 1) }
+            else if pendingJumpToFirstPage { currentPageIndex = 0 }
+            else if currentPageIndex >= pages.count { currentPageIndex = 0 }
+            
+            pendingJumpToLastPage = false
+            pendingJumpToFirstPage = false
+            
+            // 漫画模式下不使用 renderStore
+            currentCache = ChapterCache(pages: pages, renderStore: nil, pageInfos: nil, contentSentences: sentences, rawContent: rawContent, attributedText: NSAttributedString(string: sentences.joined(separator: "\n")), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: true)
+            hasInitialPagination = true
+            return
+        }
 
         let newAttrText = TextKitPaginator.createAttributedText(sentences: sentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, chapterTitle: chapterTitle)
         let newPStarts = TextKitPaginator.paragraphStartIndices(sentences: sentences)
@@ -732,35 +765,52 @@ struct ReadingView: View {
     }
 
     private func makeContentViewController(snapshot: PageSnapshot, pageIndex: Int, chapterOffset: Int) -> ReadContentViewController? {
-        guard let store = snapshot.renderStore, let infos = snapshot.pageInfos, pageIndex >= 0, pageIndex < infos.count else { return nil }
+        guard pageIndex >= 0 else { return nil }
+        
+        // 验证索引
+        if let store = snapshot.renderStore {
+            guard let infos = snapshot.pageInfos, pageIndex < infos.count else { return nil }
+        } else if let sentences = snapshot.contentSentences {
+            guard pageIndex < sentences.count else { return nil }
+        } else {
+            return nil
+        }
 
-        let vc = contentControllerCache.controller(for: store, pageIndex: pageIndex, chapterOffset: chapterOffset) {
+        let vc = contentControllerCache.controller(for: snapshot.renderStore ?? mangaPlaceholderStore, pageIndex: pageIndex, chapterOffset: chapterOffset) {
             ReadContentViewController(
-                pageIndex: pageIndex, renderStore: store, chapterOffset: chapterOffset,
+                pageIndex: pageIndex, 
+                renderStore: snapshot.renderStore, 
+                sentences: snapshot.contentSentences,
+                chapterOffset: chapterOffset,
                 onAddReplaceRule: { selectedText in presentReplaceRuleEditor(selectedText: selectedText) },
                 onTapLocation: { location in handleReaderTap(location: location) }
             )
         }
         
-        // 更新高亮状态
-        if chapterOffset == 0 {
-            vc.updateHighlights(
-                index: ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex,
-                secondary: ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : [],
-                isPlaying: ttsManager.isPlaying,
-                starts: currentCache.paragraphStarts,
-                prefixLen: currentCache.chapterPrefixLen
-            )
-        } else {
-            vc.updateHighlights(index: nil, secondary: [], isPlaying: false, starts: [], prefixLen: 0)
+        // 更新高亮状态 (仅文本模式)
+        if snapshot.renderStore != nil {
+            if chapterOffset == 0 {
+                vc.updateHighlights(
+                    index: ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex,
+                    secondary: ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : [],
+                    isPlaying: ttsManager.isPlaying,
+                    starts: currentCache.paragraphStarts,
+                    prefixLen: currentCache.chapterPrefixLen
+                )
+            } else {
+                vc.updateHighlights(index: nil, secondary: [], isPlaying: false, starts: [], prefixLen: 0)
+            }
+            
+            if let infos = snapshot.pageInfos, pageIndex < infos.count {
+                vc.configureTK2Page(info: infos[pageIndex])
+            }
         }
         
-        vc.configureTK2Page(info: infos[pageIndex])
         return vc
     }
 
     private func snapshot(from cache: ChapterCache) -> PageSnapshot {
-        PageSnapshot(pages: cache.pages, renderStore: cache.renderStore, pageInfos: cache.pageInfos)
+        PageSnapshot(pages: cache.pages, renderStore: cache.renderStore, pageInfos: cache.pageInfos, contentSentences: cache.contentSentences)
     }
 
     private func scheduleRepaginate(in size: CGSize) {
@@ -790,6 +840,10 @@ struct ReadingView: View {
     }
 
     private func pageStartSentenceIndex(for pageIndex: Int) -> Int? {
+        if currentCache.pages.indices.contains(pageIndex) {
+            return currentCache.pages[pageIndex].startSentenceIndex
+        }
+        
         guard let range = pageRange(for: pageIndex) else { return nil }
         let adjustedLocation = max(0, range.location - currentCache.chapterPrefixLen)
         return currentCache.paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
@@ -1112,8 +1166,20 @@ struct ReadingView: View {
 
     private func removeHTMLAndSVG(_ text: String) -> String {
         var result = text
+        // 移除 SVG
         result = result.replacingOccurrences(of: "<svg[^>]*>.*?</svg>", with: "", options: [.regularExpression, .caseInsensitive])
-        result = result.replacingOccurrences(of: "<img[^>]*>", with: "", options: [.regularExpression, .caseInsensitive])
+        
+        // 提取 img src 并替换为特殊占位符 __IMG__url
+        // 匹配 <img ... src="url" ...> 或 <img ... src='url' ...>
+        let imgPattern = "<img[^>]+src\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>"
+        if let regex = try? NSRegularExpression(pattern: imgPattern, options: .caseInsensitive) {
+            let range = NSRange(location: 0, length: result.utf16.count)
+            result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "\n__IMG__$1\n")
+        }
+        
+        // 移除所有其他 HTML 标签，替换为换行以保持分段
+        result = result.replacingOccurrences(of: "<[^>]+>", with: "\n", options: .regularExpression)
+        
         return result
     }
     
@@ -1766,7 +1832,8 @@ struct ReadingView: View {
 // MARK: - Other Views
 private class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     let pageIndex: Int
-    let renderStore: TextKit2RenderStore
+    let renderStore: TextKit2RenderStore?
+    let sentences: [String]?
     let chapterOffset: Int
     let onAddReplaceRule: ((String) -> Void)?
     let onTapLocation: ((ReaderTapLocation) -> Void)?
@@ -1781,9 +1848,10 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
     private var tk2View: ReadContent2View?
     private var pendingPageInfo: TK2PageInfo?
     
-    init(pageIndex: Int, renderStore: TextKit2RenderStore, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
+    init(pageIndex: Int, renderStore: TextKit2RenderStore?, sentences: [String]? = nil, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
         self.pageIndex = pageIndex
         self.renderStore = renderStore
+        self.sentences = sentences
         self.chapterOffset = chapterOffset
         self.onAddReplaceRule = onAddReplaceRule
         self.onTapLocation = onTapLocation
@@ -1795,13 +1863,17 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor.systemBackground
-        setupTK2View()
+        if let store = renderStore {
+            setupTK2View(store: store)
+        } else if let sentences = sentences, pageIndex < sentences.count {
+            setupMangaView(content: sentences[pageIndex])
+        }
     }
     
-    private func setupTK2View() {
+    private func setupTK2View(store: TextKit2RenderStore) {
          let v = ReadContent2View(frame: view.bounds)
          v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-         v.renderStore = renderStore
+         v.renderStore = store
          v.onTapLocation = onTapLocation
          v.onAddReplaceRule = onAddReplaceRule
          v.highlightIndex = highlightIndex
@@ -1815,6 +1887,47 @@ private class ReadContentViewController: UIViewController, UIGestureRecognizerDe
              v.pageInfo = pendingPageInfo
              v.setNeedsDisplay()
          }
+    }
+
+    private func setupMangaView(content: String) {
+        let isImage = content.hasPrefix("__IMG__")
+        let view: AnyView
+        if isImage {
+            view = AnyView(MangaImageView(url: String(content.dropFirst(7))).padding(4))
+        } else {
+            view = AnyView(
+                Text(content)
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            )
+        }
+        
+        let hostingController = UIHostingController(rootView: view)
+        hostingController.view.backgroundColor = .clear
+        hostingController.view.frame = self.view.bounds
+        hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        
+        self.addChild(hostingController)
+        self.view.addSubview(hostingController.view)
+        hostingController.didMove(toParent: self)
+        
+        // 添加点击手势透传
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
+        hostingController.view.addGestureRecognizer(tap)
+    }
+
+    @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
+        let x = gesture.location(in: view).x
+        let width = view.bounds.width
+        let location: ReaderTapLocation
+        if x < width * 0.3 {
+            location = .left
+        } else if x > width * 0.7 {
+            location = .right
+        } else {
+            location = .middle
+        }
+        onTapLocation?(location)
     }
     
     func updateHighlights(index: Int?, secondary: Set<Int>, isPlaying: Bool, starts: [Int], prefixLen: Int) {
@@ -1994,16 +2107,23 @@ private struct RichTextView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: fontSize * 0.8) {
             ForEach(Array(sentences.enumerated()), id: \.offset) { index, sentence in
-                Text(sentence.trimmingCharacters(in: .whitespacesAndNewlines))
-                    .font(.system(size: fontSize))
-                    .lineSpacing(lineSpacing)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 8)
-                    .background(GeometryReader { proxy in Color.clear.preference(key: SentenceFramePreferenceKey.self, value: [index: proxy.frame(in: .named("scroll"))]) })
-                    .background(RoundedRectangle(cornerRadius: 4).fill(highlightColor(for: index)).animation(.easeInOut, value: highlightIndex))
-                    .id(index)
+                if sentence.hasPrefix("__IMG__") {
+                    let urlString = String(sentence.dropFirst(7))
+                    MangaImageView(url: urlString)
+                        .id(index)
+                        .padding(.vertical, 4)
+                } else {
+                    Text(sentence.trimmingCharacters(in: .whitespacesAndNewlines))
+                        .font(.system(size: fontSize))
+                        .lineSpacing(lineSpacing)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 8)
+                        .background(GeometryReader { proxy in Color.clear.preference(key: SentenceFramePreferenceKey.self, value: [index: proxy.frame(in: .named("scroll"))]) })
+                        .background(RoundedRectangle(cornerRadius: 4).fill(highlightColor(for: index)).animation(.easeInOut, value: highlightIndex))
+                        .id(index)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2021,6 +2141,42 @@ private struct RichTextView: View {
             return .clear
         }
         return index == highlightIndex ? Color.orange.opacity(0.2) : .clear
+    }
+}
+
+private struct MangaImageView: View {
+    let url: String
+    
+    var body: some View {
+        AsyncImage(url: URL(string: url)) { phase in
+            switch phase {
+            case .empty:
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+                .frame(height: 200)
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+            case .failure:
+                VStack {
+                    Image(systemName: "photo.fill")
+                        .foregroundColor(.gray)
+                    Text("图片加载失败")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 100)
+                .background(Color.gray.opacity(0.1))
+            @unknown default:
+                EmptyView()
+            }
+        }
     }
 }
 

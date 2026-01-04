@@ -562,15 +562,16 @@ class TTSManager: NSObject, ObservableObject {
             result = svgRegex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "")
         }
         
-        // 鍙Щ闄ゅ父瑙佺殑HTML鏍囩锛屼繚鐣欐枃鏈唴瀹?
-        // 鍏堢Щ闄mg鏍囩
+        // 绉婚櫎鎵€鏈?img 鏍囩鍙婂叾鍗犱綅绗?
         let imgPattern = "<img[^>]*>"
         if let imgRegex = try? NSRegularExpression(pattern: imgPattern, options: [.caseInsensitive]) {
             let range = NSRange(location: 0, length: result.utf16.count)
             result = imgRegex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "")
         }
+        // 绉婚櫎鍙兘瀛樺湪鐨?__IMG__ 鍗犱綅绗?
+        result = result.replacingOccurrences(of: "__IMG__[^\\s\\n]+", with: "", options: .regularExpression)
         
-        // 绉婚櫎鍏朵粬鏍囩浣嗕繚鐣欏唴瀹?
+        // 鍙Щ闄ゅ父瑙佺殑HTML鏍囩锛屼繚鐣欐枃鏈唴瀹?
         let htmlPattern = "<[^>]+>"
         if let htmlRegex = try? NSRegularExpression(pattern: htmlPattern, options: []) {
             let range = NSRange(location: 0, length: result.utf16.count)

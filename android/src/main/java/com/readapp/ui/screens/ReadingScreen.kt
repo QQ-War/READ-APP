@@ -301,11 +301,25 @@ fun ReadingScreen(
                         headerText = headerText,
                         headerFontSize = headerFontSize
                     )
+                    
+                    val isMangaMode = remember(paragraphs, book.type) {
+                        val imageCount = paragraphs.count { it.contains("<img") || it.contains("__IMG__") }
+                        book.type == 2 || (paragraphs.isNotEmpty() && imageCount.toFloat() / paragraphs.size > 0.3f)
+                    }
+
                     val pageTextCache = remember { mutableStateMapOf<Int, AnnotatedString>() }
-                    val pagerState = rememberPagerState { paginatedPages.pages.size.coerceAtLeast(1) }
+                    val pagerState = rememberPagerState { 
+                        if (isMangaMode) paragraphs.size.coerceAtLeast(1)
+                        else paginatedPages.pages.size.coerceAtLeast(1) 
+                    }
+                    
                     resolveCurrentPageStart = {
-                        paginatedPages.getOrNull(pagerState.currentPage)?.let {
-                            it.startParagraphIndex to it.startOffsetInParagraph
+                        if (isMangaMode) {
+                            pagerState.currentPage to 0
+                        } else {
+                            paginatedPages.getOrNull(pagerState.currentPage)?.let {
+                                it.startParagraphIndex to it.startOffsetInParagraph
+                            }
                         }
                     }
                     val viewConfiguration = LocalViewConfiguration.current
@@ -359,40 +373,73 @@ fun ReadingScreen(
                                     }
                                 }
                         ) { page ->
-                            val pageInfo = paginatedPages.getOrNull(page)
-                            val pageText = pageInfo?.let { pi ->
-                                remember(pi, currentPlayingParagraph, currentParagraphStartOffset, playbackProgress, paginatedPages.fullText) {
-                                    val baseText = paginatedPages.fullText.subSequence(
-                                        pi.start.coerceAtLeast(0),
-                                        pi.end.coerceAtMost(paginatedPages.fullText.text.length)
-                                    )
-                                    
-                                    if (currentPlayingParagraph == pi.startParagraphIndex) {
-                                        val builder = AnnotatedString.Builder(baseText)
-                                        // 计算在当前页面内的相对偏移
-                                        // 简化版：由于阅读器分页通常以段落为界或包含完整段落，这里对当前段落覆盖到的文字应用高亮
-                                        // 如果需要更精准，需要 paragraphStartIndices
-                                        builder.addStyle(
-                                            style = SpanStyle(background = Color.Blue.copy(alpha = 0.15f)),
-                                            start = 0,
-                                            end = baseText.length
+                            if (isMangaMode) {
+                                val text = paragraphs.getOrNull(page) ?: ""
+                                val imgUrl = remember(text) {
+                                    val pattern = """(?:__IMG__|<img[^>]+src=["'])([^"'>]+)""".toRegex()
+                                    pattern.find(text)?.groupValues?.get(1)
+                                }
+                                
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (imgUrl != null) {
+                                        coil.compose.AsyncImage(
+                                            model = imgUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Fit
                                         )
-                                        builder.toAnnotatedString()
                                     } else {
-                                        baseText
+                                        Text(
+                                            text = text,
+                                            style = style,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(pagePadding)
+                                        )
                                     }
                                 }
-                            } ?: AnnotatedString("")
-                            
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(pagePadding)
-                            ) {
-                                Text(
-                                    text = pageText,
-                                    style = style
-                                )
+                            } else {
+                                val pageInfo = paginatedPages.getOrNull(page)
+                                val pageText = pageInfo?.let { pi ->
+                                    remember(pi, currentPlayingParagraph, currentParagraphStartOffset, playbackProgress, paginatedPages.fullText) {
+                                        val baseText = paginatedPages.fullText.subSequence(
+                                            pi.start.coerceAtLeast(0),
+                                            pi.end.coerceAtMost(paginatedPages.fullText.text.length)
+                                        )
+                                        
+                                        if (currentPlayingParagraph == pi.startParagraphIndex) {
+                                            val builder = AnnotatedString.Builder(baseText)
+                                            // 计算在当前页面内的相对偏移
+                                            // 简化版：由于阅读器分页通常以段落为界或包含完整段落，这里对当前段落覆盖到的文字应用高亮
+                                            // 如果需要更精准，需要 paragraphStartIndices
+                                            builder.addStyle(
+                                                style = SpanStyle(background = Color.Blue.copy(alpha = 0.15f)),
+                                                start = 0,
+                                                end = baseText.length
+                                            )
+                                            builder.toAnnotatedString()
+                                        } else {
+                                            baseText
+                                        }
+                                    }
+                                } ?: AnnotatedString("")
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(pagePadding)
+                                ) {
+                                    SelectionContainer {
+                                        Text(
+                                            text = pageText,
+                                            style = style,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
                             }
                         }
                     
@@ -675,6 +722,7 @@ fun ReadingScreen(
  * 娈佃惤椤圭粍浠?- 甯﹂珮浜晥鏋?
  */
 @Composable
+@Composable
 private fun ParagraphItem(
     text: String,
     isPlaying: Boolean,
@@ -693,16 +741,33 @@ private fun ParagraphItem(
         color = backgroundColor,
         shape = RoundedCornerShape(8.dp)
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
-            color = MaterialTheme.colorScheme.onSurface,
-            lineHeight = (fontSize * 1.8f).sp,
-            modifier = Modifier.padding(
-                horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp,
-                vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp
+        // 检查是否包含图片占位符或标签
+        val imgUrl = remember(text) {
+            val pattern = """(?:__IMG__|<img[^>]+src=["'])([^"'>]+)""".toRegex()
+            pattern.find(text)?.groupValues?.get(1)
+        }
+
+        if (imgUrl != null) {
+            coil.compose.AsyncImage(
+                model = imgUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                contentScale = ContentScale.Fit
             )
-        )
+        } else {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                lineHeight = (fontSize * 1.8f).sp,
+                modifier = Modifier.padding(
+                    horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp,
+                    vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp
+                )
+            )
+        }
     }
 }
 

@@ -1317,7 +1317,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         content = content.replace("(?is)<svg.*?</svg>".toRegex(), "")
         content = content.replace("(?is)<script.*?</script>".toRegex(), "")
         content = content.replace("(?is)<style.*?</style>".toRegex(), "")
-        content = content.replace("(?is)<(?!img\\b)[^>]+>".toRegex(), "\n")
+        
+        // 提取图片并转换为统一占位符
+        content = content.replace("(?is)<img[^>]+src\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>".toRegex(), "\n__IMG__$1\n")
+        
+        // 移除所有其他 HTML 标签
+        content = content.replace("(?is)<[^>]+>".toRegex(), "\n")
 
         return content
             .replace("&nbsp;", " ")
