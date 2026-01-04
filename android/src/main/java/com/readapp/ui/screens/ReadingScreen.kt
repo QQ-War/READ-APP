@@ -118,6 +118,13 @@ fun ReadingScreen(
     var lastAutoScrollTarget by remember { mutableStateOf<Int?>(null) }
     var resolveCurrentPageStart by remember { mutableStateOf<(() -> Pair<Int, Int>?)?>(null) }
 
+    // 垂直模式切章置顶
+    LaunchedEffect(currentChapterIndex, displayContent) {
+        if (readingMode == com.readapp.data.ReadingMode.Vertical) {
+            scrollState.scrollToItem(0)
+        }
+    }
+
     val contentPadding = remember(readingHorizontalPadding) {
         PaddingValues(
             start = readingHorizontalPadding.dp,

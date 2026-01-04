@@ -1418,6 +1418,13 @@ struct ReadingView: View {
                         }
                         self.shouldSyncPageAfterPagination = false
                     }
+                    
+                    // 垂直模式置顶逻辑
+                    if self.preferences.readingMode == .vertical && capturedTTSIndex == nil && !shouldResume {
+                        self.pendingScrollToSentenceIndex = 0
+                        self.handlePendingScroll()
+                    }
+                    
                     self.isLoading = false
                     self.shouldApplyResumeOnce = false
                     self.pendingJumpToFirstPage = false

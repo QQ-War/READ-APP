@@ -357,10 +357,11 @@ fun SourceItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 左侧：点击展开/收起频道
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable(onClick = onClick)
+                    .clickable(onClick = onToggleExpand)
             ) {
                 Text(
                     text = source.bookSourceName,
@@ -387,11 +388,12 @@ fun SourceItem(
                     modifier = Modifier.scale(0.8f)
                 )
                 
-                IconButton(onClick = onToggleExpand) {
+                // 编辑按钮 (原来中间的箭头改到这里)
+                IconButton(onClick = onClick) {
                     Icon(
-                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "编辑",
+                        tint = MaterialTheme.colorScheme.outline
                     )
                 }
                 

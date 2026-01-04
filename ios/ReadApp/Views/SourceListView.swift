@@ -163,9 +163,10 @@ struct SourceListView: View {
     @ViewBuilder
     private func sourceRow(_ source: BookSource) -> some View {
         VStack(spacing: 0) {
-            HStack {
-                NavigationLink(destination: SourceEditView(sourceId: source.bookSourceUrl)) {
-                    VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                // 左侧：点击展开/隐藏频道
+                Button(action: { withAnimation { toggleExpand(source) } }) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(source.bookSourceName)
                             .font(.headline)
                             .foregroundColor(source.enabled ? .primary : .secondary)
@@ -173,27 +174,32 @@ struct SourceListView: View {
                         Text(source.bookSourceUrl)
                             .font(.caption)
                             .foregroundColor(.gray)
+                            .lineLimit(1)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
-                HStack(spacing: 12) {
+                HStack(spacing: 16) {
+                    // 启用开关
                     Toggle("", isOn: Binding(
                         get: { source.enabled },
                         set: { _ in viewModel.toggleSource(source: source) }
                     ))
                     .labelsHidden()
+                    .scaleEffect(0.8)
                     
-                    Button(action: { toggleExpand(source) }) {
-                        Image(systemName: expandedSourceIds.contains(source.id) ? "chevron.down" : "chevron.right")
-                            .foregroundColor(.blue)
-                            .frame(width: 30, height: 30)
+                    // 右侧：点击进入编辑
+                    NavigationLink(destination: SourceEditView(sourceId: source.bookSourceUrl)) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.secondary)
                     }
-                    .buttonStyle(BorderlessButtonStyle())
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 8)
             
             if expandedSourceIds.contains(source.id) {
                 if loadingExploreIds.contains(source.id) {
@@ -214,7 +220,7 @@ struct SourceListView: View {
                             }
                         }
                         .padding(.vertical, 8)
-                        .padding(.leading, 12)
+                        .padding(.leading, 4)
                     }
                 } else {
                     Text("该书源暂无发现配置")
