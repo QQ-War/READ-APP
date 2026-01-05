@@ -539,7 +539,28 @@ private fun BottomControlBar(
                 ) {
                     Icon(Icons.Default.SkipPrevious, null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("上一章", onPrev, canPrev)
+                    Text("上一章")
+                }
+                Button(
+                    onClick = onNext,
+                    enabled = canNext,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("下一章")
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.SkipNext, null, modifier = Modifier.size(20.dp))
+                }
+            }
+
+            // 3. 功能按钮层
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 ControlButton(Icons.Default.List, "目录", onList)
                 
                 if (isManga) {
@@ -558,7 +579,6 @@ private fun BottomControlBar(
                     ControlButton(Icons.Default.Settings, "选项", onFont)
                 }
                 
-                ControlButton(Icons.Default.SkipNext, "下一章", onNext, canNext)
             }
         }
     }
