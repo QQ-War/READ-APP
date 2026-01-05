@@ -43,7 +43,8 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Make gradlew executable
-        run: chmod +x android/gradlew
+        run: chmod +x gradlew
+        working-directory: android
 
       - name: Build release APK
         # 启用并行编译和构建缓存
