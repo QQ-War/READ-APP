@@ -3067,34 +3067,30 @@ private struct TextKit2Paginator {
                 }
             }
             
-            // If we reached here, it means the fragment was fully processed or split, and we need to continue
-            return true
-        }
-        
-        let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
-        var endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
-        
-        // Failsafe: Ensure progress
-        if endOffset <= startOffset {
-            if let forced = layoutManager.location(currentContentLocation, offsetBy: 1) {
-                pageEndLocation = forced
-                endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
-            } else {
-                break // Cannot advance, exit loop
-            }
-        }
+            let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
+            var endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
 
-        let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
-        let actualContentHeight = (pageFragmentMaxY ?? (pageStartY + pageContentHeight)) - pageStartY
-        let adjustedLocation = max(0, pageRange.location - prefixLen)
-        let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
-        
-        pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
-        pageInfos.append(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
-        
-        pageCount += 1
-        currentContentLocation = pageEndLocation
-    }
+            // Failsafe: Ensure progress
+            if endOffset <= startOffset {
+                if let forced = layoutManager.location(currentContentLocation, offsetBy: 1) {
+                    pageEndLocation = forced
+                    endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
+                } else {
+                    break // Cannot advance, exit loop
+                }
+            }
+
+            let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
+            let actualContentHeight = (pageFragmentMaxY ?? (pageStartY + pageContentHeight)) - pageStartY
+            let adjustedLocation = max(0, pageRange.location - prefixLen)
+            let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
+
+            pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
+            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
+
+            pageCount += 1
+            currentContentLocation = pageEndLocation
+        }
 
         let reachedEnd = layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation) == 0
         return PaginationResult(pages: pages, pageInfos: pageInfos, reachedEnd: reachedEnd)
@@ -3637,34 +3633,30 @@ private struct TextKit2Paginator {
                 }
             }
             
-            // If we reached here, it means the fragment was fully processed or split, and we need to continue
-            return true
-        }
-        
-        let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
-        var endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
-        
-        // Failsafe: Ensure progress
-        if endOffset <= startOffset {
-            if let forced = layoutManager.location(currentContentLocation, offsetBy: 1) {
-                pageEndLocation = forced
-                endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
-            } else {
-                break // Cannot advance, exit loop
-            }
-        }
+            let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
+            var endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
 
-        let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
-        let actualContentHeight = (pageFragmentMaxY ?? (pageStartY + pageContentHeight)) - pageStartY
-        let adjustedLocation = max(0, pageRange.location - prefixLen)
-        let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
-        
-        pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
-        pageInfos.append(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
-        
-        pageCount += 1
-        currentContentLocation = pageEndLocation
-    }
+            // Failsafe: Ensure progress
+            if endOffset <= startOffset {
+                if let forced = layoutManager.location(currentContentLocation, offsetBy: 1) {
+                    pageEndLocation = forced
+                    endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
+                } else {
+                    break // Cannot advance, exit loop
+                }
+            }
+
+            let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
+            let actualContentHeight = (pageFragmentMaxY ?? (pageStartY + pageContentHeight)) - pageStartY
+            let adjustedLocation = max(0, pageRange.location - prefixLen)
+            let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
+
+            pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
+            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
+
+            pageCount += 1
+            currentContentLocation = pageEndLocation
+        }
 
         let reachedEnd = layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation) == 0
         return PaginationResult(pages: pages, pageInfos: pageInfos, reachedEnd: reachedEnd)
@@ -4207,34 +4199,30 @@ private struct TextKit2Paginator {
                 }
             }
             
-            // If we reached here, it means the fragment was fully processed or split, and we need to continue
-            return true
-        }
-        
-        let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
-        var endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
-        
-        // Failsafe: Ensure progress
-        if endOffset <= startOffset {
-            if let forced = layoutManager.location(currentContentLocation, offsetBy: 1) {
-                pageEndLocation = forced
-                endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
-            } else {
-                break // Cannot advance, exit loop
-            }
-        }
+            let startOffset = contentStorage.offset(from: documentRange.location, to: currentContentLocation)
+            var endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
 
-        let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
-        let actualContentHeight = (pageFragmentMaxY ?? (pageStartY + pageContentHeight)) - pageStartY
-        let adjustedLocation = max(0, pageRange.location - prefixLen)
-        let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
-        
-        pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
-        pageInfos.append(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
-        
-        pageCount += 1
-        currentContentLocation = pageEndLocation
-    }
+            // Failsafe: Ensure progress
+            if endOffset <= startOffset {
+                if let forced = layoutManager.location(currentContentLocation, offsetBy: 1) {
+                    pageEndLocation = forced
+                    endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
+                } else {
+                    break // Cannot advance, exit loop
+                }
+            }
+
+            let pageRange = NSRange(location: startOffset, length: endOffset - startOffset)
+            let actualContentHeight = (pageFragmentMaxY ?? (pageStartY + pageContentHeight)) - pageStartY
+            let adjustedLocation = max(0, pageRange.location - prefixLen)
+            let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
+
+            pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
+            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
+
+            pageCount += 1
+            currentContentLocation = pageEndLocation
+        }
 
         let reachedEnd = layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation) == 0
         return PaginationResult(pages: pages, pageInfos: pageInfos, reachedEnd: reachedEnd)
