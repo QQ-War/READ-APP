@@ -122,6 +122,42 @@ struct IconButton: View {
     }
 }
 
+// MARK: - 优化的章节导航按钮
+struct ChapterNavButton: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+    let isDisabled: Bool
+    let isLandscape: Bool
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if isLandscape {
+                    // 横屏：左右排列，更宽的点击区域
+                    HStack(spacing: 8) {
+                        Image(systemName: icon).font(.system(size: 16, weight: .bold))
+                        Text(title).font(.subheadline).fontWeight(.medium)
+                    }
+                    .padding(.horizontal, 16)
+                } else {
+                    // 竖屏：上下排列，但增加整体热区
+                    VStack(spacing: 4) {
+                        Image(systemName: icon).font(.title3.weight(.bold))
+                        Text(title).font(.system(size: 10, weight: .medium))
+                    }
+                    .frame(width: 64)
+                }
+            }
+            .frame(height: isLandscape ? 40 : 54)
+            .background(Color.primary.opacity(isDisabled ? 0.03 : 0.08))
+            .cornerRadius(isLandscape ? 20 : 12)
+        }
+        .foregroundColor(isDisabled ? .secondary.opacity(0.3) : .primary)
+        .disabled(isDisabled)
+    }
+}
+
 struct NormalControlBar: View {
     let currentChapterIndex: Int
     let chaptersCount: Int
@@ -135,65 +171,71 @@ struct NormalControlBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // 左侧：翻页与目录
-            HStack(spacing: 20) {
-                Button(action: onPreviousChapter) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "chevron.left").font(.title2)
-                        Text("上一章").font(.caption2)
-                    }
-                }.disabled(currentChapterIndex <= 0)
+            // 左侧：上一章
+            ChapterNavButton(
+                icon: "chevron.left",
+                title: "上一章",
+                action: onPreviousChapter,
+                isDisabled: currentChapterIndex <= 0,
+                isLandscape: isForceLandscape
+            )
+            
+            Spacer()
 
+            // 中间：核心功能区
+            HStack(spacing: isForceLandscape ? 40 : 15) {
                 Button(action: onShowChapterList) {
                     VStack(spacing: 4) {
-                        Image(systemName: "list.bullet").font(.title2)
-                        Text("目录").font(.caption2)
+                        Image(systemName: "list.bullet").font(.title3)
+                        Text("目录").font(.system(size: 10))
                     }
+                    .frame(width: 44, height: 44)
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                .foregroundColor(.primary)
 
-            // 中间：功能扩展区（填充空白）
-            HStack(spacing: 25) {
                 if isMangaMode {
-                    // 漫画模式特有按钮
                     Button(action: { withAnimation { isForceLandscape.toggle() } }) {
                         VStack(spacing: 4) {
-                            Image(systemName: isForceLandscape ? "iphone.smartrotate.forward" : "iphone.landscape").font(.title2)
-                            Text(isForceLandscape ? "竖屏" : "横屏").font(.caption2)
+                            Image(systemName: isForceLandscape ? "iphone.smartrotate.forward" : "iphone.landscape").font(.title3)
+                            Text(isForceLandscape ? "竖屏" : "横屏").font(.system(size: 10))
                         }
+                        .frame(width: 44, height: 44)
                     }
                     .foregroundColor(isForceLandscape ? .blue : .primary)
                 } else {
                     Button(action: onToggleTTS) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "speaker.wave.2.circle.fill").font(.system(size: 32)).foregroundColor(.blue)
-                            Text("听书").font(.caption2).foregroundColor(.blue)
+                        VStack(spacing: 2) {
+                            Image(systemName: "speaker.wave.2.circle.fill").font(.system(size: 28))
+                            Text("听书").font(.system(size: 10))
                         }
+                        .frame(width: 44, height: 44)
                     }
+                    .foregroundColor(.blue)
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
 
-            // 右侧：选项与下一章
-            HStack(spacing: 20) {
                 Button(action: onShowFontSettings) {
                     VStack(spacing: 4) {
-                        Image(systemName: isMangaMode ? "gearshape" : "slider.horizontal.3").font(.title2)
-                        Text("选项").font(.caption2)
+                        Image(systemName: isMangaMode ? "gearshape" : "slider.horizontal.3").font(.title3)
+                        Text("选项").font(.system(size: 10))
                     }
+                    .frame(width: 44, height: 44)
                 }
-
-                Button(action: onNextChapter) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "chevron.right").font(.title2)
-                        Text("下一章").font(.caption2)
-                    }
-                }.disabled(currentChapterIndex >= chaptersCount - 1)
+                .foregroundColor(.primary)
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+
+            Spacer()
+
+            // 右侧：下一章
+            ChapterNavButton(
+                icon: "chevron.right",
+                title: "下一章",
+                action: onNextChapter,
+                isDisabled: currentChapterIndex >= chaptersCount - 1,
+                isLandscape: isForceLandscape
+            )
         }
-        .padding(.horizontal, 20).padding(.vertical, 12)
+        .padding(.horizontal, isForceLandscape ? 30 : 15)
+        .padding(.vertical, 10)
         .background(Color(UIColor.systemBackground))
         .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
     }
