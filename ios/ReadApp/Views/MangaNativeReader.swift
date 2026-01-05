@@ -80,11 +80,16 @@ struct MangaNativeReader: UIViewRepresentable {
         }
         
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            let location = gesture.location(in: scrollView)
-            let screenHeight = scrollView?.bounds.height ?? 1000
+            // 关键修复：使用 nil 获取相对于窗口的坐标，而不是相对于滚动内容的坐标
+            // 这样无论滚动到哪里，y 坐标的范围都是固定的屏幕高度
+            let location = gesture.location(in: nil)
+            let screenSize = UIScreen.main.bounds.size
             
-            // 只有点击屏幕中间区域才唤起菜单，防止边缘翻页误触
-            if location.y > screenHeight * 0.2 && location.y < screenHeight * 0.8 {
+            // 判定中间区域：水平中间 60% (0.2~0.8)，垂直中间 60% (0.2~0.8)
+            let horizontalRange = (screenSize.width * 0.2)...(screenSize.width * 0.8)
+            let verticalRange = (screenSize.height * 0.2)...(screenSize.height * 0.8)
+            
+            if horizontalRange.contains(location.x) && verticalRange.contains(location.y) {
                 withAnimation {
                     parent.showUIControls.toggle()
                 }
