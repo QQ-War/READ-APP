@@ -284,11 +284,11 @@ fun ReadingScreen(
                         }
                     }
 
+                    val viewConfiguration = LocalViewConfiguration.current
                     HorizontalPager(
                         state = pagerState,
                         userScrollEnabled = !(isPlaying && lockPageOnTTS),
-                        modifier = Modifier.fillMaxSize().pointerInput(showControls, paginatedPages, isPlaying, lockPageOnTTS) { 
-                            val viewConfiguration = LocalViewConfiguration.current
+                        modifier = Modifier.fillMaxSize().pointerInput(showControls, paginatedPages, isPlaying, lockPageOnTTS, viewConfiguration) {
                             detectTapGesturesWithoutConsuming(viewConfiguration) { offset, size ->
                                 if (isPlaying && lockPageOnTTS) {
                                     if (offset.x in (size.width / 3f)..(size.width * 2f / 3f)) showControls = !showControls
@@ -324,15 +324,24 @@ fun ReadingScreen(
         }
         
         AnimatedVisibility(visible = showControls, enter = fadeIn() + slideInVertically(initialOffsetY = { it }), exit = fadeOut() + slideOutVertically(targetOffsetY = { it }), modifier = Modifier.align(Alignment.BottomCenter)) {
-            BottomControlBar(isPlaying, isMangaMode,
-                onPreviousChapter = { if (currentChapterIndex > 0) { navIntent = ChapterNavIntent.LAST; onChapterClick(currentChapterIndex - 1) } },
-                onNextChapter = { if (currentChapterIndex < chapters.size - 1) { navIntent = ChapterNavIntent.FIRST; onChapterClick(currentChapterIndex + 1) } },
-                onShowChapterList = { showChapterList = true }, onPlayPause = onPlayPauseClick, onStopListening = onStopListening, onPreviousParagraph = onPreviousParagraph, onNextParagraph = onNextParagraph, onFontSettings = { showFontDialog = true },
-                canGoPrevious = currentChapterIndex > 0, canGoNext = currentChapterIndex < chapters.size - 1, showTtsControls = showTtsControls && !isMangaMode
+            BottomControlBar(
+                isPlaying,
+                isMangaMode,
+                onPrev = { if (currentChapterIndex > 0) { navIntent = ChapterNavIntent.LAST; onChapterClick(currentChapterIndex - 1) } },
+                onNext = { if (currentChapterIndex < chapters.size - 1) { navIntent = ChapterNavIntent.FIRST; onChapterClick(currentChapterIndex + 1) } },
+                onList = { showChapterList = true },
+                onPlay = onPlayPauseClick,
+                onStop = onStopListening,
+                onPrevP = onPreviousParagraph,
+                onNextP = onNextParagraph,
+                onFont = { showFontDialog = true },
+                canPrev = currentChapterIndex > 0,
+                canNext = currentChapterIndex < chapters.size - 1,
+                showTts = showTtsControls && !isMangaMode
             )
         }
 
-        if (showChapterList) ChapterListDialog(chapters, currentChapterIndex, preloadedChapters, book.bookUrl ?: "", onChapterClick = { onChapterClick(it); showChapterList = false }, onDismiss = { showChapterList = false })
+        if (showChapterList) ChapterListDialog(chapters, currentChapterIndex, preloadedChapters, book.bookUrl ?: "", onChapter = { onChapterClick(it); showChapterList = false }, onDismiss = { showChapterList = false })
         if (showFontDialog) FontSizeDialog(readingFontSize, onReadingFontSizeChange, readingHorizontalPadding, onReadingHorizontalPaddingChange, lockPageOnTTS, onLockPageOnTTSChange, pageTurningMode, onPageTurningModeChange, darkModeConfig, onDarkModeChange, forceMangaProxy, onForceMangaProxyChange, readingMode, onReadingModeChange, isMangaMode, onDismiss = { showFontDialog = false })
     }
 }
