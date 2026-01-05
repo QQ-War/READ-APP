@@ -114,6 +114,8 @@ struct ReadingView: View {
         let resumeCharIndex: Int
         let resumePageIndex: Int
     }
+}
+
     
     struct TTSPlayRequest {
         let pageIndexOverride: Int?
