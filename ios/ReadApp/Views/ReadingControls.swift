@@ -171,7 +171,7 @@ struct NormalControlBar: View {
 
     var body: some View {
         HStack(spacing: isForceLandscape ? 12 : 0) {
-            // 左侧：上一章 (比例分配)
+            // 左侧：上一章 (显式扩展以实现比例布局)
             ChapterNavButton(
                 icon: "chevron.left",
                 title: "上一章",
@@ -179,10 +179,11 @@ struct NormalControlBar: View {
                 isDisabled: currentChapterIndex <= 0,
                 isLandscape: isForceLandscape
             )
+            .frame(maxWidth: isForceLandscape ? .infinity : nil)
             
             if !isForceLandscape { Spacer(minLength: 0) }
 
-            // 中间：核心功能区 (横屏时固定宽度以挤压左右按钮)
+            // 中间：核心功能区 (横屏时固定宽度)
             HStack(spacing: isForceLandscape ? 25 : 10) {
                 Button(action: onShowChapterList) {
                     VStack(spacing: 4) {
@@ -226,7 +227,7 @@ struct NormalControlBar: View {
 
             if !isForceLandscape { Spacer(minLength: 0) }
 
-            // 右侧：下一章 (比例分配)
+            // 右侧：下一章 (显式扩展以实现比例布局)
             ChapterNavButton(
                 icon: "chevron.right",
                 title: "下一章",
@@ -234,6 +235,7 @@ struct NormalControlBar: View {
                 isDisabled: currentChapterIndex >= chaptersCount - 1,
                 isLandscape: isForceLandscape
             )
+            .frame(maxWidth: isForceLandscape ? .infinity : nil)
         }
         .padding(.horizontal, isForceLandscape ? 15 : 10)
         .padding(.vertical, 10)
