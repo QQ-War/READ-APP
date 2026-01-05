@@ -114,8 +114,6 @@ struct ReadingView: View {
         let resumeCharIndex: Int
         let resumePageIndex: Int
     }
-}
-
     
     struct TTSPlayRequest {
         let pageIndexOverride: Int?
@@ -246,6 +244,12 @@ struct ReadingView: View {
             enterReadingSessionIfNeeded()
         }
     }
+}
+
+}
+}
+
+}
 
     // MARK: - UI Components
     
@@ -686,7 +690,6 @@ struct ReadingView: View {
             }
         }
     }
-}
 
 	private struct ReadPageViewController: UIViewControllerRepresentable {
 	    var snapshot: PageSnapshot
@@ -889,3 +892,7 @@ struct ReadingView: View {
             }
         }
     }
+
+}
+
+}
