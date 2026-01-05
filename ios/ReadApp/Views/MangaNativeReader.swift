@@ -80,14 +80,17 @@ struct MangaNativeReader: UIViewRepresentable {
         }
         
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            // 关键修复：使用 nil 获取相对于窗口的坐标，而不是相对于滚动内容的坐标
-            // 这样无论滚动到哪里，y 坐标的范围都是固定的屏幕高度
-            let location = gesture.location(in: nil)
-            let screenSize = UIScreen.main.bounds.size
+            guard let scrollView = scrollView else { return }
             
-            // 判定中间区域：水平中间 60% (0.2~0.8)，垂直中间 60% (0.2~0.8)
-            let horizontalRange = (screenSize.width * 0.2)...(screenSize.width * 0.8)
-            let verticalRange = (screenSize.height * 0.2)...(screenSize.height * 0.8)
+            // 获取点击位置相对于 ScrollView 的坐标 (包含 contentOffset)
+            let location = gesture.location(in: scrollView)
+            // 获取 ScrollView 当前可见区域的 bounds (其 origin 即为 contentOffset)
+            let visibleBounds = scrollView.bounds
+            
+            // 判定中间区域：基于当前可见区域的百分比 (横向中间 60%，纵向中间 60%)
+            // 使用 bounds.origin.x/y 作为基准，这样无论滚动到哪里都能正确对应
+            let horizontalRange = (visibleBounds.origin.x + visibleBounds.width * 0.2)...(visibleBounds.origin.x + visibleBounds.width * 0.8)
+            let verticalRange = (visibleBounds.origin.y + visibleBounds.height * 0.2)...(visibleBounds.origin.y + visibleBounds.height * 0.8)
             
             if horizontalRange.contains(location.x) && verticalRange.contains(location.y) {
                 withAnimation {
