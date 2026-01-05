@@ -37,17 +37,15 @@ jobs:
         with:
           build-root-directory: android
           gradle-version: 8.2.1
-          # setup-gradle 默认会自动处理缓存，不再需要额外的 actions/cache
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Make gradlew executable
-        run: chmod +x gradlew
-        working-directory: android
+        # 终极方案：递归搜索所有 gradlew 并授权，无视当前工作目录
+        run: find . -name gradlew -exec chmod +x {} +
 
       - name: Build release APK
-        # 启用并行编译和构建缓存
         run: ./gradlew assembleUnsigned assembleDebug --build-cache --parallel --no-daemon
         working-directory: android
 
