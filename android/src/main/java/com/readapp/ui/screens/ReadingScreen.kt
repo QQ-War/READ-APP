@@ -126,6 +126,26 @@ fun ReadingScreen(
     var navIntent by remember { mutableStateOf(ChapterNavIntent.NONE) }
     var lastChapterIndex by remember { mutableStateOf(-1) }
     
+    // 强制旋转状态
+    var isForceLandscape by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    // 处理强制旋转逻辑
+    DisposableEffect(isForceLandscape) {
+        val activity = context as? android.app.Activity
+        if (isForceLandscape) {
+            activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        } else {
+            activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        onDispose {
+            // 退出或销毁时确保恢复
+            if (isForceLandscape) {
+                activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+    }
+    
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val latestOnExit by rememberUpdatedState(onExit)
@@ -324,20 +344,13 @@ fun ReadingScreen(
         }
         
         AnimatedVisibility(visible = showControls, enter = fadeIn() + slideInVertically(initialOffsetY = { it }), exit = fadeOut() + slideOutVertically(targetOffsetY = { it }), modifier = Modifier.align(Alignment.BottomCenter)) {
-            BottomControlBar(
-                isPlaying,
-                isMangaMode,
-                onPrev = { if (currentChapterIndex > 0) { navIntent = ChapterNavIntent.LAST; onChapterClick(currentChapterIndex - 1) } },
-                onNext = { if (currentChapterIndex < chapters.size - 1) { navIntent = ChapterNavIntent.FIRST; onChapterClick(currentChapterIndex + 1) } },
-                onList = { showChapterList = true },
-                onPlay = onPlayPauseClick,
-                onStop = onStopListening,
-                onPrevP = onPreviousParagraph,
-                onNextP = onNextParagraph,
-                onFont = { showFontDialog = true },
-                canPrev = currentChapterIndex > 0,
-                canNext = currentChapterIndex < chapters.size - 1,
-                showTts = showTtsControls && !isMangaMode
+            BottomControlBar(isPlaying, isMangaMode,
+                isForceLandscape = isForceLandscape,
+                onToggleRotation = { isForceLandscape = !isForceLandscape },
+                onPreviousChapter = { if (currentChapterIndex > 0) { navIntent = ChapterNavIntent.LAST; onChapterClick(currentChapterIndex - 1) } },
+                onNextChapter = { if (currentChapterIndex < chapters.size - 1) { navIntent = ChapterNavIntent.FIRST; onChapterClick(currentChapterIndex + 1) } },
+                onShowChapterList = { showChapterList = true }, onPlayPause = onPlayPauseClick, onStopListening = onStopListening, onPreviousParagraph = onPreviousParagraph, onNextParagraph = onNextParagraph, onFontSettings = { showFontDialog = true },
+                canGoPrevious = currentChapterIndex > 0, canGoNext = currentChapterIndex < chapters.size - 1, showTtsControls = showTtsControls && !isMangaMode
             )
         }
 
@@ -455,7 +468,23 @@ private fun TopControlBar(title: String, chapter: String, onBack: () -> Unit, on
 }
 
 @Composable
-private fun BottomControlBar(isPlaying: Boolean, isManga: Boolean, onPrev: () -> Unit, onNext: () -> Unit, onList: () -> Unit, onPlay: () -> Unit, onStop: () -> Unit, onPrevP: () -> Unit, onNextP: () -> Unit, onFont: () -> Unit, canPrev: Boolean, canNext: Boolean, showTts: Boolean) {
+private fun BottomControlBar(
+    isPlaying: Boolean, 
+    isManga: Boolean, 
+    isForceLandscape: Boolean,
+    onToggleRotation: () -> Unit,
+    onPrev: () -> Unit, 
+    onNext: () -> Unit, 
+    onList: () -> Unit, 
+    onPlay: () -> Unit, 
+    onStop: () -> Unit, 
+    onPrevP: () -> Unit, 
+    onNextP: () -> Unit, 
+    onFont: () -> Unit, 
+    canPrev: Boolean, 
+    canNext: Boolean, 
+    showTts: Boolean
+) {
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), shadowElevation = 8.dp) {
         Column(modifier = Modifier.fillMaxWidth().padding(AppDimens.PaddingMedium)) {
             if (showTts) {
@@ -470,10 +499,24 @@ private fun BottomControlBar(isPlaying: Boolean, isManga: Boolean, onPrev: () ->
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 ControlButton(Icons.Default.SkipPrevious, "上一章", onPrev, canPrev)
                 ControlButton(Icons.Default.List, "目录", onList)
+                
+                if (isManga) {
+                    // 漫画模式中间加一个旋转按钮
+                    ControlButton(
+                        icon = if (isForceLandscape) Icons.Default.ScreenLockRotation else Icons.Default.ScreenRotation,
+                        label = if (isForceLandscape) "锁定竖屏" else "强制横屏",
+                        onClick = onToggleRotation
+                    )
+                } else if (!showTts) {
+                    FloatingActionButton(onClick = onPlay, containerColor = MaterialTheme.customColors.gradientStart, modifier = Modifier.size(56.dp)) { Icon(Icons.Default.VolumeUp, null, tint = Color.White) }
+                }
+
                 if (!isManga) {
-                    if (!showTts) FloatingActionButton(onClick = onPlay, containerColor = MaterialTheme.customColors.gradientStart, modifier = Modifier.size(56.dp)) { Icon(Icons.Default.VolumeUp, null, tint = Color.White) }
                     ControlButton(Icons.Default.FormatSize, "字体", onFont)
-                } else ControlButton(Icons.Default.Settings, "选项", onFont)
+                } else {
+                    ControlButton(Icons.Default.Settings, "选项", onFont)
+                }
+                
                 ControlButton(Icons.Default.SkipNext, "下一章", onNext, canNext)
             }
         }
