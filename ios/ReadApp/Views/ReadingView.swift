@@ -2825,53 +2825,6 @@ private struct ReaderOptionsSheet: View {
         }
     }
 }
-                        Text("翻页间距: \(String(format: "%.0f", preferences.pageInterSpacing))")
-                            .font(.subheadline)
-                        Slider(value: $preferences.pageInterSpacing, in: 0...30, step: 1)
-                    }
-                }
-                
-                Section(header: Text("夜间模式")) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("模式切换").font(.subheadline).foregroundColor(.secondary)
-                        Picker("夜间模式", selection: $preferences.darkMode) {
-                            ForEach(DarkModeConfig.allCases) { config in
-                                Text(config.localizedName).tag(config)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    .padding(.vertical, 4)
-                }
-                
-                Section(header: Text("交互设置")) {
-                    Picker("翻页效果", selection: $preferences.pageTurningMode) {
-                        Text("平滑滑动").tag(PageTurningMode.scroll)
-                        Text("仿真翻页").tag(PageTurningMode.simulation)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.vertical, 4)
-                    
-                    Toggle("听书时锁定翻页", isOn: $preferences.lockPageOnTTS)
-                }
-                
-                Section(header: Text("漫画/图片加载")) {
-                    Toggle("强制服务器代理", isOn: $preferences.forceMangaProxy)
-                    Text("如果图片无法加载（403拒绝等），请开启此项由服务器中转")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .navigationTitle("阅读选项")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") { dismiss() }
-                }
-            }
-        }
-    }
-}
 
 // MARK: - TextKit 2 Implementation
 private final class TextKit2RenderStore {
