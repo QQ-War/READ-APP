@@ -70,6 +70,7 @@ import com.readapp.data.model.BookSource
 import com.readapp.viewmodel.SourceViewModel
 import kotlinx.coroutines.launch
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api())
 @Composable
 fun SourceListScreen(
     onNavigateToEdit: (String?) -> Unit = {},
@@ -81,16 +82,28 @@ fun SourceListScreen(
     val isLoading by sourceViewModel.isLoading.collectAsState()
     val errorMessage by sourceViewModel.errorMessage.collectAsState()
     val searchText by sourceViewModel.searchText.collectAsState()
-    val searchResults by sourceViewModel.searchResults.collectAsState()
-    val isGlobalSearching by sourceViewModel.isGlobalSearching.collectAsState()
+    
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
+    val pullRefreshState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+    if (pullRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            sourceViewModel.fetchSources()
+        }
+    }
+    
+    LaunchedEffect(isLoading) {
+        if (!isLoading) pullRefreshState.endRefresh()
+    }
 
     var showImportUrlDialog by remember { mutableStateOf(false) }
     var importUrl by remember { mutableStateOf("") }
-    val scope = rememberCoroutineScope()
-    val context = androidx.compose.ui.platform.LocalContext.current
 
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
         uri?.let {
             scope.launch {
@@ -104,6 +117,42 @@ fun SourceListScreen(
     }
 
     Scaffold(
+        topBar = {
+            Surface(
+                tonalElevation = 3.dp,
+                shadowElevation = 3.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = searchText,
+                        onValueChange = { sourceViewModel.onSearchTextChanged(it) },
+                        placeholder = { Text("搜索书源...") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    
+                    if (searchText.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                sourceViewModel.onSearchTextChanged("")
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            },
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Text("取消")
+                        }
+                    }
+                }
+            }
+        },
         floatingActionButton = {
             var showMenu by remember { mutableStateOf(false) }
             Column(horizontalAlignment = Alignment.End) {
@@ -125,8 +174,62 @@ fun SourceListScreen(
             }
         }
     ) { paddingValues ->
-        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
+            val exploreKinds = remember { mutableStateMapOf<String, List<com.readapp.data.model.BookSource.ExploreKind>>() }
+            val loadingExplores = remember { mutableStateMapOf<String, Boolean>() }
+            val gson = remember { Gson() }
+
+            val filteredSources = if (searchText.isEmpty()) {
+                sources
+            } else {
+                sources.filter { 
+                    it.bookSourceName.contains(searchText, ignoreCase = true) ||
+                    it.bookSourceUrl.contains(searchText, ignoreCase = true) ||
+                    (it.bookSourceGroup?.contains(searchText, ignoreCase = true) ?: false)
+                }
+            }
+
+            androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                state = pullRefreshState,
+                isRefreshing = isLoading,
+                onRefresh = { sourceViewModel.fetchSources() },
+                modifier = Modifier.fillMaxSize()
+            ) {
+                SourceListViewContent(
+                    sources = filteredSources,
+                    isLoading = isLoading,
+                    errorMessage = errorMessage,
+                    expandedIds = expandedIds,
+                    exploreKinds = exploreKinds,
+                    loadingExplores = loadingExplores,
+                    onToggleExpand = { source ->
+                        val current = expandedIds[source.bookSourceUrl] ?: false
+                        expandedIds[source.bookSourceUrl] = !current
+                        if (!current && exploreKinds[source.bookSourceUrl] == null) {
+                            scope.launch {
+                                loadingExplores[source.bookSourceUrl] = true
+                                val foundJson = sourceViewModel.fetchExploreKinds(source.bookSourceUrl)
+                                if (foundJson != null) {
+                                    try {
+                                        val kinds = gson.fromJson(foundJson, Array<com.readapp.data.model.BookSource.ExploreKind>::class.java).toList()
+                                        exploreKinds[source.bookSourceUrl] = kinds
+                                    } catch (e: Exception) {}
+                                }
+                                loadingExplores[source.bookSourceUrl] = false
+                            }
+                        }
+                    },
+                    onExploreClick = { source, kind ->
+                        onNavigateToExplore(source.bookSourceUrl, source.bookSourceName, kind.url, kind.title)
+                    },
+                    onSourceClick = { onNavigateToEdit(it.bookSourceUrl) },
+                    onToggleSource = { sourceViewModel.toggleSource(it) },
+                    onDeleteSource = { sourceViewModel.deleteSource(it) },
+                    onSearchClick = { onNavigateToSearch(it) }
+                )
+            }
+
             if (showImportUrlDialog) {
                 AlertDialog(
                     onDismissRequest = { showImportUrlDialog = false },
@@ -155,80 +258,6 @@ fun SourceListScreen(
                     dismissButton = { TextButton(onClick = { showImportUrlDialog = false }) { Text("取消") } }
                 )
             }
-            Surface(
-                tonalElevation = 2.dp,
-                shadowElevation = 2.dp
-            ) {
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { sourceViewModel.onSearchTextChanged(it) },
-                    label = { Text("过滤书源...") },
-                    singleLine = true,
-                    trailingIcon = {
-                        if (searchText.isNotEmpty()) {
-                            IconButton(onClick = { 
-                                sourceViewModel.onSearchTextChanged("")
-                                focusManager.clearFocus()
-                            }) {
-                                Icon(Icons.Default.Clear, "清除")
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
-
-            val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
-            val exploreKinds = remember { mutableStateMapOf<String, List<com.readapp.data.model.BookSource.ExploreKind>>() }
-            val loadingExplores = remember { mutableStateMapOf<String, Boolean>() }
-            val scope = rememberCoroutineScope()
-            val gson = remember { Gson() }
-
-            val filteredSources = if (searchText.isEmpty()) {
-                sources
-            } else {
-                sources.filter { 
-                    it.bookSourceName.contains(searchText, ignoreCase = true) ||
-                    it.bookSourceUrl.contains(searchText, ignoreCase = true) ||
-                    (it.bookSourceGroup?.contains(searchText, ignoreCase = true) ?: false)
-                }
-            }
-
-            SourceListViewContent(
-                sources = filteredSources,
-                isLoading = isLoading,
-                errorMessage = errorMessage,
-                expandedIds = expandedIds,
-                exploreKinds = exploreKinds,
-                loadingExplores = loadingExplores,
-                onToggleExpand = { source ->
-                    val current = expandedIds[source.bookSourceUrl] ?: false
-                    expandedIds[source.bookSourceUrl] = !current
-                    if (!current && exploreKinds[source.bookSourceUrl] == null) {
-                        scope.launch {
-                            loadingExplores[source.bookSourceUrl] = true
-                            val foundJson = sourceViewModel.fetchExploreKinds(source.bookSourceUrl)
-                            if (foundJson != null) {
-                                try {
-                                    val kinds = gson.fromJson(foundJson, Array<com.readapp.data.model.BookSource.ExploreKind>::class.java).toList()
-                                    exploreKinds[source.bookSourceUrl] = kinds
-                                } catch (e: Exception) {}
-                            }
-                            loadingExplores[source.bookSourceUrl] = false
-                        }
-                    }
-                },
-                onExploreClick = { source, kind ->
-                    onNavigateToExplore(source.bookSourceUrl, source.bookSourceName, kind.url, kind.title)
-                },
-                onSourceClick = { onNavigateToEdit(it.bookSourceUrl) },
-                onToggleSource = { sourceViewModel.toggleSource(it) },
-                onDeleteSource = { sourceViewModel.deleteSource(it) },
-                onSearchClick = { onNavigateToSearch(it) }
-            )
         }
     }
 }

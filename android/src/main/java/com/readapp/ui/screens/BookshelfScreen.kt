@@ -1,4 +1,4 @@
-// BookshelfScreen.kt - 书架页面（带右上角设置按钮）
+// BookshelfScreen.kt - 书架页面（带右上角设置按钮与下拉刷新）
 @file:OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
 
 package com.readapp.ui.screens
@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +45,7 @@ import com.readapp.data.model.Book
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
 import com.readapp.viewmodel.BookViewModel
+
 @Composable
 fun BookshelfScreen(
     mainNavController: NavController,
@@ -59,11 +62,14 @@ fun BookshelfScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showSearchConfig by remember { mutableStateOf(false) }
     
+    val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
     val refreshState = rememberPullRefreshState(
         refreshing = isLoading,
         onRefresh = { bookViewModel.refreshBooks() }
     )
-    val context = LocalContext.current
 
     val importBookLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -129,22 +135,32 @@ fun BookshelfScreen(
             ) {
                 item {
                     Spacer(modifier = Modifier.height(AppDimens.PaddingMedium))
-                    SearchBar(
-                        query = searchQuery,
-                        onQueryChange = {
-                            searchQuery = it
-                            bookViewModel.searchBooks(it)
-                        },
-                        onConfigClick = { showSearchConfig = true },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SearchBar(
+                            query = searchQuery,
+                            onQueryChange = {
+                                searchQuery = it
+                                bookViewModel.searchBooks(it)
+                            },
+                            onConfigClick = { showSearchConfig = true },
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (searchQuery.isNotEmpty()) {
+                            TextButton(onClick = {
+                                searchQuery = ""
+                                bookViewModel.searchBooks("")
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            }) {
+                                Text("取消")
+                            }
+                        }
+                    }
                 }
 
                 if (searchQuery.isEmpty()) {
                     if (books.isEmpty()) {
-                        item {
-                            EmptyBookshelf()
-                        }
+                        item { EmptyBookshelf() }
                     } else {
                         items(books) { book ->
                             BookRow(
@@ -161,7 +177,7 @@ fun BookshelfScreen(
                         }
                     }
                 } else {
-                    // Search Results
+                    // 搜索结果
                     if (books.isNotEmpty()) {
                         item { SectionHeader("书架内匹配") }
                         items(books) { book ->
@@ -225,9 +241,7 @@ fun BookshelfScreen(
 @Composable
 private fun EmptyBookshelf() {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 48.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -353,7 +367,7 @@ private fun SearchConfigDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } }
     )
 }
 
@@ -365,60 +379,33 @@ private fun BookRow(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(120.dp),
+        modifier = modifier.fillMaxWidth().height(120.dp),
         shape = RoundedCornerShape(AppDimens.CornerRadiusLarge),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.customColors.cardBackground
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = AppDimens.ElevationSmall
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.customColors.cardBackground),
+        elevation = CardDefaults.cardElevation(defaultElevation = AppDimens.ElevationSmall)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(AppDimens.PaddingMedium),
+            modifier = Modifier.fillMaxSize().padding(AppDimens.PaddingMedium),
             horizontalArrangement = Arrangement.spacedBy(AppDimens.PaddingMedium)
         ) {
             BookCover(
-                emoji = book.coverEmoji,
                 coverUrl = book.coverUrl,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .aspectRatio(3f / 4f)
-                    .clickable(onClick = onCoverClick)
+                modifier = Modifier.fillMaxHeight().aspectRatio(3f / 4f).clickable(onClick = onCoverClick)
             )
 
             Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1f)
-                    .clickable(onClick = onInfoClick),
+                modifier = Modifier.fillMaxHeight().weight(1f).clickable(onClick = onInfoClick),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = book.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = book.author,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.customColors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text(text = book.name ?: "未知书名", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = book.author ?: "未知作者", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.customColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
                 ReadingProgress(
-                    progress = book.progress,
-                    currentChapter = book.currentChapter,
-                    totalChapters = book.totalChapters
+                    progress = (book.durChapterIndex?.toFloat() ?: 0f) / (book.totalChapters?.toFloat()?.coerceAtLeast(1f) ?: 1f),
+                    currentChapter = (book.durChapterIndex ?: 0) + 1,
+                    totalChapters = book.totalChapters ?: 0
                 )
             }
         }
@@ -427,36 +414,19 @@ private fun BookRow(
 
 @Composable
 private fun BookCover(
-    emoji: String,
     coverUrl: String?,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(AppDimens.CornerRadiusMedium))
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.customColors.gradientStart,
-                        MaterialTheme.customColors.gradientEnd
-                    )
-                )
-            ),
+            .background(brush = Brush.linearGradient(colors = listOf(MaterialTheme.customColors.gradientStart, MaterialTheme.customColors.gradientEnd))),
         contentAlignment = Alignment.Center
     ) {
         if (!coverUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = coverUrl,
-                contentDescription = "书籍封面",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            AsyncImage(model = coverUrl, contentDescription = "书籍封面", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else {
-            Text(
-                text = emoji,
-                style = MaterialTheme.typography.displayLarge,
-                fontSize = 64.sp
-            )
+            Icon(Icons.Default.Book, null, modifier = Modifier.size(48.dp), tint = Color.White.copy(alpha = 0.5f))
         }
     }
 }
@@ -468,30 +438,14 @@ private fun ReadingProgress(
     totalChapters: Int
 ) {
     Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "进度 ${(progress * 100).toInt()}%",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.customColors.textSecondary
-            )
-            Text(
-                text = "$currentChapter/$totalChapters?",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.customColors.textSecondary
-            )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(text = "进度 ${(progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.customColors.textSecondary)
+            Text(text = "$currentChapter/$totalChapters", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.customColors.textSecondary)
         }
-
         Spacer(modifier = Modifier.height(4.dp))
-
         LinearProgressIndicator(
-            progress = progress,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
+            progress = progress.coerceIn(0f, 1f),
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
             color = MaterialTheme.customColors.gradientStart,
             trackColor = MaterialTheme.customColors.border
         )
