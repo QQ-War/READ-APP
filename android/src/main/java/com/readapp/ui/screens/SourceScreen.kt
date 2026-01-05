@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
+
 package com.readapp.ui.screens
 
 import androidx.compose.foundation.clickable
@@ -32,6 +34,10 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
@@ -70,7 +77,6 @@ import com.readapp.data.model.BookSource
 import com.readapp.viewmodel.SourceViewModel
 import kotlinx.coroutines.launch
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api())
 @Composable
 fun SourceListScreen(
     onNavigateToEdit: (String?) -> Unit = {},
@@ -88,16 +94,10 @@ fun SourceListScreen(
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
-    val pullRefreshState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(true) {
-            sourceViewModel.fetchSources()
-        }
-    }
-    
-    LaunchedEffect(isLoading) {
-        if (!isLoading) pullRefreshState.endRefresh()
-    }
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isLoading,
+        onRefresh = { sourceViewModel.fetchSources() }
+    )
 
     var showImportUrlDialog by remember { mutableStateOf(false) }
     var importUrl by remember { mutableStateOf("") }
@@ -174,7 +174,12 @@ fun SourceListScreen(
             }
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .pullRefresh(pullRefreshState)
+        ) {
             val expandedIds = remember { mutableStateMapOf<String, Boolean>() }
             val exploreKinds = remember { mutableStateMapOf<String, List<com.readapp.data.model.BookSource.ExploreKind>>() }
             val loadingExplores = remember { mutableStateMapOf<String, Boolean>() }
@@ -190,45 +195,44 @@ fun SourceListScreen(
                 }
             }
 
-            androidx.compose.material3.pulltorefresh.PullToRefreshBox(
-                state = pullRefreshState,
-                isRefreshing = isLoading,
-                onRefresh = { sourceViewModel.fetchSources() },
-                modifier = Modifier.fillMaxSize()
-            ) {
-                SourceListViewContent(
-                    sources = filteredSources,
-                    isLoading = isLoading,
-                    errorMessage = errorMessage,
-                    expandedIds = expandedIds,
-                    exploreKinds = exploreKinds,
-                    loadingExplores = loadingExplores,
-                    onToggleExpand = { source ->
-                        val current = expandedIds[source.bookSourceUrl] ?: false
-                        expandedIds[source.bookSourceUrl] = !current
-                        if (!current && exploreKinds[source.bookSourceUrl] == null) {
-                            scope.launch {
-                                loadingExplores[source.bookSourceUrl] = true
-                                val foundJson = sourceViewModel.fetchExploreKinds(source.bookSourceUrl)
-                                if (foundJson != null) {
-                                    try {
-                                        val kinds = gson.fromJson(foundJson, Array<com.readapp.data.model.BookSource.ExploreKind>::class.java).toList()
-                                        exploreKinds[source.bookSourceUrl] = kinds
-                                    } catch (e: Exception) {}
-                                }
-                                loadingExplores[source.bookSourceUrl] = false
+            SourceListViewContent(
+                sources = filteredSources,
+                isLoading = isLoading,
+                errorMessage = errorMessage,
+                expandedIds = expandedIds,
+                exploreKinds = exploreKinds,
+                loadingExplores = loadingExplores,
+                onToggleExpand = { source ->
+                    val current = expandedIds[source.bookSourceUrl] ?: false
+                    expandedIds[source.bookSourceUrl] = !current
+                    if (!current && exploreKinds[source.bookSourceUrl] == null) {
+                        scope.launch {
+                            loadingExplores[source.bookSourceUrl] = true
+                            val foundJson = sourceViewModel.fetchExploreKinds(source.bookSourceUrl)
+                            if (foundJson != null) {
+                                try {
+                                    val kinds = gson.fromJson(foundJson, Array<com.readapp.data.model.BookSource.ExploreKind>::class.java).toList()
+                                    exploreKinds[source.bookSourceUrl] = kinds
+                                } catch (e: Exception) {}
                             }
+                            loadingExplores[source.bookSourceUrl] = false
                         }
-                    },
-                    onExploreClick = { source, kind ->
-                        onNavigateToExplore(source.bookSourceUrl, source.bookSourceName, kind.url, kind.title)
-                    },
-                    onSourceClick = { onNavigateToEdit(it.bookSourceUrl) },
-                    onToggleSource = { sourceViewModel.toggleSource(it) },
-                    onDeleteSource = { sourceViewModel.deleteSource(it) },
-                    onSearchClick = { onNavigateToSearch(it) }
-                )
-            }
+                    }
+                },
+                onExploreClick = { source, kind ->
+                    onNavigateToExplore(source.bookSourceUrl, source.bookSourceName, kind.url, kind.title)
+                },
+                onSourceClick = { onNavigateToEdit(it.bookSourceUrl) },
+                onToggleSource = { sourceViewModel.toggleSource(it) },
+                onDeleteSource = { sourceViewModel.deleteSource(it) },
+                onSearchClick = { onNavigateToSearch(it) }
+            )
+
+            PullRefreshIndicator(
+                refreshing = isLoading,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
 
             if (showImportUrlDialog) {
                 AlertDialog(
