@@ -41,8 +41,12 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+        working-directory: android
+
       - name: Build release APK
-        run: gradle assembleUnsigned assembleDebug --build-cache --parallel --no-daemon
+        run: ./gradlew assembleUnsigned assembleDebug --build-cache --parallel --no-daemon
         working-directory: android
 
       - name: Prepare APK artifacts
