@@ -134,24 +134,24 @@ struct ChapterNavButton: View {
         Button(action: action) {
             Group {
                 if isLandscape {
-                    // 横屏：左右排列，更宽的点击区域
-                    HStack(spacing: 8) {
-                        Image(systemName: icon).font(.system(size: 16, weight: .bold))
-                        Text(title).font(.subheadline).fontWeight(.medium)
+                    // 横屏：显著加长加宽的点击区域
+                    HStack(spacing: 12) {
+                        Image(systemName: icon).font(.system(size: 18, weight: .bold))
+                        Text(title).font(.headline).fontWeight(.semibold)
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 35)
                 } else {
-                    // 竖屏：上下排列，但增加整体热区
-                    VStack(spacing: 4) {
-                        Image(systemName: icon).font(.title3.weight(.bold))
-                        Text(title).font(.system(size: 10, weight: .medium))
+                    // 竖屏：适度增加热区
+                    VStack(spacing: 6) {
+                        Image(systemName: icon).font(.title2.weight(.bold))
+                        Text(title).font(.system(size: 11, weight: .bold))
                     }
-                    .frame(width: 64)
+                    .frame(width: 85)
                 }
             }
-            .frame(height: isLandscape ? 40 : 54)
-            .background(Color.primary.opacity(isDisabled ? 0.03 : 0.08))
-            .cornerRadius(isLandscape ? 20 : 12)
+            .frame(height: isLandscape ? 52 : 64)
+            .background(Color.primary.opacity(isDisabled ? 0.03 : 0.1))
+            .cornerRadius(isLandscape ? 26 : 16)
         }
         .foregroundColor(isDisabled ? .secondary.opacity(0.3) : .primary)
         .disabled(isDisabled)
@@ -180,10 +180,10 @@ struct NormalControlBar: View {
                 isLandscape: isForceLandscape
             )
             
-            Spacer()
+            Spacer(minLength: 0)
 
             // 中间：核心功能区
-            HStack(spacing: isForceLandscape ? 40 : 15) {
+            HStack(spacing: isForceLandscape ? 30 : 10) {
                 Button(action: onShowChapterList) {
                     VStack(spacing: 4) {
                         Image(systemName: "list.bullet").font(.title3)
@@ -223,7 +223,7 @@ struct NormalControlBar: View {
                 .foregroundColor(.primary)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             // 右侧：下一章
             ChapterNavButton(
@@ -234,7 +234,7 @@ struct NormalControlBar: View {
                 isLandscape: isForceLandscape
             )
         }
-        .padding(.horizontal, isForceLandscape ? 30 : 15)
+        .padding(.horizontal, isForceLandscape ? 20 : 10)
         .padding(.vertical, 10)
         .background(Color(UIColor.systemBackground))
         .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
