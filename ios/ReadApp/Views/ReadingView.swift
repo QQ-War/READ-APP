@@ -317,7 +317,9 @@ struct ReadingView: View {
             loadChapterContent()
             showChapterList = false
         } }
-        .sheet(isPresented: $showFontSettings) { ReaderOptionsSheet(preferences: preferences) }
+        .sheet(isPresented: $showFontSettings) { 
+            ReaderOptionsSheet(preferences: preferences, isMangaMode: currentChapterIsManga) 
+        }
         .sheet(isPresented: $showAddReplaceRule) { ReplaceRuleEditView(viewModel: replaceRuleViewModel, rule: pendingReplaceRule) }
         .onChange(of: showAddReplaceRule) { value in if !value { pendingReplaceRule = nil } }
         .task {
@@ -598,7 +600,16 @@ struct ReadingView: View {
                 onSetTimer: { minutes in toggleSleepTimer(minutes: minutes) }
             )
         } else {
-            NormalControlBar(currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onToggleTTS: toggleTTS, onShowFontSettings: { showFontSettings = true })
+            NormalControlBar(
+                currentChapterIndex: currentChapterIndex,
+                chaptersCount: chapters.count,
+                isMangaMode: currentChapterIsManga, // 传入模式
+                onPreviousChapter: { previousChapter() },
+                onNextChapter: { nextChapter() },
+                onShowChapterList: { showChapterList = true },
+                onToggleTTS: toggleTTS,
+                onShowFontSettings: { showFontSettings = true }
+            )
         }
     }
 
@@ -2690,6 +2701,7 @@ private struct IconButton: View {
 private struct NormalControlBar: View {
     let currentChapterIndex: Int
     let chaptersCount: Int
+    let isMangaMode: Bool
     let onPreviousChapter: () -> Void
     let onNextChapter: () -> Void
     let onShowChapterList: () -> Void
@@ -2712,18 +2724,21 @@ private struct NormalControlBar: View {
                 }
             }
             
-            Spacer()
-            Button(action: onToggleTTS) {
-                VStack(spacing: 4) {
-                    Image(systemName: "speaker.wave.2.circle.fill").font(.system(size: 32)).foregroundColor(.blue)
-                    Text("听书").font(.caption2).foregroundColor(.blue)
+            if !isMangaMode {
+                Spacer()
+                Button(action: onToggleTTS) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "speaker.wave.2.circle.fill").font(.system(size: 32)).foregroundColor(.blue)
+                        Text("听书").font(.caption2).foregroundColor(.blue)
+                    }
                 }
             }
+            
             Spacer()
             
             Button(action: onShowFontSettings) {
                 VStack(spacing: 4) {
-                    Image(systemName: "slider.horizontal.3").font(.title2)
+                    Image(systemName: isMangaMode ? "gearshape" : "slider.horizontal.3").font(.title2)
                     Text("选项").font(.caption2)
                 }
             }
@@ -2743,41 +2758,73 @@ private struct NormalControlBar: View {
 
 private struct ReaderOptionsSheet: View {
     @ObservedObject var preferences: UserPreferences
+    let isMangaMode: Bool
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("显示设置")) {
-                    Picker("阅读模式", selection: $preferences.readingMode) {
-                        ForEach(ReadingMode.allCases) { mode in
-                            Text(mode.localizedName).tag(mode)
+                if !isMangaMode {
+                    Section(header: Text("显示设置")) {
+                        Picker("阅读模式", selection: $preferences.readingMode) {
+                            ForEach(ReadingMode.allCases) { mode in
+                                Text(mode.localizedName).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.vertical, 4)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("字体大小: \(String(format: "%.0f", preferences.fontSize))")
+                                .font(.subheadline)
+                            Slider(value: $preferences.fontSize, in: 12...30, step: 1)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("行间距: \(String(format: "%.0f", preferences.lineSpacing))")
+                                .font(.subheadline)
+                            Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.vertical, 4)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("字体大小: \(String(format: "%.0f", preferences.fontSize))")
-                            .font(.subheadline)
-                        Slider(value: $preferences.fontSize, in: 12...30, step: 1)
-                    }
                     
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("行间距: \(String(format: "%.0f", preferences.lineSpacing))")
-                            .font(.subheadline)
-                        Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
+                    Section(header: Text("页面布局")) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("左右边距: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
+                                .font(.subheadline)
+                            Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
+                        }
                     }
                 }
                 
-                Section(header: Text("页面布局")) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("左右边距: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
-                            .font(.subheadline)
-                        Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
+                Section(header: Text("夜间模式")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("模式切换").font(.subheadline).foregroundColor(.secondary)
+                        Picker("夜间模式", selection: $preferences.darkMode) {
+                            ForEach(DarkModeConfig.allCases) { config in
+                                Text(config.localizedName).tag(config)
+                            }
+                        }
+                        .pickerStyle(.segmented)
                     }
-
-                    VStack(alignment: .leading, spacing: 8) {
+                    .padding(.vertical, 4)
+                }
+                
+                if isMangaMode {
+                    Section(header: Text("高级设置")) {
+                        Toggle("强制服务器代理", isOn: $preferences.forceMangaProxy)
+                    }
+                }
+            }
+            .navigationTitle("阅读选项")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+    }
+}
                         Text("翻页间距: \(String(format: "%.0f", preferences.pageInterSpacing))")
                             .font(.subheadline)
                         Slider(value: $preferences.pageInterSpacing, in: 0...30, step: 1)
