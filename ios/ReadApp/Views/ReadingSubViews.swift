@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
 
+struct SentenceFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
 // MARK: - Other Views
 class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     let pageIndex: Int
@@ -313,4 +320,3 @@ struct MangaImageView: View {
         return URL(string: resolved)
     }
 }
-

@@ -45,6 +45,14 @@
 		7B4B2D6E5A2A4C7AA1F0B011 /* ReadingCoreTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A011 /* ReadingCoreTypes.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B012 /* ReadingSubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A012 /* ReadingSubViews.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B013 /* ReadingTextKit2Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A013 /* ReadingTextKit2Support.swift */; };
+		E7E256D061E047AC9B2BEA06 /* ReadingMangaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF65E99FFB4D44599370BB70 /* ReadingMangaViews.swift */; };
+		24184F839EDD4DCA8E2CDAB7 /* ReadingControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D779FADDCE4247B8A2165E /* ReadingControls.swift */; };
+		39778D3524AC4DE9ADC699F9 /* ReadingTTSSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8B961668B1342D3AD643FB2 /* ReadingTTSSupport.swift */; };
+		B891C843C415406ABD63AE45 /* ReadingPagination.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95435FFDAA5C40F2962789A0 /* ReadingPagination.swift */; };
+		B26477C3B01C4AF78FC63E66 /* ReadingNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A026348F98743B986896224 /* ReadingNavigation.swift */; };
+		3899765890DF434F9D58E0CE /* ReadingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BFBFE432AD54D4D9E0D5512 /* ReadingProgress.swift */; };
+		CB5FAC46066248FF92EFD94D /* ReadingChapterLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B6F3D6C47B643BA966D638B /* ReadingChapterLifecycle.swift */; };
+		EAD8E312F02947618A22FAEE /* ReadingContentProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9961F6F9EC81418684577520 /* ReadingContentProcessing.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -86,6 +94,14 @@
 		7B4B2D6E5A2A4C7AA1F0A011 /* ReadingCoreTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingCoreTypes.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A012 /* ReadingSubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSubViews.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A013 /* ReadingTextKit2Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTextKit2Support.swift; sourceTree = "<group>"; };
+		FF65E99FFB4D44599370BB70 /* ReadingMangaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingMangaViews.swift; sourceTree = "<group>"; };
+		E9D779FADDCE4247B8A2165E /* ReadingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingControls.swift; sourceTree = "<group>"; };
+		E8B961668B1342D3AD643FB2 /* ReadingTTSSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTTSSupport.swift; sourceTree = "<group>"; };
+		95435FFDAA5C40F2962789A0 /* ReadingPagination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingPagination.swift; sourceTree = "<group>"; };
+		3A026348F98743B986896224 /* ReadingNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingNavigation.swift; sourceTree = "<group>"; };
+		3BFBFE432AD54D4D9E0D5512 /* ReadingProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingProgress.swift; sourceTree = "<group>"; };
+		2B6F3D6C47B643BA966D638B /* ReadingChapterLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingChapterLifecycle.swift; sourceTree = "<group>"; };
+		9961F6F9EC81418684577520 /* ReadingContentProcessing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingContentProcessing.swift; sourceTree = "<group>"; };
 		1A000020000000000000001 /* ReadApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000021000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -145,6 +161,14 @@
 				7B4B2D6E5A2A4C7AA1F0A011 /* ReadingCoreTypes.swift */,
 				7B4B2D6E5A2A4C7AA1F0A012 /* ReadingSubViews.swift */,
 				7B4B2D6E5A2A4C7AA1F0A013 /* ReadingTextKit2Support.swift */,
+				FF65E99FFB4D44599370BB70 /* ReadingMangaViews.swift */,
+				E9D779FADDCE4247B8A2165E /* ReadingControls.swift */,
+				E8B961668B1342D3AD643FB2 /* ReadingTTSSupport.swift */,
+				95435FFDAA5C40F2962789A0 /* ReadingPagination.swift */,
+				3A026348F98743B986896224 /* ReadingNavigation.swift */,
+				3BFBFE432AD54D4D9E0D5512 /* ReadingProgress.swift */,
+				2B6F3D6C47B643BA966D638B /* ReadingChapterLifecycle.swift */,
+				9961F6F9EC81418684577520 /* ReadingContentProcessing.swift */,
 				1A000018000000000000001 /* SettingsView.swift */,
 				1A000048000000000000006 /* SettingsSubviews.swift */,
 				1A000020000000000000002 /* TTSSelectionView.swift */,
@@ -288,6 +312,14 @@
 				7B4B2D6E5A2A4C7AA1F0B011 /* ReadingCoreTypes.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B012 /* ReadingSubViews.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B013 /* ReadingTextKit2Support.swift in Sources */,
+				E7E256D061E047AC9B2BEA06 /* ReadingMangaViews.swift in Sources */,
+				24184F839EDD4DCA8E2CDAB7 /* ReadingControls.swift in Sources */,
+				39778D3524AC4DE9ADC699F9 /* ReadingTTSSupport.swift in Sources */,
+				B891C843C415406ABD63AE45 /* ReadingPagination.swift in Sources */,
+				B26477C3B01C4AF78FC63E66 /* ReadingNavigation.swift in Sources */,
+				3899765890DF434F9D58E0CE /* ReadingProgress.swift in Sources */,
+				CB5FAC46066248FF92EFD94D /* ReadingChapterLifecycle.swift in Sources */,
+				EAD8E312F02947618A22FAEE /* ReadingContentProcessing.swift in Sources */,
 				1A000021000000000000002 /* LoginView.swift in Sources */,
 				1A000023000000000000002 /* LogManager.swift in Sources */,
 				1A000025000000000000002 /* HTMLContentView.swift in Sources */,
