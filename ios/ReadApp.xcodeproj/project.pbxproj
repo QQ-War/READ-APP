@@ -42,6 +42,9 @@
 		7B4B2D6E5A2A4C7AA1F0B006 /* FullBookSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A006 /* FullBookSource.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B007 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A007 /* LogView.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B008 /* MangaNativeReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A008 /* MangaNativeReader.swift */; };
+		7B4B2D6E5A2A4C7AA1F0B011 /* ReadingCoreTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A011 /* ReadingCoreTypes.swift */; };
+		7B4B2D6E5A2A4C7AA1F0B012 /* ReadingSubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A012 /* ReadingSubViews.swift */; };
+		7B4B2D6E5A2A4C7AA1F0B013 /* ReadingTextKit2Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A013 /* ReadingTextKit2Support.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -80,6 +83,9 @@
 		7B4B2D6E5A2A4C7AA1F0A006 /* FullBookSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullBookSource.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A007 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A008 /* MangaNativeReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaNativeReader.swift; sourceTree = "<group>"; };
+		7B4B2D6E5A2A4C7AA1F0A011 /* ReadingCoreTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingCoreTypes.swift; sourceTree = "<group>"; };
+		7B4B2D6E5A2A4C7AA1F0A012 /* ReadingSubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSubViews.swift; sourceTree = "<group>"; };
+		7B4B2D6E5A2A4C7AA1F0A013 /* ReadingTextKit2Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTextKit2Support.swift; sourceTree = "<group>"; };
 		1A000020000000000000001 /* ReadApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000021000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -136,6 +142,9 @@
 				1A00003F000000000000003 /* SourceEditView.swift */,
 				1A000014000000000000001 /* ReadingView.swift */,
 				7B4B2D6E5A2A4C7AA1F0A008 /* MangaNativeReader.swift */,
+				7B4B2D6E5A2A4C7AA1F0A011 /* ReadingCoreTypes.swift */,
+				7B4B2D6E5A2A4C7AA1F0A012 /* ReadingSubViews.swift */,
+				7B4B2D6E5A2A4C7AA1F0A013 /* ReadingTextKit2Support.swift */,
 				1A000018000000000000001 /* SettingsView.swift */,
 				1A000048000000000000006 /* SettingsSubviews.swift */,
 				1A000020000000000000002 /* TTSSelectionView.swift */,
@@ -276,6 +285,9 @@
 				7B4B2D6E5A2A4C7AA1F0B006 /* FullBookSource.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B007 /* LogView.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B008 /* MangaNativeReader.swift in Sources */,
+				7B4B2D6E5A2A4C7AA1F0B011 /* ReadingCoreTypes.swift in Sources */,
+				7B4B2D6E5A2A4C7AA1F0B012 /* ReadingSubViews.swift in Sources */,
+				7B4B2D6E5A2A4C7AA1F0B013 /* ReadingTextKit2Support.swift in Sources */,
 				1A000021000000000000002 /* LoginView.swift in Sources */,
 				1A000023000000000000002 /* LogManager.swift in Sources */,
 				1A000025000000000000002 /* HTMLContentView.swift in Sources */,
