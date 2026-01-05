@@ -244,12 +244,6 @@ struct ReadingView: View {
             enterReadingSessionIfNeeded()
         }
     }
-}
-
-}
-}
-
-}
 
     // MARK: - UI Components
     
