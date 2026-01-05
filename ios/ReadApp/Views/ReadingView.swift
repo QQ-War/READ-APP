@@ -430,9 +430,10 @@ struct ReadingView: View {
                             scrollProxy: scrollProxy,
                             chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
                         )
-                        .padding(.horizontal, preferences.pageHorizontalMargin)
+                        .padding(.horizontal, currentChapterIsManga ? 0 : preferences.pageHorizontalMargin)
                     }
-                    .contentShape(Rectangle())
+                    .frame(maxWidth: .infinity) // 确保全宽响应
+                    .contentShape(Rectangle()) // 确保空白处可点击
                     .onTapGesture {
                         withAnimation { showUIControls.toggle() }
                     }

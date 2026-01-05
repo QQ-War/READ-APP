@@ -128,15 +128,9 @@ fun MangaNativeReader(
             // 使用 GestureDetector 处理点击，确保灵敏度且不干扰滑动
             val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
-                    val width = rv.width
-                    val height = rv.height
-                    // 判定中间区域：水平中间 60%，垂直中间 80%
-                    if (e.x > width * 0.2 && e.x < width * 0.8 &&
-                        e.y > height * 0.1 && e.y < height * 0.9) {
-                        onToggleControls()
-                        return true
-                    }
-                    return false
+                    // 优化：垂直滚动模式下点击任何位置都触发菜单
+                    onToggleControls()
+                    return true
                 }
             })
 
