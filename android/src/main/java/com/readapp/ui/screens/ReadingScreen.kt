@@ -493,19 +493,53 @@ private fun BottomControlBar(
     canNext: Boolean, 
     showTts: Boolean
 ) {
-    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), shadowElevation = 8.dp) {
-        Column(modifier = Modifier.fillMaxWidth().padding(AppDimens.PaddingMedium)) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(), 
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f), 
+        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = AppDimens.PaddingMedium, vertical = 12.dp)
+                .navigationBarsPadding() // 适配系统导航栏
+        ) {
+            // 1. TTS 播放控制层 (仅在显示时可见)
             if (showTts) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), 
+                    horizontalArrangement = Arrangement.SpaceEvenly, 
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(onClick = onPrevP) { Icon(Icons.Default.KeyboardArrowUp, null) }
-                    FloatingActionButton(onClick = onPlay, containerColor = MaterialTheme.customColors.gradientStart, modifier = Modifier.size(56.dp)) { Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White) }
+                    FloatingActionButton(
+                        onClick = onPlay, 
+                        containerColor = MaterialTheme.customColors.gradientStart, 
+                        modifier = Modifier.size(48.dp)
+                    ) { Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White) }
                     IconButton(onClick = onNextP) { Icon(Icons.Default.KeyboardArrowDown, null) }
                     IconButton(onClick = onStop) { Icon(Icons.Default.Stop, null, tint = MaterialTheme.colorScheme.error) }
                 }
-                Spacer(modifier = Modifier.height(8.dp)); Divider(color = MaterialTheme.customColors.border); Spacer(modifier = Modifier.height(8.dp))
+                Divider(modifier = Modifier.padding(bottom = 12.dp), color = MaterialTheme.customColors.border.copy(alpha = 0.5f))
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                ControlButton(Icons.Default.SkipPrevious, "上一章", onPrev, canPrev)
+
+            // 2. 主导航层：上一章 / 下一章 (超大点击区域)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = onPrev,
+                    enabled = canPrev,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(Icons.Default.SkipPrevious, null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("上一章", onPrev, canPrev)
                 ControlButton(Icons.Default.List, "目录", onList)
                 
                 if (isManga) {
