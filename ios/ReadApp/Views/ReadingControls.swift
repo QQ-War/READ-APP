@@ -134,14 +134,14 @@ struct ChapterNavButton: View {
         Button(action: action) {
             Group {
                 if isLandscape {
-                    // 横屏：显著加长加宽的点击区域
+                    // 横屏：全宽填充，比例布局
                     HStack(spacing: 12) {
                         Image(systemName: icon).font(.system(size: 18, weight: .bold))
                         Text(title).font(.headline).fontWeight(.semibold)
                     }
-                    .padding(.horizontal, 35)
+                    .frame(maxWidth: .infinity) // 强制填满父容器分配的空间
                 } else {
-                    // 竖屏：适度增加热区
+                    // 竖屏：保持固定宽度
                     VStack(spacing: 6) {
                         Image(systemName: icon).font(.title2.weight(.bold))
                         Text(title).font(.system(size: 11, weight: .bold))
@@ -149,9 +149,9 @@ struct ChapterNavButton: View {
                     .frame(width: 85)
                 }
             }
-            .frame(height: isLandscape ? 52 : 64)
+            .frame(height: isLandscape ? 50 : 64)
             .background(Color.primary.opacity(isDisabled ? 0.03 : 0.1))
-            .cornerRadius(isLandscape ? 26 : 16)
+            .cornerRadius(isLandscape ? 25 : 16)
         }
         .foregroundColor(isDisabled ? .secondary.opacity(0.3) : .primary)
         .disabled(isDisabled)
@@ -170,8 +170,8 @@ struct NormalControlBar: View {
     let onShowFontSettings: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            // 左侧：上一章
+        HStack(spacing: isForceLandscape ? 12 : 0) {
+            // 左侧：上一章 (比例分配)
             ChapterNavButton(
                 icon: "chevron.left",
                 title: "上一章",
@@ -180,10 +180,10 @@ struct NormalControlBar: View {
                 isLandscape: isForceLandscape
             )
             
-            Spacer(minLength: 0)
+            if !isForceLandscape { Spacer(minLength: 0) }
 
-            // 中间：核心功能区
-            HStack(spacing: isForceLandscape ? 30 : 10) {
+            // 中间：核心功能区 (横屏时固定宽度以挤压左右按钮)
+            HStack(spacing: isForceLandscape ? 25 : 10) {
                 Button(action: onShowChapterList) {
                     VStack(spacing: 4) {
                         Image(systemName: "list.bullet").font(.title3)
@@ -222,10 +222,11 @@ struct NormalControlBar: View {
                 }
                 .foregroundColor(.primary)
             }
+            .frame(width: isForceLandscape ? 180 : nil) 
 
-            Spacer(minLength: 0)
+            if !isForceLandscape { Spacer(minLength: 0) }
 
-            // 右侧：下一章
+            // 右侧：下一章 (比例分配)
             ChapterNavButton(
                 icon: "chevron.right",
                 title: "下一章",
@@ -234,7 +235,7 @@ struct NormalControlBar: View {
                 isLandscape: isForceLandscape
             )
         }
-        .padding(.horizontal, isForceLandscape ? 20 : 10)
+        .padding(.horizontal, isForceLandscape ? 15 : 10)
         .padding(.vertical, 10)
         .background(Color(UIColor.systemBackground))
         .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
