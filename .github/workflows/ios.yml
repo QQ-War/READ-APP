@@ -10,16 +10,30 @@ on:
       - "ios/**"
       - ".github/workflows/ios.yml"
 
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
 jobs:
   build:
+    # 使用最新的 macOS 镜像（通常预装了最新的 Xcode）
     runs-on: macos-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # 提速核心：缓存 Xcode 的 DerivedData 和 Swift Packages
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-xcode-deriveddata-${{ hashFiles('ios/**/*.swift', 'ios/**/*.xcodeproj') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-deriveddata-
 
       - name: Make build script executable
         run: chmod +x ios/build_unsigned_ipa.sh

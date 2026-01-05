@@ -10,6 +10,10 @@ on:
       - "android/**"
       - ".github/workflows/android.yml"
 
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -28,30 +32,19 @@ jobs:
           java-version: 17
           cache: gradle
 
-      - name: Cache Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           build-root-directory: android
           gradle-version: 8.2.1
-
-      - name: Cache Gradle user home
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            android/.gradle
-          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties', 'android/settings.gradle*', 'android/gradle.properties') }}
+          # setup-gradle 默认会自动处理缓存，不再需要额外的 actions/cache
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK components
-        run: |
-          yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
       - name: Build release APK
-        run: gradle assembleUnsigned assembleDebug
+        # 启用并行编译和构建缓存
+        run: ./gradlew assembleUnsigned assembleDebug --build-cache --parallel --no-daemon
         working-directory: android
 
       - name: Prepare APK artifacts
