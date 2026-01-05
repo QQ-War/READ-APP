@@ -1,4 +1,4 @@
-// ReadingScreen.kt - 阅读页面集成听书功能（段落高亮）
+// ReadingScreen.kt - 阅读页面集成听书功能（段落高亮与翻页优化）
 package com.readapp.ui.screens
 
 import androidx.compose.animation.*
@@ -63,6 +63,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 
+private enum class ChapterNavIntent {
+    NONE, FIRST, LAST
+}
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ReadingScreen(
@@ -78,7 +82,7 @@ fun ReadingScreen(
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
     onNavigateBack: () -> Unit,
-    // TTS 相关状态
+    // TTS 状态
     isPlaying: Boolean = false,
     isPaused: Boolean = false,
     currentPlayingParagraph: Int = -1,
@@ -117,19 +121,17 @@ fun ReadingScreen(
     var showControls by remember { mutableStateOf(false) }
     var showChapterList by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
-    var currentPageStartIndex by remember { mutableStateOf(0) }
-    var currentPageStartOffset by remember { mutableStateOf(0) }
-    var pausedPageStartIndex by remember { mutableStateOf<Int?>(null) }
-    var pausedPageStartOffset by remember { mutableStateOf<Int?>(null) }
-    var pendingJumpToLastPageTarget by remember { mutableStateOf<Int?>(null) }
-    var lastHandledChapterIndex by remember { mutableStateOf(-1) }
+    
+    // 状态机记录翻页意图
+    var navIntent by remember { mutableStateOf(ChapterNavIntent.NONE) }
+    var lastChapterIndex by remember { mutableStateOf(-1) }
+    
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val latestOnExit by rememberUpdatedState(onExit)
     var isAutoScrolling by remember { mutableStateOf(false) }
     var lastAutoScrollTarget by remember { mutableStateOf<Int?>(null) }
     var resolveCurrentPageStart by remember { mutableStateOf<(() -> Pair<Int, Int>?)?>(null) }
-    var isExplicitlySwitchingChapter by remember { mutableStateOf(false) }
 
     val contentPadding = remember(readingHorizontalPadding) {
         PaddingValues(
@@ -145,20 +147,13 @@ fun ReadingScreen(
             onDismissRequest = onClearError,
             title = { Text("错误") },
             text = { Text(errorMessage) },
-            confirmButton = {
-                TextButton(onClick = onClearError) {
-                    Text("好的")
-                }
-            }
+            confirmButton = { TextButton(onClick = onClearError) { Text("好的") } }
         )
     }
     
     val displayContent = remember(currentChapterContent, currentChapterIndex, chapters) {
-        if (currentChapterContent.isNotBlank()) {
-            currentChapterContent
-        } else {
-            chapters.getOrNull(currentChapterIndex)?.content.orEmpty()
-        }
+        if (currentChapterContent.isNotBlank()) currentChapterContent
+        else chapters.getOrNull(currentChapterIndex)?.content.orEmpty()
     }
 
     val currentChapterUrl = remember(currentChapterIndex, chapters) {
@@ -167,13 +162,8 @@ fun ReadingScreen(
 
     val paragraphs = remember(displayContent) {
         if (displayContent.isNotEmpty()) {
-            displayContent
-                .split("\n")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-        } else {
-            emptyList()
-        }
+            displayContent.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+        } else emptyList()
     }
 
     val isMangaMode = remember(paragraphs, book.type, manualMangaUrls) {
@@ -182,15 +172,25 @@ fun ReadingScreen(
         book.type == 2 || (paragraphs.isNotEmpty() && imageCount.toFloat() / paragraphs.size > 0.1f)
     }
 
-    // 监听滚动，上报可见进度
-    LaunchedEffect(scrollState.firstVisibleItemIndex) {
-        if (readingMode == ReadingMode.Vertical && !isMangaMode) {
-            val index = (scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0)
-            onScrollUpdate(index)
+    // 监听切章并分发意图
+    LaunchedEffect(currentChapterIndex) {
+        if (currentChapterIndex != lastChapterIndex) {
+            onLoadChapterContent(currentChapterIndex)
+            if (navIntent == ChapterNavIntent.NONE) {
+                navIntent = ChapterNavIntent.FIRST
+            }
+            lastChapterIndex = currentChapterIndex
         }
     }
 
-    // 处理挂起的滚动请求 (垂直模式)
+    // 上报垂直滚动进度
+    LaunchedEffect(scrollState.firstVisibleItemIndex) {
+        if (readingMode == ReadingMode.Vertical && !isMangaMode) {
+            onScrollUpdate((scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0))
+        }
+    }
+
+    // 处理挂起的滚动 (垂直模式)
     LaunchedEffect(pendingScrollIndex, isMangaMode, readingMode) {
         if (readingMode == ReadingMode.Vertical && !isMangaMode && pendingScrollIndex != null) {
             scrollState.scrollToItem(pendingScrollIndex + 1)
@@ -198,37 +198,10 @@ fun ReadingScreen(
         }
     }
 
-    // 当章节索引变化时，加载内容
-    LaunchedEffect(currentChapterIndex, chapters.size) {
-        if (chapters.isNotEmpty() && currentChapterIndex in chapters.indices) {
-            onLoadChapterContent(currentChapterIndex)
-            if (!isMangaMode && readingMode == ReadingMode.Vertical) {
-                scrollState.scrollToItem(0)
-            }
-        }
-    }
-    
-    // 当前播放段落变化时，自动滚动
-    LaunchedEffect(currentPlayingParagraph) {
-        if (currentPlayingParagraph >= 0 && currentPlayingParagraph < paragraphs.size) {
-            coroutineScope.launch {
-                if (!isMangaMode && readingMode == ReadingMode.Vertical) {
-                    scrollState.animateScrollToItem(currentPlayingParagraph + 1)
-                }
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            latestOnExit()
-        }
-    }
+    DisposableEffect(Unit) { onDispose { latestOnExit() } }
     
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
     ) {
         if (isMangaMode) {
             MangaNativeReader(
@@ -241,398 +214,179 @@ fun ReadingScreen(
                 onScroll = { onScrollUpdate(it) },
                 modifier = Modifier.fillMaxSize()
             )
-            
-            LaunchedEffect(pendingScrollIndex) {
-                if (pendingScrollIndex != null) {
-                    onScrollConsumed()
-                }
-            }
+            LaunchedEffect(pendingScrollIndex) { if (pendingScrollIndex != null) onScrollConsumed() }
         } else if (readingMode == ReadingMode.Vertical) {
             LazyColumn(
                 state = scrollState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        showControls = !showControls
-                    },
+                modifier = Modifier.fillMaxSize().clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { showControls = !showControls },
                 contentPadding = contentPadding
             ) {
                 item {
                     Text(
-                        text = if (currentChapterIndex < chapters.size) {
-                            chapters[currentChapterIndex].title
-                        } else {
-                            "章节"
-                        },
+                        text = if (currentChapterIndex < chapters.size) chapters[currentChapterIndex].title else "章节",
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = AppDimens.PaddingLarge)
                     )
                 }
-
                 if (paragraphs.isEmpty()) {
                     item {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = AppDimens.PaddingLarge),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            if (isContentLoading) {
-                                CircularProgressIndicator()
-                                Text(text = "正在加载章节内容...", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.customColors.textSecondary)
-                            } else {
-                                Text(text = displayContent.ifBlank { "暂无显示内容" }, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.customColors.textSecondary)
-                            }
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = AppDimens.PaddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
+                            if (isContentLoading) CircularProgressIndicator()
+                            Text(text = if (isContentLoading) "正在加载..." else "暂无内容", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.customColors.textSecondary)
                         }
                     }
                 } else {
-                    itemsIndexed(
-                        items = paragraphs,
-                        key = { index, _ -> "${currentChapterIndex}_${index}" }
-                    ) { index, paragraph ->
-                        ParagraphItem(
-                            text = paragraph,
-                            isPlaying = index == currentPlayingParagraph,
-                            isPreloaded = preloadedParagraphs.contains(index),
-                            fontSize = readingFontSize,
-                            chapterUrl = currentChapterUrl,
-                            serverUrl = serverUrl,
-                            forceProxy = forceMangaProxy,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = AppDimens.PaddingMedium)
-                        )
+                    itemsIndexed(items = paragraphs, key = { i, _ -> "${currentChapterIndex}_$i" }) { index, p ->
+                        ParagraphItem(text = p, isPlaying = index == currentPlayingParagraph, isPreloaded = preloadedParagraphs.contains(index), fontSize = readingFontSize, chapterUrl = currentChapterUrl, serverUrl = serverUrl, forceProxy = forceMangaProxy, modifier = Modifier.fillMaxWidth().padding(bottom = AppDimens.PaddingMedium))
                     }
                 }
             }
-        } else { // Horizontal Pager 逻辑 (针对小说文本)
+        } else {
+            // Horizontal Pager 模式
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = readingFontSize.sp,
-                    lineHeight = (readingFontSize * 1.8f).sp
-                )
+                val style = MaterialTheme.typography.bodyLarge.copy(fontSize = readingFontSize.sp, lineHeight = (readingFontSize * 1.8f).sp)
                 val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title.orEmpty()
                 val headerText = if (chapterTitle.isNotBlank()) chapterTitle + "\n\n" else ""
                 val headerFontSize = (readingFontSize + 6f).sp
                 val lineHeightPx = with(LocalDensity.current) { (readingFontSize * 1.8f).sp.toPx() }
-                val pagePadding = contentPadding
                 val density = LocalDensity.current
-                val availableConstraints = remember(constraints, pagePadding, density) {
-                    adjustedConstraints(constraints, pagePadding, density)
-                }
+                val availableConstraints = remember(constraints, contentPadding, density) { adjustedConstraints(constraints, contentPadding, density) }
+                val paginatedPages = rememberPaginatedText(paragraphs, style, availableConstraints, lineHeightPx, headerText, headerFontSize)
                 
-                val paginatedPages = rememberPaginatedText(
-                    paragraphs = paragraphs,
-                    style = style,
-                    constraints = availableConstraints,
-                    lineHeightPx = lineHeightPx,
-                    headerText = headerText,
-                    headerFontSize = headerFontSize
-                )
-                
-                val pagerState = rememberPagerState(
-                    initialPage = 0,
-                    pageCount = { paginatedPages.pages.size.coerceAtLeast(1) }
-                )
-
-                LaunchedEffect(pendingScrollIndex, paginatedPages) {
-                    if (pendingScrollIndex != null && paginatedPages.pages.isNotEmpty()) {
-                        val targetPage = paginatedPages.pages.indexOfFirst { it.startParagraphIndex >= pendingScrollIndex }
-                            .coerceAtLeast(0)
-                        pagerState.scrollToPage(targetPage)
-                        onScrollConsumed()
+                key(currentChapterIndex) { // 强行重置 Pager 状态
+                    val pagerState = rememberPagerState(initialPage = 0, pageCount = { paginatedPages.pages.size.coerceAtLeast(1) })
+                    
+                    // 处理所有 Pager 内部的跳转意图
+                    LaunchedEffect(paginatedPages, isPlaying, currentPlayingParagraph, pendingScrollIndex, navIntent) {
+                        if (paginatedPages.pages.isEmpty()) return@LaunchedEffect
+                        
+                        // 1. TTS 优先级最高
+                        if (isPlaying && currentPlayingParagraph >= 0) {
+                            val target = paginatedPages.pages.indexOfFirst { it.startParagraphIndex >= currentPlayingParagraph }.coerceAtLeast(0)
+                            pagerState.scrollToPage(target)
+                            navIntent = ChapterNavIntent.NONE
+                        }
+                        // 2. 模式切换进度同步
+                        else if (pendingScrollIndex != null) {
+                            val target = paginatedPages.pages.indexOfFirst { it.startParagraphIndex >= pendingScrollIndex }.coerceAtLeast(0)
+                            pagerState.scrollToPage(target)
+                            onScrollConsumed()
+                            navIntent = ChapterNavIntent.NONE
+                        }
+                        // 3. 正常切章导航
+                        else if (navIntent == ChapterNavIntent.LAST) {
+                            pagerState.scrollToPage(paginatedPages.lastIndex)
+                            navIntent = ChapterNavIntent.NONE
+                        } else if (navIntent == ChapterNavIntent.FIRST) {
+                            pagerState.scrollToPage(0)
+                            navIntent = ChapterNavIntent.NONE
+                        }
                     }
-                }
 
-                val viewConfiguration = LocalViewConfiguration.current
-                HorizontalPager(
-                    state = pagerState,
-                    userScrollEnabled = !(isPlaying && lockPageOnTTS),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(showControls, paginatedPages, currentChapterIndex, isPlaying, lockPageOnTTS) {
+                    HorizontalPager(
+                        state = pagerState,
+                        userScrollEnabled = !(isPlaying && lockPageOnTTS),
+                        modifier = Modifier.fillMaxSize().pointerInput(showControls, paginatedPages, isPlaying, lockPageOnTTS) { 
+                            val viewConfiguration = LocalViewConfiguration.current
                             detectTapGesturesWithoutConsuming(viewConfiguration) { offset, size ->
                                 if (isPlaying && lockPageOnTTS) {
-                                    val width = size.width.toFloat()
-                                    if (offset.x in (width / 3f)..(width * 2f / 3f)) showControls = !showControls
+                                    if (offset.x in (size.width / 3f)..(size.width * 2f / 3f)) showControls = !showControls
                                     return@detectTapGesturesWithoutConsuming
                                 }
-                                handleHorizontalTap(
-                                    offset = offset,
-                                    size = size,
-                                    showControls = showControls,
-                                    pagerState = pagerState,
-                                    paginatedPages = paginatedPages.pages,
-                                    onPreviousChapter = {
-                                        if (currentChapterIndex > 0) onChapterClick(currentChapterIndex - 1)
-                                    },
-                                    onNextChapter = {
-                                        if (currentChapterIndex < chapters.size - 1) onChapterClick(currentChapterIndex + 1)
-                                    },
-                                    coroutineScope = coroutineScope,
-                                    onToggleControls = { showControls = it }
-                                )
+                                handleHorizontalTap(offset, size, showControls, pagerState, paginatedPages.pages, 
+                                    onPreviousChapter = { navIntent = ChapterNavIntent.LAST; onChapterClick(currentChapterIndex - 1) }, 
+                                    onNextChapter = { navIntent = ChapterNavIntent.FIRST; onChapterClick(currentChapterIndex + 1) }, 
+                                    coroutineScope, onToggleControls = { showControls = it })
                             }
                         }
-                ) { page ->
-                    val pageInfo = paginatedPages.getOrNull(page)
-                    val pageText = pageInfo?.let { pi ->
-                        remember(pi, currentPlayingParagraph, paginatedPages.fullText) {
-                            val baseText = paginatedPages.fullText.subSequence(
-                                pi.start.coerceAtLeast(0),
-                                pi.end.coerceAtMost(paginatedPages.fullText.text.length)
-                            )
-                            if (currentPlayingParagraph == pi.startParagraphIndex) {
-                                AnnotatedString.Builder(baseText).apply {
-                                    addStyle(SpanStyle(background = Color.Blue.copy(alpha = 0.15f)), 0, baseText.length)
-                                }.toAnnotatedString()
-                            } else baseText
-                        }
-                    } ?: AnnotatedString("")
-                    
-                    Box(modifier = Modifier.fillMaxSize().padding(pagePadding)) {
-                        SelectionContainer {
-                            Text(text = pageText, style = style, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxSize())
+                    ) { page ->
+                        val pi = paginatedPages.getOrNull(page)
+                        val text = pi?.let { 
+                            remember(it, currentPlayingParagraph, paginatedPages.fullText) { 
+                                val base = paginatedPages.fullText.subSequence(it.start.coerceAtLeast(0), it.end.coerceAtMost(paginatedPages.fullText.text.length))
+                                if (currentPlayingParagraph == it.startParagraphIndex) {
+                                    AnnotatedString.Builder(base).apply { addStyle(SpanStyle(background = Color.Blue.copy(alpha = 0.15f)), 0, base.length) }.toAnnotatedString()
+                                } else base
+                            }
+                        } ?: AnnotatedString("")
+                        Box(modifier = Modifier.fillMaxSize().padding(contentPadding)) { 
+                            SelectionContainer { Text(text = text, style = style, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxSize()) } 
                         }
                     }
-                }
-
-                LaunchedEffect(pagerState.currentPage) {
-                    if (paginatedPages.pages.isNotEmpty()) {
-                        paginatedPages.getOrNull(pagerState.currentPage)?.let {
-                            onScrollUpdate(it.startParagraphIndex)
-                        }
-                    }
+                    LaunchedEffect(pagerState.currentPage) { paginatedPages.getOrNull(pagerState.currentPage)?.let { onScrollUpdate(it.startParagraphIndex) } }
                 }
             }
         }
         
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn() + slideInVertically(),
-            exit = fadeOut() + slideOutVertically(),
-            modifier = Modifier.align(Alignment.TopCenter)
-        ) {
-            TopControlBar(
-                bookTitle = book.title,
-                chapterTitle = if (currentChapterIndex < chapters.size) chapters[currentChapterIndex].title else "",
-                onNavigateBack = onNavigateBack,
-                onHeaderClick = onHeaderClick
-            )
+        AnimatedVisibility(visible = showControls, enter = fadeIn() + slideInVertically(), exit = fadeOut() + slideOutVertically(), modifier = Modifier.align(Alignment.TopCenter)) {
+            TopControlBar(book.title, currentChapterIndex.let { if (it < chapters.size) chapters[it].title else "" }, onNavigateBack, onHeaderClick)
         }
         
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            BottomControlBar(
-                isPlaying = isPlaying,
-                isMangaMode = isMangaMode,
-                onPreviousChapter = {
-                    if (currentChapterIndex > 0) {
-                        if (readingMode == ReadingMode.Horizontal) pendingJumpToLastPageTarget = currentChapterIndex - 1
-                        isExplicitlySwitchingChapter = true
-                        onChapterClick(currentChapterIndex - 1)
-                    }
-                },
-                onNextChapter = {
-                    if (currentChapterIndex < chapters.size - 1) {
-                        pendingJumpToLastPageTarget = null
-                        isExplicitlySwitchingChapter = true
-                        onChapterClick(currentChapterIndex + 1)
-                    }
-                },
-                onShowChapterList = { showChapterList = true },
-                onPlayPause = { onPlayPauseClick() },
-                onStopListening = onStopListening,
-                onPreviousParagraph = onPreviousParagraph,
-                onNextParagraph = onNextParagraph,
-                onFontSettings = { showFontDialog = true },
-                canGoPrevious = currentChapterIndex > 0,
-                canGoNext = currentChapterIndex < chapters.size - 1,
-                showTtsControls = showTtsControls && !isMangaMode
+        AnimatedVisibility(visible = showControls, enter = fadeIn() + slideInVertically(initialOffsetY = { it }), exit = fadeOut() + slideOutVertically(targetOffsetY = { it }), modifier = Modifier.align(Alignment.BottomCenter)) {
+            BottomControlBar(isPlaying, isMangaMode,
+                onPreviousChapter = { if (currentChapterIndex > 0) { navIntent = ChapterNavIntent.LAST; onChapterClick(currentChapterIndex - 1) } },
+                onNextChapter = { if (currentChapterIndex < chapters.size - 1) { navIntent = ChapterNavIntent.FIRST; onChapterClick(currentChapterIndex + 1) } },
+                onShowChapterList = { showChapterList = true }, onPlayPause = onPlayPauseClick, onStopListening = onStopListening, onPreviousParagraph = onPreviousParagraph, onNextParagraph = onNextParagraph, onFontSettings = { showFontDialog = true },
+                canGoPrevious = currentChapterIndex > 0, canGoNext = currentChapterIndex < chapters.size - 1, showTtsControls = showTtsControls && !isMangaMode
             )
         }
 
-        if (showChapterList) {
-            ChapterListDialog(
-                chapters = chapters,
-                currentChapterIndex = currentChapterIndex,
-                preloadedChapters = preloadedChapters,
-                bookUrl = book.bookUrl ?: "",
-                onChapterClick = { index ->
-                    onChapterClick(index)
-                    showChapterList = false
-                },
-                onDismiss = { showChapterList = false }
-            )
-        }
-
-        if (showFontDialog) {
-            FontSizeDialog(
-                value = readingFontSize,
-                onValueChange = onReadingFontSizeChange,
-                horizontalPadding = readingHorizontalPadding,
-                onHorizontalPaddingChange = onReadingHorizontalPaddingChange,
-                lockPageOnTTS = lockPageOnTTS,
-                onLockPageOnTTSChange = onLockPageOnTTSChange,
-                pageTurningMode = pageTurningMode,
-                onPageTurningModeChange = onPageTurningModeChange,
-                darkModeConfig = darkModeConfig,
-                onDarkModeChange = onDarkModeChange,
-                forceMangaProxy = forceMangaProxy,
-                onForceMangaProxyChange = onForceMangaProxyChange,
-                readingMode = readingMode,
-                onReadingModeChange = onReadingModeChange,
-                isMangaMode = isMangaMode,
-                onDismiss = { showFontDialog = false }
-            )
-        }
+        if (showChapterList) ChapterListDialog(chapters, currentChapterIndex, preloadedChapters, book.bookUrl ?: "", onChapterClick = { onChapterClick(it); showChapterList = false }, onDismiss = { showChapterList = false })
+        if (showFontDialog) FontSizeDialog(readingFontSize, onReadingFontSizeChange, readingHorizontalPadding, onReadingHorizontalPaddingChange, lockPageOnTTS, onLockPageOnTTSChange, pageTurningMode, onPageTurningModeChange, darkModeConfig, onDarkModeChange, forceMangaProxy, onForceMangaProxyChange, readingMode, onReadingModeChange, isMangaMode, onDismiss = { showFontDialog = false })
     }
 }
 
 @Composable
-private fun ZoomableImage(
-    model: Any,
-    modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Fit
-) {
-    var scale by remember { mutableStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    val state = rememberTransformableState { zoomChange, offsetChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 4f)
-        if (scale > 1f) offset += offsetChange else offset = Offset.Zero
-    }
-    Box(
-        modifier = modifier
-            .clip(RectangleShape)
-            .transformable(state = state)
-            .pointerInput(Unit) {
-                detectTapGestures(onDoubleTap = {
-                    scale = if (scale > 1f) 1f else 2f
-                    offset = Offset.Zero
-                })
-            }
-    ) {
-        AsyncImage(
-            model = model,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y),
-            contentScale = contentScale
-        )
-    }
-}
-
-@Composable
-private fun ParagraphItem(
-    text: String,
-    isPlaying: Boolean,
-    isPreloaded: Boolean,
-    fontSize: Float,
-    chapterUrl: String?,
-    serverUrl: String,
-    forceProxy: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor = when {
-        isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-        isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f)
-        else -> Color.Transparent
-    }
+private fun ParagraphItem(text: String, isPlaying: Boolean, isPreloaded: Boolean, fontSize: Float, chapterUrl: String?, serverUrl: String, forceProxy: Boolean, modifier: Modifier = Modifier) {
+    val backgroundColor = when { isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f); isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f); else -> Color.Transparent }
     Surface(modifier = modifier, color = backgroundColor, shape = RoundedCornerShape(8.dp)) {
-        val imgUrl = remember(text) {
-            val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""" .toRegex()
-            pattern.find(text)?.groupValues?.get(1)
-        }
-        if (imgUrl != null) {
-            AsyncImage(
-                model = imgUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                contentScale = ContentScale.FillWidth
-            )
-        } else {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
-                color = MaterialTheme.colorScheme.onSurface,
-                lineHeight = (fontSize * 1.8f).sp,
-                modifier = Modifier.padding(horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp, vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp)
-            )
-        }
+        val imgUrl = remember(text) { """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""".toRegex().find(text)?.groupValues?.get(1) }
+        if (imgUrl != null) AsyncImage(model = imgUrl, contentDescription = null, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), contentScale = ContentScale.FillWidth)
+        else Text(text, style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp), color = MaterialTheme.colorScheme.onSurface, lineHeight = (fontSize * 1.8f).sp, modifier = Modifier.padding(horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp, vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp))
     }
 }
 
 @Composable
-private fun rememberPaginatedText(
-    paragraphs: List<String>,
-    style: TextStyle,
-    constraints: Constraints,
-    lineHeightPx: Float,
-    headerText: String,
-    headerFontSize: TextUnit
-): PaginationResult {
+private fun rememberPaginatedText(paragraphs: List<String>, style: TextStyle, constraints: Constraints, lineHeightPx: Float, headerText: String, headerFontSize: TextUnit): PaginationResult {
     val textMeasurer = rememberTextMeasurer()
     return remember(paragraphs, style, constraints, lineHeightPx, headerText, headerFontSize) {
-        if (paragraphs.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) {
-            return@remember PaginationResult(emptyList(), AnnotatedString(""))
-        }
+        if (paragraphs.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) return@remember PaginationResult(emptyList(), AnnotatedString(""))
         val paragraphStartIndices = paragraphStartIndices(paragraphs, headerText.length)
         val fullText = fullContent(paragraphs, headerText, headerFontSize)
-        val layout = textMeasurer.measure(text = fullText, style = style, constraints = Constraints(maxWidth = constraints.maxWidth))
+        val layout = textMeasurer.measure(fullText, style, constraints = Constraints(maxWidth = constraints.maxWidth))
         if (layout.lineCount == 0) return@remember PaginationResult(emptyList(), fullText)
-        val pageHeight = constraints.maxHeight.toFloat()
         val pages = mutableListOf<PaginatedPage>()
         var startLine = 0
         while (startLine < layout.lineCount) {
             val pageTop = layout.getLineTop(startLine)
             var endLine = startLine
-            while (endLine + 1 < layout.lineCount && layout.getLineBottom(endLine + 1) - pageTop <= pageHeight) {
-                endLine++
-            }
-            val startOffset = layout.getLineStart(startLine)
-            val endOffset = layout.getLineEnd(endLine, visibleEnd = true)
-            val adjustedOffset = (startOffset - headerText.length).coerceAtLeast(0)
-            val normalizedOffset = normalizePageOffset(fullText.text, adjustedOffset, headerText.length)
-            val startParagraphIndex = paragraphIndexForOffset(normalizedOffset, paragraphStartIndices)
-            val paragraphStart = paragraphStartIndices.getOrElse(startParagraphIndex) { 0 }
-            pages.add(PaginatedPage(startOffset, endOffset, startParagraphIndex, (normalizedOffset - paragraphStart).coerceAtLeast(0)))
+            while (endLine + 1 < layout.lineCount && layout.getLineBottom(endLine + 1) - pageTop <= constraints.maxHeight.toFloat()) endLine++
+            val startParagraphIndex = paragraphIndexForOffset(normalizePageOffset(fullText.text, (layout.getLineStart(startLine) - headerText.length).coerceAtLeast(0), headerText.length), paragraphStartIndices)
+            pages.add(PaginatedPage(layout.getLineStart(startLine), layout.getLineEnd(endLine, true), startParagraphIndex))
             startLine = endLine + 1
         }
         PaginationResult(pages, fullText)
     }
 }
 
-private data class PaginatedPage(val start: Int, val end: Int, val startParagraphIndex: Int, val startOffsetInParagraph: Int)
+private data class PaginatedPage(val start: Int, val end: Int, val startParagraphIndex: Int)
 private data class PaginationResult(val pages: List<PaginatedPage>, val fullText: AnnotatedString) {
     val indices: IntRange get() = pages.indices
+    val lastIndex: Int get() = pages.size - 1
     fun isEmpty(): Boolean = pages.isEmpty()
     fun getOrNull(index: Int): PaginatedPage? = pages.getOrNull(index)
 }
 
 private fun fullContent(paragraphs: List<String>, headerText: String, headerFontSize: TextUnit): AnnotatedString {
     val body = paragraphs.joinToString(separator = "\n\n") { it.trim() }
-    return AnnotatedString.Builder().apply {
-        if (headerText.isNotBlank()) {
-            pushStyle(SpanStyle(fontSize = headerFontSize, fontWeight = FontWeight.Bold))
-            append(headerText)
-            pop()
-        }
-        append(body)
-    }.toAnnotatedString()
+    return AnnotatedString.Builder().apply { if (headerText.isNotBlank()) { pushStyle(SpanStyle(fontSize = headerFontSize, fontWeight = FontWeight.Bold)); append(headerText); pop() }; append(body) }.toAnnotatedString()
 }
 
 private fun paragraphStartIndices(paragraphs: List<String>, prefixLength: Int): List<Int> {
     val starts = mutableListOf<Int>()
-    var currentIndex = prefixLength
-    paragraphs.forEachIndexed {
-        index, paragraph ->
-        starts.add(currentIndex)
-        currentIndex += paragraph.trim().length + if (index < paragraphs.lastIndex) 2 else 0
-    }
+    var current = prefixLength
+    paragraphs.forEachIndexed { i, p -> starts.add(current); current += p.trim().length + if (i < paragraphs.size - 1) 2 else 0 }
     return starts
 }
 
@@ -640,88 +394,78 @@ private fun paragraphIndexForOffset(offset: Int, starts: List<Int>): Int = start
 
 private fun normalizePageOffset(fullText: String, bodyOffset: Int, headerLength: Int): Int {
     if (bodyOffset <= 0) return 0
-    var absoluteOffset = (bodyOffset + headerLength).coerceIn(0, fullText.length)
-    while (absoluteOffset < fullText.length && (fullText[absoluteOffset] == '\n' || fullText[absoluteOffset] == '\r')) {
-        absoluteOffset++
-    }
-    return (absoluteOffset - headerLength).coerceAtLeast(0)
+    var absolute = (bodyOffset + headerLength).coerceIn(0, fullText.length)
+    while (absolute < fullText.length && (fullText[absolute] == '\n' || fullText[absolute] == '\r')) absolute++
+    return (absolute - headerLength).coerceAtLeast(0)
 }
 
-private fun adjustedConstraints(constraints: Constraints, paddingValues: PaddingValues, density: Density): Constraints {
-    val hPadding = with(density) { (paddingValues.calculateLeftPadding(LayoutDirection.Ltr) + paddingValues.calculateRightPadding(LayoutDirection.Ltr)).toPx() }
-    val vPadding = with(density) { (paddingValues.calculateTopPadding() + paddingValues.calculateBottomPadding()).toPx() }
-    return Constraints(maxWidth = (constraints.maxWidth - hPadding).toInt().coerceAtLeast(0), maxHeight = (constraints.maxHeight - vPadding).toInt().coerceAtLeast(0))
+private fun adjustedConstraints(constraints: Constraints, padding: PaddingValues, density: Density): Constraints {
+    val h = with(density) { (padding.calculateLeftPadding(LayoutDirection.Ltr) + padding.calculateRightPadding(LayoutDirection.Ltr)).toPx() }
+    val v = with(density) { (padding.calculateTopPadding() + padding.calculateBottomPadding()).toPx() }
+    return Constraints(maxWidth = (constraints.maxWidth - h).toInt().coerceAtLeast(0), maxHeight = (constraints.maxHeight - v).toInt().coerceAtLeast(0))
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-private suspend fun PointerInputScope.detectTapGesturesWithoutConsuming(viewConfiguration: androidx.compose.ui.platform.ViewConfiguration, onTap: (Offset, IntSize) -> Unit) {
+private suspend fun PointerInputScope.detectTapGesturesWithoutConsuming(vc: androidx.compose.ui.platform.ViewConfiguration, onTap: (Offset, IntSize) -> Unit) {
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
+        val down = awaitFirstDown(false)
         var isTap = true
-        var tapPosition = down.position
+        var tapPos = down.position
         while (true) {
             val event = awaitPointerEvent()
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) isTap = false
-            if (change.changedToUp()) { tapPosition = change.position; break }
+            if ((change.position - down.position).getDistance() > vc.touchSlop) isTap = false
+            if (change.changedToUp()) { tapPos = change.position; break }
         }
-        if (isTap) onTap(tapPosition, size)
+        if (isTap) onTap(tapPos, size)
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-private fun handleHorizontalTap(offset: Offset, size: IntSize, showControls: Boolean, pagerState: androidx.compose.foundation.pager.PagerState, paginatedPages: List<PaginatedPage>, onPreviousChapter: () -> Unit, onNextChapter: () -> Unit, coroutineScope: kotlinx.coroutines.CoroutineScope, onToggleControls: (Boolean) -> Unit) {
-    if (showControls) { onToggleControls(false); return }
+private fun handleHorizontalTap(offset: Offset, size: IntSize, show: Boolean, state: androidx.compose.foundation.pager.PagerState, pages: List<PaginatedPage>, onPreviousChapter: () -> Unit, onNextChapter: () -> Unit, scope: kotlinx.coroutines.CoroutineScope, onToggleControls: (Boolean) -> Unit) {
+    if (show) { onToggleControls(false); return }
     val width = size.width.toFloat()
     when {
-        offset.x < width / 3f -> coroutineScope.launch { if (pagerState.currentPage > 0) pagerState.animateScrollToPage(pagerState.currentPage - 1) else onPreviousChapter() }
+        offset.x < width / 3f -> scope.launch { if (state.currentPage > 0) state.animateScrollToPage(state.currentPage - 1) else onPreviousChapter() }
         offset.x < width * 2f / 3f -> onToggleControls(true)
-        else -> coroutineScope.launch { if (pagerState.currentPage < paginatedPages.lastIndex) pagerState.animateScrollToPage(pagerState.currentPage + 1) else onNextChapter() }
+        else -> scope.launch { if (state.currentPage < pages.size - 1) state.animateScrollToPage(state.currentPage + 1) else onNextChapter() }
     }
 }
 
 @Composable
-private fun TopControlBar(bookTitle: String, chapterTitle: String, onNavigateBack: () -> Unit, onHeaderClick: () -> Unit) {
+private fun TopControlBar(title: String, chapter: String, onBack: () -> Unit, onHeader: () -> Unit) {
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), shadowElevation = 4.dp) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = AppDimens.PaddingMedium, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "返回") }
-            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp).clickable(onClick = onHeaderClick)) {
-                Text(text = bookTitle, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                Text(text = chapterTitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.customColors.textSecondary, maxLines = 1)
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "返回") }
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp).clickable(onClick = onHeader)) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Text(text = chapter, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.customColors.textSecondary, maxLines = 1)
             }
         }
     }
 }
 
 @Composable
-private fun BottomControlBar(isPlaying: Boolean, isMangaMode: Boolean, onPreviousChapter: () -> Unit, onNextChapter: () -> Unit, onShowChapterList: () -> Unit, onPlayPause: () -> Unit, onStopListening: () -> Unit, onPreviousParagraph: () -> Unit, onNextParagraph: () -> Unit, onFontSettings: () -> Unit, canGoPrevious: Boolean, canGoNext: Boolean, showTtsControls: Boolean) {
+private fun BottomControlBar(isPlaying: Boolean, isManga: Boolean, onPrev: () -> Unit, onNext: () -> Unit, onList: () -> Unit, onPlay: () -> Unit, onStop: () -> Unit, onPrevP: () -> Unit, onNextP: () -> Unit, onFont: () -> Unit, canPrev: Boolean, canNext: Boolean, showTts: Boolean) {
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), shadowElevation = 8.dp) {
         Column(modifier = Modifier.fillMaxWidth().padding(AppDimens.PaddingMedium)) {
-            if (showTtsControls) {
+            if (showTts) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onPreviousParagraph) { Icon(Icons.Default.KeyboardArrowUp, "上一段") }
-                    FloatingActionButton(onClick = onPlayPause, containerColor = MaterialTheme.customColors.gradientStart, modifier = Modifier.size(56.dp)) {
-                        Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp))
-                    }
-                    IconButton(onClick = onNextParagraph) { Icon(Icons.Default.KeyboardArrowDown, "下一段") }
-                    IconButton(onClick = onStopListening) { Icon(Icons.Default.Stop, "停止", tint = MaterialTheme.colorScheme.error) }
+                    IconButton(onClick = onPrevP) { Icon(Icons.Default.KeyboardArrowUp, null) }
+                    FloatingActionButton(onClick = onPlay, containerColor = MaterialTheme.customColors.gradientStart, modifier = Modifier.size(56.dp)) { Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White) }
+                    IconButton(onClick = onNextP) { Icon(Icons.Default.KeyboardArrowDown, null) }
+                    IconButton(onClick = onStop) { Icon(Icons.Default.Stop, null, tint = MaterialTheme.colorScheme.error) }
                 }
                 Spacer(modifier = Modifier.height(8.dp)); Divider(color = MaterialTheme.customColors.border); Spacer(modifier = Modifier.height(8.dp))
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                ControlButton(icon = Icons.Default.SkipPrevious, label = "上一章", onClick = onPreviousChapter, enabled = canGoPrevious)
-                ControlButton(icon = Icons.Default.List, label = "目录", onClick = onShowChapterList)
-                if (!isMangaMode) {
-                    if (!showTtsControls) {
-                        FloatingActionButton(onClick = onPlayPause, containerColor = MaterialTheme.customColors.gradientStart, elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)) {
-                            Icon(Icons.Default.VolumeUp, "听书", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp))
-                        }
-                    }
-                    ControlButton(icon = Icons.Default.FormatSize, label = "字体", onClick = onFontSettings)
-                } else {
-                    ControlButton(icon = Icons.Default.Settings, label = "选项", onClick = onFontSettings)
-                }
-                ControlButton(icon = Icons.Default.SkipNext, label = "下一章", onClick = onNextChapter, enabled = canGoNext)
+                ControlButton(Icons.Default.SkipPrevious, "上一章", onPrev, canPrev)
+                ControlButton(Icons.Default.List, "目录", onList)
+                if (!isManga) {
+                    if (!showTts) FloatingActionButton(onClick = onPlay, containerColor = MaterialTheme.customColors.gradientStart, modifier = Modifier.size(56.dp)) { Icon(Icons.Default.VolumeUp, null, tint = Color.White) }
+                    ControlButton(Icons.Default.FormatSize, "字体", onFont)
+                } else ControlButton(Icons.Default.Settings, "选项", onFont)
+                ControlButton(Icons.Default.SkipNext, "下一章", onNext, canNext)
             }
         }
     }
@@ -729,87 +473,54 @@ private fun BottomControlBar(isPlaying: Boolean, isMangaMode: Boolean, onPreviou
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReaderOptionsDialog(fontSize: Float, onFontSizeChange: (Float) -> Unit, horizontalPadding: Float, onHorizontalPaddingChange: (Float) -> Unit, lockPageOnTTS: Boolean, onLockPageOnTTSChange: (Boolean) -> Unit, pageTurningMode: com.readapp.data.PageTurningMode, onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit, darkModeConfig: DarkModeConfig, onDarkModeChange: (DarkModeConfig) -> Unit, forceMangaProxy: Boolean, onForceMangaProxyChange: (Boolean) -> Unit, readingMode: ReadingMode, onReadingModeChange: (ReadingMode) -> Unit, isMangaMode: Boolean, onDismiss: () -> Unit) {
+private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("阅读选项") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (!isMangaMode) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("阅读模式", style = MaterialTheme.typography.labelMedium)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ReadingMode.values().forEach { mode ->
-                            FilterChip(selected = readingMode == mode, onClick = { onReadingModeChange(mode) }, label = { Text(if (mode == ReadingMode.Vertical) "上下滚动" else "左右翻页") }, modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
+            if (!isManga) {
+                Column { Text("阅读模式", style = MaterialTheme.typography.labelMedium); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ReadingMode.values().forEach { m -> FilterChip(selected = mode == m, onClick = { onMode(m) }, label = { Text(if (m == ReadingMode.Vertical) "上下滚动" else "左右翻页") }, modifier = Modifier.weight(1f)) } } }
                 Divider()
             }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("夜间模式", style = MaterialTheme.typography.labelMedium)
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    DarkModeConfig.values().forEach { config ->
-                        FilterChip(selected = darkModeConfig == config, onClick = { onDarkModeChange(config) }, label = { Text(when(config){ DarkModeConfig.ON->"开启"; DarkModeConfig.OFF->"关闭"; DarkModeConfig.AUTO->"系统"}) }, modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-            if (isMangaMode) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onForceMangaProxyChange(!forceMangaProxy) }) {
-                    Column(modifier = Modifier.weight(1f)) { Text("强制服务器代理", style = MaterialTheme.typography.bodyLarge); Text("如果漫画图片无法加载，请开启此项", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline) }
-                    Switch(checked = forceMangaProxy, onCheckedChange = onForceMangaProxyChange)
-                }
-            }
-            if (!isMangaMode) {
+            Column { Text("夜间模式", style = MaterialTheme.typography.labelMedium); Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { DarkModeConfig.values().forEach { c -> FilterChip(selected = darkConfig == c, onClick = { onDark(c) }, label = { Text(when(c){ DarkModeConfig.ON->"开启"; DarkModeConfig.OFF->"关闭"; DarkModeConfig.AUTO->"系统"}) }, modifier = Modifier.weight(1f)) } } }
+            if (isManga) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onForceProxy(!forceProxy) }) { Column(modifier = Modifier.weight(1f)) { Text("强制服务器代理", style = MaterialTheme.typography.bodyLarge); Text("如果漫画加载失败请开启", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline) }; Switch(checked = forceProxy, onCheckedChange = onForceProxy) }
+            if (!isManga) {
                 Divider()
-                Column { Text("字体大小: ${fontSize.toInt()}sp", style = MaterialTheme.typography.labelMedium); Slider(value = fontSize, onValueChange = onFontSizeChange, valueRange = 12f..30f) }
-                Column { Text("页面边距: ${horizontalPadding.toInt()}dp", style = MaterialTheme.typography.labelMedium); Slider(value = horizontalPadding, onValueChange = onHorizontalPaddingChange, valueRange = 0f..50f) }
+                Column { Text("字体大小: ${fontSize.toInt()}sp", style = MaterialTheme.typography.labelMedium); Slider(value = fontSize, onValueChange = onFontSize, valueRange = 12f..30f) }
+                Column { Text("页面边距: ${hPadding.toInt()}dp", style = MaterialTheme.typography.labelMedium); Slider(value = hPadding, onValueChange = onHPadding, valueRange = 0f..50f) }
                 Divider()
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onLockPageOnTTSChange(!lockPageOnTTS) }) { Checkbox(checked = lockPageOnTTS, onCheckedChange = onLockPageOnTTSChange); Text("播放时锁定翻页", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium) }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onLockTTS(!lockTTS) }) { Checkbox(checked = lockTTS, onCheckedChange = onLockTTS); Text("播放时锁定翻页", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium) }
             }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } })
 }
 
 @Composable
-private fun FontSizeDialog(value: Float, onValueChange: (Float) -> Unit, horizontalPadding: Float, onHorizontalPaddingChange: (Float) -> Unit, lockPageOnTTS: Boolean, onLockPageOnTTSChange: (Boolean) -> Unit, pageTurningMode: com.readapp.data.PageTurningMode, onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit, darkModeConfig: DarkModeConfig, onDarkModeChange: (DarkModeConfig) -> Unit, forceMangaProxy: Boolean, onForceMangaProxyChange: (Boolean) -> Unit, readingMode: ReadingMode, onReadingModeChange: (ReadingMode) -> Unit, isMangaMode: Boolean, onDismiss: () -> Unit) {
-    ReaderOptionsDialog(fontSize = value, onFontSizeChange = onValueChange, horizontalPadding = horizontalPadding, onHorizontalPaddingChange = onHorizontalPaddingChange, lockPageOnTTS = lockPageOnTTS, onLockPageOnTTSChange = onLockPageOnTTSChange, pageTurningMode = pageTurningMode, onPageTurningModeChange = onPageTurningModeChange, darkModeConfig = darkModeConfig, onDarkModeChange = onDarkModeChange, forceMangaProxy = forceMangaProxy, onForceMangaProxyChange = onForceMangaProxyChange, readingMode = readingMode, onReadingModeChange = onReadingModeChange, isMangaMode = isMangaMode, onDismiss = onDismiss)
+private fun FontSizeDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
+    ReaderOptionsDialog(fontSize, onFontSize, hPadding, onHPadding, lockTTS, onLockTTS, turnMode, onTurnMode, darkConfig, onDark, forceProxy, onForceProxy, mode, onMode, isManga, onDismiss)
 }
 
 @Composable
 private fun ControlButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        IconButton(onClick = onClick, enabled = enabled) { Icon(imageVector = icon, contentDescription = label, tint = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.customColors.textSecondary.copy(alpha = 0.3f), modifier = Modifier.size(24.dp)) }
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = if (enabled) MaterialTheme.customColors.textSecondary else MaterialTheme.customColors.textSecondary.copy(alpha = 0.3f))
-    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) { IconButton(onClick = onClick, enabled = enabled) { Icon(icon, null, tint = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), modifier = Modifier.size(24.dp)) }; Text(label, style = MaterialTheme.typography.labelSmall, color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChapterListDialog(chapters: List<Chapter>, currentChapterIndex: Int, preloadedChapters: Set<Int>, bookUrl: String, onChapterClick: (Int) -> Unit, onDismiss: () -> Unit) {
+private fun ChapterListDialog(chapters: List<Chapter>, current: Int, preloaded: Set<Int>, url: String, onChapter: (Int) -> Unit, onDismiss: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val localCache = remember { LocalCacheManager(context) }
-    var currentGroupIndex by remember(chapters.size) { mutableStateOf(currentChapterIndex / 50) }
+    var groupIdx by remember(chapters.size) { mutableStateOf(current / 50) }
     val groupCount = (chapters.size + 49) / 50
     AlertDialog(onDismissRequest = onDismiss, title = { Text("章节列表 (${chapters.size})", style = MaterialTheme.typography.titleLarge) }, text = {
         Column {
-            if (groupCount > 1) {
-                androidx.compose.foundation.lazy.LazyRow(modifier = Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(groupCount) { 
-                        val start = it * 50 + 1; val end = minOf((it + 1) * 50, chapters.size)
-                        FilterChip(selected = currentGroupIndex == it, onClick = { currentGroupIndex = it }, label = { Text("$start-$end") })
+            if (groupCount > 1) { androidx.compose.foundation.lazy.LazyRow(modifier = Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(groupCount) { i -> val s = i * 50 + 1; val e = minOf((i + 1) * 50, chapters.size); FilterChip(selected = groupIdx == i, onClick = { groupIdx = i }, label = { Text("$s-$e") }) } } }
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, false)) {
+                val start = groupIdx * 50; val end = minOf((groupIdx + 1) * 50, chapters.size)
+                itemsIndexed(chapters.subList(start, end)) { relIdx, chapter ->
+                    val index = start + relIdx; val isCurrent = index == current
+                    Surface(onClick = { onChapter(index) }, color = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else if (preloaded.contains(index)) MaterialTheme.customColors.success.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) { Text(chapter.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface); if (isCurrent) Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary) { Text("当前", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = Color.White) } }
                     }
-                }
-            }
-            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
-                val start = currentGroupIndex * 50; val end = minOf((currentGroupIndex + 1) * 50, chapters.size)
-                itemsIndexed(chapters.subList(start, end)) { relativeIndex, chapter ->
-                    val index = start + relativeIndex
-                    val isCurrent = index == currentChapterIndex
-                    Surface(onClick = { onChapterClick(index) }, color = if (isCurrent) MaterialTheme.customColors.gradientStart.copy(alpha = 0.25f) else if (preloadedChapters.contains(index)) MaterialTheme.customColors.success.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = chapter.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = if (isCurrent) MaterialTheme.customColors.gradientStart else MaterialTheme.colorScheme.onSurface)
-                            if (isCurrent) Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.customColors.gradientStart) { Text("当前", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary) }
-                        }
-                    }
-                    if (index < chapters.size - 1) Divider(color = MaterialTheme.customColors.border)
+                    if (index < chapters.size - 1) Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
             }
         }
