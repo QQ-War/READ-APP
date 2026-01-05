@@ -44,8 +44,11 @@ struct MangaNativeReader: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIScrollView, context: Context) {
-        if context.coordinator.lastChapterUrl != chapterUrl {
+        // 关键修复：结合 URL 和内容长度/哈希来判断是否需要重新加载
+        let currentHash = sentences.joined().hashValue
+        if context.coordinator.lastChapterUrl != chapterUrl || context.coordinator.lastContentHash != currentHash {
             context.coordinator.lastChapterUrl = chapterUrl
+            context.coordinator.lastContentHash = currentHash
             context.coordinator.loadImages(from: sentences, into: context.coordinator.stackView!)
         }
         
@@ -66,6 +69,7 @@ struct MangaNativeReader: UIViewRepresentable {
         var stackView: UIStackView?
         var scrollView: UIScrollView?
         var lastChapterUrl: String?
+        var lastContentHash: Int? // 新增：内容哈希追踪
         
         init(_ parent: MangaNativeReader) {
             self.parent = parent

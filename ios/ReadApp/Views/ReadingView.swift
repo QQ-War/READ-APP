@@ -203,6 +203,9 @@ struct ReadingView: View {
     @State private var isExplicitlySwitchingChapter = false
     @State private var currentChapterIsManga = false
     @State private var lastEffectiveMode: ReadingMode? = nil
+    
+    // 旋转与布局增强
+    @State private var isForceLandscape = false
 
     private struct PaginationKey: Hashable {
         let width: Int
@@ -310,6 +313,14 @@ struct ReadingView: View {
         }
         .onAppear {
             lastEffectiveMode = effectiveReadingMode
+        }
+        .onChange(of: isForceLandscape) { newValue in
+            // 强制旋转逻辑
+            updateAppOrientation(landscape: newValue)
+        }
+        .onDisappear {
+            // 退出阅读器时恢复竖屏
+            if isForceLandscape { updateAppOrientation(landscape: false) }
         }
         .sheet(isPresented: $showChapterList) { ChapterListView(chapters: chapters, currentIndex: currentChapterIndex, bookUrl: book.bookUrl ?? "") { index in
             currentChapterIndex = index
@@ -603,7 +614,8 @@ struct ReadingView: View {
             NormalControlBar(
                 currentChapterIndex: currentChapterIndex,
                 chaptersCount: chapters.count,
-                isMangaMode: currentChapterIsManga, // 传入模式
+                isMangaMode: currentChapterIsManga,
+                isForceLandscape: $isForceLandscape, // 传入旋转状态
                 onPreviousChapter: { previousChapter() },
                 onNextChapter: { nextChapter() },
                 onShowChapterList: { showChapterList = true },
@@ -964,6 +976,26 @@ struct ReadingView: View {
     private func pageIndexForSentence(_ index: Int) -> Int? {
         guard let charIndex = globalCharIndexForSentence(index) else { return nil }
         return currentCache.pages.firstIndex { NSLocationInRange(charIndex, $0.globalRange) }
+    }
+
+    private func updateAppOrientation(landscape: Bool) {
+        let mask: UIInterfaceOrientationMask = landscape ? .landscapeRight : .portrait
+        
+        // 1. 设置支持的旋转方向（通过通知或通知中心触发）
+        // 这里依赖于项目中 AppDelegate 或 RootViewController 已经处理了通知
+        
+        // 2. 现代请求几何更新 (iOS 16+)
+        if #available(iOS 16.0, *) {
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
+                    print("几何更新失败: \(error.localizedDescription)")
+                }
+            }
+        } else {
+            // 传统方案 (iOS 15及以下)
+            UIDevice.current.setValue(mask.rawValue, forKey: "orientation")
+            UIViewController.attemptRotationToDeviceOrientation()
+        }
     }
 
     private func syncPageForSentenceIndex(_ index: Int) {
@@ -2702,6 +2734,7 @@ private struct NormalControlBar: View {
     let currentChapterIndex: Int
     let chaptersCount: Int
     let isMangaMode: Bool
+    @Binding var isForceLandscape: Bool // 新增
     let onPreviousChapter: () -> Void
     let onNextChapter: () -> Void
     let onShowChapterList: () -> Void
@@ -2709,46 +2742,64 @@ private struct NormalControlBar: View {
     let onShowFontSettings: () -> Void
     
     var body: some View {
-        HStack(spacing: 30) {
-            Button(action: onPreviousChapter) {
-                VStack(spacing: 4) {
-                    Image(systemName: "chevron.left").font(.title2)
-                    Text("上一章").font(.caption2)
-                }
-            }.disabled(currentChapterIndex <= 0)
-            
-            Button(action: onShowChapterList) {
-                VStack(spacing: 4) {
-                    Image(systemName: "list.bullet").font(.title2)
-                    Text("目录").font(.caption2)
-                }
-            }
-            
-            if !isMangaMode {
-                Spacer()
-                Button(action: onToggleTTS) {
+        HStack(spacing: 0) {
+            // 左侧：翻页与目录
+            HStack(spacing: 20) {
+                Button(action: onPreviousChapter) {
                     VStack(spacing: 4) {
-                        Image(systemName: "speaker.wave.2.circle.fill").font(.system(size: 32)).foregroundColor(.blue)
-                        Text("听书").font(.caption2).foregroundColor(.blue)
+                        Image(systemName: "chevron.left").font(.title2)
+                        Text("上一章").font(.caption2)
+                    }
+                }.disabled(currentChapterIndex <= 0)
+                
+                Button(action: onShowChapterList) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "list.bullet").font(.title2)
+                        Text("目录").font(.caption2)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             
-            Spacer()
-            
-            Button(action: onShowFontSettings) {
-                VStack(spacing: 4) {
-                    Image(systemName: isMangaMode ? "gearshape" : "slider.horizontal.3").font(.title2)
-                    Text("选项").font(.caption2)
+            // 中间：功能扩展区（填充空白）
+            HStack(spacing: 25) {
+                if isMangaMode {
+                    // 漫画模式特有按钮
+                    Button(action: { withAnimation { isForceLandscape.toggle() } }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: isForceLandscape ? "iphone.smartrotate.forward" : "iphone.landscape").font(.title2)
+                            Text(isForceLandscape ? "竖屏" : "横屏").font(.caption2)
+                        }
+                    }
+                    .foregroundColor(isForceLandscape ? .blue : .primary)
+                } else {
+                    Button(action: onToggleTTS) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "speaker.wave.2.circle.fill").font(.system(size: 32)).foregroundColor(.blue)
+                            Text("听书").font(.caption2).foregroundColor(.blue)
+                        }
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .center)
             
-            Button(action: onNextChapter) {
-                VStack(spacing: 4) {
-                    Image(systemName: "chevron.right").font(.title2)
-                    Text("下一章").font(.caption2)
+            // 右侧：选项与下一章
+            HStack(spacing: 20) {
+                Button(action: onShowFontSettings) {
+                    VStack(spacing: 4) {
+                        Image(systemName: isMangaMode ? "gearshape" : "slider.horizontal.3").font(.title2)
+                        Text("选项").font(.caption2)
+                    }
                 }
-            }.disabled(currentChapterIndex >= chaptersCount - 1)
+                
+                Button(action: onNextChapter) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "chevron.right").font(.title2)
+                        Text("下一章").font(.caption2)
+                    }
+                }.disabled(currentChapterIndex >= chaptersCount - 1)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
         .background(Color(UIColor.systemBackground))
