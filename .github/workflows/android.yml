@@ -41,12 +41,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Make gradlew executable
-        # 终极方案：递归搜索所有 gradlew 并授权，无视当前工作目录
-        run: find . -name gradlew -exec chmod +x {} +
-
       - name: Build release APK
-        run: ./gradlew assembleUnsigned assembleDebug --build-cache --parallel --no-daemon
+        run: gradle assembleUnsigned assembleDebug --build-cache --parallel --no-daemon
         working-directory: android
 
       - name: Prepare APK artifacts
