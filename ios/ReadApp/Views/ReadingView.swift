@@ -1999,6 +1999,156 @@ struct ReadingView: View {
             } else if let current = snapshot, newSnapshot.pages.count > current.pages.count {
                 if isAnimating { pendingSnapshot = newSnapshot } else { snapshot = newSnapshot }
             }
+        }
+
+        private func shouldReplaceSnapshot(with new: PageSnapshot) -> Bool {
+            guard let current = snapshot else { return true }
+            return current.renderStore !== new.renderStore || current.chapterUrl != new.chapterUrl
+        }
+
+        // MARK: - UIPageViewControllerDataSource
+        func pageViewController(_ pvc: UIPageViewController, viewControllerBefore vc: UIViewController) -> UIViewController? {
+            guard let currentVC = vc as? ReadContentViewController, !isAnimating else { return nil }
+            let targetIdx = currentVC.pageIndex - 1
+            if targetIdx >= 0 { return parent.makeViewController(snapshot ?? parent.snapshot, targetIdx, currentVC.chapterOffset) }
+            if currentVC.chapterOffset == 0, let prev = parent.prevSnapshot, !prev.pages.isEmpty { return parent.makeViewController(prev, max(0, prev.pages.count - 1), -1) }
+            return nil
+        }
+
+        func pageViewController(_ pvc: UIPageViewController, viewControllerAfter vc: UIViewController) -> UIViewController? {
+            guard let currentVC = vc as? ReadContentViewController, !isAnimating else { return nil }
+            let targetIdx = currentVC.pageIndex + 1
+            let active = snapshot ?? parent.snapshot
+            if targetIdx < active.pages.count { return parent.makeViewController(active, targetIdx, currentVC.chapterOffset) }
+            if currentVC.chapterOffset == 0, let next = parent.nextSnapshot, !next.pages.isEmpty { return parent.makeViewController(next, 0, 1) }
+            return nil
+        }
+
+        // MARK: - UIPageViewControllerDelegate
+        func pageViewController(_ pvc: UIPageViewController, willTransitionTo pendingViewControllers: [UIViewController]) {
+            isAnimating = true; parent.onTransitioningChanged(true)
+        }
+
+        func pageViewController(_ pvc: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
+            isAnimating = false; parent.onTransitioningChanged(false)
+            if completed, let currentVC = pvc.viewControllers?.first as? ReadContentViewController {
+                if currentVC.chapterOffset != 0 {
+                    parent.onChapterChange(currentVC.chapterOffset)
+                } else {
+                    parent.currentPageIndex = currentVC.pageIndex
+                }
+                if let pending = pendingSnapshot { snapshot = pending; pendingSnapshot = nil }
+            }
+        }
+    }
+}
+
+// MARK: - Sub-Views
+private struct MangaCell: View {
+    let sentence: String; let chapterUrl: String?
+    var body: some View {
+        Group {
+            if sentence.hasPrefix("__IMG__") {
+                MangaImage(url: URL(string: String(sentence.dropFirst(7)))!, refererOverride: chapterUrl)
+            } else {
+                Text(sentence).font(.body).padding()
+            }
+        }.frame(maxWidth: .infinity)
+    }
+}
+
+private struct ControlButton: View {
+    let icon: String; let label: String; let color: Color; let action: () -> Void; var isEnabled: Bool = true
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) { Image(systemName: icon).font(.system(size: 22)); Text(label).font(.system(size: 10, weight: .medium)) }.frame(maxWidth: .infinity).contentShape(Rectangle()).foregroundColor(isEnabled ? color : .gray.opacity(0.3))
+        }.disabled(!isEnabled)
+    }
+}
+
+// MARK: - View Controllers & Layout Managers
+final class ReadContentViewController: UIViewController {
+    let pageIndex: Int; let renderStore: TextKit2RenderStore?; let sentences: [String]?; let chapterUrl: String?; let chapterOffset: Int; let onAddReplaceRule: ((String) -> Void)?; let onTapLocation: ((ReaderTapLocation) -> Void)?
+    var tk2View: ReadContent2View?
+    init(pageIndex: Int, renderStore: TextKit2RenderStore?, sentences: [String]?, chapterUrl: String?, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
+        self.pageIndex = pageIndex; self.renderStore = renderStore; self.sentences = sentences; self.chapterUrl = chapterUrl; self.chapterOffset = chapterOffset; self.onAddReplaceRule = onAddReplaceRule; self.onTapLocation = onTapLocation; super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func viewDidLoad() { super.viewDidLoad()
+        if let store = renderStore {
+            let v = ReadContent2View(frame: view.bounds); v.renderStore = store; v.onTapLocation = onTapLocation; view.addSubview(v); self.tk2View = v
+        } else if let s = sentences, pageIndex < s.count {
+            let host = UIHostingController(rootView: MangaCell(sentence: s[pageIndex], chapterUrl: chapterUrl)); host.view.frame = view.bounds; host.view.backgroundColor = .clear; addChild(host); view.addSubview(host.view); host.didMove(toParent: self)
+        }
+    }
+    func updateHighlights(index: Int?, secondary: Set<Int>, isPlaying: Bool, starts: [Int], prefixLen: Int) { tk2View?.highlightIndex = index; tk2View?.secondaryIndices = secondary; tk2View?.isPlayingHighlight = isPlaying; tk2View?.paragraphStarts = starts; tk2View?.chapterPrefixLen = prefixLen; tk2View?.setNeedsDisplay() }
+    func configureTK2Page(info: TK2PageInfo) { tk2View?.pageInfo = info; tk2View?.setNeedsDisplay() }
+}
+
+class ReadContent2View: UIView {
+    var renderStore: TextKit2RenderStore?; var pageInfo: TK2PageInfo?; var onTapLocation: ((ReaderTapLocation) -> Void)?; var highlightIndex: Int?; var secondaryIndices: Set<Int> = []; var isPlayingHighlight: Bool = false; var paragraphStarts: [Int] = []; var chapterPrefixLen: Int = 0
+    override init(frame: CGRect) { super.init(frame: frame); self.backgroundColor = .clear; let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:))); self.addGestureRecognizer(tap) }
+    required init?(coder: NSCoder) { fatalError() }
+    override func draw(_ rect: CGRect) {
+        guard let store = renderStore, let info = pageInfo else { return }
+        let context = UIGraphicsGetCurrentContext(); context?.saveGState(); context?.translateBy(x: 0, y: -(info.yOffset - info.contentInset))
+        if isPlayingHighlight {
+            let highlightIndices = ([highlightIndex].compactMap { $0 }) + Array(secondaryIndices)
+            for idx in highlightIndices {
+                guard idx >= 0 && idx < paragraphStarts.count else { continue }
+                let start = paragraphStarts[idx] + chapterPrefixLen; let end = (idx + 1 < paragraphStarts.count) ? (paragraphStarts[idx + 1] + chapterPrefixLen) : store.attributedString.length
+                let intersection = NSIntersectionRange(NSRange(location: start, length: end - start), info.range)
+                if intersection.length <= 0 { continue }
+                context?.setFillColor(UIColor.systemBlue.withAlphaComponent(0.2).cgColor)
+                store.layoutManager.enumerateTextLayoutFragments(from: store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: intersection.location)) { frag in
+                    let fFrame = frag.layoutFragmentFrame; for line in frag.textLineFragments { let lFrame = line.typographicBounds.offsetBy(dx: fFrame.origin.x, dy: fFrame.origin.y); context?.fill(CGRect(x: 0, y: lFrame.minY, width: bounds.width, height: lFrame.height)) }; return true
+                }
+            }
+        }
+        store.layoutManager.enumerateTextLayoutFragments(from: store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location)) { frag in let frame = frag.layoutFragmentFrame; if frame.minY >= info.yOffset + info.pageHeight { return false }; if frame.maxY > info.yOffset { frag.draw(at: frame.origin, in: context!) }; return true }
+        context?.restoreGState()
+    }
+    @objc private func handleTap(_ gesture: UITapGestureRecognizer) { let x = gesture.location(in: self).x; let w = bounds.width; if x < w / 3 { onTapLocation?(.left) } else if x > w * 2 / 3 { onTapLocation?(.right) } else { onTapLocation?(.middle) } }
+}
+
+// MARK: - TextKit 2 Backend
+final class TextKit2RenderStore {
+    let contentStorage = NSTextContentStorage(); let layoutManager = NSTextLayoutManager(); let textContainer = NSTextContainer(); var attributedString: NSAttributedString; var layoutWidth: CGFloat
+    init(attributedString: NSAttributedString, layoutWidth: CGFloat) { self.attributedString = attributedString; self.layoutWidth = layoutWidth; contentStorage.textStorage = NSTextStorage(attributedString: attributedString); contentStorage.addTextLayoutManager(layoutManager); textContainer.size = CGSize(width: layoutWidth, height: 0); textContainer.lineFragmentPadding = 0; layoutManager.textContainer = textContainer }
+    func update(attributedString: NSAttributedString, layoutWidth: CGFloat) { self.attributedString = attributedString; self.contentStorage.textStorage = NSTextStorage(attributedString: attributedString); self.layoutWidth = layoutWidth; self.textContainer.size = CGSize(width: layoutWidth, height: 0); self.layoutManager.textContainer = nil; self.layoutManager.textContainer = self.textContainer }
+}
+
+struct TextKit2Paginator {
+    static func paginate(renderStore: TextKit2RenderStore, pageSize: CGSize, paragraphStarts: [Int], prefixLen: Int, contentInset: CGFloat, maxPages: Int = Int.max, startOffset: Int = 0) -> PaginationResult {
+        let lm = renderStore.layoutManager; let cs = renderStore.contentStorage; let doc = cs.documentRange; if doc.isEmpty || pageSize.width <= 1 { return PaginationResult(pages: [], pageInfos: [], reachedEnd: true) }
+        lm.ensureLayout(for: doc); var pages: [PaginatedPage] = []; var infos: [TK2PageInfo] = []; let contentH = max(1, pageSize.height - contentInset * 2); var curLoc: NSTextLocation = startOffset > 0 ? cs.location(doc.location, offsetBy: startOffset)! : doc.location
+        while pages.count < maxPages {
+            let remain = lm.offset(from: curLoc, to: doc.endLocation); if remain <= 0 { break }
+            let startY = findLineTopY(at: curLoc, lm: lm, cs: cs); let rect = CGRect(x: 0, y: startY, width: pageSize.width, height: contentH); var fragMaxY: CGFloat?; var endLoc = curLoc
+            lm.enumerateTextLayoutFragments(from: curLoc, options: [.ensuresLayout]) { frag in
+                let frame = frag.layoutFragmentFrame; if frame.minY >= rect.maxY { return false }; if frame.maxY <= startY { return true }
+                if fragMaxY == nil { fragMaxY = max(startY, frame.minY) }
+                if frame.maxY <= rect.maxY { fragMaxY = frame.maxY; endLoc = frag.rangeInElement.endLocation; return true }
+                else { for line in frag.textLineFragments { let lFrame = line.typographicBounds.offsetBy(dx: frame.origin.x, dy: frame.origin.y); if lFrame.maxY <= rect.maxY { endLoc = cs.location(frag.rangeInElement.location, offsetBy: line.characterRange.upperBound)!; fragMaxY = lFrame.maxY } else { break } }; return false }
+            }
+            let sOff = cs.offset(from: doc.location, to: curLoc); var eOff = cs.offset(from: doc.location, to: endLoc)
+            if eOff <= sOff { if let f = lm.location(curLoc, offsetBy: 1) { endLoc = f; eOff = cs.offset(from: doc.location, to: endLoc) } else { break } }
+            let range = NSRange(location: sOff, length: eOff - sOff); let actH = (fragMaxY ?? (startY + contentH)) - startY; let sIdx = paragraphStarts.lastIndex(where: { $0 <= max(0, range.location - prefixLen) }) ?? 0
+            pages.append(PaginatedPage(globalRange: range, startSentenceIndex: sIdx)); infos.append(TK2PageInfo(range: range, yOffset: startY, pageHeight: contentH, actualContentHeight: actH, startSentenceIndex: sIdx, contentInset: contentInset)); curLoc = endLoc
+        }
+        return PaginationResult(pages: pages, pageInfos: infos, reachedEnd: lm.offset(from: curLoc, to: doc.endLocation) == 0)
+    }
+    private static func findLineTopY(at loc: NSTextLocation, lm: NSTextLayoutManager, cs: NSTextContentStorage) -> CGFloat {
+        guard let frag = lm.textLayoutFragment(for: loc) else { return 0 }
+        let off = cs.offset(from: frag.rangeInElement.location, to: loc); if off == 0 { return (frag.textLineFragments.first?.typographicBounds.minY ?? 0) + frag.layoutFragmentFrame.minY }
+        for line in frag.textLineFragments { if off < line.characterRange.upperBound { return line.typographicBounds.minY + frag.layoutFragmentFrame.minY } }
+        return frag.layoutFragmentFrame.maxY
+    }
+}
+
+struct PaginationResult { let pages: [PaginatedPage]; let pageInfos: [TK2PageInfo]; let reachedEnd: Bool }
+
+            }
             let activeSnapshot = snapshot ?? newSnapshot
             
             guard let pvc = pageViewController, let activeStore = activeSnapshot.renderStore else { return }
@@ -2732,79 +2882,72 @@ private struct IconButton: View {
     }
 }
 
-private struct NormalControlBar: View {
+struct NormalControlBar: View {
     let currentChapterIndex: Int
     let chaptersCount: Int
     let isMangaMode: Bool
-    @Binding var isForceLandscape: Bool // 新增
+    @Binding var isForceLandscape: Bool
     let onPreviousChapter: () -> Void
     let onNextChapter: () -> Void
     let onShowChapterList: () -> Void
     let onToggleTTS: () -> Void
     let onShowFontSettings: () -> Void
-    
+
     var body: some View {
-        HStack(spacing: 0) {
-            // 左侧：翻页与目录
-            HStack(spacing: 20) {
+        VStack(spacing: 16) {
+            // 第一层：大按钮导航
+            HStack(spacing: 12) {
                 Button(action: onPreviousChapter) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "chevron.left").font(.title2)
-                        Text("上一章").font(.caption2)
+                    HStack {
+                        Image(systemName: "chevron.left.2")
+                        Text("上一章")
                     }
-                }.disabled(currentChapterIndex <= 0)
-                
-                Button(action: onShowChapterList) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "list.bullet").font(.title2)
-                        Text("目录").font(.caption2)
-                    }
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(UIColor.secondarySystemFill))
+                    .cornerRadius(12)
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            
-            // 中间：功能扩展区（填充空白）
-            HStack(spacing: 25) {
-                if isMangaMode {
-                    // 漫画模式特有按钮
-                    Button(action: { withAnimation { isForceLandscape.toggle() } }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: isForceLandscape ? "iphone.smartrotate.forward" : "iphone.landscape").font(.title2)
-                            Text(isForceLandscape ? "竖屏" : "横屏").font(.caption2)
-                        }
-                    }
-                    .foregroundColor(isForceLandscape ? .blue : .primary)
-                } else {
-                    Button(action: onToggleTTS) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "speaker.wave.2.circle.fill").font(.system(size: 32)).foregroundColor(.blue)
-                            Text("听书").font(.caption2).foregroundColor(.blue)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            
-            // 右侧：选项与下一章
-            HStack(spacing: 20) {
-                Button(action: onShowFontSettings) {
-                    VStack(spacing: 4) {
-                        Image(systemName: isMangaMode ? "gearshape" : "slider.horizontal.3").font(.title2)
-                        Text("选项").font(.caption2)
-                    }
-                }
-                
+                .disabled(currentChapterIndex <= 0)
+                .opacity(currentChapterIndex <= 0 ? 0.4 : 1.0)
+
                 Button(action: onNextChapter) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "chevron.right").font(.title2)
-                        Text("下一章").font(.caption2)
+                    HStack {
+                        Text("下一章")
+                        Image(systemName: "chevron.right.2")
                     }
-                }.disabled(currentChapterIndex >= chaptersCount - 1)
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(UIColor.secondarySystemFill))
+                    .cornerRadius(12)
+                }
+                .disabled(currentChapterIndex >= chaptersCount - 1)
+                .opacity(currentChapterIndex >= chaptersCount - 1 ? 0.4 : 1.0)
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+
+            // 第二层：功能图标
+            HStack(spacing: 0) {
+                ControlButton(icon: "list.bullet", label: "目录", color: .primary, action: onShowChapterList)
+                
+                if isMangaMode {
+                    ControlButton(
+                        icon: isForceLandscape ? "screen.lock.portrait" : "screen.rotate",
+                        label: isForceLandscape ? "切回竖屏" : "强制横屏",
+                        color: isForceLandscape ? .accentColor : .primary,
+                        action: { withAnimation { isForceLandscape.toggle() } }
+                    )
+                } else {
+                    ControlButton(icon: "waveform.circle", label: "听书", color: .primary, action: onToggleTTS)
+                }
+
+                ControlButton(icon: "gearshape", label: "选项", color: .primary, action: onShowFontSettings)
+            }
         }
-        .padding(.horizontal, 20).padding(.vertical, 12)
-        .background(Color(UIColor.systemBackground))
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(Color(UIColor.systemBackground).opacity(0.98))
         .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
     }
 }
