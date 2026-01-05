@@ -8,102 +8,102 @@ enum ReaderTapLocation {
 
 struct ReadingView: View {
     let book: Book
-    private let logger = LogManager.shared
+    let logger = LogManager.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var apiService: APIService
-    @StateObject private var ttsManager = TTSManager.shared
-    @StateObject private var preferences = UserPreferences.shared
-    @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
+    @StateObject var ttsManager = TTSManager.shared
+    @StateObject var preferences = UserPreferences.shared
+    @StateObject var replaceRuleViewModel = ReplaceRuleViewModel()
 
     // Chapter and Content State
-    @State private var chapters: [BookChapter] = []
-    @State private var currentChapterIndex: Int
-    @State private var rawContent = ""
-    @State private var currentContent = ""
-    @State private var contentSentences: [String] = []
+    @State var chapters: [BookChapter] = []
+    @State var currentChapterIndex: Int
+    @State var rawContent = ""
+    @State var currentContent = ""
+    @State var contentSentences: [String] = []
     
     // UI State
-    @State private var isLoading = false
-    @State private var showChapterList = false
-    @State private var errorMessage: String?
-    @State private var showUIControls = false
-    @State private var showFontSettings = false
+    @State var isLoading = false
+    @State var showChapterList = false
+    @State var errorMessage: String?
+    @State var showUIControls = false
+    @State var showFontSettings = false
     
     // Reading Progress & Position
-    @State private var pendingResumePos: Double?
-    @State private var pendingResumeCharIndex: Int?
-    @State private var pendingResumeLocalBodyIndex: Int?
-    @State private var pendingResumeLocalChapterIndex: Int?
-    @State private var pendingResumeLocalPageIndex: Int?
-    @State private var didApplyResumePos = false
-    @State private var initialServerChapterIndex: Int?
-    @State private var didEnterReadingSession = false
-    @State private var shouldApplyResumeOnce = false
-    @State private var shouldSyncPageAfterPagination = false
+    @State var pendingResumePos: Double?
+    @State var pendingResumeCharIndex: Int?
+    @State var pendingResumeLocalBodyIndex: Int?
+    @State var pendingResumeLocalChapterIndex: Int?
+    @State var pendingResumeLocalPageIndex: Int?
+    @State var didApplyResumePos = false
+    @State var initialServerChapterIndex: Int?
+    @State var didEnterReadingSession = false
+    @State var shouldApplyResumeOnce = false
+    @State var shouldSyncPageAfterPagination = false
 
     // Vertical (Scrolling) Reader State
-    @State private var scrollProxy: ScrollViewProxy?
-    @State private var currentVisibleSentenceIndex: Int?
-    @State private var pendingScrollToSentenceIndex: Int?
+    @State var scrollProxy: ScrollViewProxy?
+    @State var currentVisibleSentenceIndex: Int?
+    @State var pendingScrollToSentenceIndex: Int?
 
     // Horizontal (Paging) Reader State
-    @State private var currentPageIndex: Int = 0
-    @State private var currentCache: ChapterCache = .empty
-    @State private var prevCache: ChapterCache = .empty
-    @State private var nextCache: ChapterCache = .empty
-    @State private var pendingJumpToLastPage = false
-    @State private var pendingJumpToFirstPage = false
-    @State private var pageSize: CGSize = .zero
-    @State private var isPageTransitioning = false
-    @State private var pendingBufferPageIndex: Int?
-    @State private var lastHandledPageIndex: Int?
-    @StateObject private var contentControllerCache = ReadContentViewControllerCache()
-    @State private var hasInitialPagination = false
+    @State var currentPageIndex: Int = 0
+    @State var currentCache: ChapterCache = .empty
+    @State var prevCache: ChapterCache = .empty
+    @State var nextCache: ChapterCache = .empty
+    @State var pendingJumpToLastPage = false
+    @State var pendingJumpToFirstPage = false
+    @State var pageSize: CGSize = .zero
+    @State var isPageTransitioning = false
+    @State var pendingBufferPageIndex: Int?
+    @State var lastHandledPageIndex: Int?
+    @StateObject var contentControllerCache = ReadContentViewControllerCache()
+    @State var hasInitialPagination = false
     
     // 漫画模式占位符，用于缓存 key 保持稳定
-    private let mangaPlaceholderStore = TextKit2RenderStore(attributedString: NSAttributedString(), layoutWidth: 1)
+    let mangaPlaceholderStore = TextKit2RenderStore(attributedString: NSAttributedString(), layoutWidth: 1)
     
     // Repagination Control
-    @State private var isRepaginateQueued = false
-    @State private var lastPaginationKey: PaginationKey?
-    @State private var suppressRepaginateOnce = false
+    @State var isRepaginateQueued = false
+    @State var lastPaginationKey: PaginationKey?
+    @State var suppressRepaginateOnce = false
     
     // TTS State
-    @State private var lastTTSSentenceIndex: Int?
-    @State private var ttsBaseIndex: Int = 0
-    @State private var pendingFlipId: UUID = UUID()
-    @State private var isTTSSyncingPage = false
-    @State private var suppressTTSSync = false
-    @State private var suppressPageIndexChangeOnce = false
-    @State private var isAutoFlipping: Bool = false
-    @State private var isTTSAutoChapterChange = false
-    @State private var pausedChapterIndex: Int?
-    @State private var pausedPageIndex: Int?
-    @State private var needsTTSRestartAfterPause = false
-    @State private var lastAdjacentPrepareAt: TimeInterval = 0
-    @State private var pendingTTSRequest: TTSPlayRequest?
-    @State private var showDetailFromHeader = false
+    @State var lastTTSSentenceIndex: Int?
+    @State var ttsBaseIndex: Int = 0
+    @State var pendingFlipId: UUID = UUID()
+    @State var isTTSSyncingPage = false
+    @State var suppressTTSSync = false
+    @State var suppressPageIndexChangeOnce = false
+    @State var isAutoFlipping: Bool = false
+    @State var isTTSAutoChapterChange = false
+    @State var pausedChapterIndex: Int?
+    @State var pausedPageIndex: Int?
+    @State var needsTTSRestartAfterPause = false
+    @State var lastAdjacentPrepareAt: TimeInterval = 0
+    @State var pendingTTSRequest: TTSPlayRequest?
+    @State var showDetailFromHeader = false
     
     // Sleep Timer State
-    @State private var timerRemaining: Int = 0
-    @State private var timerActive = false
-    @State private var sleepTimer: Timer? = nil
+    @State var timerRemaining: Int = 0
+    @State var timerActive = false
+    @State var sleepTimer: Timer? = nil
     
     // Replace Rule State
-    @State private var showAddReplaceRule = false
-    @State private var pendingReplaceRule: ReplaceRule?
+    @State var showAddReplaceRule = false
+    @State var pendingReplaceRule: ReplaceRule?
     
     // Page Turn & Navigation State
-    @State private var pageTurnRequest: PageTurnRequest? = nil
-    @State private var isExplicitlySwitchingChapter = false
-    @State private var currentChapterIsManga = false
-    @State private var lastEffectiveMode: ReadingMode? = nil
+    @State var pageTurnRequest: PageTurnRequest? = nil
+    @State var isExplicitlySwitchingChapter = false
+    @State var currentChapterIsManga = false
+    @State var lastEffectiveMode: ReadingMode? = nil
     
     // 旋转与布局增强
-    @State private var isForceLandscape = false
+    @State var isForceLandscape = false
 
-    private struct PaginationKey: Hashable {
+    struct PaginationKey: Hashable {
         let width: Int
         let height: Int
         let fontSize: Int
