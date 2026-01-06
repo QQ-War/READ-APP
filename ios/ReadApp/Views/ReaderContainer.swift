@@ -92,8 +92,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     func updateReplaceRules(_ rules: [ReplaceRule]) {
-        let signature = rules.map{"$0.id ?? ""$0.isEnabled ?? false"}.joined()
-        if signature == lastAppliedRulesSignature { return }; lastAppliedRulesSignature = signature
+        let signature = rulesSignature(rules)
+        if signature == lastAppliedRulesSignature { return }
+        lastAppliedRulesSignature = signature
         if !rawContent.isEmpty && !isMangaMode { reRenderCurrentContent(maintainOffset: true) }
     }
     
@@ -316,7 +317,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let activeInfos = (offset == 0) ? pageInfos : (offset > 0 ? nextChapterPageInfos : prevChapterPageInfos)
         pageView.renderStore = activeStore
         if index < activeInfos.count {
-            var info = activeInfos[index]; info.contentInset = safeAreaTop + 20; pageView.pageInfo = info
+            pageView.pageInfo = activeInfos[index]
         }
         pageView.onTapLocation = { [weak self] loc in if loc == .middle { self?.onToggleMenu?() } else { self?.handlePageTap(isNext: loc == .right) } }
         vc.view.addSubview(pageView); pageView.translatesAutoresizingMaskIntoConstraints = false
@@ -342,6 +343,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var res = text; let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]
         for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }
         return res.replacingOccurrences(of: "&nbsp;", with: " ")
+    }
+
+    private func rulesSignature(_ rules: [ReplaceRule]) -> String {
+        rules.map {
+            "\($0.id ?? "")|\($0.pattern)|\($0.replacement)|\($0.isEnabled ?? false)|\($0.isRegex ?? false)"
+        }.joined(separator: ";")
     }
 }
 
