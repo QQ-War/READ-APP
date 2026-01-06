@@ -159,7 +159,29 @@ struct ReadingView: View {
             GeometryReader { proxy in
                 ZStack {
                     backgroundView
-                    mainContent(safeArea: proxy.safeAreaInsets)
+                    
+                    // 核心容器：接管所有阅读渲染与逻辑
+                    ReaderContainerRepresentable(
+                        book: book,
+                        preferences: preferences,
+                        ttsManager: ttsManager,
+                        onToggleMenu: {
+                            withAnimation { showUIControls.toggle() }
+                        },
+                        onShowChapterList: {
+                            showChapterList = true
+                        },
+                        onAddReplaceRule: { text in
+                            presentReplaceRuleEditor(selectedText: text)
+                        },
+                        onProgressChanged: { chapterIdx, pos in
+                            // 进度仅用于 SwiftUI 端的存盘，不干涉 UIKit 渲染
+                            self.currentChapterIndex = chapterIdx
+                        },
+                        pendingChapterIndex: currentChapterIndex,
+                        readingMode: preferences.readingMode
+                    )
+                    .ignoresSafeArea()
                     
                     if showUIControls {
                         topBar(safeArea: proxy.safeAreaInsets)
@@ -171,269 +193,36 @@ struct ReadingView: View {
                     if isLoading { loadingOverlay }
                 }
                 .animation(.easeInOut(duration: 0.2), value: showUIControls)
-                .ignoresSafeArea()
             }
             .navigationBarHidden(true)
             .navigationBarBackButtonHidden(true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
-        .onChange(of: effectiveReadingMode) { newMode in
-            guard let oldMode = lastEffectiveMode, oldMode != newMode else {
-                lastEffectiveMode = newMode
-                return
-            }
-            
-            // 执行进度同步
-            if oldMode == .vertical && newMode == .horizontal {
-                // 垂直 -> 水平：找到当前看到的段落，跳转到包含该段落的页
-                if let targetSentence = currentVisibleSentenceIndex {
-                    let pStarts = currentCache.paragraphStarts
-                    let prefixLen = currentCache.chapterPrefixLen
-                    if targetSentence < pStarts.count {
-                        let charOffset = pStarts[targetSentence] + prefixLen
-                        if let pageIdx = currentCache.pages.firstIndex(where: { NSLocationInRange(charOffset, $0.globalRange) }) {
-                            self.currentPageIndex = pageIdx
-                            self.pageTurnRequest = PageTurnRequest(direction: .forward, animated: false, targetIndex: pageIdx)
-                        }
-                    }
-                }
-            } else if oldMode == .horizontal && newMode == .vertical {
-                // 水平 -> 垂直：获取当前页起始段落，滚动到该段落
-                if let targetSentence = pageStartSentenceIndex(for: currentPageIndex) {
-                    self.pendingScrollToSentenceIndex = targetSentence
-                    self.handlePendingScroll()
-                }
-            }
-            
-            lastEffectiveMode = newMode
-        }
-        .onAppear {
-            lastEffectiveMode = effectiveReadingMode
-        }
         .onChange(of: isForceLandscape) { newValue in
-            // 强制旋转逻辑
             updateAppOrientation(landscape: newValue)
         }
         .onDisappear {
             // 退出阅读器时恢复竖屏
             if isForceLandscape { updateAppOrientation(landscape: false) }
+            saveProgress()
         }
-        .sheet(isPresented: $showChapterList) { ChapterListView(chapters: chapters, currentIndex: currentChapterIndex, bookUrl: book.bookUrl ?? "") { index in
-            currentChapterIndex = index
-            pendingJumpToFirstPage = true
-            loadChapterContent()
-            showChapterList = false
-        } } // ChapterListView
+        .sheet(isPresented: $showChapterList) { 
+            // 这里的章节列表需要从 APIService 获取
+            ChapterListView(chapters: [], currentIndex: currentChapterIndex, bookUrl: book.bookUrl ?? "") { index in
+                currentChapterIndex = index
+                showChapterList = false
+            } 
+        }
         .sheet(isPresented: $showFontSettings) { 
-            ReaderOptionsSheet(preferences: preferences, isMangaMode: currentChapterIsManga) 
-        } // ReaderOptionsSheet
-        .sheet(isPresented: $showAddReplaceRule) { ReplaceRuleEditView(viewModel: replaceRuleViewModel, rule: pendingReplaceRule) } // ReplaceRuleEditView
-        .onChange(of: replaceRuleViewModel.rules) { _ in updateProcessedContent(from: rawContent) }
-        .onChange(of: pendingScrollToSentenceIndex) { _ in handlePendingScroll() }
-        .alert("错误", isPresented: .constant(errorMessage != nil)) { Button("确定") { errorMessage = nil } } message: {
-            if let error = errorMessage { Text(error) }
+            ReaderOptionsSheet(preferences: preferences, isMangaMode: false) 
         }
-        .onDisappear { saveProgress() }
-        .onChange(of: ttsManager.isPlaying) { handleTTSPlayStateChange($0) }
-        .onChange(of: ttsManager.isPaused) { handleTTSPauseStateChange($0) }
-        .onChange(of: ttsManager.currentSentenceIndex) { _ in handleTTSSentenceChange() }
-        .onChange(of: scenePhase) { handleScenePhaseChange($0) }
-        .task {
-            await loadChapters()
-            await replaceRuleViewModel.fetchRules()
-            enterReadingSessionIfNeeded()
-        }
+    }
     }
 
     // MARK: - UI Components
     
     private var backgroundView: some View { Color(UIColor.systemBackground) }
 
-    @ViewBuilder
-    private func mainContent(safeArea: EdgeInsets) -> some View {
-        if currentChapterIsManga {
-            // 路径 1: 原生 UIKit 漫画模式
-            MangaNativeReader(
-                sentences: contentSentences,
-                chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil,
-                showUIControls: $showUIControls,
-                currentVisibleIndex: Binding(
-                    get: { currentVisibleSentenceIndex ?? 0 },
-                    set: { currentVisibleSentenceIndex = $0 }
-                ),
-                pendingScrollIndex: $pendingScrollToSentenceIndex
-            )
-            .ignoresSafeArea()
-        } else if preferences.readingMode == .horizontal {
-            // 路径 2: 水平翻页模式 (小说)
-            horizontalReader(safeArea: safeArea)
-        } else {
-            // 路径 3: 垂直滚动模式 (小说)
-            verticalReader.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
-        }
-    }
-    
-    func updateMangaModeState() {
-        // 漫画模式判定（对标 legado.koplugin 分类逻辑）
-        // 1. 手动强制
-        if let url = book.bookUrl, preferences.manualMangaUrls.contains(url) {
-            currentChapterIsManga = true
-            return
-        }
-        // 2. 纯图片章节 (内容极短且包含图片占位符)
-        if rawContent.count < 500 && rawContent.contains("__IMG__") {
-            currentChapterIsManga = true
-            return
-        }
-        // 3. 漫画书类型 (2)
-        if book.type == 2 {
-            currentChapterIsManga = true
-            return
-        }
-        
-        let imageCount = contentSentences.filter { $0.hasPrefix("__IMG__") }.count
-        if imageCount > 0 {
-            let ratio = Double(imageCount) / Double(contentSentences.count)
-            // 4. 高密度图片 (15% 以上)
-            currentChapterIsManga = ratio > 0.15
-        } else {
-            currentChapterIsManga = false
-        }
-    }
-    
-    private var verticalReader: some View {
-        VerticalTextReader(
-            sentences: contentSentences,
-            fontSize: preferences.fontSize,
-            lineSpacing: preferences.lineSpacing,
-            horizontalMargin: preferences.pageHorizontalMargin,
-            highlightIndex: ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex,
-            secondaryIndices: ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>(),
-            isPlayingHighlight: ttsManager.isPlaying,
-            chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil,
-            currentVisibleIndex: Binding(
-                get: { currentVisibleSentenceIndex ?? 0 },
-                set: { currentVisibleSentenceIndex = $0 }
-            ),
-            pendingScrollIndex: $pendingScrollToSentenceIndex,
-            forceScrollToTop: pendingJumpToFirstPage && !isExplicitlySwitchingChapter,
-            onScrollFinished: {
-                pendingJumpToFirstPage = false
-            },
-            onAddReplaceRule: { selectedText in
-                presentReplaceRuleEditor(selectedText: selectedText)
-            }
-        )
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ReaderToggleControls"))) { _ in
-            withAnimation { showUIControls.toggle() }
-        }
-        .onChange(of: currentChapterIndex) { _ in
-            pendingJumpToFirstPage = true
-        }
-    }
-    
-    private func horizontalReader(safeArea: EdgeInsets) -> some View {
-        GeometryReader {
-            geometry in
-            // 如果是漫画模式，强制 0 边距以占满屏幕
-            let horizontalMargin: CGFloat = currentChapterIsManga ? 0 : preferences.pageHorizontalMargin
-            let verticalMargin: CGFloat = currentChapterIsManga ? 0 : 10
-            
-            let availableSize = CGSize(
-                width: max(0, geometry.size.width - safeArea.leading - safeArea.trailing - horizontalMargin * 2),
-                height: max(0, geometry.size.height - safeArea.top - safeArea.bottom - verticalMargin * 2)
-            )
-
-            let contentSize = availableSize
-            horizontalReaderBody(geometry: geometry, safeArea: safeArea, availableSize: availableSize, contentSize: contentSize, hMargin: horizontalMargin)
-            .onAppear { if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: contentSentences) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: preferences.fontSize) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: preferences.lineSpacing) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: preferences.pageHorizontalMargin) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: geometry.size) { _ in if contentSize.width > 0 { scheduleRepaginate(in: contentSize) } }
-            .onChange(of: currentPageIndex) { newIndex in
-                if isTTSSyncingPage {
-                    // 仅更新索引，不释放锁，也不触发 handlePageIndexChange
-                    if let startIndex = pageStartSentenceIndex(for: newIndex) { lastTTSSentenceIndex = startIndex }
-                    return
-                }
-                handlePageIndexChange(newIndex)
-            }
-        }
-    }
-
-    private func horizontalReaderBody(geometry: GeometryProxy, safeArea: EdgeInsets, availableSize: CGSize, contentSize: CGSize, hMargin: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: safeArea.top + (currentChapterIsManga ? 0 : 10))
-            HStack(spacing: 0) {
-                Color.clear.frame(width: safeArea.leading + hMargin).contentShape(Rectangle()).onTapGesture { handleReaderTap(location: .left) }
-                
-                if availableSize.width > 0 {
-                    if hasInitialPagination {
-                        ZStack(alignment: .bottomTrailing) {
-                            cacheRefresher
-                            let currentVC = makeContentViewController(snapshot: snapshot(from: currentCache), pageIndex: currentPageIndex, chapterOffset: 0)
-                            let prevVC = makeContentViewController(snapshot: snapshot(from: prevCache), pageIndex: max(0, prevCache.pages.count - 1), chapterOffset: -1)
-                            let nextVC = makeContentViewController(snapshot: snapshot(from: nextCache), pageIndex: 0, chapterOffset: 1)
-
-                            ReadPageViewController(
-                                snapshot: snapshot(from: currentCache),
-                                prevSnapshot: snapshot(from: prevCache),
-                                nextSnapshot: snapshot(from: nextCache),
-                                currentPageIndex: $currentPageIndex,
-                                pageTurnRequest: $pageTurnRequest,
-                                pageSpacing: preferences.pageInterSpacing,
-                                transitionStyle: preferences.pageTurningMode == .simulation ? .pageCurl : .scroll,
-                                onTransitioningChanged: { self.isPageTransitioning = $0 },
-                                onTapLocation: handleReaderTap,
-                                onChapterChange: { offset in self.isAutoFlipping = true; self.handleChapterSwitch(offset: offset) },
-                                onAdjacentPrefetch: { offset in
-                                    let needsPrepare = offset > 0 ? nextCache.pages.isEmpty : prevCache.pages.isEmpty
-                                    if needsPrepare { prepareAdjacentChapters(for: currentChapterIndex) }
-                                },
-                                onAddReplaceRule: presentReplaceRuleEditor,
-                                onChapterSwitchRequest: { chapterIdx, pageIdx in
-                                    self.finalizeAnimatedChapterSwitch(targetChapter: chapterIdx, targetPage: pageIdx)
-                                },
-                                currentContentViewController: currentVC,
-                                prevContentViewController: prevVC,
-                                nextContentViewController: nextVC,
-                                makeViewController: makeContentViewController
-                            )
-                            .id("\(preferences.pageInterSpacing)_\(preferences.pageTurningMode.rawValue)_\(currentChapterIsManga)")
-                            .frame(width: contentSize.width, height: contentSize.height)
-
-                            if !showUIControls && currentCache.pages.count > 0 && !currentChapterIsManga {
-                                let displayCurrent = currentPageIndex + 1
-                                Group {
-                                    if currentCache.isFullyPaginated {
-                                        let total = max(currentCache.pages.count, displayCurrent)
-                                        Text("\(displayCurrent)/\(total) (\(Int((Double(displayCurrent) / Double(total)) * 100))%)")
-                                    } else if let range = pageRange(for: currentPageIndex), currentCache.attributedText.length > 0 {
-                                        let progress = Double(NSMaxRange(range)) / Double(currentCache.attributedText.length)
-                                        Text("\(displayCurrent)/\(currentCache.pages.count)+ (\(Int(progress * 100))%)")
-                                    } else {
-                                        Text("\(displayCurrent)/\(currentCache.pages.count)+")
-                                    }
-                                }
-                                .font(.caption2).foregroundColor(.secondary).padding(.trailing, 8).padding(.bottom, 2)
-                                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
-                            }
-                        }
-                        .frame(width: availableSize.width, height: availableSize.height)
-                    } else {
-                        Color.clear.frame(width: contentSize.width, height: contentSize.height)
-                    }
-                }
-                
-                Color.clear.frame(width: safeArea.trailing + hMargin).contentShape(Rectangle()).onTapGesture { handleReaderTap(location: .right) }
-            }
-            Spacer().frame(height: safeArea.bottom + (currentChapterIsManga ? 0 : 10))
-        }
-        .frame(width: geometry.size.width, height: geometry.size.height)
-    }
-    
     @ViewBuilder private func topBar(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
