@@ -2,12 +2,6 @@ import SwiftUI
 import UIKit
 import Combine
 
-// MARK: - 辅助模型
-struct PaginatedPage: Equatable {
-    let range: NSRange
-    let startSentenceIndex: Int
-}
-
 // MARK: - SwiftUI 桥接入口
 struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     let book: Book
@@ -95,14 +89,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func captureCurrentProgress() {
         if isMangaMode { return }
         if currentReadingMode == .vertical, let v = verticalVC { currentCharOffset = v.getCurrentCharOffset() }
-        else if currentReadingMode == .horizontal { if currentPageIndex < pages.count { currentCharOffset = pages[currentPageIndex].range.location } }
+        else if currentReadingMode == .horizontal { if currentPageIndex < pages.count { currentCharOffset = pages[currentPageIndex].globalRange.location } }
     }
     
     private func applyCapturedProgress() {
         if isMangaMode { return }
         if currentReadingMode == .vertical { verticalVC?.scrollToCharOffset(currentCharOffset, animated: false) }
         else if currentReadingMode == .horizontal {
-            let targetPage = pages.firstIndex(where: { NSLocationInRange(currentCharOffset, $0.range) }) ?? 0
+            let targetPage = pages.firstIndex(where: { NSLocationInRange(currentCharOffset, $0.globalRange) }) ?? 0
             updateHorizontalPage(to: targetPage, animated: false)
         }
     }
@@ -162,7 +156,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                         self.nextChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: view.bounds.width - preferences.pageHorizontalMargin * 2)
                         var pS: [Int] = []; var c = 0; for s in sents { pS.append(c); c += s.count + 1 }
                         let res = TextKit2Paginator.paginate(renderStore: nextChapterStore!, pageSize: view.bounds.size, paragraphStarts: pS, prefixLen: 0, contentInset: 20)
-                        self.nextChapterPages = res.pageInfos.map { PaginatedPage(range: $0.range, startSentenceIndex: $0.startSentenceIndex) }
+                        self.nextChapterPages = res.pageInfos.map { PaginatedPage(globalRange: $0.range, startSentenceIndex: $0.startSentenceIndex) }
                     }
                 }
             }
@@ -185,7 +179,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard let store = renderStore else { return }
         var starts: [Int] = []; var curr = 0; for s in contentSentences { starts.append(curr); curr += s.count + 1 }
         let result = TextKit2Paginator.paginate(renderStore: store, pageSize: view.bounds.size, paragraphStarts: starts, prefixLen: 0, contentInset: 20)
-        self.pages = result.pageInfos.map { PaginatedPage(range: $0.range, startSentenceIndex: $0.startSentenceIndex) }
+        self.pages = result.pageInfos.map { PaginatedPage(globalRange: $0.range, startSentenceIndex: $0.startSentenceIndex) }
     }
 
     private func setupReaderMode() {
@@ -223,7 +217,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if completed, let visibleVC = pvc.viewControllers?.first as? PageContentViewController {
             if visibleVC.chapterOffset == 0 {
                 self.currentPageIndex = visibleVC.pageIndex
-                self.currentCharOffset = pages[visibleVC.pageIndex].range.location
+                self.currentCharOffset = pages[visibleVC.pageIndex].globalRange.location
                 self.onProgressChanged?(currentChapterIndex, Double(visibleVC.pageIndex) / Double(max(1, pages.count)))
             } else {
                 // 执行跨章切换
@@ -264,7 +258,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         pageView.renderStore = activeStore
         if index < activePages.count {
             let p = activePages[index]
-            pageView.pageInfo = TK2PageInfo(range: p.range, yOffset: 0, pageHeight: view.bounds.height, actualContentHeight: view.bounds.height, startSentenceIndex: p.startSentenceIndex, contentInset: 20)
+            pageView.pageInfo = TK2PageInfo(range: p.globalRange, yOffset: 0, pageHeight: view.bounds.height, actualContentHeight: view.bounds.height, startSentenceIndex: p.startSentenceIndex, contentInset: 20)
         }
         pageView.onTapLocation = { [weak self] loc in
             if loc == .middle { self?.onToggleMenu?() }
@@ -286,7 +280,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         for s in contentSentences { pStarts.append(curr); curr += s.count + 1 }
         guard sentenceIndex < pStarts.count else { return }
         let offset = pStarts[sentenceIndex]
-        if let target = pages.firstIndex(where: { NSLocationInRange(offset, $0.range) }), target != currentPageIndex {
+        if let target = pages.firstIndex(where: { NSLocationInRange(offset, $0.globalRange) }), target != currentPageIndex {
             updateHorizontalPage(to: target, animated: true)
         }
     }

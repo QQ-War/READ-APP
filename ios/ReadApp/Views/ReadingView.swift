@@ -12,8 +12,8 @@ struct ReadingView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var apiService: APIService
-    @StateObject private var ttsManager = TTSManager.shared
-    @StateObject private var preferences = UserPreferences.shared
+    @StateObject var ttsManager = TTSManager.shared
+    @StateObject var preferences = UserPreferences.shared
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
 
     // 状态对齐：与 ReaderContainer 共享

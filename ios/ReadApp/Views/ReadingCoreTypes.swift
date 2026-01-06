@@ -30,7 +30,7 @@ struct PageTurnRequest: Equatable {
     }
 }
 
-struct PaginatedPage {
+struct PaginatedPage: Equatable {
     let globalRange: NSRange
     let startSentenceIndex: Int
 }
@@ -104,4 +104,3 @@ struct PageSnapshot {
     let contentSentences: [String]? // 新增：保存原始句子用于漫画渲染
     let chapterUrl: String? // 新增
 }
-
