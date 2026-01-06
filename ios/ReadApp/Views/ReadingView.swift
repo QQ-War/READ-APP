@@ -16,27 +16,20 @@ struct ReadingView: View {
     @StateObject private var preferences = UserPreferences.shared
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
 
-    // 简化后的 UI 状态
+    // 状态对齐：与 ReaderContainer 共享
+    @State var chapters: [BookChapter] = []
+    @State var currentChapterIndex: Int
+    @State var currentPos: Double = 0 
+    
     @State private var showUIControls = false
     @State private var showFontSettings = false
     @State private var showChapterList = false
-    @State private var currentChapterIndex: Int
     @State var isLoading = false
     @State var errorMessage: String?
     
-    // 旋转与布局
     @State private var isForceLandscape = false
     @State private var showDetailFromHeader = false
     
-    // 进度与位置快照（用于存盘同步）
-    @State var lastTTSSentenceIndex: Int?
-    @State var ttsBaseIndex: Int = 0
-    @State var pendingJumpToFirstPage = false
-    
-    // 状态
-    @State var chapters: [BookChapter] = []
-    
-    // 睡眠定时
     @State private var timerRemaining: Int = 0
     @State private var timerActive = false
     @State private var sleepTimer: Timer? = nil
@@ -44,6 +37,7 @@ struct ReadingView: View {
     init(book: Book) {
         self.book = book
         _currentChapterIndex = State(initialValue: book.durChapterIndex ?? 0)
+        _currentPos = State(initialValue: book.durChapterPos ?? 0)
     }
 
     var body: some View {
@@ -57,19 +51,11 @@ struct ReadingView: View {
                         book: book,
                         preferences: preferences,
                         ttsManager: ttsManager,
-                        onToggleMenu: {
-                            withAnimation { showUIControls.toggle() }
-                        },
-                        onShowChapterList: {
-                            showChapterList = true
-                        },
-                        onAddReplaceRule: { text in
-                            presentReplaceRuleEditor(selectedText: text)
-                        },
-                        onProgressChanged: { chapterIdx, pos in
-                            self.currentChapterIndex = chapterIdx
-                        },
-                        pendingChapterIndex: currentChapterIndex,
+                        chapters: $chapters,
+                        currentChapterIndex: $currentChapterIndex,
+                        onToggleMenu: { withAnimation { showUIControls.toggle() } },
+                        onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
+                        onProgressChanged: { _, pos in self.currentPos = pos },
                         readingMode: preferences.readingMode
                     )
                     .ignoresSafeArea()
@@ -80,7 +66,6 @@ struct ReadingView: View {
                         bottomBar(safeArea: proxy.safeAreaInsets)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    
                     if isLoading { loadingOverlay }
                 }
                 .animation(.easeInOut(duration: 0.2), value: showUIControls)
@@ -104,10 +89,6 @@ struct ReadingView: View {
         }
         .sheet(isPresented: $showFontSettings) { 
             ReaderOptionsSheet(preferences: preferences, isMangaMode: false) 
-        }
-        .task {
-            // 虽然渲染下沉了，但主界面仍需要加载一次目录以供底部菜单使用
-            await loadChapters()
         }
     }
 

@@ -3,7 +3,7 @@ import UIKit
 import Combine
 
 // MARK: - 辅助模型
-struct PaginatedPage {
+struct PaginatedPage: Equatable {
     let range: NSRange
     let startSentenceIndex: Int
 }
@@ -13,70 +13,55 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     let book: Book
     @ObservedObject var preferences: UserPreferences
     @ObservedObject var ttsManager: TTSManager
-    
+    @Binding var chapters: [BookChapter]
+    @Binding var currentChapterIndex: Int
     var onToggleMenu: () -> Void
     var onAddReplaceRule: (String) -> Void
     var onProgressChanged: (Int, Double) -> Void
-    
-    var pendingChapterIndex: Int?
     var readingMode: ReadingMode
     
     func makeUIViewController(context: Context) -> ReaderContainerViewController {
         let vc = ReaderContainerViewController()
-        vc.book = book
-        vc.preferences = preferences
-        vc.ttsManager = ttsManager
-        vc.onToggleMenu = onToggleMenu
-        vc.onAddReplaceRuleWithText = onAddReplaceRule
-        vc.onProgressChanged = onProgressChanged
+        vc.book = book; vc.preferences = preferences; vc.ttsManager = ttsManager
+        vc.onToggleMenu = onToggleMenu; vc.onAddReplaceRuleWithText = onAddReplaceRule
+        vc.onProgressChanged = { idx, pos in self.currentChapterIndex = idx; onProgressChanged(idx, pos) }
+        vc.onChaptersLoaded = { list in self.chapters = list }
         return vc
     }
     
     func updateUIViewController(_ vc: ReaderContainerViewController, context: Context) {
         vc.updatePreferences(preferences)
-        if let chapterIndex = pendingChapterIndex, vc.currentChapterIndex != chapterIndex {
-            vc.jumpToChapter(chapterIndex)
-        }
-        if vc.currentReadingMode != readingMode {
-            vc.switchReadingMode(to: readingMode)
-        }
+        if vc.currentChapterIndex != currentChapterIndex { vc.jumpToChapter(currentChapterIndex) }
+        if vc.currentReadingMode != readingMode { vc.switchReadingMode(to: readingMode) }
         vc.syncTTSState()
     }
 }
 
 // MARK: - UIKit 核心容器
 class ReaderContainerViewController: UIViewController, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
-    // 外部依赖
-    var book: Book!
-    var chapters: [BookChapter] = []
-    var preferences: UserPreferences!
-    var ttsManager: TTSManager!
+    var book: Book!; var chapters: [BookChapter] = []; var preferences: UserPreferences!; var ttsManager: TTSManager!
+    var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?
     
-    // 回调
-    var onToggleMenu: (() -> Void)?
-    var onAddReplaceRuleWithText: ((String) -> Void)?
-    var onProgressChanged: ((Int, Double) -> Void)?
-    
-    // 状态核心
     private(set) var currentChapterIndex: Int = 0
     private(set) var currentReadingMode: ReadingMode = .vertical
     private var contentSentences: [String] = []
     private var renderStore: TextKit2RenderStore?
-    
-    // 进度锚点 (Source of Truth)
     private var currentCharOffset: Int = 0 
     
-    // 子组件
+    // 多章节缓存（用于无缝翻页）
+    private var nextChapterStore: TextKit2RenderStore?
+    private var prevChapterStore: TextKit2RenderStore?
+    private var nextChapterPages: [PaginatedPage] = []
+    private var prevChapterPages: [PaginatedPage] = []
+
     private var verticalVC: VerticalTextViewController?
     private var horizontalVC: UIPageViewController?
+    private var mangaVC: UIViewController?
     
-    // 分页缓存
-    private var pages: [PaginatedPage] = []
-    private var currentPageIndex: Int = 0
+    private var pages: [PaginatedPage] = []; private var currentPageIndex: Int = 0; private var isMangaMode = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .clear
         currentChapterIndex = book.durChapterIndex ?? 0
         currentReadingMode = preferences.readingMode
         loadChapters()
@@ -84,79 +69,60 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // 确保容器尺寸变化时更新布局
-        if let v = verticalVC { v.view.frame = view.bounds }
-        if let h = horizontalVC { h.view.frame = view.bounds }
+        verticalVC?.view.frame = view.bounds
+        horizontalVC?.view.frame = view.bounds
+        mangaVC?.view.frame = view.bounds
     }
 
     func updatePreferences(_ prefs: UserPreferences) {
         self.preferences = prefs
-        // 如果字体变了，需要重新计算排版和页码
-        if renderStore != nil {
-            loadChapterContent(at: currentChapterIndex, maintainOffset: true)
-        }
+        if renderStore != nil && !isMangaMode { loadChapterContent(at: currentChapterIndex, maintainOffset: true) }
     }
     
     func jumpToChapter(_ index: Int) {
+        guard index >= 0 && index < (chapters.isEmpty ? 9999 : chapters.count) else { return }
         currentChapterIndex = index
         loadChapterContent(at: index, resetOffset: true)
     }
     
     func switchReadingMode(to mode: ReadingMode) {
-        // 1. 捕获当前进度偏移
         captureCurrentProgress()
-        
-        // 2. 切换模式
         currentReadingMode = mode
         setupReaderMode()
-        
-        // 3. 应用进度偏移
         applyCapturedProgress()
     }
     
     private func captureCurrentProgress() {
-        if currentReadingMode == .vertical, let v = verticalVC {
-            // 从垂直视图获取当前第一行字符偏移
-            currentCharOffset = v.getCurrentCharOffset()
-        } else if currentReadingMode == .horizontal {
-            // 从当前页获取偏移
-            if currentPageIndex < pages.count {
-                currentCharOffset = pages[currentPageIndex].range.location
-            }
-        }
+        if isMangaMode { return }
+        if currentReadingMode == .vertical, let v = verticalVC { currentCharOffset = v.getCurrentCharOffset() }
+        else if currentReadingMode == .horizontal { if currentPageIndex < pages.count { currentCharOffset = pages[currentPageIndex].range.location } }
     }
     
     private func applyCapturedProgress() {
-        if currentReadingMode == .vertical {
-            verticalVC?.scrollToCharOffset(currentCharOffset, animated: false)
-        } else if currentReadingMode == .horizontal {
+        if isMangaMode { return }
+        if currentReadingMode == .vertical { verticalVC?.scrollToCharOffset(currentCharOffset, animated: false) }
+        else if currentReadingMode == .horizontal {
             let targetPage = pages.firstIndex(where: { NSLocationInRange(currentCharOffset, $0.range) }) ?? 0
             updateHorizontalPage(to: targetPage, animated: false)
         }
     }
 
     func syncTTSState() {
+        guard !isMangaMode else { return }
         let hIndex = ttsManager.currentSentenceIndex
         if currentReadingMode == .vertical {
             verticalVC?.update(sentences: contentSentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: hIndex, secondaryIndices: Set(ttsManager.preloadedIndices), isPlaying: ttsManager.isPlaying)
             if ttsManager.isPlaying { verticalVC?.ensureSentenceVisible(index: hIndex) }
         } else if currentReadingMode == .horizontal {
-            // 水平高亮与翻页逻辑...
-            if ttsManager.isPlaying {
-                syncHorizontalPageToTTS(sentenceIndex: hIndex)
-            }
+            if ttsManager.isPlaying { syncHorizontalPageToTTS(sentenceIndex: hIndex) }
         }
     }
 
-    // MARK: - 数据加载
     private func loadChapters() {
         Task {
             do {
                 let list = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
-                await MainActor.run { 
-                    self.chapters = list
-                    loadChapterContent(at: currentChapterIndex) 
-                } 
+                await MainActor.run { self.chapters = list; self.onChaptersLoaded?(list); loadChapterContent(at: currentChapterIndex) }
             } catch { print("加载目录失败") }
         }
     }
@@ -165,192 +131,175 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard index >= 0 && index < chapters.count else { return }
         Task {
             do {
-                let content = try await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index)
+                let isM = book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
+                let content = try await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: isM ? 2 : 0)
                 await MainActor.run {
-                    let cleaned = removeHTMLAndSVG(content)
+                    self.isMangaMode = isM; let cleaned = removeHTMLAndSVG(content)
                     self.contentSentences = cleaned.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                    
-                    // 构建 RenderStore
-                    prepareRenderStore()
-                    
-                    // 如果是水平模式，执行分页
-                    if currentReadingMode == .horizontal {
-                        performPagination()
+                    if !isM {
+                        prepareRenderStore()
+                        if currentReadingMode == .horizontal { performPagination() }
                     }
-                    
                     setupReaderMode()
-                    
-                    if resetOffset {
-                        verticalVC?.scrollToTop(animated: false)
-                        updateHorizontalPage(to: 0, animated: false)
-                    } else if maintainOffset {
-                        applyCapturedProgress()
-                    }
+                    if resetOffset { verticalVC?.scrollToTop(animated: false); updateHorizontalPage(to: 0, animated: false) }
+                    else if maintainOffset { applyCapturedProgress() }
+                    prefetchAdjacentChapters(index: index)
                 }
             } catch { print("加载内容失败") }
         }
     }
     
-    private func prepareRenderStore() {
-        let fullText = contentSentences.joined(separator: "\n")
-        let attrString = NSAttributedString(string: fullText, attributes: [
-            .font: UIFont.systemFont(ofSize: preferences.fontSize),
-            .paragraphStyle: {
-                let p = NSMutableParagraphStyle()
-                p.lineSpacing = preferences.lineSpacing
-                p.paragraphSpacing = preferences.lineSpacing * 0.8
-                return p
-            }()
-        ])
-        let width = view.bounds.width > 0 ? view.bounds.width - preferences.pageHorizontalMargin * 2 : 350
-        if let store = renderStore {
-            store.update(attributedString: attrString, layoutWidth: width)
-        } else {
-            renderStore = TextKit2RenderStore(attributedString: attrString, layoutWidth: width)
-        }
-    }
-    
-    private func performPagination() {
-        guard let store = renderStore else { return }
-        let pStarts = calculateParagraphStarts()
-        let result = TextKit2Paginator.paginate(
-            renderStore: store,
-            pageSize: view.bounds.size,
-            paragraphStarts: pStarts,
-            prefixLen: 0,
-            contentInset: 20
-        )
-        self.pages = result.pageInfos.map { PaginatedPage(range: $0.range, startSentenceIndex: $0.startSentenceIndex) }
-    }
-    
-    private func calculateParagraphStarts() -> [Int] {
-        var starts: [Int] = []
-        var currentPos = 0
-        for s in contentSentences {
-            starts.append(currentPos)
-            currentPos += s.count + 1
-        }
-        return starts
-    }
-
-    // MARK: - 模式切换核心
-    private func setupReaderMode() {
-        // 清理旧视图
-        verticalVC?.view.removeFromSuperview(); verticalVC?.removeFromParent(); verticalVC = nil
-        horizontalVC?.view.removeFromSuperview(); horizontalVC?.removeFromParent(); horizontalVC = nil
-        
-        if currentReadingMode == .vertical {
-            let v = VerticalTextViewController()
-            v.onVisibleIndexChanged = { [weak self] idx in
-                self?.onProgressChanged?(self?.currentChapterIndex ?? 0, Double(idx) / Double(max(1, self?.contentSentences.count ?? 1)))
-            }
-            v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }
-            v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
-            
-            addChild(v)
-            view.addSubview(v.view)
-            v.view.frame = view.bounds
-            v.didMove(toParent: self)
-            v.update(sentences: contentSentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
-            self.verticalVC = v
-        } else {
-            // 水平翻页模式
-            let h = UIPageViewController(transitionStyle: preferences.pageTurningMode == .simulation ? .pageCurl : .scroll, navigationOrientation: .horizontal, options: nil)
-            h.dataSource = self
-            h.delegate = self
-            
-            addChild(h)
-            view.addSubview(h.view)
-            h.view.frame = view.bounds
-            h.didMove(toParent: self)
-            self.horizontalVC = h
-            
-            updateHorizontalPage(to: currentPageIndex, animated: false)
-        }
-    }
-
-    // MARK: - UIPageViewController Logic
-    private func updateHorizontalPage(to index: Int, animated: Bool) {
-        guard let h = horizontalVC, index >= 0 && index < pages.count else { return }
-        currentPageIndex = index
-        let vc = createPageVC(at: index)
-        h.setViewControllers([vc], direction: .forward, animated: animated)
-    }
-    
-    private func createPageVC(at index: Int) -> UIViewController {
-        let vc = UIViewController()
-        let pageView = ReadContent2View(frame: .zero)
-        pageView.renderStore = renderStore
-        if index < pages.count {
-            let page = pages[index]
-            // 这里利用现有的 TK2PageInfo 结构
-            pageView.pageInfo = TK2PageInfo(range: page.range, yOffset: 0, pageHeight: view.bounds.height, actualContentHeight: view.bounds.height, startSentenceIndex: page.startSentenceIndex, contentInset: 20)
-        }
-        pageView.onTapLocation = { [weak self] loc in
-            if loc == .middle { self?.onToggleMenu?() }
-            else { self?.handlePageTap(isNext: loc == .right) }
-        }
-        vc.view.addSubview(pageView)
-        pageView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            pageView.topAnchor.constraint(equalTo: vc.view.topAnchor),
-            pageView.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor),
-            pageView.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
-            pageView.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor)
-        ])
-        return vc
-    }
-    
-    private func handlePageTap(isNext: Bool) {
-        let target = isNext ? currentPageIndex + 1 : currentPageIndex - 1
-        if target >= 0 && target < pages.count {
-            updateHorizontalPage(to: target, animated: true)
-        } else if isNext {
-            jumpToChapter(currentChapterIndex + 1)
-        } else {
-            jumpToChapter(currentChapterIndex - 1)
-        }
-    }
-
-    func pageViewController(_ pvc: UIPageViewController, viewControllerBefore vc: UIViewController) -> UIViewController? {
-        return currentPageIndex > 0 ? createPageVC(at: currentPageIndex - 1) : nil
-    }
-    
-    func pageViewController(_ pvc: UIPageViewController, viewControllerAfter vc: UIViewController) -> UIViewController? {
-        return currentPageIndex < pages.count - 1 ? createPageVC(at: currentPageIndex + 1) : nil
-    }
-    
-    func pageViewController(_ pvc: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
-        if completed, let visibleVC = pvc.viewControllers?.first {
-            // 获取新页面的索引并同步状态
-            if let pageView = visibleVC.view.subviews.first(where: { $0 is ReadContent2View }) as? ReadContent2View,
-               let range = pageView.pageInfo?.range {
-                if let index = pages.firstIndex(where: { $0.range == range }) {
-                    self.currentPageIndex = index
-                    self.currentCharOffset = range.location
-                    self.onProgressChanged?(currentChapterIndex, Double(index) / Double(max(1, pages.count)))
+    private func prefetchAdjacentChapters(index: Int) {
+        // 预加载下一章并提前排版，实现无缝切换
+        if index + 1 < chapters.count {
+            Task {
+                if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1) {
+                    await MainActor.run {
+                        let cleaned = removeHTMLAndSVG(content)
+                        let sents = cleaned.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                        let fullText = sents.joined(separator: "\n")
+                        let attr = createAttrString(fullText)
+                        self.nextChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: view.bounds.width - preferences.pageHorizontalMargin * 2)
+                        var pS: [Int] = []; var c = 0; for s in sents { pS.append(c); c += s.count + 1 }
+                        let res = TextKit2Paginator.paginate(renderStore: nextChapterStore!, pageSize: view.bounds.size, paragraphStarts: pS, prefixLen: 0, contentInset: 20)
+                        self.nextChapterPages = res.pageInfos.map { PaginatedPage(range: $0.range, startSentenceIndex: $0.startSentenceIndex) }
+                    }
                 }
             }
         }
     }
 
+    private func createAttrString(_ text: String) -> NSAttributedString {
+        return NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize), .paragraphStyle: { let p = NSMutableParagraphStyle(); p.lineSpacing = preferences.lineSpacing; p.alignment = .justified; return p }() ])
+    }
+
+    private func prepareRenderStore() {
+        let fullText = contentSentences.joined(separator: "\n")
+        let attrString = createAttrString(fullText)
+        let width = max(100, view.bounds.width - preferences.pageHorizontalMargin * 2)
+        if let store = renderStore { store.update(attributedString: attrString, layoutWidth: width) }
+        else { renderStore = TextKit2RenderStore(attributedString: attrString, layoutWidth: width) }
+    }
+    
+    private func performPagination() {
+        guard let store = renderStore else { return }
+        var starts: [Int] = []; var curr = 0; for s in contentSentences { starts.append(curr); curr += s.count + 1 }
+        let result = TextKit2Paginator.paginate(renderStore: store, pageSize: view.bounds.size, paragraphStarts: starts, prefixLen: 0, contentInset: 20)
+        self.pages = result.pageInfos.map { PaginatedPage(range: $0.range, startSentenceIndex: $0.startSentenceIndex) }
+    }
+
+    private func setupReaderMode() {
+        verticalVC?.view.removeFromSuperview(); verticalVC?.removeFromParent(); verticalVC = nil
+        horizontalVC?.view.removeFromSuperview(); horizontalVC?.removeFromParent(); horizontalVC = nil
+        mangaVC?.view.removeFromSuperview(); mangaVC?.removeFromParent(); mangaVC = nil
+        if isMangaMode { setupMangaMode() }
+        else if currentReadingMode == .vertical { setupVerticalMode() }
+        else { setupHorizontalMode() }
+    }
+    
+    private func setupVerticalMode() {
+        let v = VerticalTextViewController(); v.onVisibleIndexChanged = { [weak self] idx in self?.onProgressChanged?(self?.currentChapterIndex ?? 0, Double(idx) / Double(max(1, self?.contentSentences.count ?? 1))) }
+        v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
+        addChild(v); view.addSubview(v.view); v.view.frame = view.bounds; v.didMove(toParent: self)
+        v.update(sentences: contentSentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+        self.verticalVC = v
+    }
+    
+    private func setupHorizontalMode() {
+        let h = UIPageViewController(transitionStyle: preferences.pageTurningMode == .simulation ? .pageCurl : .scroll, navigationOrientation: .horizontal, options: nil)
+        h.dataSource = self; h.delegate = self
+        addChild(h); view.addSubview(h.view); h.view.frame = view.bounds; h.didMove(toParent: self); self.horizontalVC = h
+        updateHorizontalPage(to: currentPageIndex, animated: false)
+    }
+    
+    private func setupMangaMode() {
+        let vc = UIViewController()
+        let mangaView = MangaNativeReader(sentences: contentSentences, chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil, showUIControls: .constant(false), currentVisibleIndex: .constant(0), pendingScrollIndex: .constant(nil))
+        let host = UIHostingController(rootView: mangaView); addChild(host); vc.view.addSubview(host.view); host.view.frame = vc.view.bounds; host.didMove(toParent: vc)
+        addChild(vc); view.addSubview(vc.view); vc.view.frame = view.bounds; vc.didMove(toParent: self); self.mangaVC = vc
+    }
+
+    func pageViewController(_ pvc: UIPageViewController, didFinishAnimating f: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
+        if completed, let visibleVC = pvc.viewControllers?.first as? PageContentViewController {
+            if visibleVC.chapterOffset == 0 {
+                self.currentPageIndex = visibleVC.pageIndex
+                self.currentCharOffset = pages[visibleVC.pageIndex].range.location
+                self.onProgressChanged?(currentChapterIndex, Double(visibleVC.pageIndex) / Double(max(1, pages.count)))
+            } else {
+                // 执行跨章切换
+                self.currentChapterIndex += visibleVC.chapterOffset
+                loadChapterContent(at: currentChapterIndex, resetOffset: visibleVC.chapterOffset > 0 ? false : false)
+            }
+        }
+    }
+
+    func pageViewController(_ pvc: UIPageViewController, viewControllerBefore vc: UIViewController) -> UIViewController? {
+        guard let current = vc as? PageContentViewController else { return nil }
+        if current.chapterOffset == 0 {
+            if current.pageIndex > 0 { return createPageVC(at: current.pageIndex - 1, offset: 0) }
+            // 暂不支持向上跨章无缝，保持原有逻辑
+        }
+        return nil
+    }
+    
+    func pageViewController(_ pvc: UIPageViewController, viewControllerAfter vc: UIViewController) -> UIViewController? {
+        guard let current = vc as? PageContentViewController else { return nil }
+        if current.chapterOffset == 0 {
+            if current.pageIndex < pages.count - 1 { return createPageVC(at: current.pageIndex + 1, offset: 0) }
+            if !nextChapterPages.isEmpty { return createPageVC(at: 0, offset: 1) } // 喂入下一章第一页
+        }
+        return nil
+    }
+    
+    private func updateHorizontalPage(to index: Int, animated: Bool) {
+        guard let h = horizontalVC, index >= 0 && index < pages.count else { return }
+        currentPageIndex = index; h.setViewControllers([createPageVC(at: index, offset: 0)], direction: .forward, animated: animated)
+    }
+    
+    private func createPageVC(at index: Int, offset: Int) -> PageContentViewController {
+        let vc = PageContentViewController(pageIndex: index, chapterOffset: offset)
+        let pageView = ReadContent2View(frame: .zero)
+        let activeStore = (offset == 0) ? renderStore : (offset > 0 ? nextChapterStore : prevChapterStore)
+        let activePages = (offset == 0) ? pages : (offset > 0 ? nextChapterPages : prevChapterPages)
+        pageView.renderStore = activeStore
+        if index < activePages.count {
+            let p = activePages[index]
+            pageView.pageInfo = TK2PageInfo(range: p.range, yOffset: 0, pageHeight: view.bounds.height, actualContentHeight: view.bounds.height, startSentenceIndex: p.startSentenceIndex, contentInset: 20)
+        }
+        pageView.onTapLocation = { [weak self] loc in
+            if loc == .middle { self?.onToggleMenu?() }
+            else { self?.handlePageTap(isNext: loc == .right) }
+        }
+        vc.view.addSubview(pageView); pageView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([pageView.topAnchor.constraint(equalTo: vc.view.topAnchor), pageView.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor), pageView.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor), pageView.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor)])
+        return vc
+    }
+    
+    private func handlePageTap(isNext: Bool) {
+        let target = isNext ? currentPageIndex + 1 : currentPageIndex - 1
+        if target >= 0 && target < pages.count { updateHorizontalPage(to: target, animated: true) }
+        else { jumpToChapter(isNext ? currentChapterIndex + 1 : currentChapterIndex - 1) }
+    }
+
     private func syncHorizontalPageToTTS(sentenceIndex: Int) {
-        let pStarts = calculateParagraphStarts()
+        var curr = 0; var pStarts: [Int] = []
+        for s in contentSentences { pStarts.append(curr); curr += s.count + 1 }
         guard sentenceIndex < pStarts.count else { return }
         let offset = pStarts[sentenceIndex]
-        if let targetPage = pages.firstIndex(where: { NSLocationInRange(offset, $0.range) }), targetPage != currentPageIndex {
-            updateHorizontalPage(to: targetPage, animated: true)
+        if let target = pages.firstIndex(where: { NSLocationInRange(offset, $0.range) }), target != currentPageIndex {
+            updateHorizontalPage(to: target, animated: true)
         }
     }
 
     private func removeHTMLAndSVG(_ text: String) -> String {
-        var res = text
-        let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]
-        for p in patterns {
-            if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
-                res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "")
-            }
-        }
+        var res = text; let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]
+        for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }
         return res.replacingOccurrences(of: "&nbsp;", with: " ")
     }
+}
+
+class PageContentViewController: UIViewController {
+    let pageIndex: Int; let chapterOffset: Int
+    init(pageIndex: Int, chapterOffset: Int) { self.pageIndex = pageIndex; self.chapterOffset = chapterOffset; super.init(nibName: nil, bundle: nil) }
+    required init?(coder: NSCoder) { fatalError() }
 }
