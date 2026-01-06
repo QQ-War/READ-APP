@@ -30,6 +30,12 @@ struct PageTurnRequest: Equatable {
     }
 }
 
+enum ReaderTapLocation {
+    case left
+    case right
+    case middle
+}
+
 struct PaginatedPage: Equatable {
     let globalRange: NSRange
     let startSentenceIndex: Int

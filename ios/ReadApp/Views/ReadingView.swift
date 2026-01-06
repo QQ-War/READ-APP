@@ -5,8 +5,8 @@ struct ReadingView: View {
     let book: Book
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var apiService: APIService
-    @StateObject private var ttsManager = TTSManager.shared
-    @StateObject private var preferences = UserPreferences.shared
+    @StateObject var ttsManager = TTSManager.shared
+    @StateObject var preferences = UserPreferences.shared
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
 
     @State var chapters: [BookChapter] = []
