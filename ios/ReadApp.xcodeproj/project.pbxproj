@@ -11,13 +11,22 @@
 		72FDB17ADA4241E9BF6A5BB9 /* BookSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A79963738344134ACDF2305 /* BookSearchViewModel.swift */; };
 		1A000001000000000000001 /* ReadAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000001 /* ReadAppApp.swift */; };
 		1A000003000000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000004000000000000001 /* ContentView.swift */; };
+		1A000013000000000000001 /* ReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000014000000000000001 /* ReadingView.swift */; };
+		1A000098000000000000001 /* VerticalTextReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000099000000000000001 /* VerticalTextReader.swift */; };
+		1A0000AB000000000000001 /* ReaderContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AA000000000000001 /* ReaderContainer.swift */; };
+		1A0000C1000000000000001 /* MangaNativeReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B1000000000000001 /* MangaNativeReader.swift */; };
+		1A0000C2000000000000001 /* ReadingControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B2000000000000001 /* ReadingControls.swift */; };
+		1A0000C3000000000000001 /* ReadingCoreTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B3000000000000001 /* ReadingCoreTypes.swift */; };
+		1A0000C4000000000000001 /* ReadingSubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B4000000000000001 /* ReadingSubViews.swift */; };
+		1A0000C5000000000000001 /* ReadingTextKit2Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B5000000000000001 /* ReadingTextKit2Support.swift */; };
+		1A0000C6000000000000001 /* ReadingMangaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B6000000000000001 /* ReadingMangaViews.swift */; };
+		1A0000C7000000000000001 /* ReadingChapterLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B7000000000000001 /* ReadingChapterLifecycle.swift */; };
+		1A0000C8000000000000001 /* ReadingContentProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B8000000000000001 /* ReadingContentProcessing.swift */; };
+		1A0000C9000000000000001 /* ReadingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B9000000000000001 /* ReadingProgress.swift */; };
 		1A000005000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A000006000000000000001 /* Assets.xcassets */; };
 		1A000007000000000000001 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000008000000000000001 /* APIService.swift */; };
 		1A000009000000000000001 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000010000000000000001 /* Models.swift */; };
 		1A000011000000000000001 /* BookListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000012000000000000001 /* BookListView.swift */; };
-		1A000013000000000000001 /* ReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000014000000000000001 /* ReadingView.swift */; };
-		1A000098000000000000001 /* VerticalTextReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000099000000000000001 /* VerticalTextReader.swift */; };
-		1A0000AB000000000000001 /* ReaderContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AA000000000000001 /* ReaderContainer.swift */; };
 		1A000015000000000000001 /* TTSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000016000000000000001 /* TTSManager.swift */; };
 		1A000017000000000000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000018000000000000001 /* SettingsView.swift */; };
 		1A000047000000000000006 /* SettingsSubviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000048000000000000006 /* SettingsSubviews.swift */; };
@@ -43,15 +52,6 @@
 		7B4B2D6E5A2A4C7AA1F0B005 /* SourceExploreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A005 /* SourceExploreView.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B006 /* FullBookSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A006 /* FullBookSource.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B007 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A007 /* LogView.swift */; };
-		7B4B2D6E5A2A4C7AA1F0B008 /* MangaNativeReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A008 /* MangaNativeReader.swift */; };
-		7B4B2D6E5A2A4C7AA1F0B011 /* ReadingCoreTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A011 /* ReadingCoreTypes.swift */; };
-		7B4B2D6E5A2A4C7AA1F0B012 /* ReadingSubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A012 /* ReadingSubViews.swift */; };
-		7B4B2D6E5A2A4C7AA1F0B013 /* ReadingTextKit2Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A013 /* ReadingTextKit2Support.swift */; };
-		E7E256D061E047AC9B2BEA06 /* ReadingMangaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF65E99FFB4D44599370BB70 /* ReadingMangaViews.swift */; };
-		24184F839EDD4DCA8E2CDAB7 /* ReadingControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D779FADDCE4247B8A2165E /* ReadingControls.swift */; };
-		3899765890DF434F9D58E0CE /* ReadingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BFBFE432AD54D4D9E0D5512 /* ReadingProgress.swift */; };
-		CB5FAC46066248FF92EFD94D /* ReadingChapterLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B6F3D6C47B643BA966D638B /* ReadingChapterLifecycle.swift */; };
-		EAD8E312F02947618A22FAEE /* ReadingContentProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9961F6F9EC81418684577520 /* ReadingContentProcessing.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -59,13 +59,22 @@
 		0A79963738344134ACDF2305 /* BookSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSearchViewModel.swift; sourceTree = "<group>"; };
 		1A000002000000000000001 /* ReadAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadAppApp.swift; sourceTree = "<group>"; };
 		1A000004000000000000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1A000014000000000000001 /* ReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReadingView.swift; sourceTree = "<group>"; };
+		1A000099000000000000001 /* VerticalTextReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/VerticalTextReader.swift; sourceTree = "<group>"; };
+		1A0000AA000000000000001 /* ReaderContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReaderContainer.swift; sourceTree = "<group>"; };
+		1A0000B1000000000000001 /* MangaNativeReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/MangaNativeReader.swift; sourceTree = "<group>"; };
+		1A0000B2000000000000001 /* ReadingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReadingControls.swift; sourceTree = "<group>"; };
+		1A0000B3000000000000001 /* ReadingCoreTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReadingCoreTypes.swift; sourceTree = "<group>"; };
+		1A0000B4000000000000001 /* ReadingSubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReadingSubViews.swift; sourceTree = "<group>"; };
+		1A0000B5000000000000001 /* ReadingTextKit2Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReadingTextKit2Support.swift; sourceTree = "<group>"; };
+		1A0000B6000000000000001 /* ReadingMangaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReadingMangaViews.swift; sourceTree = "<group>"; };
+		1A0000B7000000000000001 /* ReadingChapterLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReadingChapterLifecycle.swift; sourceTree = "<group>"; };
+		1A0000B8000000000000001 /* ReadingContentProcessing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReadingContentProcessing.swift; sourceTree = "<group>"; };
+		1A0000B9000000000000001 /* ReadingProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadApp/Views/ReadingProgress.swift; sourceTree = "<group>"; };
 		1A000006000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A000008000000000000001 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
 		1A000010000000000000001 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		1A000012000000000000001 /* BookListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookListView.swift; sourceTree = "<group>"; };
-		1A000014000000000000001 /* ReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingView.swift; sourceTree = "<group>"; };
-		1A000099000000000000001 /* VerticalTextReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerticalTextReader.swift; sourceTree = "<group>"; };
-		1A0000AA000000000000001 /* ReaderContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContainer.swift; sourceTree = "<group>"; };
 		1A000016000000000000001 /* TTSManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSManager.swift; sourceTree = "<group>"; };
 		1A000018000000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1A000048000000000000006 /* SettingsSubviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSubviews.swift; sourceTree = "<group>"; };
@@ -91,15 +100,6 @@
 		7B4B2D6E5A2A4C7AA1F0A005 /* SourceExploreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceExploreView.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A006 /* FullBookSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullBookSource.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A007 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
-		7B4B2D6E5A2A4C7AA1F0A008 /* MangaNativeReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaNativeReader.swift; sourceTree = "<group>"; };
-		7B4B2D6E5A2A4C7AA1F0A011 /* ReadingCoreTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingCoreTypes.swift; sourceTree = "<group>"; };
-		7B4B2D6E5A2A4C7AA1F0A012 /* ReadingSubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSubViews.swift; sourceTree = "<group>"; };
-		7B4B2D6E5A2A4C7AA1F0A013 /* ReadingTextKit2Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTextKit2Support.swift; sourceTree = "<group>"; };
-		FF65E99FFB4D44599370BB70 /* ReadingMangaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingMangaViews.swift; sourceTree = "<group>"; };
-		E9D779FADDCE4247B8A2165E /* ReadingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingControls.swift; sourceTree = "<group>"; };
-		3BFBFE432AD54D4D9E0D5512 /* ReadingProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingProgress.swift; sourceTree = "<group>"; };
-		2B6F3D6C47B643BA966D638B /* ReadingChapterLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingChapterLifecycle.swift; sourceTree = "<group>"; };
-		9961F6F9EC81418684577520 /* ReadingContentProcessing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingContentProcessing.swift; sourceTree = "<group>"; };
 		1A000020000000000000001 /* ReadApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000021000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -129,6 +129,18 @@
 				1A000021000000000000001 /* Info.plist */,
 				1A000002000000000000001 /* ReadAppApp.swift */,
 				1A000004000000000000001 /* ContentView.swift */,
+				1A000014000000000000001 /* ReadingView.swift */,
+				1A000099000000000000001 /* VerticalTextReader.swift */,
+				1A0000AA000000000000001 /* ReaderContainer.swift */,
+				1A0000B1000000000000001 /* MangaNativeReader.swift */,
+				1A0000B2000000000000001 /* ReadingControls.swift */,
+				1A0000B3000000000000001 /* ReadingCoreTypes.swift */,
+				1A0000B4000000000000001 /* ReadingSubViews.swift */,
+				1A0000B5000000000000001 /* ReadingTextKit2Support.swift */,
+				1A0000B6000000000000001 /* ReadingMangaViews.swift */,
+				1A0000B7000000000000001 /* ReadingChapterLifecycle.swift */,
+				1A0000B8000000000000001 /* ReadingContentProcessing.swift */,
+				1A0000B9000000000000001 /* ReadingProgress.swift */,
 				1A000026000000000000001 /* Views */,
 				1A000027000000000000001 /* Services */,
 				1A000030000000000000002 /* ViewModels */,
@@ -154,12 +166,6 @@
 				1A000012000000000000001 /* BookListView.swift */,
 				1A00003D000000000000003 /* SourceListView.swift */,
 				1A00003F000000000000003 /* SourceEditView.swift */,
-				1A000014000000000000001 /* ReadingView.swift */,
-				                				1A000099000000000000001 /* VerticalTextReader.swift */,
-				                				1A0000AA000000000000001 /* ReaderContainer.swift */,
-				                				3BFBFE432AD54D4D9E0D5512 /* ReadingProgress.swift */,
-				2B6F3D6C47B643BA966D638B /* ReadingChapterLifecycle.swift */,
-				9961F6F9EC81418684577520 /* ReadingContentProcessing.swift */,
 				1A000018000000000000001 /* SettingsView.swift */,
 				1A000048000000000000006 /* SettingsSubviews.swift */,
 				1A000020000000000000002 /* TTSSelectionView.swift */,
@@ -281,15 +287,24 @@
 			files = (
 				1A000001000000000000001 /* ReadAppApp.swift in Sources */,
 				1A000003000000000000001 /* ContentView.swift in Sources */,
+				1A000013000000000000001 /* ReadingView.swift in Sources */,
+				1A000098000000000000001 /* VerticalTextReader.swift in Sources */,
+				1A0000AB000000000000001 /* ReaderContainer.swift in Sources */,
+				1A0000C1000000000000001 /* MangaNativeReader.swift in Sources */,
+				1A0000C2000000000000001 /* ReadingControls.swift in Sources */,
+				1A0000C3000000000000001 /* ReadingCoreTypes.swift in Sources */,
+				1A0000C4000000000000001 /* ReadingSubViews in Sources */,
+				1A0000C5000000000000001 /* ReadingTextKit2Support in Sources */,
+				1A0000C6000000000000001 /* ReadingMangaViews in Sources */,
+				1A0000C7000000000000001 /* ReadingChapterLifecycle in Sources */,
+				1A0000C8000000000000001 /* ReadingContentProcessing in Sources */,
+				1A0000C9000000000000001 /* ReadingProgress in Sources */,
 				1A000007000000000000001 /* APIService.swift in Sources */,
 				1A000009000000000000001 /* Models.swift in Sources */,
 				1A00003A000000000000003 /* BookSource.swift in Sources */,
 				1A000011000000000000001 /* BookListView.swift in Sources */,
 				1A00003E000000000000003 /* SourceListView.swift in Sources */,
 				1A000040000000000000003 /* SourceEditView.swift in Sources */,
-				1A000013000000000000001 /* ReadingView.swift in Sources */,
-				1A000098000000000000001 /* VerticalTextReader.swift in Sources */,
-				1A0000AB000000000000001 /* ReaderContainer.swift in Sources */,
 				1A000015000000000000001 /* TTSManager.swift in Sources */,
 				1A000017000000000000001 /* SettingsView.swift in Sources */,
 				1A000047000000000000006 /* SettingsSubviews.swift in Sources */,
@@ -301,15 +316,6 @@
 				7B4B2D6E5A2A4C7AA1F0B005 /* SourceExploreView.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B006 /* FullBookSource.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B007 /* LogView.swift in Sources */,
-				7B4B2D6E5A2A4C7AA1F0B008 /* MangaNativeReader.swift in Sources */,
-				7B4B2D6E5A2A4C7AA1F0B011 /* ReadingCoreTypes.swift in Sources */,
-				7B4B2D6E5A2A4C7AA1F0B012 /* ReadingSubViews.swift in Sources */,
-				7B4B2D6E5A2A4C7AA1F0B013 /* ReadingTextKit2Support.swift in Sources */,
-				E7E256D061E047AC9B2BEA06 /* ReadingMangaViews.swift in Sources */,
-				24184F839EDD4DCA8E2CDAB7 /* ReadingControls.swift in Sources */,
-				3899765890DF434F9D58E0CE /* ReadingProgress.swift in Sources */,
-				CB5FAC46066248FF92EFD94D /* ReadingChapterLifecycle.swift in Sources */,
-				EAD8E312F02947618A22FAEE /* ReadingContentProcessing.swift in Sources */,
 				1A000021000000000000002 /* LoginView.swift in Sources */,
 				1A000023000000000000002 /* LogManager.swift in Sources */,
 				1A000025000000000000002 /* HTMLContentView.swift in Sources */,
