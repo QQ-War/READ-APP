@@ -315,10 +315,17 @@ struct ReadingView: View {
                 get: { currentVisibleSentenceIndex ?? 0 },
                 set: { currentVisibleSentenceIndex = $0 }
             ),
-            pendingScrollIndex: $pendingScrollToSentenceIndex
+            pendingScrollIndex: $pendingScrollToSentenceIndex,
+            forceScrollToTop: pendingJumpToFirstPage && !isExplicitlySwitchingChapter,
+            onAddReplaceRule: { selectedText in
+                presentReplaceRuleEditor(selectedText: selectedText)
+            }
         )
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ReaderToggleControls"))) { _ in
             withAnimation { showUIControls.toggle() }
+        }
+        .onChange(of: currentChapterIndex) { _ in
+            pendingJumpToFirstPage = true
         }
     }
     
