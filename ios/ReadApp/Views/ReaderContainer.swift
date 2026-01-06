@@ -270,8 +270,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func performSilentPagination(for store: TextKit2RenderStore, sentences: [String], title: String) -> TextKit2Paginator.PaginationResult {
         let spec = currentLayoutSpec
         var pS: [Int] = []; var c = title.isEmpty ? 0 : (title + "\n").utf16.count; for s in sentences { pS.append(c); c += s.count + 1 }
-        let pSize = CGSize(width: max(1, spec.pageSize.width - spec.sideMargin * 2), height: max(1, spec.pageSize.height - spec.bottomInset))
-        return TextKit2Paginator.paginate(renderStore: store, pageSize: pSize, paragraphStarts: pS, prefixLen: title.isEmpty ? 0 : (title + "\n").utf16.count, contentInset: spec.topInset)
+        // 关键修复：直接传递物理 Size，Inset 统一在 Paginator 内部一次性扣除
+        return TextKit2Paginator.paginate(renderStore: store, pageSize: spec.pageSize, paragraphStarts: pS, prefixLen: title.isEmpty ? 0 : (title + "\n").utf16.count, contentInset: spec.topInset)
     }
 
     private func createAttrString(_ text: String, title: String) -> NSAttributedString {
@@ -287,7 +287,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let attrString = createAttrString(contentSentences.joined(separator: "\n"), title: title)
         if let store = renderStore { store.update(attributedString: attrString, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2)) } 
         else { renderStore = TextKit2RenderStore(attributedString: attrString, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2)) }
-        renderStore?.textContainer.lineFragmentPadding = 0 // 内部 Inset 统一由 Spec 控制
+        renderStore?.textContainer.lineFragmentPadding = 0 
     }
     
     private func performPagination() {
@@ -296,8 +296,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
         var starts: [Int] = []; var curr = pLen; for sent in contentSentences { starts.append(curr); curr += sent.count + 1 }
-        let pSize = CGSize(width: max(1, spec.pageSize.width - spec.sideMargin * 2), height: max(1, spec.pageSize.height - spec.bottomInset))
-        let res = TextKit2Paginator.paginate(renderStore: s, pageSize: pSize, paragraphStarts: starts, prefixLen: pLen, contentInset: spec.topInset)
+        // 关键修复：统一分页高度计算
+        let res = TextKit2Paginator.paginate(renderStore: s, pageSize: spec.pageSize, paragraphStarts: starts, prefixLen: pLen, contentInset: spec.topInset)
         self.pages = res.pages; self.pageInfos = res.pageInfos
     }
 
@@ -343,7 +343,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         sv.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleMangaTap)))
     }
     @objc private func handleMangaTap() { onToggleMenu?() }
-    func viewForZooming(in scrollView: UIScrollView) -> UIView? { return mangaStackView }
+    
+    // MARK: - UIScrollViewDelegate (Manga Zoom)
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        if scrollView == mangaScrollView { return mangaStackView }
+        return nil
+    }
 
     func pageViewController(_ pvc: UIPageViewController, didFinishAnimating f: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
         if completed, let visibleVC = pvc.viewControllers?.first as? PageContentViewController {
