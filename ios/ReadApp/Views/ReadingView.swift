@@ -51,6 +51,7 @@ struct ReadingView: View {
                         book: book,
                         preferences: preferences,
                         ttsManager: ttsManager,
+                        replaceRuleViewModel: replaceRuleViewModel,
                         chapters: $chapters,
                         currentChapterIndex: $currentChapterIndex,
                         onToggleMenu: { withAnimation { showUIControls.toggle() } },

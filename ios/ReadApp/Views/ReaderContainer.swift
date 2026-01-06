@@ -7,6 +7,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     let book: Book
     @ObservedObject var preferences: UserPreferences
     @ObservedObject var ttsManager: TTSManager
+    @ObservedObject var replaceRuleViewModel: ReplaceRuleViewModel // 注入规则
     
     @Binding var chapters: [BookChapter]
     @Binding var currentChapterIndex: Int
@@ -20,6 +21,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> ReaderContainerViewController {
         let vc = ReaderContainerViewController()
         vc.book = book; vc.preferences = preferences; vc.ttsManager = ttsManager
+        vc.replaceRuleViewModel = replaceRuleViewModel
         vc.onToggleMenu = onToggleMenu; vc.onAddReplaceRuleWithText = onAddReplaceRule
         vc.onProgressChanged = { idx, pos in
             DispatchQueue.main.async {
@@ -35,6 +37,9 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     
     func updateUIViewController(_ vc: ReaderContainerViewController, context: Context) {
         vc.updatePreferences(preferences)
+        // 规则变化时触发刷新
+        vc.updateReplaceRules(replaceRuleViewModel.rules)
+        
         if vc.currentChapterIndex != currentChapterIndex {
             vc.jumpToChapter(currentChapterIndex)
         }
@@ -48,24 +53,21 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
 // MARK: - UIKit 核心容器
 class ReaderContainerViewController: UIViewController, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
     var book: Book!; var chapters: [BookChapter] = []; var preferences: UserPreferences!; var ttsManager: TTSManager!
+    var replaceRuleViewModel: ReplaceRuleViewModel?
     var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?
     
     private(set) var currentChapterIndex: Int = 0
     private(set) var currentReadingMode: ReadingMode = .vertical
+    private var rawContent: String = "" // 保存原始文本以供即时净化
     private var contentSentences: [String] = []
     private var renderStore: TextKit2RenderStore?
     private var currentCharOffset: Int = 0 
     
     // 多章节缓存系统 (The Swap System)
-    private var nextChapterStore: TextKit2RenderStore?
-    private var prevChapterStore: TextKit2RenderStore?
-    private var nextChapterPages: [PaginatedPage] = []
-    private var prevChapterPages: [PaginatedPage] = []
+    private var nextChapterStore: TextKit2RenderStore?; private var prevChapterStore: TextKit2RenderStore?
+    private var nextChapterPages: [PaginatedPage] = []; private var prevChapterPages: [PaginatedPage] = []
 
-    private var verticalVC: VerticalTextViewController?
-    private var horizontalVC: UIPageViewController?
-    private var mangaVC: UIViewController?
-    
+    private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: UIViewController?
     private var pages: [PaginatedPage] = []; private var currentPageIndex: Int = 0; private var isMangaMode = false
 
     override func viewDidLoad() {
@@ -77,18 +79,22 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        verticalVC?.view.frame = view.bounds
-        horizontalVC?.view.frame = view.bounds
-        mangaVC?.view.frame = view.bounds
+        verticalVC?.view.frame = view.bounds; horizontalVC?.view.frame = view.bounds; mangaVC?.view.frame = view.bounds
     }
 
     func updatePreferences(_ prefs: UserPreferences) {
         let fontSizeChanged = preferences.fontSize != prefs.fontSize
         let lineSpacingChanged = preferences.lineSpacing != prefs.lineSpacing
         self.preferences = prefs
-        
         if (fontSizeChanged || lineSpacingChanged) && renderStore != nil && !isMangaMode {
-            loadChapterContent(at: currentChapterIndex, maintainOffset: true)
+            reRenderCurrentContent(maintainOffset: true)
+        }
+    }
+    
+    func updateReplaceRules(_ rules: [ReplaceRule]) {
+        // 仅在规则真正变化时重绘（后续可加 hash 校验优化）
+        if !rawContent.isEmpty {
+            reRenderCurrentContent(maintainOffset: true)
         }
     }
     
@@ -136,71 +142,75 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         Task {
             do {
                 let list = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
-                await MainActor.run { 
-                    self.chapters = list
-                    self.onChaptersLoaded?(list)
-                    loadChapterContent(at: currentChapterIndex) 
-                }
+                await MainActor.run { self.chapters = list; self.onChaptersLoaded?(list); loadChapterContent(at: currentChapterIndex) }
             } catch { print("加载目录失败") }
         }
     }
     
-    private func loadChapterContent(at index: Int, resetOffset: Bool = false, maintainOffset: Bool = false) {
+    private func loadChapterContent(at index: Int, resetOffset: Bool = false) {
         guard index >= 0 && index < chapters.count else { return }
         Task {
             do {
                 let isM = book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
                 let content = try await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: isM ? 2 : 0)
                 await MainActor.run {
-                    self.isMangaMode = isM; let cleaned = removeHTMLAndSVG(content)
-                    self.contentSentences = cleaned.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                    
-                    if !isM {
-                        prepareRenderStore()
-                        if currentReadingMode == .horizontal { performPagination() }
-                    }
-                    
-                    setupReaderMode()
-                    
+                    self.rawContent = content
+                    self.isMangaMode = isM
+                    reRenderCurrentContent(maintainOffset: !resetOffset)
                     if resetOffset {
                         verticalVC?.scrollToTop(animated: false)
                         updateHorizontalPage(to: 0, animated: false)
-                    } else if maintainOffset {
-                        applyCapturedProgress()
                     }
-                    
-                    // 核心：启动邻近章节静默预加载
                     prefetchAdjacentChapters(index: index)
                 }
             } catch { print("加载内容失败") }
         }
     }
     
+    private func reRenderCurrentContent(maintainOffset: Bool) {
+        if maintainOffset { captureCurrentProgress() }
+        
+        let cleaned = removeHTMLAndSVG(rawContent)
+        let processed = applyReplaceRules(to: cleaned)
+        self.contentSentences = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        
+        if !isMangaMode {
+            prepareRenderStore()
+            if currentReadingMode == .horizontal { performPagination() }
+        }
+        
+        setupReaderMode()
+        if maintainOffset { applyCapturedProgress() }
+    }
+    
+    private func applyReplaceRules(to text: String) -> String {
+        guard let rules = replaceRuleViewModel?.rules, !rules.isEmpty else { return text }
+        var result = text
+        for rule in rules where rule.isEnabled == true {
+            let pattern = rule.pattern
+            let replacement = rule.replacement
+            if rule.isRegex == true {
+                if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
+                    result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: replacement)
+                }
+            } else {
+                result = result.replacingOccurrences(of: pattern, with: replacement)
+            }
+        }
+        return result
+    }
+
     private func prefetchAdjacentChapters(index: Int) {
-        // 预载下一章
         if index + 1 < chapters.count {
             Task {
                 if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1) {
                     await MainActor.run {
                         let cleaned = removeHTMLAndSVG(content)
-                        let attr = createAttrString(cleaned)
+                        let processed = applyReplaceRules(to: cleaned)
+                        let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                        let attr = createAttrString(processed)
                         self.nextChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: view.bounds.width - preferences.pageHorizontalMargin * 2)
-                        let res = performSilentPagination(for: nextChapterStore!, sentences: cleaned.components(separatedBy: "\n"))
-                        self.nextChapterPages = res
-                    }
-                }
-            }
-        }
-        // 预载上一章
-        if index - 1 >= 0 {
-            Task {
-                if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index - 1) {
-                    await MainActor.run {
-                        let cleaned = removeHTMLAndSVG(content)
-                        let attr = createAttrString(cleaned)
-                        self.prevChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: view.bounds.width - preferences.pageHorizontalMargin * 2)
-                        let res = performSilentPagination(for: prevChapterStore!, sentences: cleaned.components(separatedBy: "\n"))
-                        self.prevChapterPages = res
+                        self.nextChapterPages = performSilentPagination(for: nextChapterStore!, sentences: sents)
                     }
                 }
             }
@@ -209,24 +219,21 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func performSilentPagination(for store: TextKit2RenderStore, sentences: [String]) -> [PaginatedPage] {
         var pS: [Int] = []; var c = 0
-        let filtered = sentences.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        for s in filtered { pS.append(c); c += s.count + 1 }
+        for s in sentences { pS.append(c); c += s.count + 1 }
         let res = TextKit2Paginator.paginate(renderStore: store, pageSize: view.bounds.size, paragraphStarts: pS, prefixLen: 0, contentInset: 20)
         return res.pageInfos.map { PaginatedPage(globalRange: $0.range, startSentenceIndex: $0.startSentenceIndex) }
     }
 
     private func createAttrString(_ text: String) -> NSAttributedString {
-        return NSAttributedString(string: text, attributes: [
-            .font: UIFont.systemFont(ofSize: preferences.fontSize),
-            .paragraphStyle: { let p = NSMutableParagraphStyle(); p.lineSpacing = preferences.lineSpacing; p.alignment = .justified; return p }()
-        ])
+        return NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize), .paragraphStyle: { let p = NSMutableParagraphStyle(); p.lineSpacing = preferences.lineSpacing; p.alignment = .justified; return p }() ])
     }
 
     private func prepareRenderStore() {
         let fullText = contentSentences.joined(separator: "\n")
         let attrString = createAttrString(fullText)
         let width = max(100, view.bounds.width - preferences.pageHorizontalMargin * 2)
-        if let store = renderStore { store.update(attributedString: attrString, layoutWidth: width) } else { renderStore = TextKit2RenderStore(attributedString: attrString, layoutWidth: width) }
+        if let store = renderStore { store.update(attributedString: attrString, layoutWidth: width) }
+        else { renderStore = TextKit2RenderStore(attributedString: attrString, layoutWidth: width) }
     }
     
     private func performPagination() {
@@ -241,7 +248,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         verticalVC?.view.removeFromSuperview(); verticalVC?.removeFromParent(); verticalVC = nil
         horizontalVC?.view.removeFromSuperview(); horizontalVC?.removeFromParent(); horizontalVC = nil
         mangaVC?.view.removeFromSuperview(); mangaVC?.removeFromParent(); mangaVC = nil
-        
         if isMangaMode { setupMangaMode() }
         else if currentReadingMode == .vertical { setupVerticalMode() }
         else { setupHorizontalMode() }
@@ -377,12 +383,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func removeHTMLAndSVG(_ text: String) -> String {
         var res = text; let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]
-        for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }
+        for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }
         return res.replacingOccurrences(of: "&nbsp;", with: " ")
     }
 }
 
-// MARK: - 辅助 Page 容器
 class PageContentViewController: UIViewController {
     let pageIndex: Int; let chapterOffset: Int
     init(pageIndex: Int, chapterOffset: Int) { self.pageIndex = pageIndex; self.chapterOffset = chapterOffset; super.init(nibName: nil, bundle: nil) }
