@@ -383,7 +383,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func removeHTMLAndSVG(_ text: String) -> String {
         var res = text; let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]
-        for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }
+        for p in patterns {
+            if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
+                res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "")
+            }
+        }
         return res.replacingOccurrences(of: "&nbsp;", with: " ")
     }
 }
