@@ -69,7 +69,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var pendingTargetPageIndex: Int?
     private var pendingTargetDirection: UIPageViewController.NavigationDirection?
     
-    private var currentLoadTask: Task<Void, Never>?; private var prefetchNextTask: Task<Void, Never>?
+    private var currentLoadTask: Task<Void, Never>?; private var prefetchNextTask: Task<Void, Never>?; private var prefetchPrevTask: Task<Void, Never>?
     private var loadToken: Int = 0; private var lastRenderedMode: ReadingMode?; private var lastRenderedIsManga: Bool?; private var lastAppliedRulesSignature: String?
 
     override func viewDidLoad() {
