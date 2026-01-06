@@ -77,6 +77,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     
     var onVisibleIndexChanged: ((Int) -> Void)?
     var onAddReplaceRule: ((String) -> Void)?
+    var onTapMenu: (() -> Void)? // 新增：点击菜单回调
     var chapterUrl: String?
     
     private var renderStore: TextKit2RenderStore?
@@ -86,6 +87,17 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     private var lastReportedIndex: Int = -1
     private var isUpdatingLayout = false
     private var lastTTSSyncIndex: Int = -1
+    
+    func getCurrentCharOffset() -> Int {
+        let y = scrollView.contentOffset.y - 40
+        let index = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
+        return paragraphStarts.indices.contains(index) ? paragraphStarts[index] : 0
+    }
+    
+    func scrollToCharOffset(_ offset: Int, animated: Bool) {
+        let index = paragraphStarts.lastIndex(where: { $0 <= offset }) ?? 0
+        scrollToSentence(index: index, animated: animated)
+    }
     
     // 任务系统：确保在排版完成后执行
     private var pendingTask: VerticalReaderTask?
@@ -130,7 +142,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     private var lastMargin: CGFloat = 20
 
     @objc private func handleTap() {
-        NotificationCenter.default.post(name: NSNotification.Name("ReaderToggleControls"), object: nil)
+        if let onTapMenu = onTapMenu {
+            onTapMenu()
+        } else {
+            NotificationCenter.default.post(name: NSNotification.Name("ReaderToggleControls"), object: nil)
+        }
     }
     
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
