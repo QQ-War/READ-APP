@@ -88,7 +88,7 @@ struct ReadingView: View {
     private var topBar: some View {
         VStack(spacing: 0) {
             // 顶部的安全区填充
-            Color.clear.frame(height: UIApplication.shared.windows.first?.safeAreaInsets.top ?? 44)
+            Color.clear.frame(height: safeAreaInsets.top)
             
             HStack(spacing: 12) {
                 Button(action: { dismiss() }) {
@@ -117,9 +117,15 @@ struct ReadingView: View {
         VStack(spacing: 0) {
             controlBar
             // 底部的安全区填充
-            Color.clear.frame(height: UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 34)
+            Color.clear.frame(height: safeAreaInsets.bottom)
         }
         .background(.thinMaterial)
+    }
+
+    private var safeAreaInsets: UIEdgeInsets {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let window = scenes.flatMap { $0.windows }.first { $0.isKeyWindow }
+        return window?.safeAreaInsets ?? UIEdgeInsets(top: 44, left: 0, bottom: 34, right: 0)
     }
 
     @ViewBuilder private var controlBar: some View {

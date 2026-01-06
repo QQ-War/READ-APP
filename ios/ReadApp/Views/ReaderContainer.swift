@@ -56,7 +56,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var nextChapterPages: [PaginatedPage] = []; private var prevChapterPages: [PaginatedPage] = []
 
     private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaScrollView: UIScrollView?
+    private var mangaStackView: UIStackView?
     private var pages: [PaginatedPage] = []; private var currentPageIndex: Int = 0; private var isMangaMode = false
+    
+    private var currentLoadTask: Task<Void, Never>?
+    private var prefetchNextTask: Task<Void, Never>?
+    private var prefetchPrevTask: Task<Void, Never>?
+    private var loadToken: Int = 0
+    private var lastRenderedMode: ReadingMode?
+    private var lastRenderedIsManga: Bool?
+    private var lastAppliedRulesSignature: String?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -81,6 +90,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     func updateReplaceRules(_ rules: [ReplaceRule]) {
+        let signature = rulesSignature(rules)
+        if signature == lastAppliedRulesSignature { return }
+        lastAppliedRulesSignature = signature
         if !rawContent.isEmpty && !isMangaMode { reRenderCurrentContent(maintainOffset: true) }
     }
     
@@ -131,19 +143,28 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     private func loadChapterContent(at index: Int, resetOffset: Bool = false) {
         guard index >= 0 && (chapters.isEmpty || index < chapters.count) else { return }
-        Task {
+        loadToken += 1
+        let token = loadToken
+        currentLoadTask?.cancel()
+        currentLoadTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 let isM = book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
                 let content = try await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: isM ? 2 : 0)
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    self.rawContent = content; self.isMangaMode = isM
-                    reRenderCurrentContent(maintainOffset: !resetOffset)
+                    guard self.loadToken == token else { return }
+                    self.rawContent = content
+                    self.isMangaMode = isM
+                    self.nextChapterStore = nil; self.nextChapterPages = []
+                    self.prevChapterStore = nil; self.prevChapterPages = []
+                    self.reRenderCurrentContent(maintainOffset: !resetOffset)
                     if resetOffset {
-                        verticalVC?.scrollToTop(animated: false)
-                        updateHorizontalPage(to: 0, animated: false)
-                        mangaScrollView?.setContentOffset(.zero, animated: false)
+                        self.verticalVC?.scrollToTop(animated: false)
+                        self.updateHorizontalPage(to: 0, animated: false)
+                        self.mangaScrollView?.setContentOffset(.zero, animated: false)
                     }
-                    prefetchAdjacentChapters(index: index)
+                    self.prefetchAdjacentChapters(index: index)
                 }
             } catch { print("Content load failed") }
         }
@@ -158,7 +179,19 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             prepareRenderStore()
             if currentReadingMode == .horizontal { performPagination() }
         }
-        setupReaderMode()
+        
+        let shouldRebuild = lastRenderedIsManga != isMangaMode
+            || (!isMangaMode && lastRenderedMode != currentReadingMode)
+            || (isMangaMode && mangaScrollView == nil)
+            || (!isMangaMode && (currentReadingMode == .vertical ? verticalVC == nil : horizontalVC == nil))
+        
+        if shouldRebuild {
+            setupReaderMode()
+        } else {
+            updateCurrentModeViews()
+        }
+        lastRenderedIsManga = isMangaMode
+        lastRenderedMode = currentReadingMode
         if maintainOffset { applyCapturedProgress() }
     }
     
@@ -173,18 +206,64 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func prefetchAdjacentChapters(index: Int) {
+        prefetchNextTask?.cancel()
+        prefetchPrevTask?.cancel()
+        
+        let baseIndex = index
         if index + 1 < chapters.count {
-            Task {
+            prefetchNextTask = Task { [weak self] in
+                guard let self else { return }
                 if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1) {
+                    guard !Task.isCancelled else { return }
                     await MainActor.run {
+                        guard self.currentChapterIndex == baseIndex else { return }
                         let processed = applyReplaceRules(to: removeHTMLAndSVG(content))
                         let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                         let attr = createAttrString(processed)
                         self.nextChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - preferences.pageHorizontalMargin * 2))
-                        self.nextChapterPages = performSilentPagination(for: nextChapterStore!, sentences: sents)
+                        self.nextChapterPages = self.performSilentPagination(for: self.nextChapterStore!, sentences: sents)
                     }
                 }
             }
+        }
+        
+        if index - 1 >= 0 {
+            prefetchPrevTask = Task { [weak self] in
+                guard let self else { return }
+                if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index - 1) {
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        guard self.currentChapterIndex == baseIndex else { return }
+                        let processed = applyReplaceRules(to: removeHTMLAndSVG(content))
+                        let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                        let attr = createAttrString(processed)
+                        self.prevChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - preferences.pageHorizontalMargin * 2))
+                        self.prevChapterPages = self.performSilentPagination(for: self.prevChapterStore!, sentences: sents)
+                    }
+                }
+            }
+        }
+    }
+
+    private func updateCurrentModeViews() {
+        if isMangaMode {
+            reloadMangaContent()
+            return
+        }
+        if currentReadingMode == .vertical {
+            verticalVC?.update(
+                sentences: contentSentences,
+                fontSize: preferences.fontSize,
+                lineSpacing: preferences.lineSpacing,
+                margin: preferences.pageHorizontalMargin,
+                highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil,
+                secondaryIndices: Set(ttsManager.preloadedIndices),
+                isPlaying: ttsManager.isPlaying
+            )
+        } else {
+            performPagination()
+            let safeIndex = min(currentPageIndex, max(0, pages.count - 1))
+            updateHorizontalPage(to: safeIndex, animated: false)
         }
     }
 
@@ -215,7 +294,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func setupReaderMode() {
         verticalVC?.view.removeFromSuperview(); verticalVC?.removeFromParent(); verticalVC = nil
         horizontalVC?.view.removeFromSuperview(); horizontalVC?.removeFromParent(); horizontalVC = nil
-        mangaScrollView?.removeFromSuperview(); mangaScrollView = nil
+        mangaScrollView?.removeFromSuperview(); mangaScrollView = nil; mangaStackView = nil
         
         if isMangaMode { setupMangaMode() }
         else if currentReadingMode == .vertical { setupVerticalMode() }
@@ -250,6 +329,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         stack.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([stack.topAnchor.constraint(equalTo: sv.contentLayoutGuide.topAnchor), stack.bottomAnchor.constraint(equalTo: sv.contentLayoutGuide.bottomAnchor), stack.leadingAnchor.constraint(equalTo: sv.contentLayoutGuide.leadingAnchor), stack.trailingAnchor.constraint(equalTo: sv.contentLayoutGuide.trailingAnchor), stack.widthAnchor.constraint(equalTo: sv.frameLayoutGuide.widthAnchor)])
         
+        mangaStackView = stack
         for sent in contentSentences where sent.contains("__IMG__") {
             let url = sent.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
             let iv = UIImageView(); iv.contentMode = .scaleAspectFit; iv.clipsToBounds = true
@@ -260,6 +340,27 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         view.addSubview(sv); self.mangaScrollView = sv
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleMangaTap)); sv.addGestureRecognizer(tap)
+    }
+
+    private func reloadMangaContent() {
+        guard let stack = mangaStackView else {
+            setupMangaMode()
+            return
+        }
+        for view in stack.arrangedSubviews {
+            stack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        for sent in contentSentences where sent.contains("__IMG__") {
+            let url = sent.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
+            let iv = UIImageView(); iv.contentMode = .scaleAspectFit; iv.clipsToBounds = true
+            stack.addArrangedSubview(iv)
+            Task {
+                if let u = URL(string: url), let (data, _) = try? await URLSession.shared.data(from: u), let img = UIImage(data: data) {
+                    await MainActor.run { iv.image = img; iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: img.size.height / img.size.width).isActive = true }
+                }
+            }
+        }
     }
     @objc private func handleMangaTap() { onToggleMenu?() }
 
@@ -342,6 +443,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var res = text; let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]
         for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }
         return res.replacingOccurrences(of: "&nbsp;", with: " ")
+    }
+
+    private func rulesSignature(_ rules: [ReplaceRule]) -> String {
+        rules.map {
+            "\($0.id ?? "")|\($0.pattern)|\($0.replacement)|\($0.isEnabled ?? false)|\($0.isRegex ?? false)"
+        }.joined(separator: ";")
     }
 }
 
