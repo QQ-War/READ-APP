@@ -5,13 +5,14 @@ struct ReadingView: View {
     let book: Book
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var apiService: APIService
-    @StateObject private var ttsManager = TTSManager.shared
-    @StateObject private var preferences = UserPreferences.shared
+    @StateObject var ttsManager = TTSManager.shared
+    @StateObject var preferences = UserPreferences.shared
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
 
     @State var chapters: [BookChapter] = []
     @State var currentChapterIndex: Int
     @State var currentPos: Double = 0 
+    @State private var isMangaMode = false
     
     @State private var showUIControls = false
     @State private var showFontSettings = false
@@ -47,6 +48,7 @@ struct ReadingView: View {
                     replaceRuleViewModel: replaceRuleViewModel,
                     chapters: $chapters,
                     currentChapterIndex: $currentChapterIndex,
+                    isMangaMode: $isMangaMode,
                     onToggleMenu: { withAnimation { showUIControls.toggle() } },
                     onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
                     onProgressChanged: { _, pos in self.currentPos = pos },
@@ -82,7 +84,7 @@ struct ReadingView: View {
             } 
         }
         .sheet(isPresented: $showFontSettings) { 
-            ReaderOptionsSheet(preferences: preferences, isMangaMode: currentChapterIsManga) 
+            ReaderOptionsSheet(preferences: preferences, isMangaMode: isMangaMode) 
         }
     }
 
