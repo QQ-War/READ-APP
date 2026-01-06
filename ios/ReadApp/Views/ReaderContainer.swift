@@ -2,12 +2,6 @@ import SwiftUI
 import UIKit
 import Combine
 
-// MARK: - 辅助模型
-struct PaginatedPage: Equatable {
-    let globalRange: NSRange
-    let startSentenceIndex: Int
-}
-
 // MARK: - SwiftUI 桥接入口
 struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     let book: Book
