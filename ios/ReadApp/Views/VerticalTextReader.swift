@@ -374,7 +374,7 @@ class VerticalTextContentView: UIView {
                     
                     // 遍历片段内的每一行
                     for line in fragment.textLineFragments {
-                        let lineRect = line.typographicBounds.offsetBy(dx: fFrame.origin.x, dy: f.layoutFragmentFrame.origin.y)
+                        let lineRect = line.typographicBounds.offsetBy(dx: fFrame.origin.x, dy: fFrame.origin.y)
                         // 绘制带有圆角的精细背景条
                         let path = UIBezierPath(roundedRect: lineRect.insetBy(dx: -2, dy: -1), cornerRadius: 4)
                         context?.addPath(path.cgPath)

@@ -2,12 +2,6 @@ import SwiftUI
 import UIKit
 import Combine
 
-// MARK: - 辅助模型
-struct PaginatedPage: Equatable {
-    let globalRange: NSRange
-    let startSentenceIndex: Int
-}
-
 // MARK: - SwiftUI 桥接入口
 struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     let book: Book
@@ -389,10 +383,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         pageView.renderStore = activeStore
         if index < activeInfos.count {
             pageView.pageInfo = activeInfos[index]
-            // 关键：水平翻页模式也需要同步安全区
-            var info = activeInfos[index]
-            info.contentInset = view.safeAreaInsets.top + 20
-            pageView.pageInfo = info
         }
         pageView.onTapLocation = { [weak self] loc in
             if loc == .middle { self?.onToggleMenu?() }
