@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - TK1
+      - UIKIT
     paths:
       - "android/**"
       - ".github/workflows/android.yml"

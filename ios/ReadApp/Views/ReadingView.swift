@@ -302,53 +302,23 @@ struct ReadingView: View {
     }
     
     private var verticalReader: some View {
-        GeometryReader {
-            geometry in
-            ScrollViewReader {
-                proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // 置顶锚点
-                        Color.clear.frame(height: 1).id("top_marker")
-                        
-                        let primaryHighlight = ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex
-                        let secondaryHighlights = ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>()
-                        
-                        RichTextView(
-                            sentences: contentSentences,
-                            fontSize: preferences.fontSize,
-                            lineSpacing: preferences.lineSpacing,
-                            highlightIndex: primaryHighlight,
-                            secondaryIndices: secondaryHighlights,
-                            isPlayingHighlight: ttsManager.isPlaying,
-                            scrollProxy: scrollProxy,
-                            chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
-                        )
-                        .padding(.horizontal, currentChapterIsManga ? 0 : preferences.pageHorizontalMargin)
-                    }
-                    .frame(maxWidth: .infinity) // 确保全宽响应
-                    .contentShape(Rectangle()) // 确保空白处可点击
-                    .onTapGesture {
-                        withAnimation { showUIControls.toggle() }
-                    }
-                }
-                .id("v_reader_scroll_\(currentChapterIndex)") // 强制刷新视图防止内容卡死
-                .coordinateSpace(name: "scroll")
-                .onPreferenceChange(SentenceFramePreferenceKey.self) { updateVisibleSentenceIndex(frames: $0, viewportHeight: geometry.size.height) }
-                .onChange(of: contentSentences) { _ in
-                    if preferences.readingMode == .vertical && isExplicitlySwitchingChapter {
-                        // 强制置顶到锚点
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            withAnimation { proxy.scrollTo("top_marker", anchor: .top) }
-                            isExplicitlySwitchingChapter = false
-                        }
-                    }
-                }
-                .onAppear {
-                    scrollProxy = proxy
-                    handlePendingScroll()
-                }
-            }
+        VerticalTextReader(
+            sentences: contentSentences,
+            fontSize: preferences.fontSize,
+            lineSpacing: preferences.lineSpacing,
+            horizontalMargin: preferences.pageHorizontalMargin,
+            highlightIndex: ttsManager.isPlaying ? (ttsManager.currentSentenceIndex + ttsBaseIndex) : lastTTSSentenceIndex,
+            secondaryIndices: ttsManager.isPlaying ? Set(ttsManager.preloadedIndices.map { $0 + ttsBaseIndex }) : Set<Int>(),
+            isPlayingHighlight: ttsManager.isPlaying,
+            chapterUrl: chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil,
+            currentVisibleIndex: Binding(
+                get: { currentVisibleSentenceIndex ?? 0 },
+                set: { currentVisibleSentenceIndex = $0 }
+            ),
+            pendingScrollIndex: $pendingScrollToSentenceIndex
+        )
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ReaderToggleControls"))) { _ in
+            withAnimation { showUIControls.toggle() }
         }
     }
     
