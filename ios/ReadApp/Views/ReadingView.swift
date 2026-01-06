@@ -5,8 +5,8 @@ struct ReadingView: View {
     let book: Book
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var apiService: APIService
-    @StateObject var ttsManager = TTSManager.shared
-    @StateObject var preferences = UserPreferences.shared
+    @StateObject private var ttsManager = TTSManager.shared
+    @StateObject private var preferences = UserPreferences.shared
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
 
     @State var chapters: [BookChapter] = []
@@ -32,38 +32,40 @@ struct ReadingView: View {
     }
 
     var body: some View {
-        ZStack {
-            // 背景底色，铺满全屏
-            backgroundView.ignoresSafeArea()
-            
-            // 核心阅读容器
-            ReaderContainerRepresentable(
-                book: book,
-                preferences: preferences,
-                ttsManager: ttsManager,
-                replaceRuleViewModel: replaceRuleViewModel,
-                chapters: $chapters,
-                currentChapterIndex: $currentChapterIndex,
-                onToggleMenu: { withAnimation { showUIControls.toggle() } },
-                onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
-                onProgressChanged: { _, pos in self.currentPos = pos },
-                readingMode: preferences.readingMode
-            )
-            .ignoresSafeArea()
-            
-            // 控件层：利用系统安全区自动对齐
-            if showUIControls {
-                VStack(spacing: 0) {
-                    topBar
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    Spacer()
-                    bottomBar
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+        GeometryReader { fullScreenProxy in
+            ZStack {
+                // 背景底色
+                backgroundView.ignoresSafeArea()
+                
+                // 核心阅读容器：传入安全区信息
+                ReaderContainerRepresentable(
+                    book: book,
+                    preferences: preferences,
+                    ttsManager: ttsManager,
+                    replaceRuleViewModel: replaceRuleViewModel,
+                    chapters: $chapters,
+                    currentChapterIndex: $currentChapterIndex,
+                    onToggleMenu: { withAnimation { showUIControls.toggle() } },
+                    onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
+                    onProgressChanged: { _, pos in self.currentPos = pos },
+                    readingMode: preferences.readingMode,
+                    safeAreaInsets: fullScreenProxy.safeAreaInsets // 关键：注入安全区
+                )
+                .ignoresSafeArea()
+                
+                if showUIControls {
+                    VStack(spacing: 0) {
+                        topBar(safeArea: fullScreenProxy.safeAreaInsets)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        Spacer()
+                        bottomBar(safeArea: fullScreenProxy.safeAreaInsets)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    .ignoresSafeArea(edges: .vertical)
                 }
-                .ignoresSafeArea(edges: .vertical) // 背景延伸，内容避让
+                
+                if isLoading { ProgressView().padding().background(.ultraThinMaterial).cornerRadius(10) }
             }
-            
-            if isLoading { ProgressView("加载中...").padding().background(.ultraThinMaterial).cornerRadius(10) }
         }
         .navigationBarHidden(true)
         .navigationBarBackButtonHidden(true)
@@ -85,16 +87,13 @@ struct ReadingView: View {
 
     private var backgroundView: some View { Color(UIColor.systemBackground) }
 
-    private var topBar: some View {
+    private func topBar(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 0) {
-            // 背景层，自动填充灵动岛
-            Color.clear.frame(height: UIApplication.shared.windows.first?.safeAreaInsets.top ?? 44)
-            
+            Color.clear.frame(height: safeArea.top)
             HStack(spacing: 12) {
                 Button(action: { dismiss() }) {
                     Image(systemName: "chevron.left").font(.system(size: 20, weight: .semibold)).padding(8)
                 }
-                
                 Button(action: { showDetailFromHeader = true }) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
@@ -107,17 +106,15 @@ struct ReadingView: View {
                 )
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 10)
+            .padding(.horizontal, 16).padding(.bottom, 10)
         }
         .background(.thinMaterial)
     }
     
-    private var bottomBar: some View {
+    private func bottomBar(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 0) {
             controlBar
-            // 背景层，填充到底部
-            Color.clear.frame(height: UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 34)
+            Color.clear.frame(height: safeArea.bottom)
         }
         .background(.thinMaterial)
     }
@@ -136,9 +133,7 @@ struct ReadingView: View {
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
             }
-        } else {
-            UIDevice.current.setValue(mask.rawValue, forKey: "orientation")
-        }
+        } else { UIDevice.current.setValue(mask.rawValue, forKey: "orientation") }
     }
     
     private func toggleSleepTimer(minutes: Int) {

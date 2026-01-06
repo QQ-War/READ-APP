@@ -3,404 +3,135 @@ import UIKit
 
 // MARK: - SwiftUI 桥接组件
 struct VerticalTextReader: UIViewControllerRepresentable {
-    let sentences: [String]
-    let fontSize: CGFloat
-    let lineSpacing: CGFloat
-    let horizontalMargin: CGFloat
-    let highlightIndex: Int?
-    let secondaryIndices: Set<Int>
-    let isPlayingHighlight: Bool
-    let chapterUrl: String?
-    @Binding var currentVisibleIndex: Int
-    @Binding var pendingScrollIndex: Int?
-    var forceScrollToTop: Bool = false
-    var onScrollFinished: (() -> Void)? 
-    var onAddReplaceRule: ((String) -> Void)?
-    var onTapMenu: (() -> Void)?
+    let sentences: [String]; let fontSize: CGFloat; let lineSpacing: CGFloat; let horizontalMargin: CGFloat; let highlightIndex: Int?; let secondaryIndices: Set<Int>; let isPlayingHighlight: Bool; let chapterUrl: String?
+    @Binding var currentVisibleIndex: Int; @Binding var pendingScrollIndex: Int?
+    var forceScrollToTop: Bool = false; var onScrollFinished: (() -> Void)? ; var onAddReplaceRule: ((String) -> Void)? ; var onTapMenu: (() -> Void)?
+    var safeAreaTop: CGFloat = 0 // 传入安全区
     
     func makeUIViewController(context: Context) -> VerticalTextViewController {
-        let vc = VerticalTextViewController()
-        vc.onVisibleIndexChanged = { index in
-            DispatchQueue.main.async {
-                if currentVisibleIndex != index {
-                    currentVisibleIndex = index
-                }
-            }
-        }
-        vc.onAddReplaceRule = onAddReplaceRule
-        vc.onTapMenu = onTapMenu
-        return vc
+        let vc = VerticalTextViewController(); vc.onVisibleIndexChanged = { i in DispatchQueue.main.async { if currentVisibleIndex != i { currentVisibleIndex = i } } }; vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; return vc
     }
     
     func updateUIViewController(_ vc: VerticalTextViewController, context: Context) {
-        vc.onAddReplaceRule = onAddReplaceRule
-        vc.onTapMenu = onTapMenu
-        
-        let isContentChanged = vc.update(
-            sentences: sentences,
-            fontSize: fontSize,
-            lineSpacing: lineSpacing,
-            margin: horizontalMargin,
-            highlightIndex: highlightIndex,
-            secondaryIndices: secondaryIndices,
-            isPlaying: isPlayingHighlight
-        )
-        
-        if forceScrollToTop {
-            vc.scrollToTop(animated: false)
-            DispatchQueue.main.async { onScrollFinished?() }
-        } else if let scrollIndex = pendingScrollIndex {
-            if isContentChanged {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    vc.scrollToSentence(index: scrollIndex, animated: false)
-                }
-            } else {
-                vc.scrollToSentence(index: scrollIndex, animated: true)
-            }
-            DispatchQueue.main.async { self.pendingScrollIndex = nil }
-        } else if isPlayingHighlight, let hIndex = highlightIndex {
-            vc.ensureSentenceVisible(index: hIndex)
-        }
+        vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; vc.safeAreaTop = safeAreaTop
+        let changed = vc.update(sentences: sentences, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
+        if forceScrollToTop { vc.scrollToTop(animated: false); DispatchQueue.main.async { onScrollFinished?() } }
+        else if let sI = pendingScrollIndex { if changed { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { vc.scrollToSentence(index: sI, animated: false) } } else { vc.scrollToSentence(index: sI, animated: true) }; DispatchQueue.main.async { self.pendingScrollIndex = nil } }
+        else if isPlayingHighlight, let hI = highlightIndex { vc.ensureSentenceVisible(index: hI) }
     }
 }
 
 // MARK: - UIKit 控制器
 class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
-    let scrollView = UIScrollView()
-    private let contentView = VerticalTextContentView()
-    
-    var onVisibleIndexChanged: ((Int) -> Void)?
-    var onAddReplaceRule: ((String) -> Void)?
-    var onTapMenu: (() -> Void)?
-    var chapterUrl: String?
-    
-    private var renderStore: TextKit2RenderStore?
-    private var currentSentences: [String] = []
-    private var paragraphStarts: [Int] = []
-    private var sentenceYOffsets: [CGFloat] = []
-    private var lastReportedIndex: Int = -1
-    private var isUpdatingLayout = false
-    private var lastTTSSyncIndex: Int = -1
-    
-    // 任务系统
-    private var pendingTask: VerticalReaderTask?
-    
-    // 渲染缓存
-    private var lastHighlightIndex: Int?
-    private var lastSecondaryIndices: Set<Int> = []
-    private var lastFontSize: CGFloat = 0
-    private var lastLineSpacing: CGFloat = 0
-    private var lastMargin: CGFloat = 20
+    let scrollView = UIScrollView(); private let contentView = VerticalTextContentView()
+    var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?; var chapterUrl: String?
+    var safeAreaTop: CGFloat = 0 
+    private var renderStore: TextKit2RenderStore?; private var currentSentences: [String] = []; private var paragraphStarts: [Int] = []; private var sentenceYOffsets: [CGFloat] = []
+    private var lastReportedIndex: Int = -1; private var isUpdatingLayout = false; private var lastTTSSyncIndex: Int = -1; private var pendingTask: VerticalReaderTask?
+    private var lastHighlightIndex: Int?; private var lastSecondaryIndices: Set<Int> = []; private var lastFontSize: CGFloat = 0; private var lastLineSpacing: CGFloat = 0; private var lastMargin: CGFloat = 20
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .clear
-        
-        scrollView.delegate = self
-        scrollView.contentInsetAdjustmentBehavior = .never
-        scrollView.showsVerticalScrollIndicator = true
-        scrollView.alwaysBounceVertical = true
-        scrollView.delaysContentTouches = false 
-        view.addSubview(scrollView)
-        
-        scrollView.addSubview(contentView)
-        
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
-        scrollView.addGestureRecognizer(tap)
-        
-        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
-        scrollView.addGestureRecognizer(longPress)
+        scrollView.delegate = self; scrollView.contentInsetAdjustmentBehavior = .never; scrollView.showsVerticalScrollIndicator = true; scrollView.alwaysBounceVertical = true
+        view.addSubview(scrollView); scrollView.addSubview(contentView)
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap)); scrollView.addGestureRecognizer(tap)
+        let lp = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress)); scrollView.addGestureRecognizer(lp)
     }
-    
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        if !isUpdatingLayout {
-            scrollView.frame = view.bounds
-            updateContentViewFrame()
+    override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); if !isUpdatingLayout { scrollView.frame = view.bounds; updateContentViewFrame() } }
+    @objc private func handleTap() { onTapMenu?() }
+    @objc private func handleLongPress(_ g: UILongPressGestureRecognizer) {
+        guard g.state == .began, let s = renderStore else { return }
+        let p = g.location(in: contentView)
+        if let f = s.layoutManager.textLayoutFragment(for: p), let te = f.textElement, let r = TextKit2Paginator.rangeFromTextRange(te.elementRange, in: s.contentStorage) {
+            let txt = (s.attributedString.string as NSString).substring(with: r)
+            becomeFirstResponder(); self.pendingSelectedText = txt; UIMenuController.shared.showMenu(from: contentView, rect: CGRect(origin: p, size: .zero))
         }
     }
+    private var pendingSelectedText: String?; override var canBecomeFirstResponder: Bool { true }
+    override func canPerformAction(_ a: Selector, withSender s: Any?) -> Bool { return a == #selector(addToReplaceRule) }
+    @objc func addToReplaceRule() { if let t = pendingSelectedText { onAddReplaceRule?(t) } }
     
-    @objc private func handleTap() {
-        onTapMenu?()
-    }
-    
-    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began, let store = renderStore else { return }
-        let point = gesture.location(in: contentView)
-        if let fragment = store.layoutManager.textLayoutFragment(for: point),
-           let textElement = fragment.textElement,
-           let nsRange = TextKit2Paginator.rangeFromTextRange(textElement.elementRange, in: store.contentStorage) {
-            let text = (store.attributedString.string as NSString).substring(with: nsRange)
-            becomeFirstResponder()
-            let menu = UIMenuController.shared
-            self.pendingSelectedText = text
-            menu.showMenu(from: contentView, rect: CGRect(origin: point, size: .zero))
-        }
-    }
-    
-    private var pendingSelectedText: String? // 待选中的文本
-    override var canBecomeFirstResponder: Bool { true }
-    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        return action == #selector(addToReplaceRule)
-    }
-    @objc func addToReplaceRule() {
-        if let text = pendingSelectedText { onAddReplaceRule?(text) }
-    }
-    
-    func setPendingTask(_ task: VerticalReaderTask) {
-        self.pendingTask = task
-        if !isUpdatingLayout { executePendingTask() }
-    }
-
     @discardableResult
-    func update(
-        sentences: [String],
-        fontSize: CGFloat,
-        lineSpacing: CGFloat,
-        margin: CGFloat,
-        highlightIndex: Int?,
-        secondaryIndices: Set<Int>,
-        isPlaying: Bool
-    ) -> Bool {
+    func update(sentences: [String], fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
         self.lastMargin = margin
-        let contentChanged = self.currentSentences != sentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing
-        let highlightChanged = lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices
-        
-        if contentChanged || renderStore == nil {
-            self.currentSentences = sentences
-            self.lastFontSize = fontSize
-            self.lastLineSpacing = lineSpacing
-            self.isUpdatingLayout = true
-            
-            var starts: [Int] = []
-            var currentPos = 0
-            for s in sentences {
-                starts.append(currentPos)
-                currentPos += s.count + 1 
-            }
-            self.paragraphStarts = starts
-            
-            let fullText = sentences.joined(separator: "\n")
-            let attrString = createAttributedString(fullText, fontSize: fontSize, lineSpacing: lineSpacing)
-            
-            let layoutWidth = max(100, view.bounds.width - margin * 2)
-            if let store = renderStore {
-                store.update(attributedString: attrString, layoutWidth: layoutWidth)
-            } else {
-                renderStore = TextKit2RenderStore(attributedString: attrString, layoutWidth: layoutWidth)
-            }
-            
-            calculateSentenceOffsets()
-            updateContentViewFrame()
-            
-            lastHighlightIndex = highlightIndex
-            lastSecondaryIndices = secondaryIndices
+        if currentSentences != sentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing || renderStore == nil {
+            currentSentences = sentences; lastFontSize = fontSize; lastLineSpacing = lineSpacing; isUpdatingLayout = true
+            var pS: [Int] = []; var cP = 0; for s in sentences { pS.append(cP); cP += s.count + 1 }; paragraphStarts = pS
+            let attr = NSAttributedString(string: sentences.joined(separator: "\n"), attributes: [.font: UIFont.systemFont(ofSize: fontSize), .foregroundColor: UIColor.label, .paragraphStyle: { let p = NSMutableParagraphStyle(); p.lineSpacing = lineSpacing; p.alignment = .justified; return p }() ])
+            if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
+            else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+            renderStore?.textContainer.lineFragmentPadding = 8
+            calculateSentenceOffsets(); updateContentViewFrame(); isUpdatingLayout = false; executePendingTask()
             contentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
-            
-            self.isUpdatingLayout = false
-            executePendingTask()
             return true
-        } else if highlightChanged {
-            lastHighlightIndex = highlightIndex
-            lastSecondaryIndices = secondaryIndices
+        } else if lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices {
+            lastHighlightIndex = highlightIndex; lastSecondaryIndices = secondaryIndices
             contentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
         }
-        
         return false
     }
-    
-    private func createAttributedString(_ text: String, fontSize: CGFloat, lineSpacing: CGFloat) -> NSAttributedString {
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = lineSpacing
-        paragraphStyle.paragraphSpacing = lineSpacing * 0.8
-        paragraphStyle.alignment = .justified
-        
-        return NSAttributedString(string: text, attributes: [
-            .font: UIFont.systemFont(ofSize: fontSize),
-            .foregroundColor: UIColor.label,
-            .paragraphStyle: paragraphStyle
-        ])
-    }
-    
     private func calculateSentenceOffsets() {
-        guard let store = renderStore else { return }
-        let lm = store.layoutManager
-        let cs = store.contentStorage
-        lm.ensureLayout(for: cs.documentRange)
-        
-        var offsets: [CGFloat] = []
-        for start in paragraphStarts {
-            if let loc = cs.location(cs.documentRange.location, offsetBy: start),
-               let fragment = lm.textLayoutFragment(for: loc) {
-                offsets.append(fragment.layoutFragmentFrame.minY)
-            } else {
-                offsets.append(offsets.last ?? 0)
-            }
-        }
-        self.sentenceYOffsets = offsets
+        guard let s = renderStore else { return }; s.layoutManager.ensureLayout(for: s.contentStorage.documentRange); var o: [CGFloat] = []
+        for start in paragraphStarts { if let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: start), let f = s.layoutManager.textLayoutFragment(for: loc) { o.append(f.layoutFragmentFrame.minY) } else { o.append(o.last ?? 0) } }
+        sentenceYOffsets = o
     }
-    
     private func updateContentViewFrame() {
-        guard let store = renderStore else { return }
-        let docRange = store.contentStorage.documentRange
-        store.layoutManager.ensureLayout(for: docRange)
-        
-        var totalHeight: CGFloat = 0
-        store.layoutManager.enumerateTextLayoutFragments(from: docRange.endLocation, options: [.reverse, .ensuresLayout]) { fragment in
-            totalHeight = fragment.layoutFragmentFrame.maxY
-            return false
-        }
-        
-        let m = (view.bounds.width - store.layoutWidth) / 2
-        contentView.frame = CGRect(x: m, y: 40, width: store.layoutWidth, height: totalHeight)
-        scrollView.contentSize = CGSize(width: view.bounds.width, height: totalHeight + 150)
+        guard let s = renderStore else { return }; var h: CGFloat = 0; s.layoutManager.enumerateTextLayoutFragments(from: s.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h = f.layoutFragmentFrame.maxY; return false }
+        let m = (view.bounds.width - s.layoutWidth) / 2
+        contentView.frame = CGRect(x: m, y: safeAreaTop + 10, width: s.layoutWidth, height: h); scrollView.contentSize = CGSize(width: view.bounds.width, height: h + safeAreaTop + 120)
     }
-    
     private func executePendingTask() {
-        guard let task = pendingTask, !isUpdatingLayout else { return }
-        switch task {
-        case .scrollToTop:
-            scrollToTop(animated: false)
-        case .scrollToIndex(let index):
-            scrollToSentence(index: index, animated: false)
-        }
-        self.pendingTask = nil
+        guard let t = pendingTask, !isUpdatingLayout else { return }
+        switch t { case .scrollToTop: scrollToTop(animated: false); case .scrollToIndex(let i): scrollToSentence(index: i, animated: false) }; pendingTask = nil
     }
-
-    func scrollToSentence(index: Int, animated: Bool) {
-        guard index >= 0 && index < sentenceYOffsets.count else { return }
-        let targetY = max(0, sentenceYOffsets[index] + 40)
-        let maxScroll = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, maxScroll)), animated: animated)
-    }
-    
+    func setPendingTask(_ t: VerticalReaderTask) { pendingTask = t; if !isUpdatingLayout { executePendingTask() } }
+    func scrollToSentence(index: Int, animated: Bool) { guard index >= 0 && index < sentenceYOffsets.count else { return }; let y = max(0, sentenceYOffsets[index] + safeAreaTop + 10); scrollView.setContentOffset(CGPoint(x: 0, y: min(y, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: animated) }
     func ensureSentenceVisible(index: Int) {
-        guard !scrollView.isDragging && !scrollView.isDecelerating else { return }
-        guard index >= 0 && index < sentenceYOffsets.count else { return }
-        guard index != lastTTSSyncIndex else { return }
-        
-        let targetY = sentenceYOffsets[index] + 40
-        let currentOffset = scrollView.contentOffset.y
-        let viewportHeight = scrollView.bounds.height
-        
-        // 改进：保持在上方 1/3 处
-        if targetY < currentOffset + 50 || targetY > currentOffset + viewportHeight - 150 {
-            lastTTSSyncIndex = index
-            scrollView.setContentOffset(CGPoint(x: 0, y: max(0, targetY - viewportHeight/3)), animated: true)
-        }
+        guard !scrollView.isDragging && !scrollView.isDecelerating, index >= 0 && index < sentenceYOffsets.count, index != lastTTSSyncIndex else { return }
+        let y = sentenceYOffsets[index] + safeAreaTop + 10; let cur = scrollView.contentOffset.y; let vH = scrollView.bounds.height
+        if y < cur + 50 || y > cur + vH - 150 { lastTTSSyncIndex = index; scrollView.setContentOffset(CGPoint(x: 0, y: max(0, y - vH / 3)), animated: true) }
     }
-    
-    func scrollToTop(animated: Bool) {
-        scrollView.setContentOffset(.zero, animated: animated)
-    }
-    
-    // 供容器调用的精准偏移接口
+    func scrollToTop(animated: Bool) { scrollView.setContentOffset(.zero, animated: animated) }
     func getCurrentCharOffset() -> Int {
-        guard let store = renderStore else { return 0 }
-        let topPoint = CGPoint(x: 10, y: scrollView.contentOffset.y - 40 + 5)
-        if let fragment = store.layoutManager.textLayoutFragment(for: topPoint) {
-            return store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
-        }
-        return 0
+        guard let s = renderStore else { return 0 }; let topY = scrollView.contentOffset.y - (safeAreaTop + 10) + 5
+        if let f = s.layoutManager.textLayoutFragment(for: CGPoint(x: 10, y: topY)) { return s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location) }; return 0
     }
-    
-    func scrollToCharOffset(_ offset: Int, animated: Bool) {
-        guard let store = renderStore else { return }
-        if let loc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: offset),
-           let fragment = store.layoutManager.textLayoutFragment(for: loc) {
-            let targetY = fragment.layoutFragmentFrame.minY + 40
-            let maxScroll = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-            scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, maxScroll)), animated: animated)
-        }
+    func scrollToCharOffset(_ o: Int, animated: Bool) {
+        guard let s = renderStore, let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: o), let f = s.layoutManager.textLayoutFragment(for: loc) else { return }
+        let y = f.layoutFragmentFrame.minY + safeAreaTop + 10; scrollView.setContentOffset(CGPoint(x: 0, y: min(y, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: animated)
     }
-
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard !isUpdatingLayout else { return }
-        let y = scrollView.contentOffset.y - 40
-        let index = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
-        if index != lastReportedIndex {
-            lastReportedIndex = index
-            onVisibleIndexChanged?(index)
-        }
-    }
+    func scrollViewDidScroll(_ s: UIScrollView) { if !isUpdatingLayout { let idx = sentenceYOffsets.lastIndex(where: { $0 <= s.contentOffset.y - (safeAreaTop + 10) + 5 }) ?? 0; if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) } } }
 }
 
 class VerticalTextContentView: UIView {
-    private var renderStore: TextKit2RenderStore?
-    private var highlightIndex: Int?
-    private var secondaryIndices: Set<Int> = []
-    private var isPlayingHighlight: Bool = false
-    private var paragraphStarts: [Int] = []
-    private var margin: CGFloat = 20
-    
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        self.backgroundColor = .clear
-    }
+    private var renderStore: TextKit2RenderStore?; private var highlightIndex: Int?; private var secondaryIndices: Set<Int> = []; private var isPlayingHighlight: Bool = false; private var paragraphStarts: [Int] = []; private var margin: CGFloat = 20
+    override init(frame: CGRect) { super.init(frame: frame); self.backgroundColor = .clear } 
     required init?(coder: NSCoder) { fatalError() }
-    
     func update(renderStore: TextKit2RenderStore?, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool, paragraphStarts: [Int], margin: CGFloat, forceRedraw: Bool) {
-        self.renderStore = renderStore
-        self.highlightIndex = highlightIndex
-        self.secondaryIndices = secondaryIndices
-        self.isPlayingHighlight = isPlaying
-        self.paragraphStarts = paragraphStarts
-        self.margin = margin
+        self.renderStore = renderStore; self.highlightIndex = highlightIndex; self.secondaryIndices = secondaryIndices; self.isPlayingHighlight = isPlaying; self.paragraphStarts = paragraphStarts; self.margin = margin
         if forceRedraw { setNeedsDisplay() }
     }
-    
     override func draw(_ rect: CGRect) {
-        guard let store = renderStore else { return }
-        let context = UIGraphicsGetCurrentContext()
-        
+        guard let s = renderStore else { return }; let ctx = UIGraphicsGetCurrentContext()
         if isPlayingHighlight {
-            context?.saveGState()
-            let highlightIndices = ([highlightIndex].compactMap { $0 }) + Array(secondaryIndices)
-            for index in highlightIndices {
-                guard index < paragraphStarts.count else { continue }
-                let start = paragraphStarts[index]
-                let end = (index + 1 < paragraphStarts.count) ? paragraphStarts[index + 1] : store.attributedString.length
-                let range = NSRange(location: start, length: max(0, end - start))
-                let color = (index == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)
-                context?.setFillColor(color.cgColor)
-                
-                let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: range.location)!
-                
-                // 改进：利用 textLineFragments 实现精细高亮
-                store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
-                    let fFrame = fragment.layoutFragmentFrame
-                    let fOffset = store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
-                    if fOffset >= NSMaxRange(range) { return false }
-                    
-                    // 遍历片段内的每一行
-                    for line in fragment.textLineFragments {
-                        let lineRect = line.typographicBounds.offsetBy(dx: fFrame.origin.x, dy: fFrame.origin.y)
-                        // 绘制带有圆角的精细背景条
-                        let path = UIBezierPath(roundedRect: lineRect.insetBy(dx: -2, dy: -1), cornerRadius: 4)
-                        context?.addPath(path.cgPath)
-                        context?.fillPath()
-                    }
+            ctx?.saveGState()
+            for i in ([highlightIndex].compactMap{$0} + Array(secondaryIndices)) {
+                guard i < paragraphStarts.count else { continue }
+                let start = paragraphStarts[i], end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length, r = NSRange(location: start, length: max(0, end - start))
+                ctx?.setFillColor(((i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)).cgColor)
+                s.layoutManager.enumerateTextLayoutFragments(from: s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: r.location)!, options: [.ensuresLayout]) { f in
+                    if s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(r) { return false }
+                    for line in f.textLineFragments { let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y); ctx?.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath); ctx?.fillPath() }
                     return true
                 }
             }
-            context?.restoreGState()
+            ctx?.restoreGState()
         }
-        
-        let startPoint = CGPoint(x: 0, y: rect.minY)
-        let startLocation = store.layoutManager.textLayoutFragment(for: startPoint)?.rangeInElement.location ?? store.contentStorage.documentRange.location
-        
-        store.layoutManager.enumerateTextLayoutFragments(from: startLocation, options: [.ensuresLayout]) { fragment in
-            let frame = fragment.layoutFragmentFrame
-            if frame.minY > rect.maxY { return false }
-            if frame.maxY < rect.minY { return true }
-            fragment.draw(at: frame.origin, in: context!)
-            return true
+        let sL = s.layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: rect.minY))?.rangeInElement.location ?? s.contentStorage.documentRange.location
+        s.layoutManager.enumerateTextLayoutFragments(from: sL, options: [.ensuresLayout]) { f in
+            if f.layoutFragmentFrame.minY > rect.maxY { return false }; if f.layoutFragmentFrame.maxY >= rect.minY { f.draw(at: f.layoutFragmentFrame.origin, in: ctx!) }; return true
         }
     }
 }
 
-// MARK: - 内部任务类型
-enum VerticalReaderTask {
-    case scrollToTop
-    case scrollToIndex(Int)
-}
+enum VerticalReaderTask { case scrollToTop; case scrollToIndex(Int) }
