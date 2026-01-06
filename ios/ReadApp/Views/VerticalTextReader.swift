@@ -14,7 +14,8 @@ struct VerticalTextReader: UIViewControllerRepresentable {
     @Binding var currentVisibleIndex: Int
     @Binding var pendingScrollIndex: Int?
     var forceScrollToTop: Bool = false
-    var onAddReplaceRule: ((String) -> Void)? // 长按回调
+    var onScrollFinished: (() -> Void)? // 用于重置置顶标志
+    var onAddReplaceRule: ((String) -> Void)?
     
     func makeUIViewController(context: Context) -> VerticalTextViewController {
         let vc = VerticalTextViewController()
@@ -45,8 +46,10 @@ struct VerticalTextReader: UIViewControllerRepresentable {
         
         if forceScrollToTop {
             vc.scrollToTop(animated: false)
+            DispatchQueue.main.async {
+                onScrollFinished?()
+            }
         } else if let scrollIndex = pendingScrollIndex {
-            // 内容变更后延迟执行精准滚动
             if isContentChanged {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     vc.scrollToSentence(index: scrollIndex, animated: false)
@@ -58,7 +61,6 @@ struct VerticalTextReader: UIViewControllerRepresentable {
                 self.pendingScrollIndex = nil
             }
         } else if isPlayingHighlight, let hIndex = highlightIndex {
-            // TTS 播放时自动确保当前句子可见
             vc.ensureSentenceVisible(index: hIndex)
         }
     }
@@ -73,12 +75,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     var onAddReplaceRule: ((String) -> Void)?
     
     private var renderStore: TextKit2RenderStore?
-    private var sentences: [String] = []
+    private var currentSentences: [String] = []
     private var paragraphStarts: [Int] = []
     private var sentenceYOffsets: [CGFloat] = []
     private var lastReportedIndex: Int = -1
     private var isUpdatingLayout = false
     private var lastTTSSyncIndex: Int = -1
+    
+    // 缓存上次的高亮状态，用于避免滚动时重复绘制
+    private var lastHighlightIndex: Int?
+    private var lastSecondaryIndices: Set<Int> = []
+    private var lastFontSize: CGFloat = 0
+    private var lastLineSpacing: CGFloat = 0
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -88,6 +96,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.showsVerticalScrollIndicator = true
         scrollView.alwaysBounceVertical = true
+        scrollView.delaysContentTouches = false 
         view.addSubview(scrollView)
         
         scrollView.addSubview(contentView)
@@ -101,8 +110,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        scrollView.frame = view.bounds
-        updateContentViewFrame()
+        if !isUpdatingLayout {
+            scrollView.frame = view.bounds
+            updateContentViewFrame()
+        }
     }
     
     @objc private func handleTap() {
@@ -112,12 +123,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began, let store = renderStore else { return }
         let point = gesture.location(in: contentView)
-        
         if let fragment = store.layoutManager.textLayoutFragment(for: point),
            let textElement = fragment.textElement,
            let nsRange = TextKit2Paginator.rangeFromTextRange(textElement.elementRange, in: store.contentStorage) {
             let text = (store.attributedString.string as NSString).substring(with: nsRange)
-            
             becomeFirstResponder()
             let menu = UIMenuController.shared
             self.pendingSelectedText = text
@@ -125,7 +134,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         }
     }
     
-    private var pendingSelectedText: String? // 移到类属性
+    private var pendingSelectedText: String?
     override var canBecomeFirstResponder: Bool { true }
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         return action == #selector(addToReplaceRule)
@@ -145,10 +154,14 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         isPlaying: Bool,
         chapterUrl: String?
     ) -> Bool {
-        let isNewContent = self.sentences != sentences
+        // 关键：检查内容是否真正变化
+        let contentChanged = self.currentSentences != sentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing
+        let highlightChanged = lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices
         
-        if isNewContent || renderStore == nil {
-            self.sentences = sentences
+        if contentChanged || renderStore == nil {
+            self.currentSentences = sentences
+            self.lastFontSize = fontSize
+            self.lastLineSpacing = lineSpacing
             isUpdatingLayout = true
             
             let fullText = sentences.joined(separator: "\n")
@@ -169,18 +182,19 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
             
             calculateSentenceOffsets()
             updateContentViewFrame()
+            
+            lastHighlightIndex = highlightIndex
+            lastSecondaryIndices = secondaryIndices
+            contentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
+            
             isUpdatingLayout = false
             return true
+        } else if highlightChanged {
+            lastHighlightIndex = highlightIndex
+            lastSecondaryIndices = secondaryIndices
+            contentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
         }
         
-        contentView.update(
-            renderStore: renderStore,
-            highlightIndex: highlightIndex,
-            secondaryIndices: secondaryIndices,
-            isPlaying: isPlaying,
-            paragraphStarts: paragraphStarts,
-            margin: margin
-        )
         return false
     }
     
@@ -226,32 +240,24 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
             return false
         }
         
-        let m = marginValue
-        contentView.margin = m
-        contentView.frame = CGRect(x: m, y: 40, width: view.bounds.width - m * 2, height: totalHeight)
-        scrollView.contentSize = CGSize(width: view.bounds.width, height: totalHeight + 120)
-    }
-    
-    private var marginValue: CGFloat {
-        return renderStore?.layoutWidth != nil ? (view.bounds.width - renderStore!.layoutWidth) / 2 : 20
+        let m = (view.bounds.width - store.layoutWidth) / 2
+        contentView.frame = CGRect(x: m, y: 40, width: store.layoutWidth, height: totalHeight)
+        scrollView.contentSize = CGSize(width: view.bounds.width, height: totalHeight + 150)
     }
     
     func scrollToSentence(index: Int, animated: Bool) {
         guard index >= 0 && index < sentenceYOffsets.count else { return }
-        let targetY = sentenceYOffsets[index] + 40
+        let targetY = max(0, sentenceYOffsets[index] + 40)
         let maxScroll = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let finalY = min(targetY, maxScroll)
-        scrollView.setContentOffset(CGPoint(x: 0, y: finalY), animated: animated)
+        scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, maxScroll)), animated: animated)
     }
     
     func ensureSentenceVisible(index: Int) {
         guard index >= 0 && index < sentenceYOffsets.count else { return }
         guard index != lastTTSSyncIndex else { return }
-        
         let targetY = sentenceYOffsets[index] + 40
         let currentOffset = scrollView.contentOffset.y
         let viewportHeight = scrollView.bounds.height
-        
         if targetY < currentOffset + 50 || targetY > currentOffset + viewportHeight - 150 {
             lastTTSSyncIndex = index
             scrollView.setContentOffset(CGPoint(x: 0, y: max(0, targetY - 100)), animated: true)
@@ -274,35 +280,27 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
 }
 
 class VerticalTextContentView: UIView {
-    var margin: CGFloat = 20
     private var renderStore: TextKit2RenderStore?
     private var highlightIndex: Int?
     private var secondaryIndices: Set<Int> = []
     private var isPlayingHighlight: Bool = false
     private var paragraphStarts: [Int] = []
+    private var margin: CGFloat = 20
     
     override init(frame: CGRect) {
         super.init(frame: frame)
         self.backgroundColor = .clear
     }
-    
     required init?(coder: NSCoder) { fatalError() }
     
-    func update(
-        renderStore: TextKit2RenderStore?,
-        highlightIndex: Int?,
-        secondaryIndices: Set<Int>,
-        isPlaying: Bool,
-        paragraphStarts: [Int],
-        margin: CGFloat
-    ) {
+    func update(renderStore: TextKit2RenderStore?, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool, paragraphStarts: [Int], margin: CGFloat, forceRedraw: Bool) {
         self.renderStore = renderStore
         self.highlightIndex = highlightIndex
         self.secondaryIndices = secondaryIndices
         self.isPlayingHighlight = isPlaying
         self.paragraphStarts = paragraphStarts
         self.margin = margin
-        setNeedsDisplay()
+        if forceRedraw { setNeedsDisplay() }
     }
     
     override func draw(_ rect: CGRect) {
@@ -319,12 +317,14 @@ class VerticalTextContentView: UIView {
                 let range = NSRange(location: start, length: max(0, end - start))
                 let color = (index == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.15) : UIColor.systemGreen.withAlphaComponent(0.08)
                 context?.setFillColor(color.cgColor)
-                let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: range.location)
+                
+                let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: range.location)!
                 store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
                     let fFrame = fragment.layoutFragmentFrame
                     let fOffset = store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
                     if fOffset >= NSMaxRange(range) { return false }
-                    let highlightRect = CGRect(x: -margin, y: fFrame.minY, width: bounds.width + margin * 2, height: fFrame.height)
+                    // 高亮背景稍微拓宽
+                    let highlightRect = CGRect(x: -20, y: fFrame.minY, width: bounds.width + 40, height: fFrame.height)
                     context?.fill(highlightRect)
                     return true
                 }
@@ -332,8 +332,11 @@ class VerticalTextContentView: UIView {
             context?.restoreGState()
         }
         
-        let docRange = store.contentStorage.documentRange
-        store.layoutManager.enumerateTextLayoutFragments(from: docRange.location, options: [.ensuresLayout]) { fragment in
+        // 优化：从 rect.minY 附近的 location 开始枚举，而不是从文档开头
+        let startPoint = CGPoint(x: 0, y: rect.minY)
+        let startLocation = store.layoutManager.textLayoutFragment(for: startPoint)?.rangeInElement.location ?? store.contentStorage.documentRange.location
+        
+        store.layoutManager.enumerateTextLayoutFragments(from: startLocation, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
             if frame.minY > rect.maxY { return false }
             if frame.maxY < rect.minY { return true }

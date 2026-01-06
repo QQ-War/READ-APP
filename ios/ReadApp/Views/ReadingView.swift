@@ -317,6 +317,9 @@ struct ReadingView: View {
             ),
             pendingScrollIndex: $pendingScrollToSentenceIndex,
             forceScrollToTop: pendingJumpToFirstPage && !isExplicitlySwitchingChapter,
+            onScrollFinished: {
+                pendingJumpToFirstPage = false
+            },
             onAddReplaceRule: { selectedText in
                 presentReplaceRuleEditor(selectedText: selectedText)
             }
