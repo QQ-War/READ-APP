@@ -5,8 +5,8 @@ struct ReadingView: View {
     let book: Book
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var apiService: APIService
-    @StateObject var ttsManager = TTSManager.shared
-    @StateObject var preferences = UserPreferences.shared
+    @StateObject private var ttsManager = TTSManager.shared
+    @StateObject private var preferences = UserPreferences.shared
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
 
     @State var chapters: [BookChapter] = []
@@ -33,7 +33,10 @@ struct ReadingView: View {
 
     var body: some View {
         ZStack {
-            // 核心容器：忽略安全区以铺满全屏
+            // 背景底色，铺满全屏
+            backgroundView.ignoresSafeArea()
+            
+            // 核心阅读容器
             ReaderContainerRepresentable(
                 book: book,
                 preferences: preferences,
@@ -48,19 +51,16 @@ struct ReadingView: View {
             )
             .ignoresSafeArea()
             
-            // 控件层：必须显式处理安全区
+            // 控件层：利用系统安全区自动对齐
             if showUIControls {
                 VStack(spacing: 0) {
                     topBar
                         .transition(.move(edge: .top).combined(with: .opacity))
-                    
                     Spacer()
-                    
                     bottomBar
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                // 关键：确保控件贴边且避开刘海/底条
-                .ignoresSafeArea(edges: .bottom) 
+                .ignoresSafeArea(edges: .vertical) // 背景延伸，内容避让
             }
             
             if isLoading { ProgressView("加载中...").padding().background(.ultraThinMaterial).cornerRadius(10) }
@@ -87,18 +87,18 @@ struct ReadingView: View {
 
     private var topBar: some View {
         VStack(spacing: 0) {
-            // 顶部的安全区填充
-            Color.clear.frame(height: safeAreaInsets.top)
+            // 背景层，自动填充灵动岛
+            Color.clear.frame(height: UIApplication.shared.windows.first?.safeAreaInsets.top ?? 44)
             
             HStack(spacing: 12) {
                 Button(action: { dismiss() }) {
-                    Image(systemName: "chevron.left").font(.title3).padding(8)
+                    Image(systemName: "chevron.left").font(.system(size: 20, weight: .semibold)).padding(8)
                 }
                 
                 Button(action: { showDetailFromHeader = true }) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
-                        Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "加载中...").font(.caption).foregroundColor(.secondary).lineLimit(1)
+                        Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "正在加载...").font(.caption).foregroundColor(.secondary).lineLimit(1)
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -107,8 +107,8 @@ struct ReadingView: View {
                 )
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
         }
         .background(.thinMaterial)
     }
@@ -116,16 +116,10 @@ struct ReadingView: View {
     private var bottomBar: some View {
         VStack(spacing: 0) {
             controlBar
-            // 底部的安全区填充
-            Color.clear.frame(height: safeAreaInsets.bottom)
+            // 背景层，填充到底部
+            Color.clear.frame(height: UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 34)
         }
         .background(.thinMaterial)
-    }
-
-    private var safeAreaInsets: UIEdgeInsets {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let window = scenes.flatMap { $0.windows }.first { $0.isKeyWindow }
-        return window?.safeAreaInsets ?? UIEdgeInsets(top: 44, left: 0, bottom: 34, right: 0)
     }
 
     @ViewBuilder private var controlBar: some View {
