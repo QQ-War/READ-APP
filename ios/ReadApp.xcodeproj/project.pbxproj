@@ -17,6 +17,7 @@
 		1A000011000000000000001 /* BookListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000012000000000000001 /* BookListView.swift */; };
 		1A000013000000000000001 /* ReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000014000000000000001 /* ReadingView.swift */; };
 		1A000098000000000000001 /* VerticalTextReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000099000000000000001 /* VerticalTextReader.swift */; };
+		1A0000AB000000000000001 /* ReaderContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AA000000000000001 /* ReaderContainer.swift */; };
 		1A000015000000000000001 /* TTSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000016000000000000001 /* TTSManager.swift */; };
 		1A000017000000000000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000018000000000000001 /* SettingsView.swift */; };
 		1A000047000000000000006 /* SettingsSubviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000048000000000000006 /* SettingsSubviews.swift */; };
@@ -64,6 +65,7 @@
 		1A000012000000000000001 /* BookListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookListView.swift; sourceTree = "<group>"; };
 		1A000014000000000000001 /* ReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingView.swift; sourceTree = "<group>"; };
 		1A000099000000000000001 /* VerticalTextReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerticalTextReader.swift; sourceTree = "<group>"; };
+		1A0000AA000000000000001 /* ReaderContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContainer.swift; sourceTree = "<group>"; };
 		1A000016000000000000001 /* TTSManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSManager.swift; sourceTree = "<group>"; };
 		1A000018000000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1A000048000000000000006 /* SettingsSubviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSubviews.swift; sourceTree = "<group>"; };
@@ -152,8 +154,10 @@
 				1A000012000000000000001 /* BookListView.swift */,
 				1A00003D000000000000003 /* SourceListView.swift */,
 				1A00003F000000000000003 /* SourceEditView.swift */,
-				1A000014000000000000001 /* ReadingView.swift */,
-				                1A000099000000000000001 /* VerticalTextReader.swift */,				3BFBFE432AD54D4D9E0D5512 /* ReadingProgress.swift */,
+								1A000014000000000000001 /* ReadingView.swift */,
+								1A000099000000000000001 /* VerticalTextReader.swift */,
+								1A0000AA000000000000001 /* ReaderContainer.swift */,
+								3BFBFE432AD54D4D9E0D5512 /* ReadingProgress.swift */,
 				2B6F3D6C47B643BA966D638B /* ReadingChapterLifecycle.swift */,
 				9961F6F9EC81418684577520 /* ReadingContentProcessing.swift */,
 				1A000018000000000000001 /* SettingsView.swift */,
@@ -285,6 +289,7 @@
 				1A000040000000000000003 /* SourceEditView.swift in Sources */,
 				1A000013000000000000001 /* ReadingView.swift in Sources */,
 				1A000098000000000000001 /* VerticalTextReader.swift in Sources */,
+				1A0000AB000000000000001 /* ReaderContainer.swift in Sources */,
 				1A000015000000000000001 /* TTSManager.swift in Sources */,
 				1A000017000000000000001 /* SettingsView.swift in Sources */,
 				1A000047000000000000006 /* SettingsSubviews.swift in Sources */,
