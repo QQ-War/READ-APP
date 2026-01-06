@@ -237,6 +237,7 @@ class ReadContent2View: UIView {
     var isPlayingHighlight: Bool = false
     var paragraphStarts: [Int] = []
     var chapterPrefixLen: Int = 0
+    var horizontalInset: CGFloat = 0
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -258,12 +259,17 @@ class ReadContent2View: UIView {
         let context = UIGraphicsGetCurrentContext()
         context?.saveGState()
         
-        // Clip to content area (exclude top/bottom insets) to avoid edge bleed
-        let contentClip = CGRect(x: 0, y: info.contentInset, width: bounds.width, height: info.pageHeight)
-        context?.clip(to: contentClip)
+        // Translate context to start drawing from the current page's yOffset with insets
+        context?.translateBy(x: horizontalInset, y: -(info.yOffset - info.contentInset))
         
-        // Translate context to start drawing from the current page's yOffset with vertical inset
-        context?.translateBy(x: 0, y: -(info.yOffset - info.contentInset))
+        // Clip to content area (exclude top/bottom insets) to avoid edge bleed
+        let contentClip = CGRect(
+            x: 0,
+            y: info.contentInset,
+            width: max(0, bounds.width - horizontalInset * 2),
+            height: info.pageHeight
+        )
+        context?.clip(to: contentClip)
         
         let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location)
         
@@ -309,7 +315,8 @@ class ReadContent2View: UIView {
                         if lInter.length > 0 {
                             // 计算行内具体字符的 X 偏移（简化处理：整行高亮，因为阅读器通常是按段落/句子请求音频）
                             let lineFrame = line.typographicBounds.offsetBy(dx: fFrame.origin.x, dy: fFrame.origin.y)
-                            let highlightRect = CGRect(x: 0, y: lineFrame.minY, width: bounds.width, height: lineFrame.height)
+                            let contentWidth = max(0, bounds.width - horizontalInset * 2)
+                            let highlightRect = CGRect(x: 0, y: lineFrame.minY, width: contentWidth, height: lineFrame.height)
                             context?.fill(highlightRect)
                         }
                     }
@@ -354,7 +361,8 @@ class ReadContent2View: UIView {
                     shouldStop = true
                     break
                 }
-                let lineDrawRect = CGRect(x: 0, y: lineFrame.minY, width: bounds.width, height: lineFrame.height)
+                let contentWidth = max(0, bounds.width - horizontalInset * 2)
+                let lineDrawRect = CGRect(x: 0, y: lineFrame.minY, width: contentWidth, height: lineFrame.height)
                 context?.saveGState()
                 context?.clip(to: lineDrawRect)
                 fragment.draw(at: frame.origin, in: context!)
