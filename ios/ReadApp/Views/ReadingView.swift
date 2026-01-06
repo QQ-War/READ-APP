@@ -1,22 +1,14 @@
 import SwiftUI
 import UIKit
 
-// MARK: - ReadingView
-enum ReaderTapLocation {
-    case left, right, middle
-}
-
 struct ReadingView: View {
     let book: Book
-    private let logger = LogManager.shared
     @Environment(\.dismiss) var dismiss
-    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var apiService: APIService
-    @StateObject var ttsManager = TTSManager.shared
-    @StateObject var preferences = UserPreferences.shared
+    @StateObject private var ttsManager = TTSManager.shared
+    @StateObject private var preferences = UserPreferences.shared
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
 
-    // 状态对齐：与 ReaderContainer 共享
     @State var chapters: [BookChapter] = []
     @State var currentChapterIndex: Int
     @State var currentPos: Double = 0 
@@ -25,7 +17,6 @@ struct ReadingView: View {
     @State private var showFontSettings = false
     @State private var showChapterList = false
     @State var isLoading = false
-    @State var errorMessage: String?
     
     @State private var isForceLandscape = false
     @State private var showDetailFromHeader = false
@@ -41,43 +32,42 @@ struct ReadingView: View {
     }
 
     var body: some View {
-        NavigationView {
-            GeometryReader { proxy in
-                ZStack {
-                    backgroundView
+        ZStack {
+            // 核心容器：忽略安全区以铺满全屏
+            ReaderContainerRepresentable(
+                book: book,
+                preferences: preferences,
+                ttsManager: ttsManager,
+                replaceRuleViewModel: replaceRuleViewModel,
+                chapters: $chapters,
+                currentChapterIndex: $currentChapterIndex,
+                onToggleMenu: { withAnimation { showUIControls.toggle() } },
+                onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
+                onProgressChanged: { _, pos in self.currentPos = pos },
+                readingMode: preferences.readingMode
+            )
+            .ignoresSafeArea()
+            
+            // 控件层：必须显式处理安全区
+            if showUIControls {
+                VStack(spacing: 0) {
+                    topBar
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     
-                    // 核心容器：接管所有阅读渲染与逻辑
-                    ReaderContainerRepresentable(
-                        book: book,
-                        preferences: preferences,
-                        ttsManager: ttsManager,
-                        replaceRuleViewModel: replaceRuleViewModel,
-                        chapters: $chapters,
-                        currentChapterIndex: $currentChapterIndex,
-                        onToggleMenu: { withAnimation { showUIControls.toggle() } },
-                        onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
-                        onProgressChanged: { _, pos in self.currentPos = pos },
-                        readingMode: preferences.readingMode
-                    )
-                    .ignoresSafeArea()
+                    Spacer()
                     
-                    if showUIControls {
-                        topBar(safeArea: proxy.safeAreaInsets)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        bottomBar(safeArea: proxy.safeAreaInsets)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    if isLoading { loadingOverlay }
+                    bottomBar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .animation(.easeInOut(duration: 0.2), value: showUIControls)
+                // 关键：确保控件贴边且避开刘海/底条
+                .ignoresSafeArea(edges: .bottom) 
             }
-            .navigationBarHidden(true)
-            .navigationBarBackButtonHidden(true)
+            
+            if isLoading { ProgressView("加载中...").padding().background(.ultraThinMaterial).cornerRadius(10) }
         }
-        .navigationViewStyle(StackNavigationViewStyle())
-        .onChange(of: isForceLandscape) { newValue in
-            updateAppOrientation(landscape: newValue)
-        }
+        .navigationBarHidden(true)
+        .navigationBarBackButtonHidden(true)
+        .onChange(of: isForceLandscape) { newValue in updateAppOrientation(landscape: newValue) }
         .onDisappear {
             if isForceLandscape { updateAppOrientation(landscape: false) }
             saveProgress()
@@ -95,67 +85,48 @@ struct ReadingView: View {
 
     private var backgroundView: some View { Color(UIColor.systemBackground) }
 
-    @ViewBuilder private func topBar(safeArea: EdgeInsets) -> some View {
+    private var topBar: some View {
         VStack(spacing: 0) {
+            // 顶部的安全区填充
+            Color.clear.frame(height: UIApplication.shared.windows.first?.safeAreaInsets.top ?? 44)
+            
             HStack(spacing: 12) {
-                Button("返回") { dismiss() }
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left").font(.title3).padding(8)
+                }
                 
                 Button(action: { showDetailFromHeader = true }) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
-                        Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "未知章节").font(.caption).foregroundColor(.secondary).lineLimit(1)
+                        Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "加载中...").font(.caption).foregroundColor(.secondary).lineLimit(1)
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
                 .background(
-                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) {
-                        EmptyView()
-                    }
+                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) { EmptyView() }
                 )
-                
                 Spacer()
-                Color.clear.frame(width: 44, height: 44)
             }
-            .padding(.top, safeArea.top).padding(.horizontal, 12).padding(.bottom, 8).background(.thinMaterial)
-            Spacer()
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
         }
+        .background(.thinMaterial)
     }
     
-    @ViewBuilder private func bottomBar(safeArea: EdgeInsets) -> some View {
+    private var bottomBar: some View {
         VStack(spacing: 0) {
-            Spacer()
-            controlBar.padding(.bottom, safeArea.bottom).background(.thinMaterial)
+            controlBar
+            // 底部的安全区填充
+            Color.clear.frame(height: UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 34)
         }
+        .background(.thinMaterial)
     }
-
-    private var loadingOverlay: some View { ProgressView("加载中...").padding().background(Material.regular).cornerRadius(10).shadow(radius: 10) }
 
     @ViewBuilder private var controlBar: some View {
         if ttsManager.isPlaying {
-            TTSControlBar(
-                ttsManager: ttsManager,
-                currentChapterIndex: currentChapterIndex,
-                chaptersCount: chapters.count,
-                timerRemaining: timerRemaining,
-                timerActive: timerActive,
-                onPreviousChapter: { previousChapter() },
-                onNextChapter: { nextChapter() },
-                onShowChapterList: { showChapterList = true },
-                onTogglePlayPause: toggleTTS,
-                onSetTimer: { minutes in toggleSleepTimer(minutes: minutes) }
-            )
+            TTSControlBar(ttsManager: ttsManager, currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, timerRemaining: timerRemaining, timerActive: timerActive, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onTogglePlayPause: toggleTTS, onSetTimer: { m in toggleSleepTimer(minutes: m) })
         } else {
-            NormalControlBar(
-                currentChapterIndex: currentChapterIndex,
-                chaptersCount: chapters.count,
-                isMangaMode: false,
-                isForceLandscape: $isForceLandscape,
-                onPreviousChapter: { previousChapter() },
-                onNextChapter: { nextChapter() },
-                onShowChapterList: { showChapterList = true },
-                onToggleTTS: toggleTTS,
-                onShowFontSettings: { showFontSettings = true }
-            )
+            NormalControlBar(currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, isMangaMode: false, isForceLandscape: $isForceLandscape, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onToggleTTS: toggleTTS, onShowFontSettings: { showFontSettings = true })
         }
     }
 
@@ -173,8 +144,7 @@ struct ReadingView: View {
     private func toggleSleepTimer(minutes: Int) {
         sleepTimer?.invalidate()
         if minutes == 0 { timerActive = false; return }
-        timerRemaining = minutes
-        timerActive = true
+        timerRemaining = minutes; timerActive = true
         sleepTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
             if self.timerRemaining > 1 { self.timerRemaining -= 1 }
             else { self.timerActive = false; self.sleepTimer?.invalidate(); self.ttsManager.stop() }
