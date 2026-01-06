@@ -5,8 +5,8 @@ struct ReadingView: View {
     let book: Book
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var apiService: APIService
-    @StateObject var ttsManager = TTSManager.shared
-    @StateObject var preferences = UserPreferences.shared
+    @StateObject private var ttsManager = TTSManager.shared
+    @StateObject private var preferences = UserPreferences.shared
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
 
     @State var chapters: [BookChapter] = []
@@ -31,13 +31,15 @@ struct ReadingView: View {
         _currentPos = State(initialValue: book.durChapterPos ?? 0)
     }
 
+    private var currentChapterIsManga: Bool {
+        book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
+    }
+
     var body: some View {
         GeometryReader { fullScreenProxy in
             ZStack {
-                // 背景底色
                 backgroundView.ignoresSafeArea()
                 
-                // 核心阅读容器：传入安全区信息
                 ReaderContainerRepresentable(
                     book: book,
                     preferences: preferences,
@@ -49,7 +51,7 @@ struct ReadingView: View {
                     onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
                     onProgressChanged: { _, pos in self.currentPos = pos },
                     readingMode: preferences.readingMode,
-                    safeAreaInsets: fullScreenProxy.safeAreaInsets // 关键：注入安全区
+                    safeAreaInsets: fullScreenProxy.safeAreaInsets
                 )
                 .ignoresSafeArea()
                 
@@ -63,7 +65,6 @@ struct ReadingView: View {
                     }
                     .ignoresSafeArea(edges: .vertical)
                 }
-                
                 if isLoading { ProgressView().padding().background(.ultraThinMaterial).cornerRadius(10) }
             }
         }
@@ -81,7 +82,7 @@ struct ReadingView: View {
             } 
         }
         .sheet(isPresented: $showFontSettings) { 
-            ReaderOptionsSheet(preferences: preferences, isMangaMode: false) 
+            ReaderOptionsSheet(preferences: preferences, isMangaMode: currentChapterIsManga) 
         }
     }
 
@@ -91,9 +92,7 @@ struct ReadingView: View {
         VStack(spacing: 0) {
             Color.clear.frame(height: safeArea.top)
             HStack(spacing: 12) {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "chevron.left").font(.system(size: 20, weight: .semibold)).padding(8)
-                }
+                Button(action: { dismiss() }) { Image(systemName: "chevron.left").font(.system(size: 20, weight: .semibold)).padding(8) }
                 Button(action: { showDetailFromHeader = true }) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
@@ -101,9 +100,7 @@ struct ReadingView: View {
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
-                .background(
-                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) { EmptyView() }
-                )
+                .background(NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) { EmptyView() })
                 Spacer()
             }
             .padding(.horizontal, 16).padding(.bottom, 10)
@@ -120,10 +117,10 @@ struct ReadingView: View {
     }
 
     @ViewBuilder private var controlBar: some View {
-        if ttsManager.isPlaying {
+        if ttsManager.isPlaying && !currentChapterIsManga {
             TTSControlBar(ttsManager: ttsManager, currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, timerRemaining: timerRemaining, timerActive: timerActive, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onTogglePlayPause: toggleTTS, onSetTimer: { m in toggleSleepTimer(minutes: m) })
         } else {
-            NormalControlBar(currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, isMangaMode: false, isForceLandscape: $isForceLandscape, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onToggleTTS: toggleTTS, onShowFontSettings: { showFontSettings = true })
+            NormalControlBar(currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, isMangaMode: currentChapterIsManga, isForceLandscape: $isForceLandscape, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onToggleTTS: toggleTTS, onShowFontSettings: { showFontSettings = true })
         }
     }
 
