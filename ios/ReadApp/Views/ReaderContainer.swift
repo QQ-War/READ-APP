@@ -103,6 +103,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var rawContent: String = ""; private var contentSentences: [String] = []
     private var renderStore: TextKit2RenderStore?
     private var pages: [PaginatedPage] = []; private var pageInfos: [TK2PageInfo] = []
+    private var currentParagraphStarts: [Int] = []
     private var currentPageIndex: Int = 0; private var isMangaMode = false
     
     private var nextChapterStore: TextKit2RenderStore?; private var prevChapterStore: TextKit2RenderStore?
@@ -339,6 +340,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             else { ttsManager.pause() }
         } else {
             guard currentChapterIndex < chapters.count else { return }
+            let startPos = currentStartPosition()
+            var ttsSentences = contentSentences
+            if startPos.offset > 0 && startPos.index < ttsSentences.count {
+                let sentence = ttsSentences[startPos.index]
+                let utf16Count = sentence.utf16.count
+                let clamped = min(startPos.offset, utf16Count)
+                let idx = String.Index(utf16Offset: clamped, in: sentence)
+                let tail = String(sentence[idx...])
+                if !tail.isEmpty { ttsSentences[startPos.index] = tail }
+            }
             ttsManager.startReading(
                 text: rawContent,
                 chapters: chapters,
@@ -350,7 +361,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 onChapterChange: { [weak self] newIndex in
                     DispatchQueue.main.async { self?.jumpToChapter(newIndex) }
                 },
-                processedSentences: self.contentSentences
+                processedSentences: ttsSentences,
+                startAtSentenceIndex: startPos.index,
+                shouldSpeakChapterTitle: startPos.index == 0 && startPos.offset == 0
             )
         }
     }
@@ -582,6 +595,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         let res = TextKit2Paginator.paginate(renderStore: s, pageSize: spec.pageSize, paragraphStarts: starts, prefixLen: pLen, topInset: spec.topInset, bottomInset: spec.bottomInset)
         self.pages = res.pages; self.pageInfos = res.pageInfos
+        self.currentParagraphStarts = starts
     }
 
     private func setupVerticalMode() {
@@ -662,6 +676,27 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 updateHorizontalPage(to: t, animated: true) 
             }
         }
+    }
+    private func currentStartPosition() -> (index: Int, offset: Int) {
+        guard !contentSentences.isEmpty else { return (0, 0) }
+        let offset: Int
+        if currentReadingMode == .horizontal, currentPageIndex < pageInfos.count {
+            offset = pageInfos[currentPageIndex].range.location
+        } else if currentReadingMode == .vertical {
+            offset = verticalVC?.getCurrentCharOffset() ?? 0
+        } else {
+            offset = 0
+        }
+        let starts = currentParagraphStarts
+        if starts.isEmpty { return (0, 0) }
+        let idx = max(0, min((starts.lastIndex(where: { $0 <= offset }) ?? 0), contentSentences.count - 1))
+        let start = starts[idx]
+        var intra = max(0, offset - start)
+        let indentLen = 2
+        intra = intra >= indentLen ? intra - indentLen : 0
+        let maxLen = contentSentences[idx].utf16.count
+        intra = min(intra, maxLen)
+        return (idx, intra)
     }
     private func scrollToChapterEnd(animated: Bool) { if isMangaMode, let sv = mangaScrollView { sv.setContentOffset(CGPoint(x: 0, y: max(0, sv.contentSize.height - sv.bounds.height)), animated: animated) } else if currentReadingMode == .vertical { verticalVC?.scrollToBottom(animated: animated) } else if !pages.isEmpty { updateHorizontalPage(to: max(0, pages.count - 1), animated: animated) } }
     private func applyReplaceRules(to text: String) -> String { guard let rules = replaceRuleViewModel?.rules else { return text }; var res = text; for r in rules where r.isEnabled == true { if r.isRegex == true { if let reg = try? NSRegularExpression(pattern: r.pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = reg.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: r.replacement) } } else { res = res.replacingOccurrences(of: r.pattern, with: r.replacement) } }; return res }
