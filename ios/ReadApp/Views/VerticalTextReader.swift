@@ -41,6 +41,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private let currentContentView = VerticalTextContentView()
     private let nextContentView = VerticalTextContentView() // 下一章拼接视图
     private var editMenuInteraction: Any?
+    private let switchHintLabel = UILabel()
+    private var pendingSwitchDirection: Int = 0
+    private var switchReady = false
+    private var switchWorkItem: DispatchWorkItem?
+    private let switchHoldDuration: TimeInterval = 0.6
+    private let switchOverScrollThreshold: CGFloat = 80
+    private let dampingFactor: CGFloat = 0.2
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
@@ -62,6 +69,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         super.viewDidLoad()
         scrollView.delegate = self; scrollView.contentInsetAdjustmentBehavior = .never; scrollView.showsVerticalScrollIndicator = true; scrollView.alwaysBounceVertical = true
         view.addSubview(scrollView); scrollView.addSubview(currentContentView); scrollView.addSubview(nextContentView)
+        setupSwitchHint()
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tap.delegate = self
@@ -243,18 +251,17 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func scrollViewDidScroll(_ s: UIScrollView) {
         if isUpdatingLayout { return }
         let rawOffset = s.contentOffset.y
-        let velocity = s.panGestureRecognizer.velocity(in: s.superview).y
         
         if isInfiniteScrollEnabled {
             let bottomEdge = max(0, currentContentView.frame.maxY - s.bounds.height + 40)
             if rawOffset > bottomEdge {
                 let over = rawOffset - bottomEdge
-                s.contentOffset.y = bottomEdge + over * 0.3
+                s.contentOffset.y = bottomEdge + over * dampingFactor
             }
             let topEdge: CGFloat = -80
             if rawOffset < topEdge {
                 let over = rawOffset - topEdge
-                s.contentOffset.y = topEdge + over * 0.3
+                s.contentOffset.y = topEdge + over * dampingFactor
             }
         }
         
@@ -262,17 +269,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         // 1. 章节切换判定 (无限流核心)
         if isInfiniteScrollEnabled {
-            // 只有当用户向上滑动（velocity < 0，即内容往上走，试图看后面）且超过当前章节底部时切换到下一章
-            if velocity < 0 && rawOffset > currentContentView.frame.maxY - s.bounds.height + 40 {
-                 // 检查是否真的已经快到底了，且 nextContentView 已经显露
-                 if rawOffset > currentContentView.frame.maxY + 20 {
-                     onChapterSwitched?(1)
-                 }
-            } 
-            // 只有当用户向下滑动（velocity > 0，即内容往下走，试图看前面）且超过顶部阈值时切换到上一章
-            else if velocity > 0 && rawOffset < -80 {
-                onChapterSwitched?(-1)
-            }
+            handleHoldSwitchIfNeeded(rawOffset: rawOffset)
         }
         
         // 2. 预载判定
@@ -283,6 +280,22 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         // 3. 进度汇报
         let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
         if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        cancelSwitchHold()
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        guard isInfiniteScrollEnabled else { return }
+        if switchReady, pendingSwitchDirection != 0 {
+            onChapterSwitched?(pendingSwitchDirection)
+        }
+        cancelSwitchHold()
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        cancelSwitchHold()
     }
 
     func scrollToSentence(index: Int, animated: Bool) { guard index >= 0 && index < sentenceYOffsets.count else { return }; let y = max(0, sentenceYOffsets[index] + safeAreaTop + 10); scrollView.setContentOffset(CGPoint(x: 0, y: min(y, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: animated) }
@@ -318,6 +331,81 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         // 查找最接近的段落索引，防止直接使用 charOffset 定位到 fragment 中间
         let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
         scrollToSentence(index: index, animated: animated)
+    }
+}
+
+private extension VerticalTextViewController {
+    func setupSwitchHint() {
+        switchHintLabel.alpha = 0
+        switchHintLabel.textAlignment = .center
+        switchHintLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        switchHintLabel.textColor = .secondaryLabel
+        switchHintLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.9)
+        switchHintLabel.layer.cornerRadius = 12
+        switchHintLabel.layer.masksToBounds = true
+        view.addSubview(switchHintLabel)
+    }
+
+    func updateSwitchHint(text: String, isTop: Bool) {
+        switchHintLabel.text = "  \(text)  "
+        switchHintLabel.sizeToFit()
+        let width = min(view.bounds.width - 40, max(120, switchHintLabel.bounds.width))
+        let bottomSafe = max(0, view.safeAreaInsets.bottom)
+        switchHintLabel.frame = CGRect(
+            x: (view.bounds.width - width) / 2,
+            y: isTop ? (safeAreaTop + 12) : (view.bounds.height - bottomSafe - 36),
+            width: width,
+            height: 24
+        )
+        if switchHintLabel.alpha == 0 {
+            UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 1 }
+        }
+    }
+
+    func hideSwitchHint() {
+        guard switchHintLabel.alpha > 0 else { return }
+        UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 0 }
+    }
+
+    func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
+        let bottomEdge = max(0, currentContentView.frame.maxY - scrollView.bounds.height + 40)
+        let bottomOver = rawOffset - bottomEdge
+        let topEdge: CGFloat = -80
+        let topOver = topEdge - rawOffset
+
+        if scrollView.isDragging, bottomOver > switchOverScrollThreshold {
+            beginSwitchHold(direction: 1, isTop: false)
+            return
+        }
+        if scrollView.isDragging, topOver > switchOverScrollThreshold {
+            beginSwitchHold(direction: -1, isTop: true)
+            return
+        }
+        if !scrollView.isDragging || (bottomOver <= switchOverScrollThreshold && topOver <= switchOverScrollThreshold) {
+            cancelSwitchHold()
+        }
+    }
+
+    func beginSwitchHold(direction: Int, isTop: Bool) {
+        if pendingSwitchDirection == direction, switchWorkItem != nil { return }
+        cancelSwitchHold()
+        pendingSwitchDirection = direction
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            guard self.scrollView.isDragging else { return }
+            self.switchReady = true
+            self.updateSwitchHint(text: direction > 0 ? "松手切换下一章" : "松手切换上一章", isTop: isTop)
+        }
+        switchWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + switchHoldDuration, execute: work)
+    }
+
+    func cancelSwitchHold() {
+        switchWorkItem?.cancel()
+        switchWorkItem = nil
+        pendingSwitchDirection = 0
+        switchReady = false
+        hideSwitchHint()
     }
 }
 
