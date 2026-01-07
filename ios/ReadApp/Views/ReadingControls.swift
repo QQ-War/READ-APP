@@ -15,6 +15,7 @@ struct TTSControlBar: View {
     let onShowChapterList: () -> Void
     let onTogglePlayPause: () -> Void
     let onSetTimer: (Int) -> Void
+    let onShowFontSettings: () -> Void
 
     var body: some View {
         VStack(spacing: 16) {
@@ -91,6 +92,10 @@ struct TTSControlBar: View {
                 Button(action: { ttsManager.stop() }) {
                     Label("停止播放", systemImage: "stop.circle")
                         .foregroundColor(.red)
+                }
+                Spacer()
+                Button(action: onShowFontSettings) {
+                    Label("选项", systemImage: "slider.horizontal.3")
                 }
             }
             .font(.caption)

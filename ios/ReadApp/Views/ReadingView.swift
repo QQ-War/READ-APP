@@ -129,7 +129,7 @@ struct ReadingView: View {
 
     @ViewBuilder private var controlBar: some View {
         if ttsManager.isPlaying && !isMangaMode {
-            TTSControlBar(ttsManager: ttsManager, currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, timerRemaining: timerRemaining, timerActive: timerActive, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onTogglePlayPause: toggleTTS, onSetTimer: { m in toggleSleepTimer(minutes: m) })
+            TTSControlBar(ttsManager: ttsManager, currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, timerRemaining: timerRemaining, timerActive: timerActive, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onTogglePlayPause: toggleTTS, onSetTimer: { m in toggleSleepTimer(minutes: m) }, onShowFontSettings: { showFontSettings = true })
         } else {
             NormalControlBar(currentChapterIndex: currentChapterIndex, chaptersCount: chapters.count, isMangaMode: isMangaMode, isForceLandscape: $isForceLandscape, onPreviousChapter: { previousChapter() }, onNextChapter: { nextChapter() }, onShowChapterList: { showChapterList = true }, onToggleTTS: toggleTTS, onShowFontSettings: { showFontSettings = true })
         }
