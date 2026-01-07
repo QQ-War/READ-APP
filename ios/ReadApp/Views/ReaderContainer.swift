@@ -252,7 +252,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if index + 1 < chapters.count {
             prefetchNextTask = Task { [weak self] in
                 guard let self = self else { return }
-                if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1) {
+                if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1, contentType: 0) {
                     await MainActor.run {
                         guard self.currentChapterIndex == baseIndex else { return }
                         let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content))
@@ -270,7 +270,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if index - 1 >= 0 {
             prefetchPrevTask = Task { [weak self] in
                 guard let self = self else { return }
-                if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index - 1) {
+                if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index - 1, contentType: 0) {
                     await MainActor.run {
                         guard self.currentChapterIndex == baseIndex else { return }
                         let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content))
