@@ -174,6 +174,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         if y < cur + 50 || y > cur + vH - 150 { lastTTSSyncIndex = index; scrollView.setContentOffset(CGPoint(x: 0, y: max(0, y - vH / 3)), animated: true) }
     }
     func scrollToTop(animated: Bool) { scrollView.setContentOffset(.zero, animated: animated) }
+    func scrollToBottom(animated: Bool) {
+        let y = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+        scrollView.setContentOffset(CGPoint(x: 0, y: y), animated: animated)
+    }
     func getCurrentCharOffset() -> Int {
         guard let s = renderStore else { return 0 }; let f = s.layoutManager.textLayoutFragment(for: CGPoint(x: 10, y: scrollView.contentOffset.y - (safeAreaTop + 10) + 5))
         return f != nil ? s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f!.rangeInElement.location) : 0
