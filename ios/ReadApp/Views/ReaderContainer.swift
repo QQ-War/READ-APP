@@ -63,9 +63,12 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
         vc.updateLayout(safeArea: safeAreaInsets)
         vc.updatePreferences(preferences)
         vc.updateReplaceRules(replaceRuleViewModel.rules)
-        if !vc.isInternalTransitioning && vc.currentChapterIndex != currentChapterIndex {
+        
+        // 外部跳转检测逻辑优化
+        if !vc.isInternalTransitioning && vc.lastReportedChapterIndex != currentChapterIndex {
             vc.jumpToChapter(currentChapterIndex)
         }
+        
         if vc.currentReadingMode != readingMode { vc.switchReadingMode(to: readingMode) }
         vc.syncTTSState()
     }
@@ -88,6 +91,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private(set) var currentChapterIndex: Int = 0
+    var lastReportedChapterIndex: Int = -1
     private(set) var currentReadingMode: ReadingMode = .vertical
     var isInternalTransitioning = false
     
@@ -112,7 +116,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        setupProgressLabel(); currentChapterIndex = book.durChapterIndex ?? 0; currentReadingMode = preferences.readingMode; loadChapters()
+        setupProgressLabel()
+        currentChapterIndex = book.durChapterIndex ?? 0
+        lastReportedChapterIndex = currentChapterIndex
+        currentReadingMode = preferences.readingMode
+        loadChapters()
     }
     
     private func setupProgressLabel() {
@@ -147,7 +155,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func updateReplaceRules(_ rules: [ReplaceRule]) { if !rawContent.isEmpty && !isMangaMode { reRenderCurrentContent() } }
     
     func jumpToChapter(_ index: Int, startAtEnd: Bool = false) {
-        currentChapterIndex = index; onChapterIndexChanged?(index); loadChapterContent(at: index, startAtEnd: startAtEnd)
+        currentChapterIndex = index; lastReportedChapterIndex = index; onChapterIndexChanged?(index); loadChapterContent(at: index, startAtEnd: startAtEnd)
     }
     func switchReadingMode(to mode: ReadingMode) { currentReadingMode = mode; setupReaderMode() }
 
@@ -259,11 +267,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             }
             
             self.currentChapterIndex += offset
-            if offset < 0 && targetPage == 0 {
-                self.currentPageIndex = max(0, pages.count - 1)
-            } else {
-                self.currentPageIndex = targetPage
-            }
+            self.lastReportedChapterIndex = self.currentChapterIndex
+            self.currentPageIndex = targetPage
             self.onChapterIndexChanged?(self.currentChapterIndex)
             
             // 重要：洗白当前 VC 的身份，使其成为“当前章”的 VC
