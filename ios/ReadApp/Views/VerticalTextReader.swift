@@ -51,6 +51,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     
     private var lastHighlightIndex: Int?; private var lastSecondaryIndices: Set<Int> = []; private var lastFontSize: CGFloat = 0; private var lastLineSpacing: CGFloat = 0; private var lastMargin: CGFloat = 20
     
+    // 无感置换状态记录
+    private var previousContentHeight: CGFloat = 0
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         scrollView.delegate = self; scrollView.contentInsetAdjustmentBehavior = .never; scrollView.showsVerticalScrollIndicator = true; scrollView.alwaysBounceVertical = true
@@ -68,11 +71,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     @objc private func handleLongPress(_ g: UILongPressGestureRecognizer) {
         guard g.state == .began else { return }
         let p = g.location(in: scrollView)
-        // 判定是在当前章还是下一章
         let s = p.y < nextContentView.frame.minY ? renderStore : nextRenderStore
         let cv = p.y < nextContentView.frame.minY ? currentContentView : nextContentView
         guard let store = s else { return }
         let pointInContent = g.location(in: cv)
+        // 修复可选值解包
         if let f = store.layoutManager.textLayoutFragment(for: pointInContent), let te = f.textElement, let range = te.elementRange, let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
             let txt = (store.attributedString.string as NSString).substring(with: r)
             becomeFirstResponder(); self.pendingSelectedText = txt; UIMenuController.shared.showMenu(from: cv, rect: CGRect(origin: pointInContent, size: .zero))
@@ -89,22 +92,40 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         let contentChanged = self.currentSentences != sentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing
         let nextChanged = self.nextSentences != (nextSentences ?? [])
         
+        // 核心优化：检测是否发生了章节置换（即上一章的内容现在变成了本章内容）
+        // 如果 sentences 等于旧的 nextSentences，说明发生了向下滑动切换
+        let isChapterSwap = (sentences == self.nextSentences) && !sentences.isEmpty
+        
         if contentChanged || renderStore == nil {
+            self.previousContentHeight = currentContentView.frame.height
+            
             self.currentSentences = sentences; self.lastFontSize = fontSize; self.lastLineSpacing = lineSpacing; isUpdatingLayout = true
             var pS: [Int] = []; var cP = 0; for s in sentences { pS.append(cP); cP += s.count + 1 }; paragraphStarts = pS
             let attr = createAttr(sentences, fontSize: fontSize, lineSpacing: lineSpacing)
-            if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+            if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
             else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
             calculateSentenceOffsets(); isUpdatingLayout = false
             currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
             updateLayoutFrames()
+            
+            // 执行无感置换
+            if isChapterSwap {
+                // 旧的 offset.y 肯定很大（因为它包含了 previousContentHeight）
+                // 新的 offset.y 应该减去 previousContentHeight + 80 (间距)
+                let adjustment = previousContentHeight + 80
+                // 只有当 adjustment 合理时才调整，防止跳变
+                if adjustment > 0 {
+                    let newY = max(0, scrollView.contentOffset.y - adjustment)
+                    scrollView.setContentOffset(CGPoint(x: 0, y: newY), animated: false)
+                }
+            }
             return true
         }
         
         if nextChanged, let next = nextSentences {
             self.nextSentences = next
             let attr = createAttr(next, fontSize: fontSize, lineSpacing: lineSpacing)
-            if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+            if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
             else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
             nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
             updateLayoutFrames()

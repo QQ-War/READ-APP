@@ -47,11 +47,11 @@ struct TextKit2Paginator {
         var pages: [PaginatedPage] = []
         var pageInfos: [TK2PageInfo] = []
         
-        // 关键：计算真正的可用高度
-        let usableHeight = pageSize.height - topInset - bottomInset
+        // 关键优化：给可用高度留出 8pt 的呼吸空间，防止底行文字紧贴边缘
+        let safeBottomPadding: CGFloat = 8.0
+        let usableHeight = max(100, pageSize.height - topInset - bottomInset - safeBottomPadding)
         var currentY: CGFloat = 0
         
-        // 确保布局完成
         lm.ensureLayout(for: storage.documentRange)
         
         while true {
@@ -62,7 +62,7 @@ struct TextKit2Paginator {
             
             let startSentenceIdx = paragraphStarts.lastIndex(where: { $0 <= startOffset }) ?? 0
             
-            // 找到本页结束位置：通过在 Y 轴上步进
+            // 查找本页结束点
             let targetY = currentY + usableHeight
             let endFragment = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY - 0.1))
             let endLocation = endFragment?.rangeInElement.endLocation ?? storage.documentRange.endLocation
@@ -70,17 +70,18 @@ struct TextKit2Paginator {
             
             let pageRange = NSRange(location: startOffset, length: max(1, endOffset - startOffset))
             
+            // 记录分页信息
             pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx))
             pageInfos.append(TK2PageInfo(
                 range: pageRange,
                 yOffset: currentY,
                 pageHeight: pageSize.height,
-                actualContentHeight: usableHeight,
+                actualContentHeight: usableHeight, // 记录计算高度
                 startSentenceIndex: startSentenceIdx,
                 contentInset: topInset
             ))
             
-            // 逻辑步进：下一页的起点必须是 endFragment 的位置
+            // 步进：严格对齐下一页起点
             currentY = endFragment?.layoutFragmentFrame.maxY ?? (currentY + usableHeight)
             
             if currentY >= lm.usageBoundsForTextContainer.height { break }
@@ -100,14 +101,25 @@ struct TextKit2Paginator {
     }
 }
 
-// MARK: - 渲染视图
+// MARK: - 渲染视图 (视口对齐版)
 class ReadContent2View: UIView {
     var renderStore: TextKit2RenderStore?
-    var pageInfo: TK2PageInfo? { didSet { setNeedsDisplay() } }
+    var pageInfo: TK2PageInfo? {
+        didSet {
+            guard let info = pageInfo else { return }
+            // 核心逻辑修改：直接移动 View 的视口 (Bounds) 去找文字
+            // 让 Bounds 的原点 y 对应 (文字起始y - 顶部留白)
+            // 这样，yOffset 处的文字就会正好绘制在 topInset 处
+            let viewportY = info.yOffset - info.contentInset
+            self.bounds.origin = CGPoint(x: 0, y: viewportY)
+            setNeedsDisplay()
+        }
+    }
+    
     var horizontalInset: CGFloat = 16
     var onTapLocation: ((ReaderTapLocation) -> Void)?
     
-    // 兼容旧接口与 TTS 高亮支持
+    // 兼容属性
     var onAddReplaceRule: ((String) -> Void)?
     var highlightIndex: Int? { didSet { setNeedsDisplay() } }
     var secondaryIndices: Set<Int> = [] { didSet { setNeedsDisplay() } }
@@ -137,17 +149,14 @@ class ReadContent2View: UIView {
         
         ctx.saveGState()
         
-        // 1. 裁剪区域：只显示本页内容
-        let clipRect = CGRect(x: 0, y: info.yOffset, width: bounds.width, height: info.actualContentHeight)
-        ctx.clip(to: clipRect)
-
-        // 2. 坐标变换：将本页内容映射到屏幕
+        // 1. 无需 translate，直接偏移 horizontalInset 即可
+        // 因为 bounds.origin.y 已经被设为了 (yOffset - topInset)
+        // 所以原始坐标 yOffset 会自动对应屏幕坐标 topInset
         ctx.translateBy(x: horizontalInset, y: 0)
         
-        // 3. 绘制 TTS 高亮背景 (在文字底层)
+        // 2. 绘制 TTS 高亮
         if isPlayingHighlight {
             ctx.saveGState()
-            // 构造需要高亮的索引集合
             let allIndices = ([highlightIndex].compactMap { $0 } + Array(secondaryIndices))
             for i in allIndices {
                 guard i < paragraphStarts.count else { continue }
@@ -155,7 +164,6 @@ class ReadContent2View: UIView {
                 let end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length
                 let range = NSRange(location: start, length: max(0, end - start))
                 
-                // 仅当高亮范围与本页有交集时才绘制
                 if NSIntersectionRange(range, info.range).length > 0 {
                     let color = (i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)
                     ctx.setFillColor(color.cgColor)
@@ -165,9 +173,12 @@ class ReadContent2View: UIView {
                             let fRange = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
                             if fRange >= range.location + range.length { return false }
                             
-                            // 绘制高亮矩形
+                            // 直接绘制原始 Frame
                             let frame = f.layoutFragmentFrame
-                            ctx.fill(frame.insetBy(dx: -2, dy: -1))
+                            // 简单的裁剪判断：只画在当前页范围内的
+                            if frame.maxY > info.yOffset && frame.minY < info.yOffset + info.actualContentHeight {
+                                ctx.fill(frame.insetBy(dx: -2, dy: -1))
+                            }
                             return true
                         }
                     }
@@ -176,11 +187,14 @@ class ReadContent2View: UIView {
             ctx.restoreGState()
         }
         
-        // 4. 绘制文字
+        // 3. 绘制文字 (直接使用原始坐标)
         let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: info.range.location)!
         s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
-            if frame.minY >= info.yOffset + info.actualContentHeight { return false }
+            // 只要 Fragment 的一部分在可视范围内就绘制
+            // 这里的 yOffset 对应 bounds.origin.y + topInset
+            if frame.minY >= info.yOffset + info.actualContentHeight + info.contentInset { return false }
+            
             fragment.draw(at: frame.origin, in: ctx)
             return true
         }
