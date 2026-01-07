@@ -62,13 +62,51 @@ struct TextKit2Paginator {
             
             let startSentenceIdx = paragraphStarts.lastIndex(where: { $0 <= startOffset }) ?? 0
             
-            // 查找本页结束点
+            // 查找本页理论结束位置附近的 Fragment
             let targetY = currentY + usableHeight
-            let endFragment = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY - 0.1))
-            let endLocation = endFragment?.rangeInElement.endLocation ?? storage.documentRange.endLocation
-            let endOffset = storage.offset(from: storage.documentRange.location, to: endLocation)
+            // 往回一点点探测，获取位于底部的那个 Fragment
+            guard let endFragment = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY - 5.0)) else {
+                // 如果探测不到，说明可能已经到底或者空白，尝试直接用 targetY
+                 if let fallback = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY)) {
+                     // 找到了（虽然不太可能，因为 -5 都没找到）
+                     let endOffset = storage.offset(from: storage.documentRange.location, to: fallback.rangeInElement.endLocation)
+                     let pageRange = NSRange(location: startOffset, length: max(1, endOffset - startOffset))
+                     pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx))
+                     pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageSize.height, actualContentHeight: fallback.layoutFragmentFrame.maxY - currentY, startSentenceIndex: startSentenceIdx, contentInset: topInset))
+                     currentY = fallback.layoutFragmentFrame.maxY
+                     if currentY >= lm.usageBoundsForTextContainer.height { break }
+                     continue
+                 } else {
+                     // 真的没内容了
+                     break
+                 }
+            }
             
-            let pageRange = NSRange(location: startOffset, length: max(1, endOffset - startOffset))
+            var pageEndOffset: Int = 0
+            var nextPageStartY: CGFloat = 0
+            
+            // 核心判定：防截断逻辑
+            // 如果该行的底部超出了本页可用高度
+            if endFragment.layoutFragmentFrame.maxY > targetY {
+                let fragmentStartOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.location)
+                
+                // Case 1: 这一行不是本页的第一行 -> 把它推到下一页
+                if fragmentStartOffset > startOffset {
+                    pageEndOffset = fragmentStartOffset
+                    nextPageStartY = endFragment.layoutFragmentFrame.minY
+                } 
+                // Case 2: 这一行是本页第一行（超大字号占满整页） -> 只能强行放入
+                else {
+                    pageEndOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.endLocation)
+                    nextPageStartY = endFragment.layoutFragmentFrame.maxY
+                }
+            } else {
+                // Case 3: 完全在界内 -> 正常包含
+                pageEndOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.endLocation)
+                nextPageStartY = endFragment.layoutFragmentFrame.maxY
+            }
+            
+            let pageRange = NSRange(location: startOffset, length: pageEndOffset - startOffset)
             
             // 记录分页信息
             pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx))
@@ -76,13 +114,13 @@ struct TextKit2Paginator {
                 range: pageRange,
                 yOffset: currentY,
                 pageHeight: pageSize.height,
-                actualContentHeight: usableHeight, // 记录计算高度
+                actualContentHeight: nextPageStartY - currentY, // 记录真实的排版高度
                 startSentenceIndex: startSentenceIdx,
                 contentInset: topInset
             ))
             
-            // 步进：严格对齐下一页起点
-            currentY = endFragment?.layoutFragmentFrame.maxY ?? (currentY + usableHeight)
+            // 步进
+            currentY = nextPageStartY
             
             if currentY >= lm.usageBoundsForTextContainer.height { break }
         }
