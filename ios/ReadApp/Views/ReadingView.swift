@@ -21,7 +21,7 @@ struct ReadingView: View {
     
     @State private var isForceLandscape = false
     @State private var showDetailFromHeader = false
-    @State private var toggleTTSAction: (() -> Void)?
+    @State var toggleTTSAction: (() -> Void)?
     
     @State private var timerRemaining: Int = 0
     @State private var timerActive = false
