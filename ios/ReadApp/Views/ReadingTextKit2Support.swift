@@ -187,9 +187,10 @@ class ReadContent2View: UIView {
         
         ctx.saveGState()
         
-        // 1. 无需 translate，直接偏移 horizontalInset 即可
-        // 因为 bounds.origin.y 已经被设为了 (yOffset - topInset)
-        // 所以原始坐标 yOffset 会自动对应屏幕坐标 topInset
+        // 增加裁剪区域，防止文字或高亮溢出到 topInset 或 bottomInset 之外
+        let clipRect = CGRect(x: 0, y: info.yOffset, width: bounds.width, height: info.actualContentHeight)
+        ctx.clip(to: clipRect)
+        
         ctx.translateBy(x: horizontalInset, y: 0)
         
         // 2. 绘制 TTS 高亮
@@ -211,9 +212,8 @@ class ReadContent2View: UIView {
                             let fRange = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
                             if fRange >= range.location + range.length { return false }
                             
-                            // 直接绘制原始 Frame
                             let frame = f.layoutFragmentFrame
-                            // 简单的裁剪判断：只画在当前页范围内的
+                            // 修正判断条件
                             if frame.maxY > info.yOffset && frame.minY < info.yOffset + info.actualContentHeight {
                                 ctx.fill(frame.insetBy(dx: -2, dy: -1))
                             }
@@ -229,9 +229,8 @@ class ReadContent2View: UIView {
         let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: info.range.location)!
         s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
-            // 只要 Fragment 的一部分在可视范围内就绘制
-            // 这里的 yOffset 对应 bounds.origin.y + topInset
-            if frame.minY >= info.yOffset + info.actualContentHeight + info.contentInset { return false }
+            // 修正判断条件：移除错误的 contentInset 偏移量
+            if frame.minY >= info.yOffset + info.actualContentHeight { return false }
             
             fragment.draw(at: frame.origin, in: ctx)
             return true

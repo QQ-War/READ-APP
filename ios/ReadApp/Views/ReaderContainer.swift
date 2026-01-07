@@ -107,6 +107,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var lastLayoutSignature: String = ""
     private var loadToken: Int = 0
     private var prefetchNextTask: Task<Void, Never>?; private var prefetchPrevTask: Task<Void, Never>?
+    private var isFirstLoad = true
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -168,8 +169,19 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     guard self.loadToken == token else { return }
                     self.rawContent = content; self.isMangaMode = isM; self.onModeDetected?(isM)
                     self.reRenderCurrentContent()
-                    if startAtEnd { self.scrollToChapterEnd(animated: false) }
-                    else { self.updateHorizontalPage(to: 0, animated: false); self.verticalVC?.scrollToTop(animated: false) }
+                    
+                    if self.isFirstLoad && !self.isMangaMode {
+                        self.isFirstLoad = false
+                        let pos = self.book.durChapterPos ?? 0
+                        let targetPage = Int(round(pos * Double(max(1, self.pages.count))))
+                        self.updateHorizontalPage(to: targetPage, animated: false)
+                        self.verticalVC?.scrollToProgress(pos)
+                    } else if startAtEnd {
+                        self.scrollToChapterEnd(animated: false)
+                    } else {
+                        self.updateHorizontalPage(to: 0, animated: false)
+                        self.verticalVC?.scrollToTop(animated: false)
+                    }
                     self.prefetchAdjacentChapters(index: index)
                 }
             } catch { print("Content load failed") }
@@ -189,8 +201,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func updateProgressUI() {
-        if isMangaMode { progressLabel.text = ""; return }
-        let total = max(1, pages.count); let current = min(total, currentPageIndex + 1)
+        if isMangaMode || pages.isEmpty { progressLabel.text = ""; return }
+        let total = pages.count
+        let current = max(1, min(total, currentPageIndex + 1))
         progressLabel.text = currentReadingMode == .horizontal ? "\(current)/\(total)" : ""
     }
 
@@ -263,10 +276,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func updateHorizontalPage(to i: Int, animated: Bool) {
-        guard let h = horizontalVC, i >= 0 && i < pages.count else { return }
-        let direction: UIPageViewController.NavigationDirection = i >= currentPageIndex ? .forward : .reverse
-        currentPageIndex = i
-        h.setViewControllers([createPageVC(at: i, offset: 0)], direction: direction, animated: animated)
+        guard let h = horizontalVC, !pages.isEmpty else { return }
+        let targetIndex = max(0, min(i, pages.count - 1))
+        let direction: UIPageViewController.NavigationDirection = targetIndex >= currentPageIndex ? .forward : .reverse
+        currentPageIndex = targetIndex
+        h.setViewControllers([createPageVC(at: targetIndex, offset: 0)], direction: direction, animated: animated)
+        updateProgressUI()
+        self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
     }
     
     private func createPageVC(at i: Int, offset: Int) -> PageContentViewController {
