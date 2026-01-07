@@ -36,10 +36,11 @@ struct VerticalTextReader: UIViewControllerRepresentable {
 }
 
 // MARK: - UIKit 核心控制器
-class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIEditMenuInteractionDelegate, UIGestureRecognizerDelegate {
+class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     let scrollView = UIScrollView()
     private let currentContentView = VerticalTextContentView()
     private let nextContentView = VerticalTextContentView() // 下一章拼接视图
+    @available(iOS 16.0, *)
     private var editMenuInteraction: UIEditMenuInteraction?
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
@@ -70,8 +71,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIEdit
         longPress.delegate = self
         scrollView.addGestureRecognizer(longPress)
         
-        editMenuInteraction = UIEditMenuInteraction(delegate: self)
-        view.addInteraction(editMenuInteraction!)
+        if #available(iOS 16.0, *) {
+            editMenuInteraction = UIEditMenuInteraction(delegate: self)
+            view.addInteraction(editMenuInteraction!)
+        }
     }
     
     override func viewDidLayoutSubviews() {
@@ -95,16 +98,24 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIEdit
            let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
             let txt = (store.attributedString.string as NSString).substring(with: r)
             self.pendingSelectedText = txt
-            let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: g.location(in: view))
-            editMenuInteraction?.presentEditMenu(with: configuration)
+            if #available(iOS 16.0, *) {
+                let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: g.location(in: view))
+                editMenuInteraction?.presentEditMenu(with: configuration)
+            } else {
+                becomeFirstResponder()
+                let menu = UIMenuController.shared
+                menu.menuItems = [UIMenuItem(title: "添加净化规则", action: #selector(addToReplaceRule))]
+                menu.showMenu(from: view, rect: CGRect(origin: g.location(in: view), size: .zero))
+            }
         }
     }
-    
-    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
-        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
-            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
-        }
-        return UIMenu(children: [addAction] + suggestedActions)
+
+    override var canBecomeFirstResponder: Bool { true }
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        return action == #selector(addToReplaceRule)
+    }
+    @objc private func addToReplaceRule() {
+        if let t = pendingSelectedText { onAddReplaceRule?(t) }
     }
 
     @discardableResult
@@ -275,6 +286,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIEdit
         // 查找最接近的段落索引，防止直接使用 charOffset 定位到 fragment 中间
         let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
         scrollToSentence(index: index, animated: animated)
+    }
+}
+
+@available(iOS 16.0, *)
+extension VerticalTextViewController: UIEditMenuInteractionDelegate {
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
+            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
+        }
+        return UIMenu(children: [addAction] + suggestedActions)
     }
 }
 

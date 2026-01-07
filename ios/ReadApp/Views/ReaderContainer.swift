@@ -96,6 +96,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     var lastReportedChapterIndex: Int = -1
     private(set) var currentReadingMode: ReadingMode = .vertical
     var isInternalTransitioning = false
+    private var isFirstLoad = true
+    private var isUserInteracting = false
+    private var cancellables: Set<AnyCancellable> = []
     
     private var rawContent: String = ""; private var contentSentences: [String] = []
     private var renderStore: TextKit2RenderStore?

@@ -157,7 +157,7 @@ struct TextKit2Paginator {
 }
 
 // MARK: - 渲染视图 (视口对齐版)
-class ReadContent2View: UIView, UIEditMenuInteractionDelegate, UIGestureRecognizerDelegate {
+class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     var renderStore: TextKit2RenderStore?
     var pageInfo: TK2PageInfo? {
         didSet {
@@ -173,6 +173,7 @@ class ReadContent2View: UIView, UIEditMenuInteractionDelegate, UIGestureRecogniz
     
     var horizontalInset: CGFloat = 16
     var onTapLocation: ((ReaderTapLocation) -> Void)?
+    @available(iOS 16.0, *)
     var editMenuInteraction: UIEditMenuInteraction?
     var pendingSelectedText: String?
     
@@ -196,8 +197,10 @@ class ReadContent2View: UIView, UIEditMenuInteractionDelegate, UIGestureRecogniz
         longPress.delegate = self
         addGestureRecognizer(longPress)
         
-        editMenuInteraction = UIEditMenuInteraction(delegate: self)
-        addInteraction(editMenuInteraction!)
+        if #available(iOS 16.0, *) {
+            editMenuInteraction = UIEditMenuInteraction(delegate: self)
+            addInteraction(editMenuInteraction!)
+        }
     }
     
     required init?(coder: NSCoder) { fatalError() }
@@ -222,16 +225,24 @@ class ReadContent2View: UIView, UIEditMenuInteractionDelegate, UIGestureRecogniz
            let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
             let txt = (store.attributedString.string as NSString).substring(with: r)
             self.pendingSelectedText = txt
-            let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: pointInContent)
-            editMenuInteraction?.presentEditMenu(with: configuration)
+            if #available(iOS 16.0, *) {
+                let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: pointInContent)
+                editMenuInteraction?.presentEditMenu(with: configuration)
+            } else {
+                becomeFirstResponder()
+                let menu = UIMenuController.shared
+                menu.menuItems = [UIMenuItem(title: "添加净化规则", action: #selector(addToReplaceRule))]
+                menu.showMenu(from: self, rect: CGRect(origin: pointInContent, size: .zero))
+            }
         }
     }
-    
-    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
-        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
-            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
-        }
-        return UIMenu(children: [addAction] + suggestedActions)
+
+    override var canBecomeFirstResponder: Bool { true }
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        return action == #selector(addToReplaceRule)
+    }
+    @objc private func addToReplaceRule() {
+        if let t = pendingSelectedText { onAddReplaceRule?(t) }
     }
     
     override func draw(_ rect: CGRect) {
@@ -302,5 +313,15 @@ class ReadContent2View: UIView, UIEditMenuInteractionDelegate, UIGestureRecogniz
         }
         
         ctx.restoreGState()
+    }
+}
+
+@available(iOS 16.0, *)
+extension ReadContent2View: UIEditMenuInteractionDelegate {
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
+            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
+        }
+        return UIMenu(children: [addAction] + suggestedActions)
     }
 }

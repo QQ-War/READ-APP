@@ -25,6 +25,7 @@ class TTSManager: NSObject, ObservableObject {
     private var bookSourceUrl: String?
     private var bookTitle: String = ""
     private var bookCoverUrl: String?
+    private var coverArtwork: MPMediaItemArtwork?
     private var onChapterChange: ((Int) -> Void)?
     private var textProcessor: ((String) -> String)?
     
