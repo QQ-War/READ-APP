@@ -4,13 +4,14 @@ import UIKit
 // MARK: - SwiftUI 桥接组件
 struct VerticalTextReader: UIViewControllerRepresentable {
     let sentences: [String]; let fontSize: CGFloat; let lineSpacing: CGFloat; let horizontalMargin: CGFloat; let highlightIndex: Int?; let secondaryIndices: Set<Int>; let isPlayingHighlight: Bool; let chapterUrl: String?
-    let title: String?; let nextTitle: String?
+    let title: String?; let nextTitle: String?; let prevTitle: String?
     @Binding var currentVisibleIndex: Int; @Binding var pendingScrollIndex: Int?
     var forceScrollToTop: Bool = false; var onScrollFinished: (() -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var safeAreaTop: CGFloat = 0
     
     // 无限流扩展
     var nextChapterSentences: [String]?
+    var prevChapterSentences: [String]?
     var onReachedBottom: (() -> Void)? // 触发预载
     var onChapterSwitched: ((Int) -> Void)? // 0: 本章, 1: 下一章
     var onInteractionChanged: ((Bool) -> Void)?
@@ -24,7 +25,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
         vc.onReachedBottom = onReachedBottom; vc.onChapterSwitched = onChapterSwitched
         vc.onInteractionChanged = onInteractionChanged
         
-        let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, prevSentences: nil, title: title, nextTitle: nextTitle, prevTitle: nil, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
+        let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, prevSentences: prevChapterSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
         
         if forceScrollToTop {
             vc.scrollToTop(animated: false); DispatchQueue.main.async { onScrollFinished?() }
