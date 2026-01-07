@@ -113,7 +113,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var lastLayoutSignature: String = ""
     private var loadToken: Int = 0
     private var prefetchNextTask: Task<Void, Never>?; private var prefetchPrevTask: Task<Void, Never>?
-    private var isFirstLoad = true
+    private var lastChapterSwitchTime: TimeInterval = 0
+    private let chapterSwitchCooldown: TimeInterval = 1.0
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -123,6 +124,19 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         lastReportedChapterIndex = currentChapterIndex
         currentReadingMode = preferences.readingMode
         loadChapters()
+        setupTTSObservers()
+    }
+    
+    private func setupTTSObservers() {
+        ttsManager.$currentSentenceIndex
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.syncTTSState() }
+            .store(in: &cancellables)
+            
+        ttsManager.$isPlaying
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.syncTTSState() }
+            .store(in: &cancellables)
     }
     
     private func setupProgressLabel() {
@@ -173,7 +187,35 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func jumpToChapter(_ index: Int, startAtEnd: Bool = false) {
         currentChapterIndex = index; lastReportedChapterIndex = index; onChapterIndexChanged?(index); loadChapterContent(at: index, startAtEnd: startAtEnd)
     }
-    func switchReadingMode(to mode: ReadingMode) { currentReadingMode = mode; setupReaderMode() }
+    func switchReadingMode(to mode: ReadingMode) {
+        let offset = getCurrentReadingCharOffset()
+        currentReadingMode = mode
+        setupReaderMode()
+        
+        // 模式切换后的进度同步
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.scrollToCharOffset(offset, animated: false)
+        }
+    }
+    
+    private func getCurrentReadingCharOffset() -> Int {
+        if currentReadingMode == .vertical {
+            return verticalVC?.getCurrentCharOffset() ?? 0
+        } else if !pages.isEmpty && currentPageIndex < pages.count {
+            return pages[currentPageIndex].globalRange.location
+        }
+        return 0
+    }
+    
+    private func scrollToCharOffset(_ offset: Int, animated: Bool) {
+        if currentReadingMode == .vertical {
+            verticalVC?.scrollToCharOffset(offset, animated: animated)
+        } else {
+            if let targetPage = pages.firstIndex(where: { NSLocationInRange(offset, $0.globalRange) }) {
+                updateHorizontalPage(to: targetPage, animated: animated)
+            }
+        }
+    }
 
     private func loadChapters() {
         Task { do {
@@ -300,14 +342,39 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 coverUrl: book.coverUrl,
                 onChapterChange: { [weak self] newIndex in
                     DispatchQueue.main.async { self?.jumpToChapter(newIndex) }
-                }
+                },
+                processedSentences: self.contentSentences
             )
         }
     }
     
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        isUserInteracting = true
+    }
+    
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate { isUserInteracting = false }
+    }
+    
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        isUserInteracting = false
+    }
+    
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        isUserInteracting = false
+    }
+
     private func setupHorizontalMode() {
         let h = UIPageViewController(transitionStyle: preferences.pageTurningMode == .simulation ? .pageCurl : .scroll, navigationOrientation: .horizontal, options: nil)
         h.dataSource = self; h.delegate = self; addChild(h); view.insertSubview(h.view, at: 0); h.didMove(toParent: self)
+        
+        // 监听内部滚动视图以检测用户交互
+        for view in h.view.subviews {
+            if let scrollView = view as? UIScrollView {
+                scrollView.delegate = self
+            }
+        }
+        
         for recognizer in h.gestureRecognizers where recognizer is UITapGestureRecognizer {
             recognizer.isEnabled = false
         }
@@ -462,14 +529,22 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func createAttrString(_ text: String, title: String) -> NSAttributedString {
         let fullAttr = NSMutableAttributedString()
-        if !title.isEmpty { fullAttr.append(NSAttributedString(string: title + "\n", attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize + 8, weight: .bold), .foregroundColor: UIColor.label])) }
+        if !title.isEmpty { 
+            let p = NSMutableParagraphStyle()
+            p.alignment = .center
+            p.paragraphSpacing = preferences.fontSize * 1.5
+            fullAttr.append(NSAttributedString(string: title + "\n", attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize + 8, weight: .bold), .foregroundColor: UIColor.label, .paragraphStyle: p])) 
+        }
         
         let style = NSMutableParagraphStyle()
         style.lineSpacing = preferences.lineSpacing
         style.alignment = .justified
-        style.firstLineHeadIndent = preferences.fontSize * 1.5
+        // 移除 style.firstLineHeadIndent = preferences.fontSize * 1.5
         
-        fullAttr.append(NSAttributedString(string: text, attributes: [
+        // 为每一段开头手动增加两个全角空格
+        let indentedText = text.components(separatedBy: "\n").map { "　　" + $0 }.joined(separator: "\n")
+        
+        fullAttr.append(NSAttributedString(string: indentedText, attributes: [
             .font: UIFont.systemFont(ofSize: preferences.fontSize),
             .foregroundColor: UIColor.label,
             .paragraphStyle: style
@@ -488,7 +563,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard let s = renderStore else { return }; let spec = currentLayoutSpec
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
-        var starts: [Int] = []; var curr = pLen; for sent in contentSentences { starts.append(curr); curr += sent.count + 1 }
+        var starts: [Int] = []; var curr = pLen; for sent in contentSentences { 
+            starts.append(curr)
+            curr += (sent.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
+        }
         let res = TextKit2Paginator.paginate(renderStore: s, pageSize: spec.pageSize, paragraphStarts: starts, prefixLen: pLen, topInset: spec.topInset, bottomInset: spec.bottomInset)
         self.pages = res.pages; self.pageInfos = res.pageInfos
     }
@@ -498,8 +576,21 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
         v.onChapterSwitched = { [weak self] offset in 
             guard let self = self else { return }
-            self.jumpToChapter(self.currentChapterIndex + offset, startAtEnd: offset < 0)
+            
+            // 如果关闭了无限流，禁止滚动自动切换章节
+            if !self.preferences.isInfiniteScrollEnabled { return }
+            
+            // 连跳保护
+            let now = Date().timeIntervalSince1970
+            guard now - self.lastChapterSwitchTime > self.chapterSwitchCooldown else { return }
+            
+            let target = self.currentChapterIndex + offset
+            guard target >= 0 && target < self.chapters.count else { return }
+            
+            self.lastChapterSwitchTime = now
+            self.jumpToChapter(target, startAtEnd: offset < 0)
         }
+        v.scrollView.delegate = self // 统一使用容器的代理处理交互标志
         addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
         
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
@@ -522,17 +613,38 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     @objc private func handleMangaTap() { onToggleMenu?() }
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
     func syncTTSState() {
-        if isMangaMode { return }; let hIndex = ttsManager.currentSentenceIndex
+        if isMangaMode || isUserInteracting { return }
+        let hIndex = ttsManager.currentSentenceIndex
         if currentReadingMode == .vertical { 
             let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
             let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
             verticalVC?.update(sentences: contentSentences, nextSentences: nextChapterSentences, title: title, nextTitle: nextTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: hIndex, secondaryIndices: Set(ttsManager.preloadedIndices), isPlaying: ttsManager.isPlaying) 
         }
-        else if currentReadingMode == .horizontal && ttsManager.isPlaying { syncHorizontalPageToTTS(sentenceIndex: hIndex) }
+        else if currentReadingMode == .horizontal && ttsManager.isPlaying { 
+            syncHorizontalPageToTTS(sentenceIndex: hIndex) 
+        }
     }
+
     private func syncHorizontalPageToTTS(sentenceIndex: Int) { 
-        var curr = 0; var pS: [Int] = []; for s in contentSentences { pS.append(curr); curr += s.count + 1 }; guard sentenceIndex < pS.count else { return }
-        let o = pS[sentenceIndex]; if let t = pages.firstIndex(where: { NSLocationInRange(o, $0.globalRange) }), t != currentPageIndex { updateHorizontalPage(to: t, animated: true) }
+        let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+        let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
+        
+        var curr = pLen
+        var pS: [Int] = []
+        for s in contentSentences { 
+            pS.append(curr)
+            curr += (s.count + 2 + 1) // 计入全角空格和换行符
+        }
+        
+        guard sentenceIndex < pS.count else { return }
+        let o = pS[sentenceIndex]
+        
+        if let t = pages.firstIndex(where: { NSLocationInRange(o, $0.globalRange) }), t != currentPageIndex { 
+            // 只有当 TTS 正在播放且不是用户正在手动翻页时才自动跳转
+            if ttsManager.isPlaying && !isUserInteracting {
+                updateHorizontalPage(to: t, animated: true) 
+            }
+        }
     }
     private func scrollToChapterEnd(animated: Bool) { if isMangaMode, let sv = mangaScrollView { sv.setContentOffset(CGPoint(x: 0, y: max(0, sv.contentSize.height - sv.bounds.height)), animated: animated) } else if currentReadingMode == .vertical { verticalVC?.scrollToBottom(animated: animated) } else if !pages.isEmpty { updateHorizontalPage(to: max(0, pages.count - 1), animated: animated) } }
     private func applyReplaceRules(to text: String) -> String { guard let rules = replaceRuleViewModel?.rules else { return text }; var res = text; for r in rules where r.isEnabled == true { if r.isRegex == true { if let reg = try? NSRegularExpression(pattern: r.pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = reg.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: r.replacement) } } else { res = res.replacingOccurrences(of: r.pattern, with: r.replacement) } }; return res }

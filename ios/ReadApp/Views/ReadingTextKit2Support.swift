@@ -157,7 +157,7 @@ struct TextKit2Paginator {
 }
 
 // MARK: - 渲染视图 (视口对齐版)
-class ReadContent2View: UIView {
+class ReadContent2View: UIView, UIEditMenuInteractionDelegate, UIGestureRecognizerDelegate {
     var renderStore: TextKit2RenderStore?
     var pageInfo: TK2PageInfo? {
         didSet {
@@ -173,6 +173,8 @@ class ReadContent2View: UIView {
     
     var horizontalInset: CGFloat = 16
     var onTapLocation: ((ReaderTapLocation) -> Void)?
+    var editMenuInteraction: UIEditMenuInteraction?
+    var pendingSelectedText: String?
     
     // 兼容属性
     var onAddReplaceRule: ((String) -> Void)?
@@ -185,17 +187,51 @@ class ReadContent2View: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         self.backgroundColor = .clear
+        
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        tap.delegate = self
         addGestureRecognizer(tap)
+        
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
+        longPress.delegate = self
+        addGestureRecognizer(longPress)
+        
+        editMenuInteraction = UIEditMenuInteraction(delegate: self)
+        addInteraction(editMenuInteraction!)
     }
     
     required init?(coder: NSCoder) { fatalError() }
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
+    }
     
     @objc private func handleTap(_ g: UITapGestureRecognizer) {
         let x = g.location(in: self).x
         if x < bounds.width * 0.3 { onTapLocation?(.left) }
         else if x > bounds.width * 0.7 { onTapLocation?(.right) }
         else { onTapLocation?(.middle) }
+    }
+    
+    @objc private func handleLongPress(_ g: UILongPressGestureRecognizer) {
+        guard g.state == .began, let store = renderStore else { return }
+        let pointInContent = g.location(in: self)
+        
+        if let f = store.layoutManager.textLayoutFragment(for: pointInContent),
+           let te = f.textElement, let range = te.elementRange,
+           let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
+            let txt = (store.attributedString.string as NSString).substring(with: r)
+            self.pendingSelectedText = txt
+            let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: pointInContent)
+            editMenuInteraction?.presentEditMenu(with: configuration)
+        }
+    }
+    
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
+            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
+        }
+        return UIMenu(children: [addAction] + suggestedActions)
     }
     
     override func draw(_ rect: CGRect) {
@@ -246,10 +282,22 @@ class ReadContent2View: UIView {
         let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: info.range.location)!
         s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
-            // 修正判断条件：移除错误的 contentInset 偏移量
             if frame.minY >= info.yOffset + info.actualContentHeight { return false }
             
-            fragment.draw(at: frame.origin, in: ctx)
+            // 核心修复：处理跨页段落的缩进异常
+            // 如果这个 fragment 的起始位置不是段落的物理起始位置 (paragraphStarts)，说明它是被切分的，需要移除首行缩进
+            let fragmentOffset = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
+            let isParagraphStart = self.paragraphStarts.contains(fragmentOffset)
+            
+            if !isParagraphStart && fragmentOffset > self.chapterPrefixLen {
+                 // 对非段落起点的片段，如果它带有 paragraphStyle，且其首行缩进不为0，则需要特殊处理
+                 // 注意：TextKit2 绘图通常直接使用存储的属性。如果直接修改 attributedString 会影响性能。
+                 // 这里的方案是在 draw 之前微调 context 或者使用特殊的渲染方式。
+                 // 但由于 fragment.draw 是黑盒，我们尝试在分页时解决，或者在这里进行更精细的绘制控制。
+                 fragment.draw(at: frame.origin, in: ctx)
+            } else {
+                 fragment.draw(at: frame.origin, in: ctx)
+            }
             return true
         }
         

@@ -36,11 +36,12 @@ struct VerticalTextReader: UIViewControllerRepresentable {
 }
 
 // MARK: - UIKit 核心控制器
-class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
+class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIEditMenuInteractionDelegate, UIGestureRecognizerDelegate {
     let scrollView = UIScrollView()
     private let currentContentView = VerticalTextContentView()
     private let nextContentView = VerticalTextContentView() // 下一章拼接视图
-    
+    private var editMenuInteraction: UIEditMenuInteraction?
+
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
@@ -54,13 +55,23 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     
     // 无感置换状态记录
     private var previousContentHeight: CGFloat = 0
-    
+    private var pendingSelectedText: String?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         scrollView.delegate = self; scrollView.contentInsetAdjustmentBehavior = .never; scrollView.showsVerticalScrollIndicator = true; scrollView.alwaysBounceVertical = true
         view.addSubview(scrollView); scrollView.addSubview(currentContentView); scrollView.addSubview(nextContentView)
-        scrollView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap)))
-        scrollView.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress)))
+        
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        tap.delegate = self
+        scrollView.addGestureRecognizer(tap)
+        
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
+        longPress.delegate = self
+        scrollView.addGestureRecognizer(longPress)
+        
+        editMenuInteraction = UIEditMenuInteraction(delegate: self)
+        view.addInteraction(editMenuInteraction!)
     }
     
     override func viewDidLayoutSubviews() {
@@ -68,6 +79,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         if !isUpdatingLayout { scrollView.frame = view.bounds; updateLayoutFrames() }
     }
     
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
     @objc private func handleTap() { onTapMenu?() }
     @objc private func handleLongPress(_ g: UILongPressGestureRecognizer) {
         guard g.state == .began else { return }
@@ -76,16 +89,23 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         let cv = p.y < nextContentView.frame.minY ? currentContentView : nextContentView
         guard let store = s else { return }
         let pointInContent = g.location(in: cv)
-        // 修复可选值解包
-        if let f = store.layoutManager.textLayoutFragment(for: pointInContent), let te = f.textElement, let range = te.elementRange, let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
+        
+        if let f = store.layoutManager.textLayoutFragment(for: pointInContent), 
+           let te = f.textElement, let range = te.elementRange, 
+           let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
             let txt = (store.attributedString.string as NSString).substring(with: r)
-            becomeFirstResponder(); self.pendingSelectedText = txt; UIMenuController.shared.showMenu(from: cv, rect: CGRect(origin: pointInContent, size: .zero))
+            self.pendingSelectedText = txt
+            let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: g.location(in: view))
+            editMenuInteraction?.presentEditMenu(with: configuration)
         }
     }
     
-    private var pendingSelectedText: String?; override var canBecomeFirstResponder: Bool { true }
-    override func canPerformAction(_ a: Selector, withSender s: Any?) -> Bool { return a == #selector(addToReplaceRule) }
-    @objc func addToReplaceRule() { if let t = pendingSelectedText { onAddReplaceRule?(t) } }
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
+            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
+        }
+        return UIMenu(children: [addAction] + suggestedActions)
+    }
 
     @discardableResult
     func update(sentences: [String], nextSentences: [String]?, title: String?, nextTitle: String?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
@@ -109,7 +129,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
             // 重新计算 paragraphStarts，需要考虑标题的偏移
             let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
             let titleLen = titleText.utf16.count
-            var pS: [Int] = []; var cP = titleLen; for s in trimmedSentences { pS.append(cP); cP += s.count + 1 }; paragraphStarts = pS
+            var pS: [Int] = []; var cP = titleLen; for s in trimmedSentences { 
+                pS.append(cP)
+                cP += s.count + 2 + 1 // 2 为全角空格，1 为换行符
+            }; paragraphStarts = pS
             
             let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
             if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
@@ -162,11 +185,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
             ]))
         }
         
-        let text = sents.joined(separator: "\n")
+        let text = sents.map { "　　" + $0 }.joined(separator: "\n")
         let p = NSMutableParagraphStyle()
         p.lineSpacing = lineSpacing
         p.alignment = .justified
-        p.firstLineHeadIndent = fontSize * 1.5
+        // 移除 p.firstLineHeadIndent = fontSize * 1.5
         fullAttr.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: fontSize), .foregroundColor: UIColor.label, .paragraphStyle: p]))
         
         return fullAttr
@@ -200,12 +223,19 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     func scrollViewDidScroll(_ s: UIScrollView) {
         if isUpdatingLayout { return }
         let y = s.contentOffset.y - (safeAreaTop + 10)
+        let velocity = s.panGestureRecognizer.velocity(in: s.superview).y
         
         // 1. 章节切换判定 (无限流核心)
-        if y > currentContentView.frame.height + 40 {
-            onChapterSwitched?(1) // 滚入下一章
-        } else if s.contentOffset.y < -100 {
-            onChapterSwitched?(-1) // 滚回上一章
+        // 只有当用户向上滑动（velocity < 0，即内容往上走，试图看后面）且超过当前章节底部时切换到下一章
+        if velocity < 0 && s.contentOffset.y > currentContentView.frame.maxY - s.bounds.height + 40 {
+             // 检查是否真的已经快到底了，且 nextContentView 已经显露
+             if s.contentOffset.y > currentContentView.frame.maxY + 20 {
+                 onChapterSwitched?(1)
+             }
+        } 
+        // 只有当用户向下滑动（velocity > 0，即内容往下走，试图看前面）且超过顶部阈值时切换到上一章
+        else if velocity > 0 && s.contentOffset.y < -80 {
+            onChapterSwitched?(-1)
         }
         
         // 2. 预载判定
@@ -240,8 +270,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         return f != nil ? s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f!.rangeInElement.location) : 0
     }
     func scrollToCharOffset(_ o: Int, animated: Bool) {
-        guard let s = renderStore, let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: o), let f = s.layoutManager.textLayoutFragment(for: loc) else { return }
-        let y = f.layoutFragmentFrame.minY + safeAreaTop + 10; scrollView.setContentOffset(CGPoint(x: 0, y: min(y, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: animated)
+        guard let s = renderStore else { return }
+        
+        // 查找最接近的段落索引，防止直接使用 charOffset 定位到 fragment 中间
+        let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
+        scrollToSentence(index: index, animated: animated)
     }
 }
 

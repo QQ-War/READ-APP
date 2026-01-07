@@ -114,6 +114,10 @@ struct ReadingSettingsView: View {
                         Text(mode.localizedName).tag(mode)
                     }
                 }
+                
+                if preferences.readingMode == .vertical {
+                    Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
+                }
             }
             
             Section(header: Text("缓存管理")) {

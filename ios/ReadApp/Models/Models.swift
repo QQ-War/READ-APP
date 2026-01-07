@@ -347,6 +347,12 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(isVerboseLoggingEnabled, forKey: "isVerboseLoggingEnabled")
         }
     }
+    
+    @Published var isInfiniteScrollEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isInfiniteScrollEnabled, forKey: "isInfiniteScrollEnabled")
+        }
+    }
 
     /// 是否强制使用服务器代理加载漫画图片
     @Published var forceMangaProxy: Bool {
@@ -437,6 +443,7 @@ class UserPreferences: ObservableObject {
         self.manualMangaUrls = Set(savedManualMangaUrls)
         
         self.isVerboseLoggingEnabled = UserDefaults.standard.bool(forKey: "isVerboseLoggingEnabled")
+        self.isInfiniteScrollEnabled = UserDefaults.standard.object(forKey: "isInfiniteScrollEnabled") as? Bool ?? true
         self.forceMangaProxy = UserDefaults.standard.bool(forKey: "forceMangaProxy")
         
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")

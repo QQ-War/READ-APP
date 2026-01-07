@@ -25,8 +25,8 @@ class TTSManager: NSObject, ObservableObject {
     private var bookSourceUrl: String?
     private var bookTitle: String = ""
     private var bookCoverUrl: String?
-    private var coverArtwork: MPMediaItemArtwork?
     private var onChapterChange: ((Int) -> Void)?
+    private var textProcessor: ((String) -> String)?
     
     // Preload Cache
     private var audioCache: [Int: Data] = [:]
@@ -225,7 +225,7 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    func startReading(text: String, chapters: [BookChapter], currentIndex: Int, bookUrl: String, bookSourceUrl: String?, bookTitle: String, coverUrl: String?, onChapterChange: @escaping (Int) -> Void, startAtSentenceIndex: Int? = nil, shouldSpeakChapterTitle: Bool = true) {
+    func startReading(text: String, chapters: [BookChapter], currentIndex: Int, bookUrl: String, bookSourceUrl: String?, bookTitle: String, coverUrl: String?, onChapterChange: @escaping (Int) -> Void, processedSentences: [String]? = nil, textProcessor: ((String) -> String)? = nil, startAtSentenceIndex: Int? = nil, shouldSpeakChapterTitle: Bool = true) {
         self.chapters = chapters
         self.currentChapterIndex = currentIndex
         self.bookUrl = bookUrl
@@ -233,6 +233,7 @@ class TTSManager: NSObject, ObservableObject {
         self.bookTitle = bookTitle
         self.bookCoverUrl = coverUrl
         self.onChapterChange = onChapterChange
+        self.textProcessor = textProcessor
         self.allowChapterTitlePlayback = shouldSpeakChapterTitle
         
         loadCoverArtwork()
@@ -244,7 +245,11 @@ class TTSManager: NSObject, ObservableObject {
         clearNextChapterCache()
         nextChapterSentences.removeAll()
         
-        sentences = splitTextIntoSentences(text)
+        if let ps = processedSentences {
+            sentences = ps
+        } else {
+            sentences = splitTextIntoSentences(text)
+        }
         totalSentences = sentences.count
         
         if let externalIndex = startAtSentenceIndex, externalIndex < sentences.count {
