@@ -21,6 +21,7 @@ struct ReadingView: View {
     
     @State private var isForceLandscape = false
     @State private var showDetailFromHeader = false
+    @State private var toggleTTSAction: (() -> Void)?
     
     @State private var timerRemaining: Int = 0
     @State private var timerActive = false
@@ -50,13 +51,13 @@ struct ReadingView: View {
                         chapters: $chapters,
                         currentChapterIndex: $currentChapterIndex,
                         isMangaMode: $isMangaMode,
-                        onToggleMenu: { withAnimation { showUIControls.toggle() } },
-                        onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
-                        onProgressChanged: { _, pos in self.currentPos = pos },
-                        readingMode: preferences.readingMode,
-                        safeAreaInsets: fullScreenProxy.safeAreaInsets
-                    )
-                    .ignoresSafeArea()
+                                            onToggleMenu: { withAnimation { showUIControls.toggle() } },
+                                            onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
+                                            onProgressChanged: { _, pos in self.currentPos = pos },
+                                            onToggleTTS: { action in self.toggleTTSAction = action },
+                                            readingMode: preferences.readingMode,
+                                            safeAreaInsets: fullScreenProxy.safeAreaInsets
+                                        )                    .ignoresSafeArea()
 
                     NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) {
                         EmptyView()

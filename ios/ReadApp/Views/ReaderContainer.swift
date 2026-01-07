@@ -24,6 +24,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     var onToggleMenu: () -> Void
     var onAddReplaceRule: (String) -> Void
     var onProgressChanged: (Int, Double) -> Void
+    var onToggleTTS: ((@escaping () -> Void) -> Void)?
     var readingMode: ReadingMode
     var safeAreaInsets: EdgeInsets 
     
@@ -55,6 +56,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
         vc.onProgressChanged = { idx, pos in context.coordinator.handleProgress(idx, pos) }
         vc.onChaptersLoaded = { list in context.coordinator.handleChaptersLoaded(list) }
         vc.onModeDetected = { isManga in context.coordinator.handleModeDetected(isManga) }
+        onToggleTTS?({ [weak vc] in vc?.toggleTTS() })
         return vc
     }
     
@@ -237,8 +239,54 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func setupReaderMode() {
-        verticalVC?.view.removeFromSuperview(); horizontalVC?.view.removeFromSuperview(); mangaScrollView?.removeFromSuperview()
-        if isMangaMode { setupMangaMode() } else if currentReadingMode == .vertical { setupVerticalMode() } else { setupHorizontalMode() }
+        if isMangaMode {
+            if mangaScrollView == nil {
+                verticalVC?.view.removeFromSuperview(); verticalVC = nil
+                horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
+                setupMangaMode()
+            }
+            return
+        }
+        
+        if currentReadingMode == .vertical {
+            if verticalVC == nil {
+                horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
+                mangaScrollView?.removeFromSuperview(); mangaScrollView = nil
+                setupVerticalMode()
+            } else {
+                // 如果已经存在，仅更新状态
+                verticalVC?.update(sentences: contentSentences, nextSentences: nextChapterSentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+            }
+        } else {
+            if horizontalVC == nil {
+                verticalVC?.view.removeFromSuperview(); verticalVC = nil
+                mangaScrollView?.removeFromSuperview(); mangaScrollView = nil
+                setupHorizontalMode()
+            } else {
+                // 水平模式下的状态同步（如果需要）
+            }
+        }
+    }
+    
+    func toggleTTS() {
+        if ttsManager.isPlaying {
+            if ttsManager.isPaused { ttsManager.resume() }
+            else { ttsManager.pause() }
+        } else {
+            guard currentChapterIndex < chapters.count else { return }
+            ttsManager.startReading(
+                text: rawContent,
+                chapters: chapters,
+                currentIndex: currentChapterIndex,
+                bookUrl: book.bookUrl ?? "",
+                bookSourceUrl: book.origin,
+                bookTitle: book.name ?? "未知书名",
+                coverUrl: book.coverUrl,
+                onChapterChange: { [weak self] newIndex in
+                    DispatchQueue.main.async { self?.jumpToChapter(newIndex) }
+                }
+            )
+        }
     }
     
     private func setupHorizontalMode() {
