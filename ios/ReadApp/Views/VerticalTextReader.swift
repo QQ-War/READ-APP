@@ -201,7 +201,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     }
     func scrollToProgress(_ pos: Double) {
         guard let s = renderStore else { return }
-        let total = s.contentStorage.attributedString.length
+        let total = s.attributedString.length
         let offset = Int(pos * Double(total))
         scrollToCharOffset(offset, animated: false)
     }
