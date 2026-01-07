@@ -13,6 +13,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
     var nextChapterSentences: [String]?
     var onReachedBottom: (() -> Void)? // 触发预载
     var onChapterSwitched: ((Int) -> Void)? // 0: 本章, 1: 下一章
+    var onInteractionChanged: ((Bool) -> Void)?
     
     func makeUIViewController(context: Context) -> VerticalTextViewController {
         let vc = VerticalTextViewController(); vc.onVisibleIndexChanged = { i in DispatchQueue.main.async { if currentVisibleIndex != i { currentVisibleIndex = i } } }; vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; return vc
@@ -21,6 +22,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: VerticalTextViewController, context: Context) {
         vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; vc.safeAreaTop = safeAreaTop
         vc.onReachedBottom = onReachedBottom; vc.onChapterSwitched = onChapterSwitched
+        vc.onInteractionChanged = onInteractionChanged
         
         let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, title: title, nextTitle: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
         
@@ -46,11 +48,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var switchReady = false
     private var switchWorkItem: DispatchWorkItem?
     private let switchHoldDuration: TimeInterval = 0.6
-    private let switchOverScrollThreshold: CGFloat = 80
     private let dampingFactor: CGFloat = 0.2
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
+    var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
     var isInfiniteScrollEnabled: Bool = true
     
@@ -253,12 +255,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let rawOffset = s.contentOffset.y
         
         if isInfiniteScrollEnabled {
-            let bottomEdge = max(0, currentContentView.frame.maxY - s.bounds.height + 40)
+            let bottomEdge = max(0, s.contentSize.height - s.bounds.height)
             if rawOffset > bottomEdge {
                 let over = rawOffset - bottomEdge
                 s.contentOffset.y = bottomEdge + over * dampingFactor
             }
-            let topEdge: CGFloat = -80
+            let topEdge: CGFloat = 0
             if rawOffset < topEdge {
                 let over = rawOffset - topEdge
                 s.contentOffset.y = topEdge + over * dampingFactor
@@ -269,7 +271,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         // 1. 章节切换判定 (无限流核心)
         if isInfiniteScrollEnabled {
-            handleHoldSwitchIfNeeded(rawOffset: rawOffset)
+            handleHoldSwitchIfNeeded(rawOffset: s.contentOffset.y) // Use the damped offset for threshold check
         }
         
         // 2. 预载判定
@@ -284,9 +286,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         cancelSwitchHold()
+        onInteractionChanged?(true)
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate { onInteractionChanged?(false) }
         guard isInfiniteScrollEnabled else { return }
         if switchReady, pendingSwitchDirection != 0 {
             onChapterSwitched?(pendingSwitchDirection)
@@ -296,6 +300,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         cancelSwitchHold()
+        onInteractionChanged?(false)
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        onInteractionChanged?(false)
     }
 
     func scrollToSentence(index: Int, animated: Bool) { guard index >= 0 && index < sentenceYOffsets.count else { return }; let y = max(0, sentenceYOffsets[index] + safeAreaTop + 10); scrollView.setContentOffset(CGPoint(x: 0, y: min(y, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: animated) }
@@ -368,20 +377,19 @@ private extension VerticalTextViewController {
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let bottomEdge = max(0, currentContentView.frame.maxY - scrollView.bounds.height + 40)
+        let bottomEdge = max(0, scrollView.contentSize.height - scrollView.bounds.height)
         let bottomOver = rawOffset - bottomEdge
-        let topEdge: CGFloat = -80
-        let topOver = topEdge - rawOffset
+        let topOver = -rawOffset
 
-        if scrollView.isDragging, bottomOver > switchOverScrollThreshold {
+        if scrollView.isDragging, bottomOver > 40 {
             beginSwitchHold(direction: 1, isTop: false)
             return
         }
-        if scrollView.isDragging, topOver > switchOverScrollThreshold {
+        if scrollView.isDragging, topOver > 40 {
             beginSwitchHold(direction: -1, isTop: true)
             return
         }
-        if !scrollView.isDragging || (bottomOver <= switchOverScrollThreshold && topOver <= switchOverScrollThreshold) {
+        if !scrollView.isDragging || (bottomOver <= 40 && topOver <= 40) {
             cancelSwitchHold()
         }
     }

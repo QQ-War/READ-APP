@@ -618,7 +618,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.lastChapterSwitchTime = now
             self.jumpToChapter(target, startAtEnd: offset < 0)
         }
-        v.scrollView.delegate = self // 统一使用容器的代理处理交互标志
+        v.onInteractionChanged = { [weak self] interacting in self?.isUserInteracting = interacting }
         addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
         
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
