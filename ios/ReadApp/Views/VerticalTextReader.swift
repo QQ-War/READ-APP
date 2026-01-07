@@ -254,15 +254,15 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if isUpdatingLayout { return }
         let rawOffset = s.contentOffset.y
         
-        // 1. 阻尼逻辑处理
+        // 1. 顶部阻尼逻辑：始终开启，用于下拉回退上一章
+        let topEdge: CGFloat = 0
+        if rawOffset < topEdge {
+            s.contentOffset.y = topEdge + (rawOffset - topEdge) * dampingFactor
+        }
+        
+        // 2. 底部阻尼逻辑
         if isInfiniteScrollEnabled {
-            // 顶部阻尼：始终开启，用于下拉回退上一章
-            let topEdge: CGFloat = 0
-            if rawOffset < topEdge {
-                s.contentOffset.y = topEdge + (rawOffset - topEdge) * dampingFactor
-            }
-            
-            // 底部阻尼：只有当没有下一章可以滚动时，才开启底部阻尼
+            // 无限流模式：只有当没有下一章预载内容时，才开启底部阻尼
             if nextSentences.isEmpty {
                 let bottomEdge = max(0, s.contentSize.height - s.bounds.height)
                 if rawOffset > bottomEdge {
@@ -270,21 +270,26 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                     s.contentOffset.y = bottomEdge + over * dampingFactor
                 }
             }
+        } else {
+            // 普通模式：始终开启底部阻尼
+            let bottomEdge = max(0, s.contentSize.height - s.bounds.height)
+            if rawOffset > bottomEdge {
+                let over = rawOffset - bottomEdge
+                s.contentOffset.y = bottomEdge + over * dampingFactor
+            }
         }
         
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
-        // 2. 章节切换判定 (长按逻辑)
-        if isInfiniteScrollEnabled {
-            handleHoldSwitchIfNeeded(rawOffset: s.contentOffset.y)
-        }
+        // 3. 章节切换判定 (长按逻辑)：始终开启
+        handleHoldSwitchIfNeeded(rawOffset: s.contentOffset.y)
         
-        // 3. 预载判定
+        // 4. 预载判定 (仅限无限流)
         if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
             onReachedBottom?()
         }
         
-        // 4. 进度汇报
+        // 5. 进度汇报
         let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
         if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
     }
@@ -382,14 +387,17 @@ private extension VerticalTextViewController {
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let topOver = -rawOffset
+        let topEdge: CGFloat = 0
+        let topOver = topEdge - rawOffset
         if scrollView.isDragging, topOver > 40 {
             beginSwitchHold(direction: -1, isTop: true)
             return
         }
 
-        // 只有当没有下一章预载内容时，底部的“拉动切章”才生效
-        if nextSentences.isEmpty {
+        // 判定是否处于底部边界
+        let isAtBottomBoundary = !isInfiniteScrollEnabled || nextSentences.isEmpty
+        
+        if isAtBottomBoundary {
             let bottomEdge = max(0, scrollView.contentSize.height - scrollView.bounds.height)
             let bottomOver = rawOffset - bottomEdge
             if scrollView.isDragging, bottomOver > 40 {
