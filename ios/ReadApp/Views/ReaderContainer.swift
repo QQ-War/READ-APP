@@ -251,41 +251,42 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard completed, let v = pvc.viewControllers?.first as? PageContentViewController else { return }
         
         if v.chapterOffset != 0 {
-            // 静默置换策略：不调用 setViewControllers，只同步逻辑状态
-            let offset = v.chapterOffset
-            let targetPage = v.pageIndex
-            
-            self.isInternalTransitioning = true
-            if offset > 0 {
-                prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos; prevChapterSentences = contentSentences; prevChapterRawContent = rawContent
-                renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos; contentSentences = nextChapterSentences ?? []; rawContent = nextChapterRawContent ?? ""
-                nextChapterStore = nil; nextChapterPages = []; nextChapterPageInfos = []
-            } else {
-                nextChapterStore = renderStore; nextChapterPages = pages; nextChapterPageInfos = pageInfos; nextChapterSentences = contentSentences; nextChapterRawContent = rawContent
-                renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos; contentSentences = prevChapterSentences ?? []; rawContent = prevChapterRawContent ?? ""
-                prevChapterStore = nil; prevChapterPages = []; prevChapterPageInfos = []
-            }
-            
-            self.currentChapterIndex += offset
-            self.lastReportedChapterIndex = self.currentChapterIndex
-            self.currentPageIndex = targetPage
-            self.onChapterIndexChanged?(self.currentChapterIndex)
-            
-            // 重要：洗白当前 VC 的身份，使其成为“当前章”的 VC
-            v.chapterOffset = 0
-            if let rv = v.view.subviews.first as? ReadContent2View {
-                rv.renderStore = self.renderStore // 更新引用，确保后续手势逻辑正确
-            }
-            
-            self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
-            updateProgressUI()
-            prefetchAdjacentChapters(index: currentChapterIndex)
-            self.isInternalTransitioning = false
+            completeDataDrift(offset: v.chapterOffset, targetPage: v.pageIndex, currentVC: v)
         } else {
             self.currentPageIndex = v.pageIndex
             self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
             updateProgressUI()
         }
+    }
+
+    private func completeDataDrift(offset: Int, targetPage: Int, currentVC: PageContentViewController?) {
+        self.isInternalTransitioning = true
+        if offset > 0 {
+            prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos; prevChapterSentences = contentSentences; prevChapterRawContent = rawContent
+            renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos; contentSentences = nextChapterSentences ?? []; rawContent = nextChapterRawContent ?? ""
+            nextChapterStore = nil; nextChapterPages = []; nextChapterPageInfos = []
+        } else {
+            nextChapterStore = renderStore; nextChapterPages = pages; nextChapterPageInfos = pageInfos; nextChapterSentences = contentSentences; nextChapterRawContent = rawContent
+            renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos; contentSentences = prevChapterSentences ?? []; rawContent = prevChapterRawContent ?? ""
+            prevChapterStore = nil; prevChapterPages = []; prevChapterPageInfos = []
+        }
+        
+        self.currentChapterIndex += offset
+        self.lastReportedChapterIndex = self.currentChapterIndex
+        self.currentPageIndex = targetPage
+        self.onChapterIndexChanged?(self.currentChapterIndex)
+        
+        if let v = currentVC {
+            v.chapterOffset = 0
+            if let rv = v.view.subviews.first as? ReadContent2View {
+                rv.renderStore = self.renderStore
+            }
+        }
+        
+        self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
+        updateProgressUI()
+        prefetchAdjacentChapters(index: currentChapterIndex)
+        self.isInternalTransitioning = false
     }
     
     func pageViewController(_ pvc: UIPageViewController, viewControllerBefore vc: UIViewController) -> UIViewController? {
@@ -330,16 +331,33 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     private func handlePageTap(isNext: Bool) {
         let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
-        if t >= 0 && t < pages.count {
-            updateHorizontalPage(to: t, animated: true)
-        } else if isNext, !nextChapterPages.isEmpty {
-            let vc = createPageVC(at: 0, offset: 1)
-            horizontalVC?.setViewControllers([vc], direction: .forward, animated: true)
-        } else if !isNext, !prevChapterPages.isEmpty {
-            let vc = createPageVC(at: max(0, prevChapterPages.count - 1), offset: -1)
-            horizontalVC?.setViewControllers([vc], direction: .reverse, animated: true)
+        if t >= 0 && t < pages.count { 
+            updateHorizontalPage(to: t, animated: true) 
         } else {
-            jumpToChapter(isNext ? currentChapterIndex + 1 : currentChapterIndex - 1, startAtEnd: !isNext)
+            let targetChapter = isNext ? currentChapterIndex + 1 : currentChapterIndex - 1
+            guard targetChapter >= 0 && targetChapter < chapters.count else { return }
+            
+            if isNext, !nextChapterPages.isEmpty {
+                animateToAdjacentChapter(offset: 1, targetPage: 0)
+            } else if !isNext, !prevChapterPages.isEmpty {
+                animateToAdjacentChapter(offset: -1, targetPage: prevChapterPages.count - 1)
+            } else {
+                jumpToChapter(targetChapter, startAtEnd: !isNext)
+            }
+        }
+    }
+
+    private func animateToAdjacentChapter(offset: Int, targetPage: Int) {
+        guard let h = horizontalVC, !isInternalTransitioning else { return }
+        let vc = createPageVC(at: targetPage, offset: offset)
+        let direction: UIPageViewController.NavigationDirection = offset > 0 ? .forward : .reverse
+        
+        h.setViewControllers([vc], direction: direction, animated: true) { [weak self] completed in
+            guard completed, let self = self else { return }
+            DispatchQueue.main.async {
+                let currentVC = h.viewControllers?.first as? PageContentViewController
+                self.completeDataDrift(offset: offset, targetPage: targetPage, currentVC: currentVC)
+            }
         }
     }
 
