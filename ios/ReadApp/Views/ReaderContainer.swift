@@ -315,7 +315,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if currentReadingMode == .vertical {
             if verticalVC == nil {
                 horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
-                mangaScrollView?.removeFromSuperview(); mangaScrollView = nil
+                mangaVC?.view.removeFromSuperview(); mangaVC?.removeFromParent(); mangaVC = nil
                 setupVerticalMode()
             } else {
                 // 如果已经存在，仅更新状态
@@ -326,7 +326,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         } else {
             if horizontalVC == nil {
                 verticalVC?.view.removeFromSuperview(); verticalVC = nil
-                mangaScrollView?.removeFromSuperview(); mangaScrollView = nil
+                mangaVC?.view.removeFromSuperview(); mangaVC?.removeFromParent(); mangaVC = nil
                 setupHorizontalMode()
             } else {
                 // 水平模式下的状态同步（如果需要）
