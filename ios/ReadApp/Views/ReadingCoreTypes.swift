@@ -47,7 +47,7 @@ struct TK2PageInfo {
     let pageHeight: CGFloat // Allocated page height (e.g., pageSize.height)
     let actualContentHeight: CGFloat // Actual height used by content on this page
     let startSentenceIndex: Int
-    let contentInset: CGFloat
+    var contentInset: CGFloat
 }
 
 struct ChapterCache {

@@ -2,23 +2,17 @@ import SwiftUI
 import UIKit
 import Combine
 
-// MARK: - 布局规范 (Single Source of Truth)
-struct ReaderLayoutSpec {
-    let topInset: CGFloat
-    let bottomInset: CGFloat
-    let sideMargin: CGFloat
-    let pageSize: CGSize
-}
-
 // MARK: - SwiftUI 桥接入口
 struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     let book: Book
     @ObservedObject var preferences: UserPreferences
     @ObservedObject var ttsManager: TTSManager
     @ObservedObject var replaceRuleViewModel: ReplaceRuleViewModel
+    
     @Binding var chapters: [BookChapter]
     @Binding var currentChapterIndex: Int
     @Binding var isMangaMode: Bool
+    
     var onToggleMenu: () -> Void
     var onAddReplaceRule: (String) -> Void
     var onProgressChanged: (Int, Double) -> Void
@@ -108,7 +102,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     func updateReplaceRules(_ rules: [ReplaceRule]) {
-        let signature = rules.map{"$0.id ?? ""+"$0.isEnabled ?? """}.joined()
+        let signature = rulesSignature(rules)
         if signature == lastAppliedRulesSignature { return }; lastAppliedRulesSignature = signature
         if !rawContent.isEmpty && !isMangaMode { reRenderCurrentContent(maintainOffset: true) }
     }
@@ -146,7 +140,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         Task { do {
             let list = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             await MainActor.run { self.chapters = list; self.onChaptersLoaded?(list); loadChapterContent(at: currentChapterIndex) }
-        } catch { print("Chapters load failed") } }
+        } catch { print("Load chapters failed") } }
     }
     
     private func loadChapterContent(at index: Int, resetOffset: Bool = false) {
@@ -187,7 +181,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func applyReplaceRules(to text: String) -> String {
         guard let rules = replaceRuleViewModel?.rules, !rules.isEmpty else { return text }
         var res = text
-        for r in rules where r.isEnabled == true { if r.isRegex == true { if let reg = try? NSRegularExpression(pattern: r.pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = reg.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: r.replacement) } } else { res = res.replacingOccurrences(of: r.pattern, with: r.replacement) } }
+        for r in rules where r.isEnabled == true { if r.isRegex == true { if let reg = try? NSRegularExpression(pattern: r.pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = reg.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: r.replacement) } } else { res = res.replacingOccurrences(of: r.pattern, with: r.replacement) } } 
         return res
     }
 
@@ -199,13 +193,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1) {
                     await MainActor.run {
                         guard self.currentChapterIndex == baseIndex else { return }
-                        let processed = applyReplaceRules(to: removeHTMLAndSVG(content))
-                        let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                        let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content))
                         let title = self.chapters[index+1].title; let attr = self.createAttrString(processed, title: title)
                         let spec = self.currentLayoutSpec
                         self.nextChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
-                        let res = self.performSilentPagination(for: self.nextChapterStore!, sentences: sents, title: title)
-                        self.nextChapterPages = res.pages; self.nextChapterPageInfos = res.pageInfos; self.nextChapterSentences = sents
+                        let res = self.performSilentPagination(for: self.nextChapterStore!, sentences: processed.components(separatedBy: "\n"), title: title)
+                        self.nextChapterPages = res.pages; self.nextChapterPageInfos = res.pageInfos; self.nextChapterSentences = processed.components(separatedBy: "\n")
                     }
                 }
             }
@@ -287,13 +280,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func updateHorizontalPage(to i: Int, animated: Bool) { guard let h = horizontalVC, i >= 0 && i < pages.count else { return }; currentPageIndex = i; h.setViewControllers([createPageVC(at: i, offset: 0)], direction: .forward, animated: animated); updateProgressUI() }
     private func createPageVC(at i: Int, offset: Int) -> PageContentViewController {
         let vc = PageContentViewController(pageIndex: i, chapterOffset: offset); let pV = ReadContent2View(frame: .zero); let aS = (offset == 0) ? renderStore : (offset > 0 ? nextChapterStore : prevChapterStore); let aI = (offset == 0) ? pageInfos : (offset > 0 ? nextChapterPageInfos : prevChapterPageInfos)
-        pV.renderStore = aS; if i < aI.count { let info = aI[i]; pV.pageInfo = TK2PageInfo(range: info.range, yOffset: info.yOffset, pageHeight: info.pageHeight, actualContentHeight: info.actualContentHeight, startSentenceIndex: info.startSentenceIndex, contentInset: currentLayoutSpec.topInset) }; pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.onToggleMenu?() } else { self?.handlePageTap(isNext: loc == .right) } }
+        pV.renderStore = aS; if i < aI.count { var info = aI[i]; info.contentInset = currentLayoutSpec.topInset; pV.pageInfo = info }; pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.onToggleMenu?() } else { self?.handlePageTap(isNext: loc == .right) } } 
         vc.view.addSubview(pV); pV.translatesAutoresizingMaskIntoConstraints = false; NSLayoutConstraint.activate([pV.topAnchor.constraint(equalTo: vc.view.topAnchor), pV.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor), pV.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor), pV.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor)]); return vc
     }
     private func handlePageTap(isNext: Bool) { let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1; if t >= 0 && t < pages.count { updateHorizontalPage(to: t, animated: true) } else { jumpToChapter(isNext ? currentChapterIndex + 1 : currentChapterIndex - 1) } }
     private func syncHorizontalPageToTTS(sentenceIndex: Int) { var curr = 0; var pS: [Int] = []; for s in contentSentences { pS.append(curr); curr += s.count + 1 }; guard sentenceIndex < pS.count else { return }; let o = pS[sentenceIndex]; if let t = pages.firstIndex(where: { NSLocationInRange(o, $0.globalRange) }), t != currentPageIndex { updateHorizontalPage(to: t, animated: true) } }
-    private func removeHTMLAndSVG(_ text: String) -> String { var res = text; let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]; for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }; return res.replacingOccurrences(of: "&nbsp;", with: " ") }
-    private func rulesSignature(_ rules: [ReplaceRule]) -> String { rules.map { "\($0.id ?? "")|\($0.pattern)|\($0.replacement)|\($0.isEnabled ?? false)|\($0.isRegex ?? false)" }.joined(separator: ";") }
+    private func removeHTMLAndSVG(_ text: String) -> String { var res = text; let patterns = ["<svg[^>]*>.*?<\/svg>", "<img[^>]*>", "<[^>]+>"]; for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }; return res.replacingOccurrences(of: "&nbsp;", with: " ") }
+    private func rulesSignature(_ rules: [ReplaceRule]) -> String { rules.map { "\($0.id ?? "")|\($0.isEnabled ?? false)" }.joined(separator: ";") }
     private func extractMangaImageSentences(from text: String) -> [String] {
         let pattern = "<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>"; guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
         let nsText = text as NSString; let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
