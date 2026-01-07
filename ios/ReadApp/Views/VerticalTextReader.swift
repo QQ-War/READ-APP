@@ -48,7 +48,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var switchReady = false
     private var switchWorkItem: DispatchWorkItem?
     private let switchHoldDuration: TimeInterval = 0.6
-    private let dampingFactor: CGFloat = 0.2
+    private let dampingFactor: CGFloat = 0.12
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
@@ -282,7 +282,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
         // 章节切换判定 (长按逻辑)：始终开启
-        handleHoldSwitchIfNeeded(rawOffset: s.contentOffset.y)
+        handleHoldSwitchIfNeeded(rawOffset: rawOffset)
         
         // 预载判定 (仅限无限流)
         if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
@@ -397,46 +397,26 @@ private extension VerticalTextViewController {
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        // 顶部触发：拖动到顶部边缘外
-        let topThreshold: CGFloat = -80  // 顶部触发阈值
+        let topThreshold: CGFloat = -80
         let topOver = topThreshold - rawOffset
-        if scrollView.isDragging, topOver > 0 {
-            beginSwitchHold(direction: -1, isTop: true)
-            return
-        }
         
-        // 底部触发：需要考虑 contentInset
         let contentInsetBottom = scrollView.contentInset.bottom
         let adjustedBottomThreshold = max(0, scrollView.contentSize.height - scrollView.bounds.height + contentInsetBottom)
-        let bottomThreshold = adjustedBottomThreshold + 80  // 底部触发阈值
+        let bottomThreshold = adjustedBottomThreshold + 80
         let bottomOver = rawOffset - bottomThreshold
-        
-        let isAtBottomBoundary = !isInfiniteScrollEnabled || nextSentences.isEmpty
         
         if scrollView.isDragging {
             if topOver > 0 {
                 beginSwitchHold(direction: -1, isTop: true)
                 return
             }
-            if isAtBottomBoundary && bottomOver > 0 {
+            if bottomOver > 0 {
                 beginSwitchHold(direction: 1, isTop: false)
                 return
             }
         }
         
-        // 取消判定：只在用户明确停止拖动时检查
-        if !scrollView.isDragging {
-            // 延迟检查，确保阻尼回弹完成
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                guard let self = self else { return }
-                // 如果switchReady为true且用户已松手，触发切换
-                if self.switchReady && self.pendingSwitchDirection != 0 {
-                    self.onChapterSwitched?(self.pendingSwitchDirection)
-                }
-                self.cancelSwitchHold()
-            }
-        } else if topOver <= 0 && (!isAtBottomBoundary || bottomOver <= 0) {
-            // 拖动中但没有达到阈值，取消
+        if !scrollView.isDragging || (topOver <= 0 && bottomOver <= 0) {
             cancelSwitchHold()
         }
     }
