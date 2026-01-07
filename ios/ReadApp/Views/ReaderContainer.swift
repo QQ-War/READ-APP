@@ -27,12 +27,30 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     var readingMode: ReadingMode
     var safeAreaInsets: EdgeInsets 
     
+    // MARK: - Coordinator 用于状态仲裁
+    class Coordinator {
+        var previousBindingIndex: Int = -1
+        var lastReportedIndex: Int = -1
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
     func makeUIViewController(context: Context) -> ReaderContainerViewController {
         let vc = ReaderContainerViewController()
         vc.book = book; vc.preferences = preferences; vc.ttsManager = ttsManager
         vc.replaceRuleViewModel = replaceRuleViewModel
         vc.onToggleMenu = onToggleMenu; vc.onAddReplaceRuleWithText = onAddReplaceRule
+        
+        // 初始化 Coordinator 状态
+        context.coordinator.previousBindingIndex = currentChapterIndex
+        context.coordinator.lastReportedIndex = currentChapterIndex
+        
         vc.onProgressChanged = { idx, pos in
+            // 实时更新汇报值，作为“白名单”
+            context.coordinator.lastReportedIndex = idx
+            
             if self.currentChapterIndex != idx { self.currentChapterIndex = idx }
             onProgressChanged(idx, pos)
         }
@@ -45,9 +63,23 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
         vc.updateLayout(safeArea: safeAreaInsets)
         vc.updatePreferences(preferences)
         vc.updateReplaceRules(replaceRuleViewModel.rules)
-        if !vc.isInternalTransitioning && vc.currentChapterIndex != currentChapterIndex {
-            vc.jumpToChapter(currentChapterIndex)
+        
+        // 核心修复：智能仲裁跳转逻辑
+        let newIndex = currentChapterIndex
+        let oldBindingIndex = context.coordinator.previousBindingIndex
+        let lastReported = context.coordinator.lastReportedIndex
+        
+        if !vc.isInternalTransitioning && vc.currentChapterIndex != newIndex {
+            // 只有当 Binding 是全新的值（用户点的），且不是 VC 自己刚汇报上去的值（滞后回声）时，才跳转
+            if newIndex != oldBindingIndex && newIndex != lastReported {
+                vc.jumpToChapter(newIndex)
+                // 跳转后，更新汇报值，防止反复跳
+                context.coordinator.lastReportedIndex = newIndex
+            }
         }
+        // 更新 Binding 历史记录
+        context.coordinator.previousBindingIndex = newIndex
+        
         if vc.currentReadingMode != readingMode { vc.switchReadingMode(to: readingMode) }
         vc.syncTTSState()
     }
