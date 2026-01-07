@@ -85,7 +85,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var mangaStackView: UIStackView?
     private var pages: [PaginatedPage] = []; private var pageInfos: [TK2PageInfo] = []
     private var currentPageIndex: Int = 0; private var isMangaMode = false
-    private let contentInset: CGFloat = 20; private let progressLabel = UILabel()
+    private let progressLabel = UILabel()
     private var currentLoadTask: Task<Void, Never>?; private var prefetchNextTask: Task<Void, Never>?; private var prefetchPrevTask: Task<Void, Never>?
     private var lastLayoutSignature: String = ""
     private var loadToken: Int = 0; private var lastAppliedRulesSignature: String?
@@ -104,6 +104,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaScrollView?.frame = b
+        
         guard !isMangaMode, renderStore != nil, currentReadingMode == .horizontal else { return }
         let spec = currentLayoutSpec
         let signature = "\(spec.pageSize.width)x\(spec.pageSize.height)|\(spec.topInset)|\(spec.bottomInset)|\(spec.sideMargin)"
@@ -175,7 +176,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard index >= 0 && (chapters.isEmpty || index < chapters.count) else { return }
         loadToken += 1; let token = loadToken; currentLoadTask?.cancel()
         currentLoadTask = Task { [weak self] in
-            guard let self else { return }
+            guard let self = self else { return }
             do {
                 let isM = book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
                 let content = try await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: isM ? 2 : 0)
@@ -237,7 +238,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         prefetchNextTask?.cancel(); prefetchPrevTask?.cancel(); let baseIndex = index
         if index + 1 < chapters.count {
             prefetchNextTask = Task { [weak self] in
-                guard let self else { return }
+                guard let self = self else { return }
                 if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1) {
                     await MainActor.run {
                         guard self.currentChapterIndex == baseIndex else { return }
@@ -254,7 +255,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         if index - 1 >= 0 {
             prefetchPrevTask = Task { [weak self] in
-                guard let self else { return }
+                guard let self = self else { return }
                 if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index - 1) {
                     await MainActor.run {
                         guard self.currentChapterIndex == baseIndex else { return }
@@ -328,13 +329,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         mangaStackView = stack
         let imageItems = contentSentences.filter { $0.contains("__IMG__") }
         if imageItems.isEmpty {
-            let label = UILabel()
-            label.text = "暂无图片"
-            label.textColor = .lightGray
-            label.textAlignment = .center
-            label.numberOfLines = 0
-            label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
-            stack.addArrangedSubview(label)
+            let label = UILabel(); label.text = "暂无图片"; label.textColor = .lightGray; label.textAlignment = .center; label.numberOfLines = 0; label.font = UIFont.systemFont(ofSize: 16, weight: .medium); stack.addArrangedSubview(label)
         }
         for sent in imageItems {
             let iv = UIImageView(); iv.contentMode = .scaleAspectFit; iv.clipsToBounds = true; stack.addArrangedSubview(iv)
@@ -354,63 +349,23 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     func pageViewController(_ pvc: UIPageViewController, viewControllerBefore vc: UIViewController) -> UIViewController? { guard let c = vc as? PageContentViewController else { return nil }; if c.chapterOffset == 0 { if c.pageIndex > 0 { return createPageVC(at: c.pageIndex - 1, offset: 0) }; if !prevChapterPages.isEmpty { return createPageVC(at: prevChapterPages.count - 1, offset: -1) } }; return nil }
     func pageViewController(_ pvc: UIPageViewController, viewControllerAfter vc: UIViewController) -> UIViewController? { guard let c = vc as? PageContentViewController else { return nil }; if c.chapterOffset == 0 { if c.pageIndex < pages.count - 1 { return createPageVC(at: c.pageIndex + 1, offset: 0) }; if !nextChapterPages.isEmpty { return createPageVC(at: 0, offset: 1) } }; return nil }
-    private func updateHorizontalPage(to i: Int, animated: Bool) {
-        guard let h = horizontalVC, i >= 0 && i < pages.count else { return }
-        let dir: UIPageViewController.NavigationDirection = (i >= currentPageIndex) ? .forward : .reverse
-        currentPageIndex = i
-        h.setViewControllers([createPageVC(at: i, offset: 0)], direction: dir, animated: animated)
-        updateProgressUI()
-    }
+    private func updateHorizontalPage(to i: Int, animated: Bool) { guard let h = horizontalVC, i >= 0 && i < pages.count else { return }; let dir: UIPageViewController.NavigationDirection = (i >= currentPageIndex) ? .forward : .reverse; currentPageIndex = i; h.setViewControllers([createPageVC(at: i, offset: 0)], direction: dir, animated: animated); updateProgressUI() }
     private func createPageVC(at i: Int, offset: Int) -> PageContentViewController {
-        let vc = PageContentViewController(pageIndex: i, chapterOffset: offset); let pV = ReadContent2View(frame: .zero); let aS = (offset == 0) ? renderStore : (offset > 0 ? nextChapterStore : prevChapterStore); let aP = (offset == 0) ? pages : (offset > 0 ? nextChapterPages : prevChapterPages); let aI = (offset == 0) ? pageInfos : (offset > 0 ? nextChapterPageInfos : prevChapterPageInfos)
-        pV.renderStore = aS; if i < aI.count { 
-            let info = aI[i]
-            pV.pageInfo = TK2PageInfo(
-                range: info.range, 
-                yOffset: info.yOffset, 
-                pageHeight: info.pageHeight, 
-                actualContentHeight: info.actualContentHeight, 
-                startSentenceIndex: info.startSentenceIndex, 
-                contentInset: currentLayoutSpec.topInset
-            ) 
-        }
+        let vc = PageContentViewController(pageIndex: i, chapterOffset: offset); let pV = ReadContent2View(frame: .zero); let aS = (offset == 0) ? renderStore : (offset > 0 ? nextChapterStore : prevChapterStore); let aI = (offset == 0) ? pageInfos : (offset > 0 ? nextChapterPageInfos : prevChapterPageInfos)
+        pV.renderStore = aS; if i < aI.count { let info = aI[i]; pV.pageInfo = TK2PageInfo(range: info.range, yOffset: info.yOffset, pageHeight: info.pageHeight, actualContentHeight: info.actualContentHeight, startSentenceIndex: info.startSentenceIndex, contentInset: currentLayoutSpec.topInset) }; pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.onToggleMenu?() } else { self?.handlePageTap(isNext: loc == .right) } }
         pV.horizontalInset = currentLayoutSpec.sideMargin
-        pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.onToggleMenu?() } else { self?.handlePageTap(isNext: loc == .right) } }
         vc.view.addSubview(pV); pV.translatesAutoresizingMaskIntoConstraints = false; NSLayoutConstraint.activate([pV.topAnchor.constraint(equalTo: vc.view.topAnchor), pV.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor), pV.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor), pV.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor)]); return vc
     }
-    private func handlePageTap(isNext: Bool) {
-        let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
-        if t >= 0 && t < pages.count {
-            updateHorizontalPage(to: t, animated: true)
-        } else {
-            jumpToChapter(isNext ? currentChapterIndex + 1 : currentChapterIndex - 1, startAtEnd: !isNext)
-        }
-    }
+    private func handlePageTap(isNext: Bool) { let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1; if t >= 0 && t < pages.count { updateHorizontalPage(to: t, animated: true) } else { jumpToChapter(isNext ? currentChapterIndex + 1 : currentChapterIndex - 1, startAtEnd: !isNext) } }
     private func syncHorizontalPageToTTS(sentenceIndex: Int) { var curr = 0; var pS: [Int] = []; for s in contentSentences { pS.append(curr); curr += s.count + 1 }; guard sentenceIndex < pS.count else { return }; let o = pS[sentenceIndex]; if let t = pages.firstIndex(where: { NSLocationInRange(o, $0.globalRange) }), t != currentPageIndex { updateHorizontalPage(to: t, animated: true) } }
     private func removeHTMLAndSVG(_ text: String) -> String { var res = text; let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]; for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }; return res.replacingOccurrences(of: "&nbsp;", with: " ") }
-    private func rulesSignature(_ rules: [ReplaceRule]) -> String {
-        rules.map {
-            "\($0.id ?? "")|\($0.isEnabled ?? false)|\($0.isRegex ?? false)|\($0.pattern)|\($0.replacement)"
-        }.joined(separator: ";")
-    }
+    private func rulesSignature(_ rules: [ReplaceRule]) -> String { rules.map { "\($0.id ?? "")|\($0.isEnabled ?? false)|\($0.isRegex ?? false)|\($0.pattern)|\($0.replacement)" }.joined(separator: ";") }
     private func extractMangaImageSentences(from text: String) -> [String] {
         let pattern = "<img[^>]+(?:src|data-src|data-original)=[\"']([^\"']+)[\"'][^>]*>"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
         let nsText = text as NSString; let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
         return matches.compactMap { match in guard match.numberOfRanges > 1 else { return nil }; return "__IMG__" + nsText.substring(with: match.range(at: 1)) }
     }
-
-    private func scrollToChapterEnd(animated: Bool) {
-        if isMangaMode, let sv = mangaScrollView {
-            let y = max(0, sv.contentSize.height - sv.bounds.height)
-            sv.setContentOffset(CGPoint(x: 0, y: y), animated: animated)
-            return
-        }
-        if currentReadingMode == .vertical {
-            verticalVC?.scrollToBottom(animated: animated)
-        } else {
-            if !pages.isEmpty { updateHorizontalPage(to: max(0, pages.count - 1), animated: animated) }
-        }
-    }
+    private func scrollToChapterEnd(animated: Bool) { if isMangaMode, let sv = mangaScrollView { sv.setContentOffset(CGPoint(x: 0, y: max(0, sv.contentSize.height - sv.bounds.height)), animated: animated); return }; if currentReadingMode == .vertical { verticalVC?.scrollToBottom(animated: animated) } else { if !pages.isEmpty { updateHorizontalPage(to: max(0, pages.count - 1), animated: animated) } } }
 }
 class PageContentViewController: UIViewController { let pageIndex: Int; let chapterOffset: Int; init(pageIndex: Int, chapterOffset: Int) { self.pageIndex = pageIndex; self.chapterOffset = chapterOffset; super.init(nibName: nil, bundle: nil) }; required init?(coder: NSCoder) { fatalError() } }
