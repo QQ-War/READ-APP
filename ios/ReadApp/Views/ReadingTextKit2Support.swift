@@ -138,12 +138,11 @@ class ReadContent2View: UIView {
         ctx.saveGState()
         
         // 1. 裁剪区域：只显示本页内容
-        let clipRect = CGRect(x: 0, y: info.contentInset, width: bounds.width, height: info.actualContentHeight)
+        let clipRect = CGRect(x: 0, y: info.yOffset, width: bounds.width, height: info.actualContentHeight)
         ctx.clip(to: clipRect)
-        
+
         // 2. 坐标变换：将本页内容映射到屏幕
-        let ty = info.contentInset - info.yOffset
-        ctx.translateBy(x: horizontalInset, y: ty)
+        ctx.translateBy(x: horizontalInset, y: 0)
         
         // 3. 绘制 TTS 高亮背景 (在文字底层)
         if isPlayingHighlight {
