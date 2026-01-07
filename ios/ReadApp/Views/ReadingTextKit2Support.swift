@@ -173,8 +173,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     
     var horizontalInset: CGFloat = 16
     var onTapLocation: ((ReaderTapLocation) -> Void)?
-    @available(iOS 16.0, *)
-    var editMenuInteraction: UIEditMenuInteraction?
+    var editMenuInteraction: Any?
     var pendingSelectedText: String?
     
     // 兼容属性
@@ -198,8 +197,9 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         addGestureRecognizer(longPress)
         
         if #available(iOS 16.0, *) {
-            editMenuInteraction = UIEditMenuInteraction(delegate: self)
-            addInteraction(editMenuInteraction!)
+            let interaction = UIEditMenuInteraction(delegate: self)
+            addInteraction(interaction)
+            editMenuInteraction = interaction
         }
     }
     
@@ -226,8 +226,10 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
             let txt = (store.attributedString.string as NSString).substring(with: r)
             self.pendingSelectedText = txt
             if #available(iOS 16.0, *) {
-                let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: pointInContent)
-                editMenuInteraction?.presentEditMenu(with: configuration)
+                if let interaction = editMenuInteraction as? UIEditMenuInteraction {
+                    let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: pointInContent)
+                    interaction.presentEditMenu(with: configuration)
+                }
             } else {
                 becomeFirstResponder()
                 let menu = UIMenuController.shared

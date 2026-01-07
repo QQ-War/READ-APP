@@ -40,8 +40,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     let scrollView = UIScrollView()
     private let currentContentView = VerticalTextContentView()
     private let nextContentView = VerticalTextContentView() // 下一章拼接视图
-    @available(iOS 16.0, *)
-    private var editMenuInteraction: UIEditMenuInteraction?
+    private var editMenuInteraction: Any?
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
@@ -72,8 +71,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         scrollView.addGestureRecognizer(longPress)
         
         if #available(iOS 16.0, *) {
-            editMenuInteraction = UIEditMenuInteraction(delegate: self)
-            view.addInteraction(editMenuInteraction!)
+            let interaction = UIEditMenuInteraction(delegate: self)
+            view.addInteraction(interaction)
+            editMenuInteraction = interaction
         }
     }
     
@@ -99,8 +99,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             let txt = (store.attributedString.string as NSString).substring(with: r)
             self.pendingSelectedText = txt
             if #available(iOS 16.0, *) {
-                let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: g.location(in: view))
-                editMenuInteraction?.presentEditMenu(with: configuration)
+                if let interaction = editMenuInteraction as? UIEditMenuInteraction {
+                    let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: g.location(in: view))
+                    interaction.presentEditMenu(with: configuration)
+                }
             } else {
                 becomeFirstResponder()
                 let menu = UIMenuController.shared
