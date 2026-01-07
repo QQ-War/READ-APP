@@ -87,6 +87,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var currentPageIndex: Int = 0; private var isMangaMode = false
     private let contentInset: CGFloat = 20; private let progressLabel = UILabel()
     private var currentLoadTask: Task<Void, Never>?; private var prefetchNextTask: Task<Void, Never>?; private var prefetchPrevTask: Task<Void, Never>?
+    private var lastLayoutSignature: String = ""
     private var loadToken: Int = 0; private var lastAppliedRulesSignature: String?
 
     override func viewDidLoad() {
@@ -103,6 +104,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaScrollView?.frame = b
+        guard !isMangaMode, renderStore != nil, currentReadingMode == .horizontal else { return }
+        let spec = currentLayoutSpec
+        let signature = "\(spec.pageSize.width)x\(spec.pageSize.height)|\(spec.topInset)|\(spec.bottomInset)|\(spec.sideMargin)"
+        if signature != lastLayoutSignature {
+            lastLayoutSignature = signature
+            captureCurrentProgress()
+            prepareRenderStore()
+            performPagination()
+            applyCapturedProgress()
+        }
     }
 
     func updateLayout(safeArea: EdgeInsets) {
@@ -263,7 +274,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func performSilentPagination(for store: TextKit2RenderStore, sentences: [String], title: String) -> TextKit2Paginator.PaginationResult {
         let spec = currentLayoutSpec
         var pS: [Int] = []; var c = title.isEmpty ? 0 : (title + "\n").utf16.count; for s in sentences { pS.append(c); c += s.count + 1 }
-        return TextKit2Paginator.paginate(renderStore: store, pageSize: spec.pageSize, paragraphStarts: pS, prefixLen: title.isEmpty ? 0 : (title + "\n").utf16.count, contentInset: spec.topInset)
+        return TextKit2Paginator.paginate(renderStore: store, pageSize: spec.pageSize, paragraphStarts: pS, prefixLen: title.isEmpty ? 0 : (title + "\n").utf16.count, topInset: spec.topInset, bottomInset: spec.bottomInset)
     }
 
     private func createAttrString(_ text: String, title: String) -> NSAttributedString {
@@ -288,7 +299,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
         var starts: [Int] = []; var curr = pLen; for sent in contentSentences { starts.append(curr); curr += sent.count + 1 }
-        let res = TextKit2Paginator.paginate(renderStore: s, pageSize: spec.pageSize, paragraphStarts: starts, prefixLen: pLen, contentInset: spec.topInset)
+        let res = TextKit2Paginator.paginate(renderStore: s, pageSize: spec.pageSize, paragraphStarts: starts, prefixLen: pLen, topInset: spec.topInset, bottomInset: spec.bottomInset)
         self.pages = res.pages; self.pageInfos = res.pageInfos
     }
 

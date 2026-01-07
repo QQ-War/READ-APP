@@ -47,7 +47,8 @@ struct TextKit2Paginator {
         pageSize: CGSize,
         paragraphStarts: [Int],
         prefixLen: Int,
-        contentInset: CGFloat,
+        topInset: CGFloat,
+        bottomInset: CGFloat,
         maxPages: Int = Int.max,
         startOffset: Int = 0
     ) -> PaginationResult {
@@ -64,7 +65,7 @@ struct TextKit2Paginator {
         var pages: [PaginatedPage] = []
         var pageInfos: [TK2PageInfo] = []
         var pageCount = 0
-        let pageContentHeight = max(1, pageSize.height - contentInset * 2)
+        let pageContentHeight = max(1, pageSize.height - topInset - bottomInset)
         
         var currentContentLocation: NSTextLocation = documentRange.location
         if startOffset > 0, let startLoc = contentStorage.location(documentRange.location, offsetBy: startOffset) {
@@ -209,7 +210,7 @@ struct TextKit2Paginator {
             let startIdx = paragraphStarts.lastIndex(where: { $0 <= adjustedLocation }) ?? 0
             
             pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startIdx))
-            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: contentInset))
+            pageInfos.append(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageContentHeight, actualContentHeight: actualContentHeight, startSentenceIndex: startIdx, contentInset: topInset))
             
             pageCount += 1
             currentContentLocation = pageEndLocation
@@ -316,7 +317,8 @@ class ReadContent2View: UIView {
                             // 计算行内具体字符的 X 偏移（简化处理：整行高亮，因为阅读器通常是按段落/句子请求音频）
                             let lineFrame = line.typographicBounds.offsetBy(dx: fFrame.origin.x, dy: fFrame.origin.y)
                             let contentWidth = max(0, bounds.width - horizontalInset * 2)
-                            let highlightRect = CGRect(x: 0, y: lineFrame.minY, width: contentWidth, height: lineFrame.height)
+                            let bleed: CGFloat = 2
+                            let highlightRect = CGRect(x: -bleed, y: lineFrame.minY, width: contentWidth + bleed * 2, height: lineFrame.height)
                             context?.fill(highlightRect)
                         }
                     }
@@ -362,7 +364,8 @@ class ReadContent2View: UIView {
                     break
                 }
                 let contentWidth = max(0, bounds.width - horizontalInset * 2)
-                let lineDrawRect = CGRect(x: 0, y: lineFrame.minY, width: contentWidth, height: lineFrame.height)
+                let bleed: CGFloat = 2
+                let lineDrawRect = CGRect(x: -bleed, y: lineFrame.minY, width: contentWidth + bleed * 2, height: lineFrame.height)
                 context?.saveGState()
                 context?.clip(to: lineDrawRect)
                 fragment.draw(at: frame.origin, in: context!)
