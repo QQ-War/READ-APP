@@ -81,7 +81,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var nextChapterStore: TextKit2RenderStore?; private var prevChapterStore: TextKit2RenderStore?
     private var nextChapterPages: [PaginatedPage] = []; private var prevChapterPages: [PaginatedPage] = []
     private var nextChapterPageInfos: [TK2PageInfo] = []; private var prevChapterPageInfos: [TK2PageInfo] = []
-    private var nextChapterSentences: [String]?
+    private var nextChapterSentences: [String]?; private var prevChapterSentences: [String]?
+    private var nextChapterRawContent: String?; private var prevChapterRawContent: String?
 
     private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaScrollView: UIScrollView?
     private var mangaStackView: UIStackView?
@@ -193,8 +194,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 await MainActor.run {
                     guard self.loadToken == token else { return }
                     self.rawContent = content; self.isMangaMode = isM; self.onModeDetected?(isM)
-                    self.nextChapterStore = nil; self.nextChapterPages = []; self.nextChapterPageInfos = []; self.nextChapterSentences = nil
-                    self.prevChapterStore = nil; self.prevChapterPages = []; self.prevChapterPageInfos = []
+                    self.nextChapterStore = nil; self.nextChapterPages = []; self.nextChapterPageInfos = []; self.nextChapterSentences = nil; self.nextChapterRawContent = nil
+                    self.prevChapterStore = nil; self.prevChapterPages = []; self.prevChapterPageInfos = []; self.prevChapterSentences = nil; self.prevChapterRawContent = nil
                     self.reRenderCurrentContent(maintainOffset: !resetOffset)
                     if resetOffset {
                         if startAtEnd {
@@ -258,6 +259,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                         self.nextChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
                         let res = self.performSilentPagination(for: self.nextChapterStore!, sentences: sents, title: title)
                         self.nextChapterPages = res.pages; self.nextChapterPageInfos = res.pageInfos; self.nextChapterSentences = sents
+                        self.nextChapterRawContent = content
                     }
                 }
             }
@@ -274,7 +276,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                         let spec = self.currentLayoutSpec
                         self.prevChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
                         let res = self.performSilentPagination(for: self.prevChapterStore!, sentences: sents, title: title)
-                        self.prevChapterPages = res.pages; self.prevChapterPageInfos = res.pageInfos
+                        self.prevChapterPages = res.pages; self.prevChapterPageInfos = res.pageInfos; self.prevChapterSentences = sents
+                        self.prevChapterRawContent = content
                     }
                 }
             }
@@ -351,9 +354,40 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     func pageViewController(_ pvc: UIPageViewController, didFinishAnimating f: Bool, previousViewControllers p: [UIViewController], transitionCompleted completed: Bool) {
         if completed, let v = pvc.viewControllers?.first as? PageContentViewController {
-            self.isInternalTransitioning = true; if v.chapterOffset == 0 { self.currentPageIndex = v.pageIndex; self.currentCharOffset = pages[v.pageIndex].globalRange.location; self.onProgressChanged?(currentChapterIndex, Double(v.pageIndex) / Double(max(1, pages.count))) }
-            else { if v.chapterOffset > 0 { prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos; renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos; nextChapterStore = nil; nextChapterPages = []; nextChapterPageInfos = [] }
-                else { nextChapterStore = renderStore; nextChapterPages = pages; nextChapterPageInfos = pageInfos; renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos; prevChapterStore = nil; prevChapterPages = [] }; self.currentChapterIndex += v.chapterOffset; self.currentPageIndex = v.pageIndex; self.currentCharOffset = pages[currentPageIndex].globalRange.location; self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count))); prefetchAdjacentChapters(index: currentChapterIndex) }
+            self.isInternalTransitioning = true
+            if v.chapterOffset == 0 {
+                self.currentPageIndex = v.pageIndex; self.currentCharOffset = pages[v.pageIndex].globalRange.location
+                self.onProgressChanged?(currentChapterIndex, Double(v.pageIndex) / Double(max(1, pages.count)))
+            } else {
+                if v.chapterOffset > 0 {
+                    // 向后翻页：Next -> Current
+                    prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos
+                    prevChapterSentences = contentSentences; prevChapterRawContent = rawContent
+                    
+                    renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos
+                    contentSentences = nextChapterSentences ?? []; rawContent = nextChapterRawContent ?? ""
+                    
+                    nextChapterStore = nil; nextChapterPages = []; nextChapterPageInfos = []
+                    nextChapterSentences = nil; nextChapterRawContent = nil
+                } else {
+                    // 向前翻页：Prev -> Current
+                    nextChapterStore = renderStore; nextChapterPages = pages; nextChapterPageInfos = pageInfos
+                    nextChapterSentences = contentSentences; nextChapterRawContent = rawContent
+                    
+                    renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos
+                    contentSentences = prevChapterSentences ?? []; rawContent = prevChapterRawContent ?? ""
+                    
+                    prevChapterStore = nil; prevChapterPages = []; prevChapterPageInfos = []
+                    prevChapterSentences = nil; prevChapterRawContent = nil
+                }
+                self.currentChapterIndex += v.chapterOffset
+                self.currentPageIndex = v.pageIndex
+                if currentPageIndex < pages.count {
+                    self.currentCharOffset = pages[currentPageIndex].globalRange.location
+                }
+                self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
+                prefetchAdjacentChapters(index: currentChapterIndex)
+            }
             updateProgressUI(); self.isInternalTransitioning = false
         }
     }
