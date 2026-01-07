@@ -27,32 +27,49 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     var readingMode: ReadingMode
     var safeAreaInsets: EdgeInsets 
     
+    // MARK: - Coordinator 托管状态
+    class Coordinator {
+        var parent: ReaderContainerRepresentable
+        init(_ parent: ReaderContainerRepresentable) { self.parent = parent }
+        
+        func handleChapterChange(_ index: Int) {
+            DispatchQueue.main.async { self.parent.currentChapterIndex = index }
+        }
+        func handleProgress(_ idx: Int, _ pos: Double) {
+            self.parent.onProgressChanged(idx, pos)
+        }
+        func handleChaptersLoaded(_ list: [BookChapter]) {
+            DispatchQueue.main.async { self.parent.chapters = list }
+        }
+        func handleModeDetected(_ isManga: Bool) {
+            DispatchQueue.main.async { self.parent.isMangaMode = isManga }
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    
     func makeUIViewController(context: Context) -> ReaderContainerViewController {
         let vc = ReaderContainerViewController()
         vc.book = book; vc.preferences = preferences; vc.ttsManager = ttsManager
         vc.replaceRuleViewModel = replaceRuleViewModel
         vc.onToggleMenu = onToggleMenu; vc.onAddReplaceRuleWithText = onAddReplaceRule
         
-        // 绑定回调：直接更新 SwiftUI 状态
-        vc.onChapterIndexChanged = { newIdx in
-            if self.currentChapterIndex != newIdx {
-                self.currentChapterIndex = newIdx
-            }
-        }
-        vc.onProgressChanged = { idx, pos in
-            onProgressChanged(idx, pos)
-        }
-        vc.onChaptersLoaded = { list in self.chapters = list }
-        vc.onModeDetected = { isManga in self.isMangaMode = isManga }
+        // 挂载托管回调
+        vc.onChapterIndexChanged = { idx in context.coordinator.handleChapterChange(idx) }
+        vc.onProgressChanged = { idx, pos in context.coordinator.handleProgress(idx, pos) }
+        vc.onChaptersLoaded = { list in context.coordinator.handleChaptersLoaded(list) }
+        vc.onModeDetected = { isManga in context.coordinator.handleModeDetected(isManga) }
+        
         return vc
     }
     
     func updateUIViewController(_ vc: ReaderContainerViewController, context: Context) {
+        context.coordinator.parent = self // 刷新引用
+        
         vc.updateLayout(safeArea: safeAreaInsets)
         vc.updatePreferences(preferences)
         vc.updateReplaceRules(replaceRuleViewModel.rules)
         
-        // 仅当外部真正发生跳章请求时才跳转 (比如点击目录)
         if !vc.isInternalTransitioning && vc.currentChapterIndex != currentChapterIndex {
             vc.jumpToChapter(currentChapterIndex)
         }
@@ -87,7 +104,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var pages: [PaginatedPage] = []; private var pageInfos: [TK2PageInfo] = []
     private var currentPageIndex: Int = 0; private var isMangaMode = false
     
-    // 缓存池，保证跨章动画丝滑
     private var nextChapterStore: TextKit2RenderStore?; private var prevChapterStore: TextKit2RenderStore?
     private var nextChapterPages: [PaginatedPage] = []; private var prevChapterPages: [PaginatedPage] = []
     private var nextChapterPageInfos: [TK2PageInfo] = []; private var prevChapterPageInfos: [TK2PageInfo] = []
@@ -203,7 +219,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if completed, let v = pvc.viewControllers?.first as? PageContentViewController {
             self.isInternalTransitioning = true
             if v.chapterOffset != 0 {
-                // 核心切换：将预加载的数据原子化置换到当前
                 if v.chapterOffset > 0 {
                     prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos; prevChapterSentences = contentSentences; prevChapterRawContent = rawContent
                     renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos; contentSentences = nextChapterSentences ?? []; rawContent = nextChapterRawContent ?? ""
@@ -213,12 +228,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 }
                 self.currentChapterIndex += v.chapterOffset
                 self.onChapterIndexChanged?(self.currentChapterIndex)
-                
-                // 关键修正：重新创建当前页 VC 并静默设置，强制 UIPageViewController 刷新内部状态机
                 v.chapterOffset = 0
                 let newCurrentVC = createPageVC(at: v.pageIndex, offset: 0)
                 pvc.setViewControllers([newCurrentVC], direction: .forward, animated: false)
-                
                 prefetchAdjacentChapters(index: currentChapterIndex)
             }
             self.currentPageIndex = v.pageIndex
