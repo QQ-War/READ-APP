@@ -37,46 +37,49 @@ struct ReadingView: View {
     }
 
     var body: some View {
-        GeometryReader { fullScreenProxy in
-            ZStack {
-                backgroundView.ignoresSafeArea()
-                
-                ReaderContainerRepresentable(
-                    book: book,
-                    preferences: preferences,
-                    ttsManager: ttsManager,
-                    replaceRuleViewModel: replaceRuleViewModel,
-                    chapters: $chapters,
-                    currentChapterIndex: $currentChapterIndex,
-                    isMangaMode: $isMangaMode,
-                    onToggleMenu: { withAnimation { showUIControls.toggle() } },
-                    onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
-                    onProgressChanged: { _, pos in self.currentPos = pos },
-                    readingMode: preferences.readingMode,
-                    safeAreaInsets: fullScreenProxy.safeAreaInsets
-                )
-                .ignoresSafeArea()
+        NavigationView {
+            GeometryReader { fullScreenProxy in
+                ZStack {
+                    backgroundView.ignoresSafeArea()
+                    
+                    ReaderContainerRepresentable(
+                        book: book,
+                        preferences: preferences,
+                        ttsManager: ttsManager,
+                        replaceRuleViewModel: replaceRuleViewModel,
+                        chapters: $chapters,
+                        currentChapterIndex: $currentChapterIndex,
+                        isMangaMode: $isMangaMode,
+                        onToggleMenu: { withAnimation { showUIControls.toggle() } },
+                        onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
+                        onProgressChanged: { _, pos in self.currentPos = pos },
+                        readingMode: preferences.readingMode,
+                        safeAreaInsets: fullScreenProxy.safeAreaInsets
+                    )
+                    .ignoresSafeArea()
 
-                NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) {
-                    EmptyView()
-                }
-                .hidden()
-                
-                if showUIControls {
-                    VStack(spacing: 0) {
-                        topBar(safeArea: fullScreenProxy.safeAreaInsets)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        Spacer()
-                        bottomBar(safeArea: fullScreenProxy.safeAreaInsets)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) {
+                        EmptyView()
                     }
-                    .ignoresSafeArea(edges: .vertical)
+                    .hidden()
+                    
+                    if showUIControls {
+                        VStack(spacing: 0) {
+                            topBar(safeArea: fullScreenProxy.safeAreaInsets)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            Spacer()
+                            bottomBar(safeArea: fullScreenProxy.safeAreaInsets)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        .ignoresSafeArea(edges: .vertical)
+                    }
+                    if isLoading { ProgressView().padding().background(.ultraThinMaterial).cornerRadius(10) }
                 }
-                if isLoading { ProgressView().padding().background(.ultraThinMaterial).cornerRadius(10) }
             }
+            .navigationBarHidden(true)
+            .navigationBarBackButtonHidden(true)
         }
-        .navigationBarHidden(true)
-        .navigationBarBackButtonHidden(true)
+        .navigationViewStyle(StackNavigationViewStyle())
         .onChange(of: isForceLandscape) { newValue in updateAppOrientation(landscape: newValue) }
         .onDisappear {
             if isForceLandscape { updateAppOrientation(landscape: false) }
