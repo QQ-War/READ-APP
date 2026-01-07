@@ -27,11 +27,9 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     var readingMode: ReadingMode
     var safeAreaInsets: EdgeInsets 
     
-    // MARK: - Coordinator 托管状态
     class Coordinator {
         var parent: ReaderContainerRepresentable
         init(_ parent: ReaderContainerRepresentable) { self.parent = parent }
-        
         func handleChapterChange(_ index: Int) {
             DispatchQueue.main.async { self.parent.currentChapterIndex = index }
         }
@@ -52,28 +50,22 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
         let vc = ReaderContainerViewController()
         vc.book = book; vc.preferences = preferences; vc.ttsManager = ttsManager
         vc.replaceRuleViewModel = replaceRuleViewModel
-        vc.onToggleMenu = onToggleMenu; vc.onAddReplaceRuleWithText = onAddReplaceRule
-        
-        // 挂载托管回调
+        vc.onToggleMenu = onToggleMenu; vc.onAddReplaceRuleWithText = { onAddReplaceRule($0) }
         vc.onChapterIndexChanged = { idx in context.coordinator.handleChapterChange(idx) }
         vc.onProgressChanged = { idx, pos in context.coordinator.handleProgress(idx, pos) }
         vc.onChaptersLoaded = { list in context.coordinator.handleChaptersLoaded(list) }
         vc.onModeDetected = { isManga in context.coordinator.handleModeDetected(isManga) }
-        
         return vc
     }
     
     func updateUIViewController(_ vc: ReaderContainerViewController, context: Context) {
-        context.coordinator.parent = self // 刷新引用
-        
+        context.coordinator.parent = self
         vc.updateLayout(safeArea: safeAreaInsets)
         vc.updatePreferences(preferences)
         vc.updateReplaceRules(replaceRuleViewModel.rules)
-        
         if !vc.isInternalTransitioning && vc.currentChapterIndex != currentChapterIndex {
             vc.jumpToChapter(currentChapterIndex)
         }
-        
         if vc.currentReadingMode != readingMode { vc.switchReadingMode(to: readingMode) }
         vc.syncTTSState()
     }
@@ -153,9 +145,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func updateReplaceRules(_ rules: [ReplaceRule]) { if !rawContent.isEmpty && !isMangaMode { reRenderCurrentContent() } }
     
     func jumpToChapter(_ index: Int, startAtEnd: Bool = false) {
-        currentChapterIndex = index
-        onChapterIndexChanged?(index)
-        loadChapterContent(at: index, startAtEnd: startAtEnd)
+        currentChapterIndex = index; onChapterIndexChanged?(index); loadChapterContent(at: index, startAtEnd: startAtEnd)
     }
     func switchReadingMode(to mode: ReadingMode) { currentReadingMode = mode; setupReaderMode() }
 
@@ -218,46 +208,40 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard completed, let v = pvc.viewControllers?.first as? PageContentViewController else { return }
         
         if v.chapterOffset != 0 {
-            self.isInternalTransitioning = true
+            // 静默置换策略：不调用 setViewControllers，只同步逻辑状态
             let offset = v.chapterOffset
-            let pageIdx = v.pageIndex
+            let targetPage = v.pageIndex
             
-            // 关键：异步执行状态置换，防止死锁
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.performAtomicChapterSwap(offset: offset, targetPage: pageIdx)
-                self.isInternalTransitioning = false
+            self.isInternalTransitioning = true
+            if offset > 0 {
+                prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos; prevChapterSentences = contentSentences; prevChapterRawContent = rawContent
+                renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos; contentSentences = nextChapterSentences ?? []; rawContent = nextChapterRawContent ?? ""
+                nextChapterStore = nil; nextChapterPages = []; nextChapterPageInfos = []
+            } else {
+                nextChapterStore = renderStore; nextChapterPages = pages; nextChapterPageInfos = pageInfos; nextChapterSentences = contentSentences; nextChapterRawContent = rawContent
+                renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos; contentSentences = prevChapterSentences ?? []; rawContent = prevChapterRawContent ?? ""
+                prevChapterStore = nil; prevChapterPages = []; prevChapterPageInfos = []
             }
+            
+            self.currentChapterIndex += offset
+            self.currentPageIndex = targetPage
+            self.onChapterIndexChanged?(self.currentChapterIndex)
+            
+            // 重要：洗白当前 VC 的身份，使其成为“当前章”的 VC
+            v.chapterOffset = 0
+            if let rv = v.view.subviews.first as? ReadContent2View {
+                rv.renderStore = self.renderStore // 更新引用，确保后续手势逻辑正确
+            }
+            
+            self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
+            updateProgressUI()
+            prefetchAdjacentChapters(index: currentChapterIndex)
+            self.isInternalTransitioning = false
         } else {
             self.currentPageIndex = v.pageIndex
             self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
             updateProgressUI()
         }
-    }
-    
-    private func performAtomicChapterSwap(offset: Int, targetPage: Int) {
-        if offset > 0 {
-            prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos; prevChapterSentences = contentSentences; prevChapterRawContent = rawContent
-            renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos; contentSentences = nextChapterSentences ?? []; rawContent = nextChapterRawContent ?? ""
-            nextChapterStore = nil; nextChapterPages = []; nextChapterPageInfos = []
-        } else {
-            nextChapterStore = renderStore; nextChapterPages = pages; nextChapterPageInfos = pageInfos; nextChapterSentences = contentSentences; nextChapterRawContent = rawContent
-            renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos; contentSentences = prevChapterSentences ?? []; rawContent = prevChapterRawContent ?? ""
-            prevChapterStore = nil; prevChapterPages = []; prevChapterPageInfos = []
-        }
-        
-        self.currentChapterIndex += offset
-        self.currentPageIndex = targetPage
-        self.onChapterIndexChanged?(self.currentChapterIndex)
-        
-        // 重新锚定视图
-        let newCurrentVC = createPageVC(at: currentPageIndex, offset: 0)
-        let dir: UIPageViewController.NavigationDirection = offset > 0 ? .forward : .reverse
-        horizontalVC?.setViewControllers([newCurrentVC], direction: dir, animated: false)
-        
-        updateProgressUI()
-        self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
-        prefetchAdjacentChapters(index: currentChapterIndex)
     }
     
     func pageViewController(_ pvc: UIPageViewController, viewControllerBefore vc: UIViewController) -> UIViewController? {
@@ -279,9 +263,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     private func updateHorizontalPage(to i: Int, animated: Bool) {
         guard let h = horizontalVC, i >= 0 && i < pages.count else { return }
-        let dir: UIPageViewController.NavigationDirection = (i >= currentPageIndex) ? .forward : .reverse
         currentPageIndex = i
-        h.setViewControllers([createPageVC(at: i, offset: 0)], direction: dir, animated: animated)
+        h.setViewControllers([createPageVC(at: i, offset: 0)], direction: .forward, animated: animated)
     }
     
     private func createPageVC(at i: Int, offset: Int) -> PageContentViewController {
@@ -310,9 +293,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 await MainActor.run {
                     let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                     let title = self.chapters[index + 1].title; let attr = self.createAttrString(processed, title: title); let spec = self.currentLayoutSpec
-                    self.nextChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
-                    let res = self.performSilentPagination(for: self.nextChapterStore!, sentences: sents, title: title)
-                    self.nextChapterPages = res.pages; self.nextChapterPageInfos = res.pageInfos; self.nextChapterSentences = sents; self.nextChapterRawContent = content
+                    let store = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
+                    let res = self.performSilentPagination(for: store, sentences: sents, title: title)
+                    self.nextChapterStore = store; self.nextChapterPages = res.pages; self.nextChapterPageInfos = res.pageInfos; self.nextChapterSentences = sents; self.nextChapterRawContent = content
                 }
             } }
         }
@@ -321,9 +304,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 await MainActor.run {
                     let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                     let title = self.chapters[index - 1].title; let attr = self.createAttrString(processed, title: title); let spec = self.currentLayoutSpec
-                    self.prevChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
-                    let res = self.performSilentPagination(for: self.prevChapterStore!, sentences: sents, title: title)
-                    self.prevChapterPages = res.pages; self.prevChapterPageInfos = res.pageInfos; self.prevChapterSentences = sents; self.prevChapterRawContent = content
+                    let store = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
+                    let res = self.performSilentPagination(for: store, sentences: sents, title: title)
+                    self.prevChapterStore = store; self.prevChapterPages = res.pages; self.prevChapterPageInfos = res.pageInfos; self.prevChapterSentences = sents; self.prevChapterRawContent = content
                 }
             } }
         }
