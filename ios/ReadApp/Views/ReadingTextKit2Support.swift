@@ -108,7 +108,7 @@ struct TextKit2Paginator {
             let pageStartY = floor(rawPageStartY / pixel) * pixel
             
             let pageRect = CGRect(x: 0, y: pageStartY, width: pageSize.width, height: pageContentHeight)
-            let lineEdgeInset = max(2.0, contentInset * 0.05)
+            let lineEdgeInset = max(2.0, topInset * 0.05)
             let lineEdgeSlack: CGFloat = 0
             
             var pageFragmentMaxY: CGFloat?
