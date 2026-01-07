@@ -318,8 +318,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     private func handlePageTap(isNext: Bool) {
         let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
-        if t >= 0 && t < pages.count { updateHorizontalPage(to: t, animated: true) } 
-        else { jumpToChapter(isNext ? currentChapterIndex + 1 : currentChapterIndex - 1, startAtEnd: !isNext) }
+        if t >= 0 && t < pages.count {
+            updateHorizontalPage(to: t, animated: true)
+        } else if isNext, !nextChapterPages.isEmpty {
+            let vc = createPageVC(at: 0, offset: 1)
+            horizontalVC?.setViewControllers([vc], direction: .forward, animated: true)
+        } else if !isNext, !prevChapterPages.isEmpty {
+            let vc = createPageVC(at: max(0, prevChapterPages.count - 1), offset: -1)
+            horizontalVC?.setViewControllers([vc], direction: .reverse, animated: true)
+        } else {
+            jumpToChapter(isNext ? currentChapterIndex + 1 : currentChapterIndex - 1, startAtEnd: !isNext)
+        }
     }
 
     private func prefetchAdjacentChapters(index: Int) {
@@ -357,7 +366,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func createAttrString(_ text: String, title: String) -> NSAttributedString {
         let fullAttr = NSMutableAttributedString()
         if !title.isEmpty { fullAttr.append(NSAttributedString(string: title + "\n", attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize + 8, weight: .bold), .foregroundColor: UIColor.label])) }
-        fullAttr.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize), .foregroundColor: UIColor.label, .paragraphStyle: { let p = NSMutableParagraphStyle(); p.lineSpacing = preferences.lineSpacing; p.alignment = .justified; return p }() ]))
+        fullAttr.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize), .foregroundColor: UIColor.label, .paragraphStyle: { let p = NSMutableParagraphStyle(); p.lineSpacing = preferences.lineSpacing; p.alignment = .justified; p.firstLineHeadIndent = preferences.fontSize * 2; return p }() ]))
         return fullAttr
     }
 

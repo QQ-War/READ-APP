@@ -86,16 +86,33 @@ struct TextKit2Paginator {
             var nextPageStartY: CGFloat = 0
             
             // 核心判定：防截断逻辑
-            // 如果该行的底部超出了本页可用高度
+            // 如果该段落的底部超出了本页可用高度，尝试按行切分
             if endFragment.layoutFragmentFrame.maxY > targetY {
                 let fragmentStartOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.location)
+                var lastLineEndOffset: Int?
+                var lastLineMaxY: CGFloat?
                 
-                // Case 1: 这一行不是本页的第一行 -> 把它推到下一页
-                if fragmentStartOffset > startOffset {
+                for line in endFragment.textLineFragments {
+                    let lineFrame = line.typographicBounds.offsetBy(dx: endFragment.layoutFragmentFrame.origin.x, dy: endFragment.layoutFragmentFrame.origin.y)
+                    if lineFrame.maxY <= targetY {
+                        lastLineEndOffset = fragmentStartOffset + line.characterRange.upperBound
+                        lastLineMaxY = lineFrame.maxY
+                    } else {
+                        break
+                    }
+                }
+                
+                // Case 1: 找到可容纳的行 -> 按行切分，允许段落跨页
+                if let end = lastLineEndOffset, end > startOffset {
+                    pageEndOffset = end
+                    nextPageStartY = lastLineMaxY ?? endFragment.layoutFragmentFrame.minY
+                }
+                // Case 2: 本页没有一行能容纳 -> 推到下一页
+                else if fragmentStartOffset > startOffset {
                     pageEndOffset = fragmentStartOffset
                     nextPageStartY = endFragment.layoutFragmentFrame.minY
-                } 
-                // Case 2: 这一行是本页第一行（超大字号占满整页） -> 只能强行放入
+                }
+                // Case 3: 这一行是本页第一行（超大字号占满整页） -> 只能强行放入
                 else {
                     pageEndOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.endLocation)
                     nextPageStartY = endFragment.layoutFragmentFrame.maxY
