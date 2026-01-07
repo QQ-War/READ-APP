@@ -52,6 +52,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private let dampingFactor: CGFloat = 0.12
     private let chapterGap: CGFloat = 80
     private var lastInfiniteSetting: Bool?
+    private var lastAutoSwitchTime: TimeInterval = 0
+    private let autoSwitchCooldown: TimeInterval = 0.6
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
@@ -470,14 +472,14 @@ private extension VerticalTextViewController {
         if let _ = prevRenderStore {
             let triggerTop = currentContentView.frame.minY - 20
             if rawOffset < triggerTop {
-                onChapterSwitched?(-1)
+                triggerAutoSwitch(direction: -1, isTop: true)
                 return
             }
         }
         if let _ = nextRenderStore {
             let triggerBottom = nextContentView.frame.minY - 20
             if rawOffset > triggerBottom {
-                onChapterSwitched?(1)
+                triggerAutoSwitch(direction: 1, isTop: false)
             }
         }
     }
@@ -519,6 +521,18 @@ private extension VerticalTextViewController {
             cancelSwitchHold()
         } else {
             scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 100, right: 0)
+        }
+    }
+
+    func triggerAutoSwitch(direction: Int, isTop: Bool) {
+        let now = Date().timeIntervalSince1970
+        guard now - lastAutoSwitchTime > autoSwitchCooldown else { return }
+        lastAutoSwitchTime = now
+        onChapterSwitched?(direction)
+        let text = direction > 0 ? "已切换到下一章" : "已切换到上一章"
+        updateSwitchHint(text: text, isTop: isTop)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.hideSwitchHint()
         }
     }
 
