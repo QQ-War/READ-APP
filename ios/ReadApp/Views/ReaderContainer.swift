@@ -112,7 +112,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var nextChapterSentences: [String]?; private var prevChapterSentences: [String]?
     private var nextChapterRawContent: String?; private var prevChapterRawContent: String?
 
-    private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaScrollView: UIScrollView?
+    private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
     private let progressLabel = UILabel()
     private var lastLayoutSignature: String = ""
     private var loadToken: Int = 0
@@ -152,7 +152,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         guard !isInternalTransitioning else { return }
-        let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaScrollView?.frame = b
+        let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaVC?.view.frame = b
         
         if !isMangaMode, renderStore != nil, currentReadingMode == .horizontal {
             let spec = currentLayoutSpec
@@ -304,13 +304,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func setupReaderMode() {
         if isMangaMode {
-            if mangaScrollView == nil {
-                verticalVC?.view.removeFromSuperview(); verticalVC = nil
-                horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
-                setupMangaMode()
-            }
+            verticalVC?.view.removeFromSuperview(); verticalVC = nil
+            horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
+            setupMangaMode()
             return
         }
+        
+        mangaVC?.view.removeFromSuperview(); mangaVC?.removeFromParent(); mangaVC = nil
         
         if currentReadingMode == .vertical {
             if verticalVC == nil {
@@ -629,17 +629,26 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func setupMangaMode() {
-        let sv = UIScrollView(frame: view.bounds); sv.backgroundColor = .black; sv.contentInsetAdjustmentBehavior = .never; sv.delegate = self
-        let stack = UIStackView(); stack.axis = .vertical; stack.spacing = 0; stack.alignment = .fill; sv.addSubview(stack); stack.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([stack.topAnchor.constraint(equalTo: sv.contentLayoutGuide.topAnchor, constant: safeAreaTop), stack.bottomAnchor.constraint(equalTo: sv.contentLayoutGuide.bottomAnchor), stack.leadingAnchor.constraint(equalTo: sv.contentLayoutGuide.leadingAnchor), stack.trailingAnchor.constraint(equalTo: sv.contentLayoutGuide.trailingAnchor), stack.widthAnchor.constraint(equalTo: sv.frameLayoutGuide.widthAnchor)])
-        for sent in contentSentences.filter({ $0.contains("__IMG__") }) {
-            let iv = UIImageView(); iv.contentMode = .scaleAspectFit; iv.clipsToBounds = true; stack.addArrangedSubview(iv)
-            let url = sent.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
-            Task { if let u = URL(string: url), let (data, _) = try? await URLSession.shared.data(from: u), let img = UIImage(data: data) { await MainActor.run { iv.image = img; iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: img.size.height / img.size.width).isActive = true } } }
+        if mangaVC == nil {
+            let vc = MangaReaderViewController()
+            vc.safeAreaTop = safeAreaTop
+            vc.onToggleMenu = { [weak self] in self?.onToggleMenu?() }
+            vc.onInteractionChanged = { [weak self] interacting in self?.isUserInteracting = interacting }
+            vc.onChapterSwitched = { [weak self] offset in
+                guard let self = self else { return }
+                let now = Date().timeIntervalSince1970
+                guard now - self.lastChapterSwitchTime > self.chapterSwitchCooldown else { return }
+                let target = self.currentChapterIndex + offset
+                guard target >= 0 && target < self.chapters.count else { return }
+                self.lastChapterSwitchTime = now
+                self.jumpToChapter(target, startAtEnd: offset < 0)
+            }
+            addChild(vc); view.insertSubview(vc.view, at: 0); vc.view.frame = view.bounds; vc.didMove(toParent: self)
+            self.mangaVC = vc
         }
-        view.insertSubview(sv, at: 0); self.mangaScrollView = sv; sv.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleMangaTap)))
+        let imgs = extractMangaImageSentences(from: rawContent)
+        mangaVC?.update(urls: imgs)
     }
-    @objc private func handleMangaTap() { onToggleMenu?() }
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
     func syncTTSState() {
         if isMangaMode || isUserInteracting { return }
@@ -698,7 +707,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         intra = min(intra, maxLen)
         return (idx, intra)
     }
-    private func scrollToChapterEnd(animated: Bool) { if isMangaMode, let sv = mangaScrollView { sv.setContentOffset(CGPoint(x: 0, y: max(0, sv.contentSize.height - sv.bounds.height)), animated: animated) } else if currentReadingMode == .vertical { verticalVC?.scrollToBottom(animated: animated) } else if !pages.isEmpty { updateHorizontalPage(to: max(0, pages.count - 1), animated: animated) } }
+    private func scrollToChapterEnd(animated: Bool) { 
+        if isMangaMode, let m = mangaVC { 
+            let sv = m.scrollView
+            sv.setContentOffset(CGPoint(x: 0, y: max(0, sv.contentSize.height - sv.bounds.height)), animated: animated) 
+        } else if currentReadingMode == .vertical { 
+            verticalVC?.scrollToBottom(animated: animated) 
+        } else if !pages.isEmpty { 
+            updateHorizontalPage(to: max(0, pages.count - 1), animated: animated) 
+        } 
+    }
     private func applyReplaceRules(to text: String) -> String { guard let rules = replaceRuleViewModel?.rules else { return text }; var res = text; for r in rules where r.isEnabled == true { if r.isRegex == true { if let reg = try? NSRegularExpression(pattern: r.pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = reg.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: r.replacement) } } else { res = res.replacingOccurrences(of: r.pattern, with: r.replacement) } }; return res }
     private func removeHTMLAndSVG(_ text: String) -> String { var res = text; let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]; for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }; return res.replacingOccurrences(of: "&nbsp;", with: " ") }
     private func extractMangaImageSentences(from text: String) -> [String] { let pattern = #"<img[^>]+(?:src|data-src|data-original)=["']([^"']+)["'][^>]*>"#; guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }; let nsText = text as NSString; let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length)); return matches.compactMap { match in guard match.numberOfRanges > 1 else { return nil }; return "__IMG__" + nsText.substring(with: match.range(at: 1)) } }

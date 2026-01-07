@@ -486,3 +486,166 @@ class VerticalTextContentView: UIView {
 }
 
 enum VerticalReaderTask { case scrollToTop; case scrollToIndex(Int) }
+
+// MARK: - Manga Reader Controller
+class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
+    let scrollView = UIScrollView()
+    let stackView = UIStackView()
+    private let switchHintLabel = UILabel()
+    private var pendingSwitchDirection: Int = 0
+    private var switchReady = false
+    private var switchWorkItem: DispatchWorkItem?
+    private let switchHoldDuration: TimeInterval = 0.6
+    private let dampingFactor: CGFloat = 0.2
+    
+    var onChapterSwitched: ((Int) -> Void)?
+    var onToggleMenu: (() -> Void)?
+    var onInteractionChanged: ((Bool) -> Void)?
+    var safeAreaTop: CGFloat = 0
+    private var imageUrls: [String] = []
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        scrollView.delegate = self
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.alwaysBounceVertical = true
+        view.addSubview(scrollView)
+        
+        stackView.axis = .vertical
+        stackView.spacing = 0
+        stackView.alignment = .fill
+        scrollView.addSubview(stackView)
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
+        ])
+        
+        setupSwitchHint()
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        scrollView.addGestureRecognizer(tap)
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        scrollView.frame = view.bounds
+        scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 40, right: 0)
+    }
+    
+    @objc private func handleTap() { onToggleMenu?() }
+
+    func update(urls: [String]) {
+        guard urls != self.imageUrls else { return }
+        self.imageUrls = urls
+        stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for urlStr in urls {
+            let iv = UIImageView()
+            iv.contentMode = .scaleAspectFit
+            iv.clipsToBounds = true
+            stackView.addArrangedSubview(iv)
+            let url = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
+            Task {
+                if let u = URL(string: url), let (data, _) = try? await URLSession.shared.data(from: u), let img = UIImage(data: data) {
+                    await MainActor.run {
+                        iv.image = img
+                        iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: img.size.height / img.size.width).isActive = true
+                    }
+                }
+            }
+        }
+    }
+
+    func scrollViewDidScroll(_ s: UIScrollView) {
+        let rawOffset = s.contentOffset.y
+        let topEdge: CGFloat = -safeAreaTop
+        let bottomEdge = max(-safeAreaTop, s.contentSize.height - s.bounds.height + 40)
+        
+        if rawOffset < topEdge {
+            s.contentOffset.y = topEdge + (rawOffset - topEdge) * dampingFactor
+        } else if rawOffset > bottomEdge {
+            s.contentOffset.y = bottomEdge + (rawOffset - bottomEdge) * dampingFactor
+        }
+        
+        handleHoldSwitchIfNeeded(rawOffset: s.contentOffset.y)
+    }
+    
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        cancelSwitchHold()
+        onInteractionChanged?(true)
+    }
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate { onInteractionChanged?(false) }
+        if switchReady, pendingSwitchDirection != 0 { onChapterSwitched?(pendingSwitchDirection) }
+        cancelSwitchHold()
+    }
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        cancelSwitchHold()
+        onInteractionChanged?(false)
+    }
+
+    private func setupSwitchHint() {
+        switchHintLabel.alpha = 0
+        switchHintLabel.textAlignment = .center
+        switchHintLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        switchHintLabel.textColor = .white
+        switchHintLabel.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        switchHintLabel.layer.cornerRadius = 12
+        switchHintLabel.layer.masksToBounds = true
+        view.addSubview(switchHintLabel)
+    }
+
+    private func updateSwitchHint(text: String, isTop: Bool) {
+        switchHintLabel.text = "  \(text)  "
+        switchHintLabel.sizeToFit()
+        let width = min(view.bounds.width - 40, max(120, switchHintLabel.bounds.width))
+        let bottomSafe = max(0, view.safeAreaInsets.bottom)
+        switchHintLabel.frame = CGRect(
+            x: (view.bounds.width - width) / 2,
+            y: isTop ? (safeAreaTop + 12) : (view.bounds.height - bottomSafe - 36),
+            width: width, height: 24
+        )
+        if switchHintLabel.alpha == 0 { UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 1 } }
+    }
+
+    private func hideSwitchHint() {
+        guard switchHintLabel.alpha > 0 else { return }
+        UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 0 }
+    }
+
+    private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
+        let topEdge: CGFloat = -safeAreaTop
+        let topOver = topEdge - rawOffset
+        let bottomEdge = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height + 40)
+        let bottomOver = rawOffset - bottomEdge
+
+        if scrollView.isDragging, topOver > 40 {
+            beginSwitchHold(direction: -1, isTop: true)
+        } else if scrollView.isDragging, bottomOver > 40 {
+            beginSwitchHold(direction: 1, isTop: false)
+        } else if !scrollView.isDragging || (topOver <= 40 && bottomOver <= 40) {
+            cancelSwitchHold()
+        }
+    }
+
+    private func beginSwitchHold(direction: Int, isTop: Bool) {
+        if pendingSwitchDirection == direction, switchWorkItem != nil { return }
+        cancelSwitchHold()
+        pendingSwitchDirection = direction
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self, self.scrollView.isDragging else { return }
+            self.switchReady = true
+            self.updateSwitchHint(text: direction > 0 ? "松手切换下一章" : "松手切换上一章", isTop: isTop)
+        }
+        switchWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + switchHoldDuration, execute: work)
+    }
+
+    private func cancelSwitchHold() {
+        switchWorkItem?.cancel(); switchWorkItem = nil
+        pendingSwitchDirection = 0; switchReady = false; hideSwitchHint()
+    }
+}
