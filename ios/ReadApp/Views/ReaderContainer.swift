@@ -62,7 +62,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var currentLayoutSpec: ReaderLayoutSpec {
         let actualTop = max(safeAreaTop, view.safeAreaInsets.top)
         let actualBottom = max(safeAreaBottom, view.safeAreaInsets.bottom)
-        ReaderLayoutSpec(
+        return ReaderLayoutSpec(
             topInset: actualTop + 20,
             bottomInset: actualBottom + 40,
             sideMargin: preferences.pageHorizontalMargin + 8,
