@@ -69,8 +69,17 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        scrollView.delegate = self; scrollView.contentInsetAdjustmentBehavior = .never; scrollView.showsVerticalScrollIndicator = true; scrollView.alwaysBounceVertical = true
-        view.addSubview(scrollView); scrollView.addSubview(currentContentView); scrollView.addSubview(nextContentView)
+        scrollView.delegate = self
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.showsVerticalScrollIndicator = true
+        scrollView.alwaysBounceVertical = true
+        // 关键：设置 contentInset 让系统知道边界位置，阻尼效果才能生效
+        scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 100, right: 0)
+        // 初始时 contentOffset 为负，触发顶部弹性
+        scrollView.contentOffset = CGPoint(x: 0, y: -100)
+        view.addSubview(scrollView)
+        scrollView.addSubview(currentContentView)
+        scrollView.addSubview(nextContentView)
         setupSwitchHint()
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
@@ -252,44 +261,35 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     func scrollViewDidScroll(_ s: UIScrollView) {
         if isUpdatingLayout { return }
-        let rawOffset = s.contentOffset.y
         
-        // 1. 顶部阻尼逻辑：始终开启，用于下拉回退上一章
-        let topEdge: CGFloat = 0
-        if rawOffset < topEdge {
-            s.contentOffset.y = topEdge + (rawOffset - topEdge) * dampingFactor
+        let rawOffset = s.contentOffset.y
+        let contentInsetBottom = s.contentInset.bottom
+        
+        // 顶部阻尼：contentOffset.y < -contentInset.top 时触发
+        let topInset: CGFloat = 0
+        if rawOffset < topInset {
+            let over = topInset - rawOffset
+            s.contentOffset.y = topInset - over * dampingFactor
         }
         
-        // 2. 底部阻尼逻辑
-        if isInfiniteScrollEnabled {
-            // 无限流模式：只有当没有下一章预载内容时，才开启底部阻尼
-            if nextSentences.isEmpty {
-                let bottomEdge = max(0, s.contentSize.height - s.bounds.height)
-                if rawOffset > bottomEdge {
-                    let over = rawOffset - bottomEdge
-                    s.contentOffset.y = bottomEdge + over * dampingFactor
-                }
-            }
-        } else {
-            // 普通模式：始终开启底部阻尼
-            let bottomEdge = max(0, s.contentSize.height - s.bounds.height)
-            if rawOffset > bottomEdge {
-                let over = rawOffset - bottomEdge
-                s.contentOffset.y = bottomEdge + over * dampingFactor
-            }
+        // 底部阻尼：contentOffset.y > adjustedContentHeight 时触发
+        let adjustedContentHeight = max(0, s.contentSize.height - s.bounds.height + contentInsetBottom)
+        if rawOffset > adjustedContentHeight {
+            let over = rawOffset - adjustedContentHeight
+            s.contentOffset.y = adjustedContentHeight + over * dampingFactor
         }
         
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
-        // 3. 章节切换判定 (长按逻辑)：始终开启
+        // 章节切换判定 (长按逻辑)：始终开启
         handleHoldSwitchIfNeeded(rawOffset: s.contentOffset.y)
         
-        // 4. 预载判定 (仅限无限流)
+        // 预载判定 (仅限无限流)
         if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
             onReachedBottom?()
         }
         
-        // 5. 进度汇报
+        // 进度汇报
         let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
         if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
     }
@@ -300,12 +300,22 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        if !decelerate { onInteractionChanged?(false) }
-        guard isInfiniteScrollEnabled else { return }
-        if switchReady, pendingSwitchDirection != 0 {
-            onChapterSwitched?(pendingSwitchDirection)
+        // 如果在切换就绪状态，延迟检查阻尼回弹后再决定是否切换
+        if switchReady && pendingSwitchDirection != 0 {
+            // 延迟一点时间让阻尼回弹完成
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                guard let self = self else { return }
+                // 检查是否仍然在切换就绪状态
+                if self.switchReady && self.pendingSwitchDirection != 0 {
+                    // 触发章节切换
+                    self.onChapterSwitched?(self.pendingSwitchDirection)
+                }
+                self.cancelSwitchHold()
+            }
+        } else {
+            if !decelerate { onInteractionChanged?(false) }
+            cancelSwitchHold()
         }
-        cancelSwitchHold()
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
@@ -387,32 +397,47 @@ private extension VerticalTextViewController {
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let topEdge: CGFloat = 0
-        let topOver = topEdge - rawOffset
-        if scrollView.isDragging, topOver > 40 {
+        // 顶部触发：拖动到顶部边缘外
+        let topThreshold: CGFloat = -80  // 顶部触发阈值
+        let topOver = topThreshold - rawOffset
+        if scrollView.isDragging, topOver > 0 {
             beginSwitchHold(direction: -1, isTop: true)
             return
         }
-
-        // 判定是否处于底部边界
+        
+        // 底部触发：需要考虑 contentInset
+        let contentInsetBottom = scrollView.contentInset.bottom
+        let adjustedBottomThreshold = max(0, scrollView.contentSize.height - scrollView.bounds.height + contentInsetBottom)
+        let bottomThreshold = adjustedBottomThreshold + 80  // 底部触发阈值
+        let bottomOver = rawOffset - bottomThreshold
+        
         let isAtBottomBoundary = !isInfiniteScrollEnabled || nextSentences.isEmpty
         
-        if isAtBottomBoundary {
-            let bottomEdge = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-            let bottomOver = rawOffset - bottomEdge
-            if scrollView.isDragging, bottomOver > 40 {
+        if scrollView.isDragging {
+            if topOver > 0 {
+                beginSwitchHold(direction: -1, isTop: true)
+                return
+            }
+            if isAtBottomBoundary && bottomOver > 0 {
                 beginSwitchHold(direction: 1, isTop: false)
                 return
             }
         }
         
-        if !scrollView.isDragging || (topOver <= 40) {
-            // 额外的底部判定清理
-            let bottomEdge = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-            let bottomOver = rawOffset - bottomEdge
-            if !scrollView.isDragging || (bottomOver <= 40 && topOver <= 40) {
-                cancelSwitchHold()
+        // 取消判定：只在用户明确停止拖动时检查
+        if !scrollView.isDragging {
+            // 延迟检查，确保阻尼回弹完成
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self = self else { return }
+                // 如果switchReady为true且用户已松手，触发切换
+                if self.switchReady && self.pendingSwitchDirection != 0 {
+                    self.onChapterSwitched?(self.pendingSwitchDirection)
+                }
+                self.cancelSwitchHold()
             }
+        } else if topOver <= 0 && (!isAtBottomBoundary || bottomOver <= 0) {
+            // 拖动中但没有达到阈值，取消
+            cancelSwitchHold()
         }
     }
 
@@ -518,6 +543,8 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         scrollView.delegate = self
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.alwaysBounceVertical = true
+        // 设置 contentInset 让阻尼效果生效
+        scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
         view.addSubview(scrollView)
         
         stackView.axis = .vertical
@@ -541,7 +568,12 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         scrollView.frame = view.bounds
-        scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 40, right: 0)
+        // 保持 contentInset 一致，底部使用固定100pt作为阻尼空间
+        scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
+        // 初始 offset 设置为负值，触发顶部阻尼
+        if scrollView.contentOffset.y > -100 {
+            scrollView.contentOffset = CGPoint(x: 0, y: -100)
+        }
     }
     
     @objc private func handleTap() { onToggleMenu?() }
@@ -586,9 +618,19 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         onInteractionChanged?(true)
     }
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        if !decelerate { onInteractionChanged?(false) }
-        if switchReady, pendingSwitchDirection != 0 { onChapterSwitched?(pendingSwitchDirection) }
-        cancelSwitchHold()
+        if switchReady && pendingSwitchDirection != 0 {
+            // 延迟检查阻尼回弹
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                guard let self = self else { return }
+                if self.switchReady && self.pendingSwitchDirection != 0 {
+                    self.onChapterSwitched?(self.pendingSwitchDirection)
+                }
+                self.cancelSwitchHold()
+            }
+        } else {
+            if !decelerate { onInteractionChanged?(false) }
+            cancelSwitchHold()
+        }
     }
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         cancelSwitchHold()
@@ -625,16 +667,33 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let topEdge: CGFloat = -safeAreaTop
-        let topOver = topEdge - rawOffset
-        let bottomEdge = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height + 40)
-        let bottomOver = rawOffset - bottomEdge
+        let topThreshold: CGFloat = -safeAreaTop - 80
+        let topOver = topThreshold - rawOffset
+        let bottomInset: CGFloat = 100
+        let adjustedBottomThreshold = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height + bottomInset)
+        let bottomThreshold = adjustedBottomThreshold + 80
+        let bottomOver = rawOffset - bottomThreshold
 
-        if scrollView.isDragging, topOver > 40 {
-            beginSwitchHold(direction: -1, isTop: true)
-        } else if scrollView.isDragging, bottomOver > 40 {
-            beginSwitchHold(direction: 1, isTop: false)
-        } else if !scrollView.isDragging || (topOver <= 40 && bottomOver <= 40) {
+        if scrollView.isDragging {
+            if topOver > 0 {
+                beginSwitchHold(direction: -1, isTop: true)
+                return
+            }
+            if bottomOver > 0 {
+                beginSwitchHold(direction: 1, isTop: false)
+                return
+            }
+        }
+        
+        if !scrollView.isDragging {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self = self else { return }
+                if self.switchReady && self.pendingSwitchDirection != 0 {
+                    self.onChapterSwitched?(self.pendingSwitchDirection)
+                }
+                self.cancelSwitchHold()
+            }
+        } else if topOver <= 0 && bottomOver <= 0 {
             cancelSwitchHold()
         }
     }
