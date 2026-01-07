@@ -480,9 +480,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func setupVerticalMode() {
         let v = VerticalTextViewController(); v.onVisibleIndexChanged = { [weak self] idx in self?.onProgressChanged?(self?.currentChapterIndex ?? 0, Double(idx) / Double(max(1, self?.contentSentences.count ?? 1))) }
         v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
-        v.onChapterSwitched = { [weak self] _ in self?.jumpToChapter((self?.currentChapterIndex ?? 0) + 1) }
+        v.onChapterSwitched = { [weak self] offset in 
+            guard let self = self else { return }
+            self.jumpToChapter(self.currentChapterIndex + offset, startAtEnd: offset < 0)
+        }
         addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
-        v.update(sentences: contentSentences, nextSentences: nextChapterSentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+        
+        let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+        let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
+        v.update(sentences: contentSentences, nextSentences: nextChapterSentences, title: title, nextTitle: nextTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
         self.verticalVC = v
     }
     
@@ -501,7 +507,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
     func syncTTSState() {
         if isMangaMode { return }; let hIndex = ttsManager.currentSentenceIndex
-        if currentReadingMode == .vertical { verticalVC?.update(sentences: contentSentences, nextSentences: nextChapterSentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: hIndex, secondaryIndices: Set(ttsManager.preloadedIndices), isPlaying: ttsManager.isPlaying) }
+        if currentReadingMode == .vertical { 
+            let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+            let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
+            verticalVC?.update(sentences: contentSentences, nextSentences: nextChapterSentences, title: title, nextTitle: nextTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: hIndex, secondaryIndices: Set(ttsManager.preloadedIndices), isPlaying: ttsManager.isPlaying) 
+        }
         else if currentReadingMode == .horizontal && ttsManager.isPlaying { syncHorizontalPageToTTS(sentenceIndex: hIndex) }
     }
     private func syncHorizontalPageToTTS(sentenceIndex: Int) { 

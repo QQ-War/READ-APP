@@ -87,7 +87,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     @objc func addToReplaceRule() { if let t = pendingSelectedText { onAddReplaceRule?(t) } }
 
     @discardableResult
-    func update(sentences: [String], nextSentences: [String]?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
+    func update(sentences: [String], nextSentences: [String]?, title: String?, nextTitle: String?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
         self.lastMargin = margin
         // 预处理句子，去除首尾空白以统一缩进控制
         let trimmedSentences = sentences.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -104,8 +104,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
             self.previousContentHeight = currentContentView.frame.height
             
             self.currentSentences = trimmedSentences; self.lastFontSize = fontSize; self.lastLineSpacing = lineSpacing; isUpdatingLayout = true
-            var pS: [Int] = []; var cP = 0; for s in trimmedSentences { pS.append(cP); cP += s.count + 1 }; paragraphStarts = pS
-            let attr = createAttr(trimmedSentences, fontSize: fontSize, lineSpacing: lineSpacing)
+            
+            // 重新计算 paragraphStarts，需要考虑标题的偏移
+            let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
+            let titleLen = titleText.utf16.count
+            var pS: [Int] = []; var cP = titleLen; for s in trimmedSentences { pS.append(cP); cP += s.count + 1 }; paragraphStarts = pS
+            
+            let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
             if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
             else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
             calculateSentenceOffsets(); isUpdatingLayout = false
@@ -128,7 +133,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         
         if nextChanged {
             self.nextSentences = trimmedNextSentences
-            let attr = createAttr(trimmedNextSentences, fontSize: fontSize, lineSpacing: lineSpacing)
+            let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
             if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
             else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
             nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
@@ -142,13 +147,28 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         return false
     }
 
-    private func createAttr(_ sents: [String], fontSize: CGFloat, lineSpacing: CGFloat) -> NSAttributedString {
+    private func createAttr(_ sents: [String], title: String?, fontSize: CGFloat, lineSpacing: CGFloat) -> NSAttributedString {
+        let fullAttr = NSMutableAttributedString()
+        
+        if let title = title, !title.isEmpty {
+            let p = NSMutableParagraphStyle()
+            p.alignment = .center
+            p.paragraphSpacing = fontSize * 1.5
+            fullAttr.append(NSAttributedString(string: title + "\n", attributes: [
+                .font: UIFont.systemFont(ofSize: fontSize + 8, weight: .bold),
+                .foregroundColor: UIColor.label,
+                .paragraphStyle: p
+            ]))
+        }
+        
         let text = sents.joined(separator: "\n")
         let p = NSMutableParagraphStyle()
         p.lineSpacing = lineSpacing
         p.alignment = .justified
         p.firstLineHeadIndent = fontSize * 1.5
-        return NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: fontSize), .foregroundColor: UIColor.label, .paragraphStyle: p])
+        fullAttr.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: fontSize), .foregroundColor: UIColor.label, .paragraphStyle: p]))
+        
+        return fullAttr
     }
 
     private func calculateSentenceOffsets() {
@@ -183,6 +203,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         // 1. 章节切换判定 (无限流核心)
         if y > currentContentView.frame.height + 40 {
             onChapterSwitched?(1) // 滚入下一章
+        } else if s.contentOffset.y < -100 {
+            onChapterSwitched?(-1) // 滚回上一章
         }
         
         // 2. 预载判定
