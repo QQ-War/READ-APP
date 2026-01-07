@@ -45,6 +45,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
+    var isInfiniteScrollEnabled: Bool = true
     
     private var renderStore: TextKit2RenderStore?; private var nextRenderStore: TextKit2RenderStore?
     private var currentSentences: [String] = []; private var nextSentences: [String] = []
@@ -170,11 +171,17 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         if nextChanged {
             self.nextSentences = trimmedNextSentences
-            let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
-            if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
-            else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-            nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
-            updateLayoutFrames()
+            if trimmedNextSentences.isEmpty {
+                nextRenderStore = nil
+                nextContentView.isHidden = true
+                updateLayoutFrames()
+            } else {
+                let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
+                if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
+                else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
+                updateLayoutFrames()
+            }
         }
         
         if lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices {
@@ -235,24 +242,41 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     func scrollViewDidScroll(_ s: UIScrollView) {
         if isUpdatingLayout { return }
-        let y = s.contentOffset.y - (safeAreaTop + 10)
+        let rawOffset = s.contentOffset.y
         let velocity = s.panGestureRecognizer.velocity(in: s.superview).y
         
+        if isInfiniteScrollEnabled {
+            let bottomEdge = max(0, currentContentView.frame.maxY - s.bounds.height + 40)
+            if rawOffset > bottomEdge {
+                let over = rawOffset - bottomEdge
+                s.contentOffset.y = bottomEdge + over * 0.3
+            }
+            let topEdge: CGFloat = -80
+            if rawOffset < topEdge {
+                let over = rawOffset - topEdge
+                s.contentOffset.y = topEdge + over * 0.3
+            }
+        }
+        
+        let y = s.contentOffset.y - (safeAreaTop + 10)
+        
         // 1. 章节切换判定 (无限流核心)
-        // 只有当用户向上滑动（velocity < 0，即内容往上走，试图看后面）且超过当前章节底部时切换到下一章
-        if velocity < 0 && s.contentOffset.y > currentContentView.frame.maxY - s.bounds.height + 40 {
-             // 检查是否真的已经快到底了，且 nextContentView 已经显露
-             if s.contentOffset.y > currentContentView.frame.maxY + 20 {
-                 onChapterSwitched?(1)
-             }
-        } 
-        // 只有当用户向下滑动（velocity > 0，即内容往下走，试图看前面）且超过顶部阈值时切换到上一章
-        else if velocity > 0 && s.contentOffset.y < -80 {
-            onChapterSwitched?(-1)
+        if isInfiniteScrollEnabled {
+            // 只有当用户向上滑动（velocity < 0，即内容往上走，试图看后面）且超过当前章节底部时切换到下一章
+            if velocity < 0 && rawOffset > currentContentView.frame.maxY - s.bounds.height + 40 {
+                 // 检查是否真的已经快到底了，且 nextContentView 已经显露
+                 if rawOffset > currentContentView.frame.maxY + 20 {
+                     onChapterSwitched?(1)
+                 }
+            } 
+            // 只有当用户向下滑动（velocity > 0，即内容往下走，试图看前面）且超过顶部阈值时切换到上一章
+            else if velocity > 0 && rawOffset < -80 {
+                onChapterSwitched?(-1)
+            }
         }
         
         // 2. 预载判定
-        if s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
+        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
             onReachedBottom?()
         }
         

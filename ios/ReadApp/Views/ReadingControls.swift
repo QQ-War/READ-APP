@@ -282,6 +282,12 @@ struct ReaderOptionsSheet: View {
                             Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
                         }
                     }
+                    
+                    if preferences.readingMode == .vertical {
+                        Section(header: Text("上下滚动")) {
+                            Toggle("开启无限流", isOn: $preferences.isInfiniteScrollEnabled)
+                        }
+                    }
                 }
 
                 Section(header: Text("夜间模式")) {
