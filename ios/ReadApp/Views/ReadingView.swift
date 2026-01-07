@@ -105,9 +105,10 @@ struct ReadingView: View {
                         Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
                         Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "正在加载...").font(.caption).foregroundColor(.secondary).lineLimit(1)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(PlainButtonStyle())
-                Spacer()
             }
             .padding(.horizontal, 16).padding(.bottom, 10)
         }
