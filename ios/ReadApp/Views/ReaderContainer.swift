@@ -152,9 +152,23 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
     func updatePreferences(_ prefs: UserPreferences) {
         let oldP = self.preferences!; self.preferences = prefs
-        if (oldP.fontSize != prefs.fontSize || oldP.lineSpacing != prefs.lineSpacing) && !isMangaMode { reRenderCurrentContent() }
+        if (oldP.fontSize != prefs.fontSize || oldP.lineSpacing != prefs.lineSpacing) && !isMangaMode { 
+            reRenderCurrentContent() 
+        } else if !isMangaMode && currentReadingMode == .vertical {
+            let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+            let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
+            verticalVC?.update(sentences: contentSentences, nextSentences: nextChapterSentences, title: title, nextTitle: nextTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+        }
     }
-    func updateReplaceRules(_ rules: [ReplaceRule]) { if !rawContent.isEmpty && !isMangaMode { reRenderCurrentContent() } }
+    func updateReplaceRules(_ rules: [ReplaceRule]) { 
+        if !rawContent.isEmpty && !isMangaMode { 
+            reRenderCurrentContent() 
+        } else if !isMangaMode && currentReadingMode == .vertical {
+            let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+            let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
+            verticalVC?.update(sentences: contentSentences, nextSentences: nextChapterSentences, title: title, nextTitle: nextTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+        }
+    }
     
     func jumpToChapter(_ index: Int, startAtEnd: Bool = false) {
         currentChapterIndex = index; lastReportedChapterIndex = index; onChapterIndexChanged?(index); loadChapterContent(at: index, startAtEnd: startAtEnd)
@@ -255,7 +269,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 setupVerticalMode()
             } else {
                 // 如果已经存在，仅更新状态
-                verticalVC?.update(sentences: contentSentences, nextSentences: nextChapterSentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+                let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+                let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
+                verticalVC?.update(sentences: contentSentences, nextSentences: nextChapterSentences, title: title, nextTitle: nextTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
             }
         } else {
             if horizontalVC == nil {

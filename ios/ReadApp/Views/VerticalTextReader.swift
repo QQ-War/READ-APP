@@ -4,6 +4,7 @@ import UIKit
 // MARK: - SwiftUI 桥接组件
 struct VerticalTextReader: UIViewControllerRepresentable {
     let sentences: [String]; let fontSize: CGFloat; let lineSpacing: CGFloat; let horizontalMargin: CGFloat; let highlightIndex: Int?; let secondaryIndices: Set<Int>; let isPlayingHighlight: Bool; let chapterUrl: String?
+    let title: String?; let nextTitle: String?
     @Binding var currentVisibleIndex: Int; @Binding var pendingScrollIndex: Int?
     var forceScrollToTop: Bool = false; var onScrollFinished: (() -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var safeAreaTop: CGFloat = 0
@@ -21,7 +22,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
         vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; vc.safeAreaTop = safeAreaTop
         vc.onReachedBottom = onReachedBottom; vc.onChapterSwitched = onChapterSwitched
         
-        let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
+        let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, title: title, nextTitle: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
         
         if forceScrollToTop {
             vc.scrollToTop(animated: false); DispatchQueue.main.async { onScrollFinished?() }
