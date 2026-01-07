@@ -107,6 +107,14 @@ class ReadContent2View: UIView {
     var horizontalInset: CGFloat = 16
     var onTapLocation: ((ReaderTapLocation) -> Void)?
     
+    // 兼容旧接口与 TTS 高亮支持
+    var onAddReplaceRule: ((String) -> Void)?
+    var highlightIndex: Int? { didSet { setNeedsDisplay() } }
+    var secondaryIndices: Set<Int> = [] { didSet { setNeedsDisplay() } }
+    var isPlayingHighlight: Bool = false { didSet { setNeedsDisplay() } }
+    var paragraphStarts: [Int] = []
+    var chapterPrefixLen: Int = 0
+    
     override init(frame: CGRect) {
         super.init(frame: frame)
         self.backgroundColor = .clear
@@ -127,23 +135,52 @@ class ReadContent2View: UIView {
         guard let s = renderStore, let info = pageInfo else { return }
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         
-        // 关键修复：渲染位移必须完全抵消分页时的 yOffset，并叠加 contentInset
         ctx.saveGState()
         
-        // 我们只在 contentInset 指定的区域内绘制
+        // 1. 裁剪区域：只显示本页内容
         let clipRect = CGRect(x: 0, y: info.contentInset, width: bounds.width, height: info.actualContentHeight)
         ctx.clip(to: clipRect)
         
-        // 这里的数学逻辑：
-        // 1. 文字在 RenderStore 的纵向坐标是全局的。
-        // 2. 我们要把属于本页的文字（从 info.yOffset 开始）挪到屏幕的 info.contentInset 位置。
+        // 2. 坐标变换：将本页内容映射到屏幕
         let ty = info.contentInset - info.yOffset
         ctx.translateBy(x: horizontalInset, y: ty)
         
+        // 3. 绘制 TTS 高亮背景 (在文字底层)
+        if isPlayingHighlight {
+            ctx.saveGState()
+            // 构造需要高亮的索引集合
+            let allIndices = ([highlightIndex].compactMap { $0 } + Array(secondaryIndices))
+            for i in allIndices {
+                guard i < paragraphStarts.count else { continue }
+                let start = paragraphStarts[i]
+                let end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length
+                let range = NSRange(location: start, length: max(0, end - start))
+                
+                // 仅当高亮范围与本页有交集时才绘制
+                if NSIntersectionRange(range, info.range).length > 0 {
+                    let color = (i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)
+                    ctx.setFillColor(color.cgColor)
+                    
+                    if let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: range.location) {
+                        s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { f in
+                            let fRange = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                            if fRange >= range.location + range.length { return false }
+                            
+                            // 绘制高亮矩形
+                            let frame = f.layoutFragmentFrame
+                            ctx.fill(frame.insetBy(dx: -2, dy: -1))
+                            return true
+                        }
+                    }
+                }
+            }
+            ctx.restoreGState()
+        }
+        
+        // 4. 绘制文字
         let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: info.range.location)!
         s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
-            // 如果已经画过了本页范围，停止
             if frame.minY >= info.yOffset + info.actualContentHeight { return false }
             fragment.draw(at: frame.origin, in: ctx)
             return true

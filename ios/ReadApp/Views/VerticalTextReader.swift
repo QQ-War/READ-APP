@@ -73,7 +73,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
         let cv = p.y < nextContentView.frame.minY ? currentContentView : nextContentView
         guard let store = s else { return }
         let pointInContent = g.location(in: cv)
-        if let f = store.layoutManager.textLayoutFragment(for: pointInContent), let te = f.textElement, let r = TextKit2Paginator.rangeFromTextRange(te.elementRange, in: store.contentStorage) {
+        if let f = store.layoutManager.textLayoutFragment(for: pointInContent), let te = f.textElement, let range = te.elementRange, let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
             let txt = (store.attributedString.string as NSString).substring(with: r)
             becomeFirstResponder(); self.pendingSelectedText = txt; UIMenuController.shared.showMenu(from: cv, rect: CGRect(origin: pointInContent, size: .zero))
         }

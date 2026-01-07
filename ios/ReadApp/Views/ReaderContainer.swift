@@ -54,7 +54,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
 }
 
 // MARK: - UIKit 核心容器
-class ReaderContainerViewController: UIViewController, UIPageViewControllerDataSource, UIPageageViewControllerDelegate, UIScrollViewDelegate {
+class ReaderContainerViewController: UIViewController, UIPageViewControllerDataSource, UIPageViewControllerDelegate, UIScrollViewDelegate {
     var book: Book!; var chapters: [BookChapter] = []; var preferences: UserPreferences!; var ttsManager: TTSManager!; var replaceRuleViewModel: ReplaceRuleViewModel?
     var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?
     
