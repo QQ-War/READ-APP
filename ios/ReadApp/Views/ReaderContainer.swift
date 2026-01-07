@@ -153,7 +153,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func updateReplaceRules(_ rules: [ReplaceRule]) { if !rawContent.isEmpty && !isMangaMode { reRenderCurrentContent() } }
     
     func jumpToChapter(_ index: Int, startAtEnd: Bool = false) {
-        currentChapterIndex = index; loadChapterContent(at: index, startAtEnd: startAtEnd)
+        currentChapterIndex = index
+        onChapterIndexChanged?(index)
+        loadChapterContent(at: index, startAtEnd: startAtEnd)
     }
     func switchReadingMode(to mode: ReadingMode) { currentReadingMode = mode; setupReaderMode() }
 
@@ -250,7 +252,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         // 重新锚定视图
         let newCurrentVC = createPageVC(at: currentPageIndex, offset: 0)
-        horizontalVC?.setViewControllers([newCurrentVC], direction: .forward, animated: false)
+        let dir: UIPageViewController.NavigationDirection = offset > 0 ? .forward : .reverse
+        horizontalVC?.setViewControllers([newCurrentVC], direction: dir, animated: false)
         
         updateProgressUI()
         self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
@@ -276,7 +279,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     private func updateHorizontalPage(to i: Int, animated: Bool) {
         guard let h = horizontalVC, i >= 0 && i < pages.count else { return }
-        currentPageIndex = i; h.setViewControllers([createPageVC(at: i, offset: 0)], direction: .forward, animated: animated)
+        let dir: UIPageViewController.NavigationDirection = (i >= currentPageIndex) ? .forward : .reverse
+        currentPageIndex = i
+        h.setViewControllers([createPageVC(at: i, offset: 0)], direction: dir, animated: animated)
     }
     
     private func createPageVC(at i: Int, offset: Int) -> PageContentViewController {

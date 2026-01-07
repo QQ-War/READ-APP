@@ -56,6 +56,11 @@ struct ReadingView: View {
                     safeAreaInsets: fullScreenProxy.safeAreaInsets
                 )
                 .ignoresSafeArea()
+
+                NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) {
+                    EmptyView()
+                }
+                .hidden()
                 
                 if showUIControls {
                     VStack(spacing: 0) {
@@ -102,7 +107,6 @@ struct ReadingView: View {
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
-                .background(NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) { EmptyView() })
                 Spacer()
             }
             .padding(.horizontal, 16).padding(.bottom, 10)
