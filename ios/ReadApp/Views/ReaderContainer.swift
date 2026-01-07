@@ -54,17 +54,21 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
 }
 
 // MARK: - UIKit 核心容器
-class ReaderContainerViewController: UIViewController, UIPageViewControllerDataSource, UIPageViewControllerDelegate, UIScrollViewDelegate {
+class ReaderContainerViewController: UIViewController, UIPageViewControllerDataSource, UIPageageViewControllerDelegate, UIScrollViewDelegate {
     var book: Book!; var chapters: [BookChapter] = []; var preferences: UserPreferences!; var ttsManager: TTSManager!; var replaceRuleViewModel: ReplaceRuleViewModel?
     var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?
     
-    private var safeAreaTop: CGFloat = 0; private var safeAreaBottom: CGFloat = 0
+    // 默认值适配 iPhone 14 Pro+
+    private var safeAreaTop: CGFloat = 47; private var safeAreaBottom: CGFloat = 34
+    
     private var currentLayoutSpec: ReaderLayoutSpec {
+        // 双重保险：取传入值和 View 实际值的最大者
         let actualTop = max(safeAreaTop, view.safeAreaInsets.top)
         let actualBottom = max(safeAreaBottom, view.safeAreaInsets.bottom)
+        // 这里的 15 和 30 是内容与刘海/Home条的额外呼吸距离
         return ReaderLayoutSpec(
-            topInset: actualTop + 20,
-            bottomInset: actualBottom + 40,
+            topInset: actualTop + 15,
+            bottomInset: actualBottom + 30,
             sideMargin: preferences.pageHorizontalMargin + 8,
             pageSize: view.bounds.size
         )
@@ -103,11 +107,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaScrollView?.frame = b
+        // 关键锁：如果在翻页动画中，绝对禁止重排
+        guard !isInternalTransitioning else { return }
+        
+        let b = view.bounds
+        verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaScrollView?.frame = b
         
         guard !isMangaMode, renderStore != nil, currentReadingMode == .horizontal else { return }
         let spec = currentLayoutSpec
-        let signature = "\(spec.pageSize.width)x\(spec.pageSize.height)|\(spec.topInset)|\(spec.bottomInset)|\(spec.sideMargin)"
+        
+        // 签名去重机制：只有当物理尺寸发生实质变化时才重排
+        let signature = "\(Int(spec.pageSize.width))x\(Int(spec.pageSize.height))|\(Int(spec.topInset))|\(Int(spec.bottomInset))|\(Int(spec.sideMargin))"
         if signature != lastLayoutSignature {
             lastLayoutSignature = signature
             captureCurrentProgress()
@@ -118,7 +128,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     func updateLayout(safeArea: EdgeInsets) {
-        self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom
+        if abs(self.safeAreaTop - safeArea.top) > 1 || abs(self.safeAreaBottom - safeArea.bottom) > 1 {
+            self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom
+            view.setNeedsLayout() // 触发重排
+        }
     }
 
     func updatePreferences(_ prefs: UserPreferences) {
@@ -247,6 +260,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                         let title = self.chapters[index + 1].title; let attr = self.createAttrString(processed, title: title)
                         let spec = self.currentLayoutSpec
                         self.nextChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
+                        // 修正：显式传递 bottomInset
                         let res = self.performSilentPagination(for: self.nextChapterStore!, sentences: sents, title: title)
                         self.nextChapterPages = res.pages; self.nextChapterPageInfos = res.pageInfos; self.nextChapterSentences = sents
                     }
@@ -264,6 +278,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                         let title = self.chapters[index - 1].title; let attr = self.createAttrString(processed, title: title)
                         let spec = self.currentLayoutSpec
                         self.prevChapterStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
+                        // 修正：显式传递 bottomInset
                         let res = self.performSilentPagination(for: self.prevChapterStore!, sentences: sents, title: title)
                         self.prevChapterPages = res.pages; self.prevChapterPageInfos = res.pageInfos
                     }
@@ -275,6 +290,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func performSilentPagination(for store: TextKit2RenderStore, sentences: [String], title: String) -> TextKit2Paginator.PaginationResult {
         let spec = currentLayoutSpec
         var pS: [Int] = []; var c = title.isEmpty ? 0 : (title + "\n").utf16.count; for s in sentences { pS.append(c); c += s.count + 1 }
+        // 修正：传递 bottomInset
         return TextKit2Paginator.paginate(renderStore: store, pageSize: spec.pageSize, paragraphStarts: pS, prefixLen: title.isEmpty ? 0 : (title + "\n").utf16.count, topInset: spec.topInset, bottomInset: spec.bottomInset)
     }
 
@@ -300,6 +316,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
         var starts: [Int] = []; var curr = pLen; for sent in contentSentences { starts.append(curr); curr += sent.count + 1 }
+        // 修正：传递 bottomInset
         let res = TextKit2Paginator.paginate(renderStore: s, pageSize: spec.pageSize, paragraphStarts: starts, prefixLen: pLen, topInset: spec.topInset, bottomInset: spec.bottomInset)
         self.pages = res.pages; self.pageInfos = res.pageInfos
     }
@@ -361,7 +378,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func removeHTMLAndSVG(_ text: String) -> String { var res = text; let patterns = ["<svg[^>]*>.*?</svg>", "<img[^>]*>", "<[^>]+>"]; for p in patterns { if let regex = try? NSRegularExpression(pattern: p, options: [.caseInsensitive, .dotMatchesLineSeparators]) { res = regex.stringByReplacingMatches(in: res, options: [], range: NSRange(location: 0, length: res.utf16.count), withTemplate: "") } }; return res.replacingOccurrences(of: "&nbsp;", with: " ") }
     private func rulesSignature(_ rules: [ReplaceRule]) -> String { rules.map { "\($0.id ?? "")|\($0.isEnabled ?? false)|\($0.isRegex ?? false)|\($0.pattern)|\($0.replacement)" }.joined(separator: ";") }
     private func extractMangaImageSentences(from text: String) -> [String] {
-        let pattern = "<img[^>]+(?:src|data-src|data-original)=[\"']([^\"']+)[\"'][^>]*>"
+        let pattern = #"<img[^>]+(?:src|data-src|data-original)=["']([^"']+)["'][^>]*>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
         let nsText = text as NSString; let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
         return matches.compactMap { match in guard match.numberOfRanges > 1 else { return nil }; return "__IMG__" + nsText.substring(with: match.range(at: 1)) }
