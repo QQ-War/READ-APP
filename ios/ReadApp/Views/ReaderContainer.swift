@@ -212,8 +212,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos; contentSentences = prevChapterSentences ?? []; rawContent = prevChapterRawContent ?? ""
                 }
                 self.currentChapterIndex += v.chapterOffset
-                self.onChapterIndexChanged?(self.currentChapterIndex) // 立即通知 SwiftUI
-                v.chapterOffset = 0 // 重置 VC 身份
+                self.onChapterIndexChanged?(self.currentChapterIndex)
+                
+                // 关键修正：重新创建当前页 VC 并静默设置，强制 UIPageViewController 刷新内部状态机
+                v.chapterOffset = 0
+                let newCurrentVC = createPageVC(at: v.pageIndex, offset: 0)
+                pvc.setViewControllers([newCurrentVC], direction: .forward, animated: false)
+                
                 prefetchAdjacentChapters(index: currentChapterIndex)
             }
             self.currentPageIndex = v.pageIndex
@@ -339,7 +344,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     @objc private func handleMangaTap() { onToggleMenu?() }
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
-    private func syncTTSState() {
+    func syncTTSState() {
         if isMangaMode { return }; let hIndex = ttsManager.currentSentenceIndex
         if currentReadingMode == .vertical { verticalVC?.update(sentences: contentSentences, nextSentences: nextChapterSentences, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: hIndex, secondaryIndices: Set(ttsManager.preloadedIndices), isPlaying: ttsManager.isPlaying) }
         else if currentReadingMode == .horizontal && ttsManager.isPlaying { syncHorizontalPageToTTS(sentenceIndex: hIndex) }
