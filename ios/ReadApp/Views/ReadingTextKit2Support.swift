@@ -96,6 +96,22 @@ struct TextKit2Paginator {
             // Fallback to fragment bottom if not found (shouldn't happen for valid loc)
             return fragFrame.maxY
         }
+        
+        // Helper to find the end location of the line containing (or after) the given location
+        func nextLineEndLocation(from location: NSTextLocation) -> NSTextLocation? {
+            guard let fragment = layoutManager.textLayoutFragment(for: location) else { return nil }
+            let fragStart = contentStorage.offset(from: documentRange.location, to: fragment.rangeInElement.location)
+            let offsetInFrag = contentStorage.offset(from: fragment.rangeInElement.location, to: location)
+            
+            for line in fragment.textLineFragments {
+                let lineEnd = line.characterRange.upperBound
+                if lineEnd > offsetInFrag {
+                    let globalEnd = fragStart + lineEnd
+                    return contentStorage.location(documentRange.location, offsetBy: globalEnd)
+                }
+            }
+            return fragment.rangeInElement.endLocation
+        }
 
         while pageCount < maxPages {
             let remainingOffset = layoutManager.offset(from: currentContentLocation, to: documentRange.endLocation)
@@ -108,7 +124,7 @@ struct TextKit2Paginator {
             let pageStartY = floor(rawPageStartY / pixel) * pixel
             
             let pageRect = CGRect(x: 0, y: pageStartY, width: pageSize.width, height: pageContentHeight)
-            let lineEdgeInset = max(2.0, topInset * 0.05)
+            let lineEdgeInset: CGFloat = 0
             let lineEdgeSlack: CGFloat = 0
             
             var pageFragmentMaxY: CGFloat?
@@ -196,7 +212,10 @@ struct TextKit2Paginator {
             
             // Failsafe: Ensure progress
             if endOffset <= startOffset {
-                if let forced = layoutManager.location(currentContentLocation, offsetBy: 1) {
+                if let forced = nextLineEndLocation(from: currentContentLocation) {
+                    pageEndLocation = forced
+                    endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
+                } else if let forced = layoutManager.location(currentContentLocation, offsetBy: 1) {
                     pageEndLocation = forced
                     endOffset = contentStorage.offset(from: documentRange.location, to: pageEndLocation)
                 } else {
