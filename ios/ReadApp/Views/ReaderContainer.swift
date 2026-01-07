@@ -233,6 +233,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func setupHorizontalMode() {
         let h = UIPageViewController(transitionStyle: preferences.pageTurningMode == .simulation ? .pageCurl : .scroll, navigationOrientation: .horizontal, options: nil)
         h.dataSource = self; h.delegate = self; addChild(h); view.insertSubview(h.view, at: 0); h.didMove(toParent: self)
+        for recognizer in h.gestureRecognizers where recognizer is UITapGestureRecognizer {
+            recognizer.isEnabled = false
+        }
         self.horizontalVC = h; updateHorizontalPage(to: currentPageIndex, animated: false)
     }
     
@@ -256,7 +259,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             }
             
             self.currentChapterIndex += offset
-            self.currentPageIndex = targetPage
+            if offset < 0 && targetPage == 0 {
+                self.currentPageIndex = max(0, pages.count - 1)
+            } else {
+                self.currentPageIndex = targetPage
+            }
             self.onChapterIndexChanged?(self.currentChapterIndex)
             
             // 重要：洗白当前 VC 的身份，使其成为“当前章”的 VC
@@ -366,7 +373,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func createAttrString(_ text: String, title: String) -> NSAttributedString {
         let fullAttr = NSMutableAttributedString()
         if !title.isEmpty { fullAttr.append(NSAttributedString(string: title + "\n", attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize + 8, weight: .bold), .foregroundColor: UIColor.label])) }
-        fullAttr.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize), .foregroundColor: UIColor.label, .paragraphStyle: { let p = NSMutableParagraphStyle(); p.lineSpacing = preferences.lineSpacing; p.alignment = .justified; p.firstLineHeadIndent = preferences.fontSize * 2; return p }() ]))
+        fullAttr.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize), .foregroundColor: UIColor.label, .paragraphStyle: { let p = NSMutableParagraphStyle(); p.lineSpacing = preferences.lineSpacing; p.alignment = .justified; return p }() ]))
         return fullAttr
     }
 
