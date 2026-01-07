@@ -254,32 +254,37 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if isUpdatingLayout { return }
         let rawOffset = s.contentOffset.y
         
+        // 1. 阻尼逻辑处理
         if isInfiniteScrollEnabled {
-            let bottomEdge = max(0, s.contentSize.height - s.bounds.height)
-            if rawOffset > bottomEdge {
-                let over = rawOffset - bottomEdge
-                s.contentOffset.y = bottomEdge + over * dampingFactor
-            }
+            // 顶部阻尼：始终开启，用于下拉回退上一章
             let topEdge: CGFloat = 0
             if rawOffset < topEdge {
-                let over = rawOffset - topEdge
-                s.contentOffset.y = topEdge + over * dampingFactor
+                s.contentOffset.y = topEdge + (rawOffset - topEdge) * dampingFactor
+            }
+            
+            // 底部阻尼：只有当没有下一章可以滚动时，才开启底部阻尼
+            if nextSentences.isEmpty {
+                let bottomEdge = max(0, s.contentSize.height - s.bounds.height)
+                if rawOffset > bottomEdge {
+                    let over = rawOffset - bottomEdge
+                    s.contentOffset.y = bottomEdge + over * dampingFactor
+                }
             }
         }
         
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
-        // 1. 章节切换判定 (无限流核心)
+        // 2. 章节切换判定 (长按逻辑)
         if isInfiniteScrollEnabled {
-            handleHoldSwitchIfNeeded(rawOffset: s.contentOffset.y) // Use the damped offset for threshold check
+            handleHoldSwitchIfNeeded(rawOffset: s.contentOffset.y)
         }
         
-        // 2. 预载判定
+        // 3. 预载判定
         if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
             onReachedBottom?()
         }
         
-        // 3. 进度汇报
+        // 4. 进度汇报
         let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
         if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
     }
@@ -377,20 +382,29 @@ private extension VerticalTextViewController {
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let bottomEdge = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let bottomOver = rawOffset - bottomEdge
         let topOver = -rawOffset
-
-        if scrollView.isDragging, bottomOver > 40 {
-            beginSwitchHold(direction: 1, isTop: false)
-            return
-        }
         if scrollView.isDragging, topOver > 40 {
             beginSwitchHold(direction: -1, isTop: true)
             return
         }
-        if !scrollView.isDragging || (bottomOver <= 40 && topOver <= 40) {
-            cancelSwitchHold()
+
+        // 只有当没有下一章预载内容时，底部的“拉动切章”才生效
+        if nextSentences.isEmpty {
+            let bottomEdge = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+            let bottomOver = rawOffset - bottomEdge
+            if scrollView.isDragging, bottomOver > 40 {
+                beginSwitchHold(direction: 1, isTop: false)
+                return
+            }
+        }
+        
+        if !scrollView.isDragging || (topOver <= 40) {
+            // 额外的底部判定清理
+            let bottomEdge = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+            let bottomOver = rawOffset - bottomEdge
+            if !scrollView.isDragging || (bottomOver <= 40 && topOver <= 40) {
+                cancelSwitchHold()
+            }
         }
     }
 
@@ -445,16 +459,29 @@ class VerticalTextContentView: UIView {
                 ctx?.setFillColor(((i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)).cgColor)
                 s.layoutManager.enumerateTextLayoutFragments(from: s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: r.location)!, options: [.ensuresLayout]) { f in
                     if s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(r) { return false }
-                    for line in f.textLineFragments { let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y); ctx?.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath); ctx?.fillPath() }
+                    for line in f.textLineFragments { 
+                        // 这里 line.typographicBounds 已经相对于 fragment 的坐标了
+                        let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y)
+                        ctx?.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath)
+                        ctx?.fillPath() 
+                    }
                     return true
                 }
             }
             ctx?.restoreGState()
         }
+        
+        // 关键修复：绘图时不要受 View 坐标影响，LayoutManager 里的 frame 是相对于其布局容器的
+        ctx?.saveGState()
         let sL = s.layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: rect.minY))?.rangeInElement.location ?? s.contentStorage.documentRange.location
         s.layoutManager.enumerateTextLayoutFragments(from: sL, options: [.ensuresLayout]) { f in
-            if f.layoutFragmentFrame.minY > rect.maxY { return false }; if f.layoutFragmentFrame.maxY >= rect.minY { f.draw(at: f.layoutFragmentFrame.origin, in: ctx!) }; return true
+            if f.layoutFragmentFrame.minY > rect.maxY { return false }
+            if f.layoutFragmentFrame.maxY >= rect.minY { 
+                f.draw(at: f.layoutFragmentFrame.origin, in: ctx!) 
+            }
+            return true
         }
+        ctx?.restoreGState()
     }
 }
 
