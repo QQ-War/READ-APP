@@ -105,7 +105,7 @@ struct TextKitPaginator {
         paragraphStyle.lineSpacing = lineSpacing
         paragraphStyle.paragraphSpacing = fontSize * 0.5
         paragraphStyle.alignment = .justified
-        paragraphStyle.firstLineHeadIndent = fontSize * 2
+        paragraphStyle.firstLineHeadIndent = fontSize * 1.5
         
         let result = NSMutableAttributedString()
         if let title = chapterTitle, !title.isEmpty {

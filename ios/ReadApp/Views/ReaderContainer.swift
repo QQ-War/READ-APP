@@ -220,7 +220,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.contentSentences = imgs.isEmpty ? removeHTMLAndSVG(rawContent).components(separatedBy: "\n") : imgs
         } else {
             let processed = applyReplaceRules(to: removeHTMLAndSVG(rawContent))
-            self.contentSentences = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            // 核心修改：在此处进行 trim，确保后续所有逻辑（分页、渲染）使用的数据都是干净的
+            self.contentSentences = processed.components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
             prepareRenderStore(); performPagination()
         }
         setupReaderMode(); updateProgressUI()
@@ -396,7 +399,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func createAttrString(_ text: String, title: String) -> NSAttributedString {
         let fullAttr = NSMutableAttributedString()
         if !title.isEmpty { fullAttr.append(NSAttributedString(string: title + "\n", attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize + 8, weight: .bold), .foregroundColor: UIColor.label])) }
-        fullAttr.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: preferences.fontSize), .foregroundColor: UIColor.label, .paragraphStyle: { let p = NSMutableParagraphStyle(); p.lineSpacing = preferences.lineSpacing; p.alignment = .justified; return p }() ]))
+        
+        let style = NSMutableParagraphStyle()
+        style.lineSpacing = preferences.lineSpacing
+        style.alignment = .justified
+        style.firstLineHeadIndent = preferences.fontSize * 1.5
+        
+        fullAttr.append(NSAttributedString(string: text, attributes: [
+            .font: UIFont.systemFont(ofSize: preferences.fontSize),
+            .foregroundColor: UIColor.label,
+            .paragraphStyle: style
+        ]))
         return fullAttr
     }
 

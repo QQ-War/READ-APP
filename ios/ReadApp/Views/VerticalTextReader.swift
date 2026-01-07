@@ -89,19 +89,23 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
     @discardableResult
     func update(sentences: [String], nextSentences: [String]?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
         self.lastMargin = margin
-        let contentChanged = self.currentSentences != sentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing
-        let nextChanged = self.nextSentences != (nextSentences ?? [])
+        // 预处理句子，去除首尾空白以统一缩进控制
+        let trimmedSentences = sentences.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let trimmedNextSentences = (nextSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        
+        let contentChanged = self.currentSentences != trimmedSentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing
+        let nextChanged = self.nextSentences != trimmedNextSentences
         
         // 核心优化：检测是否发生了章节置换（即上一章的内容现在变成了本章内容）
         // 如果 sentences 等于旧的 nextSentences，说明发生了向下滑动切换
-        let isChapterSwap = (sentences == self.nextSentences) && !sentences.isEmpty
+        let isChapterSwap = (trimmedSentences == self.nextSentences) && !trimmedSentences.isEmpty
         
         if contentChanged || renderStore == nil {
             self.previousContentHeight = currentContentView.frame.height
             
-            self.currentSentences = sentences; self.lastFontSize = fontSize; self.lastLineSpacing = lineSpacing; isUpdatingLayout = true
-            var pS: [Int] = []; var cP = 0; for s in sentences { pS.append(cP); cP += s.count + 1 }; paragraphStarts = pS
-            let attr = createAttr(sentences, fontSize: fontSize, lineSpacing: lineSpacing)
+            self.currentSentences = trimmedSentences; self.lastFontSize = fontSize; self.lastLineSpacing = lineSpacing; isUpdatingLayout = true
+            var pS: [Int] = []; var cP = 0; for s in trimmedSentences { pS.append(cP); cP += s.count + 1 }; paragraphStarts = pS
+            let attr = createAttr(trimmedSentences, fontSize: fontSize, lineSpacing: lineSpacing)
             if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
             else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
             calculateSentenceOffsets(); isUpdatingLayout = false
@@ -122,9 +126,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
             return true
         }
         
-        if nextChanged, let next = nextSentences {
-            self.nextSentences = next
-            let attr = createAttr(next, fontSize: fontSize, lineSpacing: lineSpacing)
+        if nextChanged {
+            self.nextSentences = trimmedNextSentences
+            let attr = createAttr(trimmedNextSentences, fontSize: fontSize, lineSpacing: lineSpacing)
             if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
             else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
             nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
@@ -140,7 +144,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate {
 
     private func createAttr(_ sents: [String], fontSize: CGFloat, lineSpacing: CGFloat) -> NSAttributedString {
         let text = sents.joined(separator: "\n")
-        let p = NSMutableParagraphStyle(); p.lineSpacing = lineSpacing; p.alignment = .justified
+        let p = NSMutableParagraphStyle()
+        p.lineSpacing = lineSpacing
+        p.alignment = .justified
+        p.firstLineHeadIndent = fontSize * 1.5
         return NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: fontSize), .foregroundColor: UIColor.label, .paragraphStyle: p])
     }
 
