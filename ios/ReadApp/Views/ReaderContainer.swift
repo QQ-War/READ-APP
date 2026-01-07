@@ -300,7 +300,18 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func updateHorizontalPage(to i: Int, animated: Bool) { guard let h = horizontalVC, i >= 0 && i < pages.count else { return }; currentPageIndex = i; h.setViewControllers([createPageVC(at: i, offset: 0)], direction: .forward, animated: animated); updateProgressUI() }
     private func createPageVC(at i: Int, offset: Int) -> PageContentViewController {
         let vc = PageContentViewController(pageIndex: i, chapterOffset: offset); let pV = ReadContent2View(frame: .zero); let aS = (offset == 0) ? renderStore : (offset > 0 ? nextChapterStore : prevChapterStore); let aP = (offset == 0) ? pages : (offset > 0 ? nextChapterPages : prevChapterPages); let aI = (offset == 0) ? pageInfos : (offset > 0 ? nextChapterPageInfos : prevChapterPageInfos)
-        pV.renderStore = aS; if i < aI.count { let info = aI[i]; pV.pageInfo = TK2PageInfo(range: info.range, yOffset: info.yOffset, pageHeight: info.pageHeight, startSentenceIndex: info.startSentenceIndex, contentInset: currentLayoutSpec.topInset) }; pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.onToggleMenu?() } else { self?.handlePageTap(isNext: loc == .right) } }
+        pV.renderStore = aS; if i < aI.count { 
+            let info = aI[i]
+            pV.pageInfo = TK2PageInfo(
+                range: info.range, 
+                yOffset: info.yOffset, 
+                pageHeight: info.pageHeight, 
+                actualContentHeight: info.actualContentHeight, 
+                startSentenceIndex: info.startSentenceIndex, 
+                contentInset: currentLayoutSpec.topInset
+            ) 
+        }
+        pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.onToggleMenu?() } else { self?.handlePageTap(isNext: loc == .right) } }
         vc.view.addSubview(pV); pV.translatesAutoresizingMaskIntoConstraints = false; NSLayoutConstraint.activate([pV.topAnchor.constraint(equalTo: vc.view.topAnchor), pV.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor), pV.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor), pV.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor)]); return vc
     }
     private func handlePageTap(isNext: Bool) { let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1; if t >= 0 && t < pages.count { updateHorizontalPage(to: t, animated: true) } else { jumpToChapter(isNext ? currentChapterIndex + 1 : currentChapterIndex - 1) } }
