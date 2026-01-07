@@ -106,6 +106,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private let progressLabel = UILabel()
     private var lastLayoutSignature: String = ""
     private var loadToken: Int = 0
+    private var prefetchNextTask: Task<Void, Never>?; private var prefetchPrevTask: Task<Void, Never>?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -263,8 +264,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     private func updateHorizontalPage(to i: Int, animated: Bool) {
         guard let h = horizontalVC, i >= 0 && i < pages.count else { return }
+        let direction: UIPageViewController.NavigationDirection = i >= currentPageIndex ? .forward : .reverse
         currentPageIndex = i
-        h.setViewControllers([createPageVC(at: i, offset: 0)], direction: .forward, animated: animated)
+        h.setViewControllers([createPageVC(at: i, offset: 0)], direction: direction, animated: animated)
     }
     
     private func createPageVC(at i: Int, offset: Int) -> PageContentViewController {
@@ -288,9 +290,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func prefetchAdjacentChapters(index: Int) {
         if isMangaMode { return }
+        prefetchNextTask?.cancel(); prefetchPrevTask?.cancel()
         if index + 1 < chapters.count {
-            Task { if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1, contentType: 0) {
-                await MainActor.run {
+            prefetchNextTask = Task { if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1, contentType: 0) {
+                await MainActor.run { guard !Task.isCancelled else { return }
                     let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                     let title = self.chapters[index + 1].title; let attr = self.createAttrString(processed, title: title); let spec = self.currentLayoutSpec
                     let store = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
@@ -300,8 +303,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             } }
         }
         if index - 1 >= 0 {
-            Task { if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index - 1, contentType: 0) {
-                await MainActor.run {
+            prefetchPrevTask = Task { if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index - 1, contentType: 0) {
+                await MainActor.run { guard !Task.isCancelled else { return }
                     let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                     let title = self.chapters[index - 1].title; let attr = self.createAttrString(processed, title: title); let spec = self.currentLayoutSpec
                     let store = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
