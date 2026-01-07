@@ -154,7 +154,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func loadChapters() {
         Task { do {
             let list = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
-            await MainActor.run { self.chapters = list; self.onChaptersLoaded?(list); loadChapterContent(at: currentChapterIndex) }
+            await MainActor.run {
+                self.chapters = list; self.onChaptersLoaded?(list)
+                // 如果 TTS 正在播放这本书，优先同步到 TTS 的章节
+                if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
+                    self.currentChapterIndex = ttsManager.currentChapterIndex
+                    self.onChapterIndexChanged?(self.currentChapterIndex)
+                }
+                loadChapterContent(at: currentChapterIndex)
+            }
         } catch { print("Load chapters failed") } }
     }
     
@@ -172,10 +180,20 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     
                     if self.isFirstLoad && !self.isMangaMode {
                         self.isFirstLoad = false
-                        let pos = self.book.durChapterPos ?? 0
-                        let targetPage = Int(round(pos * Double(max(1, self.pages.count))))
-                        self.updateHorizontalPage(to: targetPage, animated: false)
-                        self.verticalVC?.scrollToProgress(pos)
+                        // 优先检查 TTS 状态：如果正在播放同一本书的当前章节，则定位到 TTS 句子
+                        if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
+                            let sentenceIdx = self.ttsManager.currentSentenceIndex
+                            if self.currentReadingMode == .horizontal {
+                                self.syncHorizontalPageToTTS(sentenceIndex: sentenceIdx)
+                            } else {
+                                self.verticalVC?.scrollToSentence(index: sentenceIdx, animated: false)
+                            }
+                        } else {
+                            let pos = self.book.durChapterPos ?? 0
+                            let targetPage = Int(round(pos * Double(max(1, self.pages.count))))
+                            self.updateHorizontalPage(to: targetPage, animated: false)
+                            self.verticalVC?.scrollToProgress(pos)
+                        }
                     } else if startAtEnd {
                         self.scrollToChapterEnd(animated: false)
                     } else {
