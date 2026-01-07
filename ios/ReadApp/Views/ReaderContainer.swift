@@ -155,10 +155,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func jumpToChapter(_ index: Int, startAtEnd: Bool = false) {
         currentChapterIndex = index; loadChapterContent(at: index, startAtEnd: startAtEnd)
     }
-    
-    func switchReadingMode(to mode: ReadingMode) {
-        currentReadingMode = mode; setupReaderMode()
-    }
+    func switchReadingMode(to mode: ReadingMode) { currentReadingMode = mode; setupReaderMode() }
 
     private func loadChapters() {
         Task { do {
@@ -216,31 +213,52 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     func pageViewController(_ pvc: UIPageViewController, didFinishAnimating f: Bool, previousViewControllers p: [UIViewController], transitionCompleted completed: Bool) {
-        if completed, let v = pvc.viewControllers?.first as? PageContentViewController {
+        guard completed, let v = pvc.viewControllers?.first as? PageContentViewController else { return }
+        
+        if v.chapterOffset != 0 {
             self.isInternalTransitioning = true
-            if v.chapterOffset != 0 {
-                if v.chapterOffset > 0 {
-                    prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos; prevChapterSentences = contentSentences; prevChapterRawContent = rawContent
-                    renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos; contentSentences = nextChapterSentences ?? []; rawContent = nextChapterRawContent ?? ""
-                } else {
-                    nextChapterStore = renderStore; nextChapterPages = pages; nextChapterPageInfos = pageInfos; nextChapterSentences = contentSentences; nextChapterRawContent = rawContent
-                    renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos; contentSentences = prevChapterSentences ?? []; rawContent = prevChapterRawContent ?? ""
-                }
-                self.currentChapterIndex += v.chapterOffset
-                self.onChapterIndexChanged?(self.currentChapterIndex)
-                v.chapterOffset = 0
-                let newCurrentVC = createPageVC(at: v.pageIndex, offset: 0)
-                pvc.setViewControllers([newCurrentVC], direction: .forward, animated: false)
-                prefetchAdjacentChapters(index: currentChapterIndex)
+            let offset = v.chapterOffset
+            let pageIdx = v.pageIndex
+            
+            // 关键：异步执行状态置换，防止死锁
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.performAtomicChapterSwap(offset: offset, targetPage: pageIdx)
+                self.isInternalTransitioning = false
             }
+        } else {
             self.currentPageIndex = v.pageIndex
             self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
-            updateProgressUI(); self.isInternalTransitioning = false
+            updateProgressUI()
         }
     }
     
+    private func performAtomicChapterSwap(offset: Int, targetPage: Int) {
+        if offset > 0 {
+            prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos; prevChapterSentences = contentSentences; prevChapterRawContent = rawContent
+            renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos; contentSentences = nextChapterSentences ?? []; rawContent = nextChapterRawContent ?? ""
+            nextChapterStore = nil; nextChapterPages = []; nextChapterPageInfos = []
+        } else {
+            nextChapterStore = renderStore; nextChapterPages = pages; nextChapterPageInfos = pageInfos; nextChapterSentences = contentSentences; nextChapterRawContent = rawContent
+            renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos; contentSentences = prevChapterSentences ?? []; rawContent = prevChapterRawContent ?? ""
+            prevChapterStore = nil; prevChapterPages = []; prevChapterPageInfos = []
+        }
+        
+        self.currentChapterIndex += offset
+        self.currentPageIndex = targetPage
+        self.onChapterIndexChanged?(self.currentChapterIndex)
+        
+        // 重新锚定视图
+        let newCurrentVC = createPageVC(at: currentPageIndex, offset: 0)
+        horizontalVC?.setViewControllers([newCurrentVC], direction: .forward, animated: false)
+        
+        updateProgressUI()
+        self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, pages.count)))
+        prefetchAdjacentChapters(index: currentChapterIndex)
+    }
+    
     func pageViewController(_ pvc: UIPageViewController, viewControllerBefore vc: UIViewController) -> UIViewController? {
-        guard let c = vc as? PageContentViewController else { return nil }
+        guard let c = vc as? PageContentViewController, !isInternalTransitioning else { return nil }
         if c.chapterOffset == 0 {
             if c.pageIndex > 0 { return createPageVC(at: c.pageIndex - 1, offset: 0) }
             if !prevChapterPages.isEmpty { return createPageVC(at: prevChapterPages.count - 1, offset: -1) }
@@ -248,7 +266,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         return nil
     }
     func pageViewController(_ pvc: UIPageViewController, viewControllerAfter vc: UIViewController) -> UIViewController? {
-        guard let c = vc as? PageContentViewController else { return nil }
+        guard let c = vc as? PageContentViewController, !isInternalTransitioning else { return nil }
         if c.chapterOffset == 0 {
             if c.pageIndex < pages.count - 1 { return createPageVC(at: c.pageIndex + 1, offset: 0) }
             if !nextChapterPages.isEmpty { return createPageVC(at: 0, offset: 1) }
