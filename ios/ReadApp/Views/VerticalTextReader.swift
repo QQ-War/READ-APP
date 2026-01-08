@@ -226,7 +226,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         if layoutNeeded {
-            // ... (keep logic inside layoutNeeded)
+            // 记录旧的 contentOffset 和关键视图的旧位置（仅用于无限流平滑置换）
+            let oldOffset = scrollView.contentOffset.y
+            let oldCurrY = currentContentView.frame.minY
+            let wasPrevVisible = lastPrevHasContent
+            let oldPrevHeightPlusGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
+            
             isUpdatingLayout = true
             updateLayoutFrames()
             
@@ -235,32 +240,25 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 self.view.alpha = 1
                 self.scrollView.isUserInteractionEnabled = true
                 self.isTransitioning = false
-            }
-            
-            if isChapterSwap {
-                // 向下切章 (C -> N): 旧的 Next 变成了现在的 Current
-                // 位移补偿：
-                // 如果之前有 Prev 且现在由于数据轮转被丢弃了，那么新的 Current 坐标会减小
-                // 具体的位移量就是被丢弃的那个 Prev 的高度 + Gap
-                if wasPrevVisible {
-                    scrollView.contentOffset.y = max(0, oldOffset - oldPrevHeightPlusGap)
-                } else {
-                    // 如果之前没有 Prev，现在由于 Current 变成了 Prev，
-                    // 新的 Current (旧 Next) 其实在坐标系中的绝对位置并没有变
-                    // 不需要调整 Offset
+            } else if isInfiniteScrollEnabled {
+                // 仅在无限流模式下执行无缝偏移补偿
+                let isChapterSwap = (trimmedSentences == self.nextSentences) && !trimmedSentences.isEmpty
+                let isChapterSwapToPrev = (trimmedSentences == self.prevSentences) && !trimmedSentences.isEmpty
+
+                if isChapterSwap {
+                    if wasPrevVisible {
+                        scrollView.contentOffset.y = max(0, oldOffset - oldPrevHeightPlusGap)
+                    }
                 }
-            } else if isChapterSwapToPrev {
-                // 向上切章 (C -> P): 旧的 Current 变成了现在的 Next
-                // 位移补偿：
-                // 此时由于上方插入了新的 Prev，所有旧内容都会被向下推
-                // 位移量就是新的 Prev 的高度 + Gap
-                let newPrevHeightPlusGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
-                scrollView.contentOffset.y = oldOffset + newPrevHeightPlusGap
-            } else if prevChanged && !isChapterSwapToPrev {
-                // 仅仅是静默加载/卸载了上一章，需要保持当前内容 (Current) 在屏幕上的位置不动
-                let displacement = currentContentView.frame.minY - oldCurrY
-                if displacement != 0 {
-                    scrollView.contentOffset.y = oldOffset + displacement
+                else if isChapterSwapToPrev {
+                    let newPrevHeightPlusGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
+                    scrollView.contentOffset.y = oldOffset + newPrevHeightPlusGap
+                }
+                else if prevChanged && !isChapterSwapToPrev {
+                    let displacement = currentContentView.frame.minY - oldCurrY
+                    if displacement != 0 {
+                        scrollView.contentOffset.y = oldOffset + displacement
+                    }
                 }
             }
             isUpdatingLayout = false
