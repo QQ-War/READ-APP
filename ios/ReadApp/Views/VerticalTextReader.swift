@@ -680,8 +680,6 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             }
         }
     }
-
-    }
     
     @objc private func handleTap() { onToggleMenu?() }
 
