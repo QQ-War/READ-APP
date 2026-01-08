@@ -4,13 +4,14 @@ import UIKit
 // MARK: - SwiftUI 桥接组件
 struct VerticalTextReader: UIViewControllerRepresentable {
     let sentences: [String]; let fontSize: CGFloat; let lineSpacing: CGFloat; let horizontalMargin: CGFloat; let highlightIndex: Int?; let secondaryIndices: Set<Int>; let isPlayingHighlight: Bool; let chapterUrl: String?
-    let title: String?; let nextTitle: String?
+    let title: String?; let nextTitle: String?; let prevTitle: String?
     @Binding var currentVisibleIndex: Int; @Binding var pendingScrollIndex: Int?
     var forceScrollToTop: Bool = false; var onScrollFinished: (() -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var safeAreaTop: CGFloat = 0
     
     // 无限流扩展
     var nextChapterSentences: [String]?
+    var prevChapterSentences: [String]?
     var onReachedBottom: (() -> Void)? // 触发预载
     var onChapterSwitched: ((Int) -> Void)? // 0: 本章, 1: 下一章
     var onInteractionChanged: ((Bool) -> Void)?
@@ -24,7 +25,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
         vc.onReachedBottom = onReachedBottom; vc.onChapterSwitched = onChapterSwitched
         vc.onInteractionChanged = onInteractionChanged
         
-        let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, title: title, nextTitle: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
+        let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, prevSentences: prevChapterSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
         
         if forceScrollToTop {
             vc.scrollToTop(animated: false); DispatchQueue.main.async { onScrollFinished?() }
@@ -40,6 +41,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
 // MARK: - UIKit 核心控制器
 class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     let scrollView = UIScrollView()
+    private let prevContentView = VerticalTextContentView()
     private let currentContentView = VerticalTextContentView()
     private let nextContentView = VerticalTextContentView() // 下一章拼接视图
     private var editMenuInteraction: Any?
@@ -47,8 +49,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var pendingSwitchDirection: Int = 0
     private var switchReady = false
     private var switchWorkItem: DispatchWorkItem?
-    private let switchHoldDuration: TimeInterval = 0.6
     private let dampingFactor: CGFloat = 0.12
+    private let chapterGap: CGFloat = 80
+    private var lastInfiniteSetting: Bool?
+    private var lastAutoSwitchTime: TimeInterval = 0
+    private let autoSwitchCooldown: TimeInterval = 0.6
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
@@ -56,8 +61,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
     var isInfiniteScrollEnabled: Bool = true
     
-    private var renderStore: TextKit2RenderStore?; private var nextRenderStore: TextKit2RenderStore?
-    private var currentSentences: [String] = []; private var nextSentences: [String] = []
+    private var renderStore: TextKit2RenderStore?; private var nextRenderStore: TextKit2RenderStore?; private var prevRenderStore: TextKit2RenderStore?
+    private var currentSentences: [String] = []; private var nextSentences: [String] = []; private var prevSentences: [String] = []
     private var paragraphStarts: [Int] = []; private var sentenceYOffsets: [CGFloat] = []
     private var lastReportedIndex: Int = -1; private var isUpdatingLayout = false; private var lastTTSSyncIndex: Int = -1
     
@@ -65,6 +70,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     
     // 无感置换状态记录
     private var previousContentHeight: CGFloat = 0
+    private var lastPrevContentHeight: CGFloat = 0
+    private var lastPrevHasContent = false
     private var pendingSelectedText: String?
 
     override func viewDidLoad() {
@@ -73,11 +80,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.showsVerticalScrollIndicator = true
         scrollView.alwaysBounceVertical = true
-        // 关键：设置 contentInset 让系统知道边界位置，阻尼效果才能生效
-        scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 100, right: 0)
-        // 初始时 contentOffset 为负，触发顶部弹性
-        scrollView.contentOffset = CGPoint(x: 0, y: -100)
         view.addSubview(scrollView)
+        scrollView.addSubview(prevContentView)
         scrollView.addSubview(currentContentView)
         scrollView.addSubview(nextContentView)
         setupSwitchHint()
@@ -108,8 +112,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     @objc private func handleLongPress(_ g: UILongPressGestureRecognizer) {
         guard g.state == .began else { return }
         let p = g.location(in: scrollView)
-        let s = p.y < nextContentView.frame.minY ? renderStore : nextRenderStore
-        let cv = p.y < nextContentView.frame.minY ? currentContentView : nextContentView
+        let isInPrev = !prevContentView.isHidden && p.y < currentContentView.frame.minY
+        let isInNext = !nextContentView.isHidden && p.y >= nextContentView.frame.minY
+        let s = isInPrev ? prevRenderStore : (isInNext ? nextRenderStore : renderStore)
+        let cv = isInPrev ? prevContentView : (isInNext ? nextContentView : currentContentView)
         guard let store = s else { return }
         let pointInContent = g.location(in: cv)
         
@@ -141,18 +147,22 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     @discardableResult
-    func update(sentences: [String], nextSentences: [String]?, title: String?, nextTitle: String?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
+    func update(sentences: [String], nextSentences: [String]?, prevSentences: [String]?, title: String?, nextTitle: String?, prevTitle: String?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
         self.lastMargin = margin
         // 预处理句子，去除首尾空白以统一缩进控制
         let trimmedSentences = sentences.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedNextSentences = (nextSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let trimmedPrevSentences = (prevSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         
         let contentChanged = self.currentSentences != trimmedSentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing
         let nextChanged = self.nextSentences != trimmedNextSentences
+        let prevChanged = self.prevSentences != trimmedPrevSentences
         
         // 核心优化：检测是否发生了章节置换（即上一章的内容现在变成了本章内容）
         // 如果 sentences 等于旧的 nextSentences，说明发生了向下滑动切换
         let isChapterSwap = (trimmedSentences == self.nextSentences) && !trimmedSentences.isEmpty
+        let isChapterSwapToPrev = (trimmedSentences == self.prevSentences) && !trimmedSentences.isEmpty
+        let oldPrevHeightWithGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
         
         if contentChanged || renderStore == nil {
             self.previousContentHeight = currentContentView.frame.height
@@ -178,10 +188,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if isChapterSwap {
                 // 旧的 offset.y 肯定很大（因为它包含了 previousContentHeight）
                 // 新的 offset.y 应该减去 previousContentHeight + 80 (间距)
-                let adjustment = previousContentHeight + 80
+                let adjustment = previousContentHeight + chapterGap
                 // 只有当 adjustment 合理时才调整，防止跳变
                 if adjustment > 0 {
                     let newY = max(0, scrollView.contentOffset.y - adjustment)
+                    scrollView.setContentOffset(CGPoint(x: 0, y: newY), animated: false)
+                }
+            } else if isChapterSwapToPrev {
+                let adjustment = oldPrevHeightWithGap
+                if adjustment > 0 {
+                    let newY = max(0, scrollView.contentOffset.y + adjustment)
                     scrollView.setContentOffset(CGPoint(x: 0, y: newY), animated: false)
                 }
             }
@@ -203,10 +219,35 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             }
         }
         
+        if prevChanged {
+            self.prevSentences = trimmedPrevSentences
+            if trimmedPrevSentences.isEmpty {
+                prevRenderStore = nil
+                prevContentView.isHidden = true
+                updateLayoutFrames()
+            } else {
+                let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
+                if let s = prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
+                else { prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                prevContentView.update(renderStore: prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
+                updateLayoutFrames()
+            }
+        }
+        
         if lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices {
             lastHighlightIndex = highlightIndex; lastSecondaryIndices = secondaryIndices
             currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
         }
+        
+        let newPrevHeightWithGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
+        if prevChanged && !isChapterSwapToPrev {
+            let delta = newPrevHeightWithGap - oldPrevHeightWithGap
+            if delta != 0 {
+                scrollView.setContentOffset(CGPoint(x: 0, y: max(0, scrollView.contentOffset.y + delta)), animated: false)
+            }
+        }
+        
+        applyScrollBehaviorIfNeeded()
         return false
     }
 
@@ -242,17 +283,38 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     private func updateLayoutFrames() {
         guard let s = renderStore else { return }
-        var h1: CGFloat = 0; s.layoutManager.enumerateTextLayoutFragments(from: s.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h1 = f.layoutFragmentFrame.maxY; return false }
+        var h1: CGFloat = 0
+        s.layoutManager.enumerateTextLayoutFragments(from: s.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h1 = f.layoutFragmentFrame.maxY; return false }
         let m = (view.bounds.width - s.layoutWidth) / 2
         let topPadding = safeAreaTop + 10
-        currentContentView.frame = CGRect(x: m, y: topPadding, width: s.layoutWidth, height: h1)
         
-        var totalH = h1 + topPadding
+        var currentY = topPadding
+        var totalH = topPadding
+        
+        if let ps = prevRenderStore {
+            var h0: CGFloat = 0
+            ps.layoutManager.enumerateTextLayoutFragments(from: ps.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h0 = f.layoutFragmentFrame.maxY; return false }
+            prevContentView.isHidden = false
+            prevContentView.frame = CGRect(x: m, y: currentY, width: ps.layoutWidth, height: h0)
+            currentY += h0 + chapterGap
+            totalH += h0 + chapterGap
+            lastPrevContentHeight = h0
+            lastPrevHasContent = true
+        } else {
+            prevContentView.isHidden = true
+            lastPrevContentHeight = 0
+            lastPrevHasContent = false
+        }
+        
+        currentContentView.frame = CGRect(x: m, y: currentY, width: s.layoutWidth, height: h1)
+        totalH += h1
+        
         if let ns = nextRenderStore {
-            var h2: CGFloat = 0; ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
+            var h2: CGFloat = 0
+            ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
             nextContentView.isHidden = false
-            nextContentView.frame = CGRect(x: m, y: h1 + topPadding + 80, width: ns.layoutWidth, height: h2) // 80 为章节间距
-            totalH += h2 + 100
+            nextContentView.frame = CGRect(x: m, y: currentY + h1 + chapterGap, width: ns.layoutWidth, height: h2)
+            totalH += h2 + chapterGap
         } else {
             nextContentView.isHidden = true
         }
@@ -265,24 +327,29 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let rawOffset = s.contentOffset.y
         let contentInsetBottom = s.contentInset.bottom
         
-        // 顶部阻尼：contentOffset.y < -contentInset.top 时触发
-        let topInset: CGFloat = 0
-        if rawOffset < topInset {
-            let over = topInset - rawOffset
-            s.contentOffset.y = topInset - over * dampingFactor
-        }
-        
-        // 底部阻尼：contentOffset.y > adjustedContentHeight 时触发
-        let adjustedContentHeight = max(0, s.contentSize.height - s.bounds.height + contentInsetBottom)
-        if rawOffset > adjustedContentHeight {
-            let over = rawOffset - adjustedContentHeight
-            s.contentOffset.y = adjustedContentHeight + over * dampingFactor
+        if !isInfiniteScrollEnabled {
+            // 顶部阻尼：contentOffset.y < -contentInset.top 时触发
+            let topInset: CGFloat = 0
+            if rawOffset < topInset {
+                let over = topInset - rawOffset
+                s.contentOffset.y = topInset - over * dampingFactor
+            }
+            
+            // 底部阻尼：contentOffset.y > adjustedContentHeight 时触发
+            let adjustedContentHeight = max(0, s.contentSize.height - s.bounds.height + contentInsetBottom)
+            if rawOffset > adjustedContentHeight {
+                let over = rawOffset - adjustedContentHeight
+                s.contentOffset.y = adjustedContentHeight + over * dampingFactor
+            }
         }
         
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
-        // 章节切换判定 (长按逻辑)：始终开启
-        handleHoldSwitchIfNeeded(rawOffset: rawOffset)
+        if isInfiniteScrollEnabled {
+            handleAutoSwitchIfNeeded(rawOffset: rawOffset)
+        } else {
+            handleHoldSwitchIfNeeded(rawOffset: rawOffset)
+        }
         
         // 预载判定 (仅限无限流)
         if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
@@ -300,6 +367,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if isInfiniteScrollEnabled {
+            if !decelerate { onInteractionChanged?(false) }
+            cancelSwitchHold()
+            return
+        }
         // 如果在切换就绪状态，延迟检查阻尼回弹后再决定是否切换
         if switchReady && pendingSwitchDirection != 0 {
             // 延迟一点时间让阻尼回弹完成
@@ -396,6 +468,22 @@ private extension VerticalTextViewController {
         UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 0 }
     }
 
+    func handleAutoSwitchIfNeeded(rawOffset: CGFloat) {
+        if let _ = prevRenderStore {
+            let triggerTop = currentContentView.frame.minY - 20
+            if rawOffset < triggerTop {
+                triggerAutoSwitch(direction: -1, isTop: true)
+                return
+            }
+        }
+        if let _ = nextRenderStore {
+            let triggerBottom = nextContentView.frame.minY - 20
+            if rawOffset > triggerBottom {
+                triggerAutoSwitch(direction: 1, isTop: false)
+            }
+        }
+    }
+
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
         let topThreshold: CGFloat = -80
         let topOver = topThreshold - rawOffset
@@ -407,11 +495,15 @@ private extension VerticalTextViewController {
         
         if scrollView.isDragging {
             if topOver > 0 {
-                beginSwitchHold(direction: -1, isTop: true)
+                switchReady = true
+                pendingSwitchDirection = -1
+                updateSwitchHint(text: "松手切换上一章", isTop: true)
                 return
             }
             if bottomOver > 0 {
-                beginSwitchHold(direction: 1, isTop: false)
+                switchReady = true
+                pendingSwitchDirection = 1
+                updateSwitchHint(text: "松手切换下一章", isTop: false)
                 return
             }
         }
@@ -421,26 +513,35 @@ private extension VerticalTextViewController {
         }
     }
 
-    func beginSwitchHold(direction: Int, isTop: Bool) {
-        if pendingSwitchDirection == direction, switchWorkItem != nil { return }
-        cancelSwitchHold()
-        pendingSwitchDirection = direction
-        let work = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            guard self.scrollView.isDragging else { return }
-            self.switchReady = true
-            self.updateSwitchHint(text: direction > 0 ? "松手切换下一章" : "松手切换上一章", isTop: isTop)
-        }
-        switchWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + switchHoldDuration, execute: work)
-    }
-
     func cancelSwitchHold() {
         switchWorkItem?.cancel()
         switchWorkItem = nil
         pendingSwitchDirection = 0
         switchReady = false
         hideSwitchHint()
+    }
+
+    func applyScrollBehaviorIfNeeded() {
+        if lastInfiniteSetting == isInfiniteScrollEnabled { return }
+        lastInfiniteSetting = isInfiniteScrollEnabled
+        if isInfiniteScrollEnabled {
+            scrollView.contentInset = .zero
+            cancelSwitchHold()
+        } else {
+            scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 100, right: 0)
+        }
+    }
+
+    func triggerAutoSwitch(direction: Int, isTop: Bool) {
+        let now = Date().timeIntervalSince1970
+        guard now - lastAutoSwitchTime > autoSwitchCooldown else { return }
+        lastAutoSwitchTime = now
+        onChapterSwitched?(direction)
+        let text = direction > 0 ? "已切换到下一章" : "已切换到上一章"
+        updateSwitchHint(text: text, isTop: isTop)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.hideSwitchHint()
+        }
     }
 }
 
