@@ -329,13 +329,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         if let ns = nextRenderStore {
             var h2: CGFloat = 0
-            ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
+            ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
             nextContentView.isHidden = false
             nextContentView.frame = CGRect(x: m, y: currentY + h1 + chapterGap, width: ns.layoutWidth, height: h2)
             totalH += h2 + chapterGap
         } else {
             nextContentView.isHidden = true
         }
+        // 无限流模式下增加底部占位，保证预载缓冲空间，防止滑到底部卡住
+        let extraBottom: CGFloat = isInfiniteScrollEnabled ? 1200 : 100
+        scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
+    }
+
         let extraBottom: CGFloat = isInfiniteScrollEnabled ? 200 : 40
         scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
     }
@@ -362,10 +367,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             hideSwitchHint()
         }
         
-        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
+        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 3 {
             onReachedBottom?()
         }
-        if isInfiniteScrollEnabled && s.contentOffset.y < s.bounds.height {
+        if isInfiniteScrollEnabled && s.contentOffset.y < s.bounds.height * 1.5 {
             onReachedTop?()
         }
         
@@ -533,13 +538,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let threshold: CGFloat = 60 // 降低阈值，更敏感
+        let threshold: CGFloat = 80 // 恢复到 80，配合较大的 inset 体验更好
         let topThreshold: CGFloat = -threshold
         
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
         let bottomThreshold = actualMaxScrollY + threshold
         
-        if rawOffset < -5 {
+        if rawOffset < -10 {
             if rawOffset < topThreshold {
                 if !switchReady {
                     switchReady = true; pendingSwitchDirection = -1
@@ -550,7 +555,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 switchReady = false; pendingSwitchDirection = -1
                 updateSwitchHint(text: "继续下拉切换上一章", isTop: true)
             }
-        } else if rawOffset > actualMaxScrollY + 5 {
+        } else if rawOffset > actualMaxScrollY + 10 {
             if rawOffset > bottomThreshold {
                 if !switchReady {
                     switchReady = true; pendingSwitchDirection = 1
@@ -562,7 +567,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 updateSwitchHint(text: "继续上拉切换下一章", isTop: false)
             }
         } else {
-            if !scrollView.isDragging && !switchReady {
+            // 只有当完全回到正常区域才取消，防止抖动导致提示消失
+            if !scrollView.isDragging && rawOffset >= -5 && rawOffset <= actualMaxScrollY + 5 {
                 cancelSwitchHold()
             }
         }
@@ -588,8 +594,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             scrollView.contentInset = .zero
             cancelSwitchHold()
         } else {
-            // 给底部留一点弹跳空间即可，不需要 100 这么大
-            scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 20, right: 0)
+            // 恢复较大的 bottom inset，保证上拉切章时有足够的弹簧空间
+            scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 120, right: 0)
         }
     }
 }
@@ -766,13 +772,13 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let threshold: CGFloat = 60
+        let threshold: CGFloat = 80
         let topThreshold: CGFloat = -safeAreaTop - threshold
         
         let actualMaxScrollY = max(-safeAreaTop, stackView.frame.height - scrollView.bounds.height)
         let bottomThreshold = actualMaxScrollY + threshold
         
-        if rawOffset < -safeAreaTop - 5 {
+        if rawOffset < -safeAreaTop - 10 {
             if rawOffset < topThreshold {
                 if !switchReady {
                     switchReady = true; pendingSwitchDirection = -1
@@ -784,7 +790,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                 switchReady = false; pendingSwitchDirection = -1
                 updateSwitchHint(text: "继续下拉切换上一章", isTop: true)
             }
-        } else if rawOffset > actualMaxScrollY + 5 {
+        } else if rawOffset > actualMaxScrollY + 10 {
             if rawOffset > bottomThreshold {
                 if !switchReady {
                     switchReady = true; pendingSwitchDirection = 1
@@ -797,7 +803,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                 updateSwitchHint(text: "继续上拉切换下一章", isTop: false)
             }
         } else {
-            if !scrollView.isDragging && !switchReady {
+            if !scrollView.isDragging && rawOffset >= -safeAreaTop - 5 && rawOffset <= actualMaxScrollY + 5 {
                 cancelSwitchHold()
             }
         }
