@@ -13,6 +13,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
     var nextChapterSentences: [String]?
     var prevChapterSentences: [String]?
     var onReachedBottom: (() -> Void)? // 触发预载
+    var onReachedTop: (() -> Void)? // 触发预载
     var onChapterSwitched: ((Int) -> Void)? // 0: 本章, 1: 下一章
     var onInteractionChanged: ((Bool) -> Void)?
     
@@ -23,6 +24,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: VerticalTextViewController, context: Context) {
         vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; vc.safeAreaTop = safeAreaTop
         vc.onReachedBottom = onReachedBottom; vc.onChapterSwitched = onChapterSwitched
+        vc.onReachedTop = onReachedTop
         vc.onInteractionChanged = onInteractionChanged
         
         let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, prevSentences: prevChapterSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
@@ -56,7 +58,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private let autoSwitchCooldown: TimeInterval = 0.6
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
-    var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
+    var onReachedBottom: (() -> Void)?; var onReachedTop: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
     var isInfiniteScrollEnabled: Bool = true
@@ -352,8 +354,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         // 预载判定 (仅限无限流)
-        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
-            onReachedBottom?()
+        if isInfiniteScrollEnabled {
+            if s.contentOffset.y > s.contentSize.height - s.bounds.height * 1.3 {
+                onReachedBottom?()
+            }
+            if s.contentOffset.y < s.bounds.height * 0.3 {
+                onReachedTop?()
+            }
         }
         
         // 进度汇报
@@ -469,14 +476,14 @@ private extension VerticalTextViewController {
     }
 
     func handleAutoSwitchIfNeeded(rawOffset: CGFloat) {
-        if let _ = prevRenderStore {
+        if let _ = prevRenderStore, !prevContentView.isHidden {
             let triggerTop = currentContentView.frame.minY - 20
             if rawOffset < triggerTop {
                 triggerAutoSwitch(direction: -1, isTop: true)
                 return
             }
         }
-        if let _ = nextRenderStore {
+        if let _ = nextRenderStore, !nextContentView.isHidden {
             let triggerBottom = nextContentView.frame.minY - 20
             if rawOffset > triggerBottom {
                 triggerAutoSwitch(direction: 1, isTop: false)
