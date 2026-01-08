@@ -383,9 +383,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let rawOffset = s.contentOffset.y
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
-        // [DEBUG] 实时偏移与状态
-        // print("DEBUG_SCROLL: offset=\(rawOffset), contentH=\(s.contentSize.height), infinite=\(isInfiniteScrollEnabled)")
-        
         // 1. 无限滚动标记切换
         if isInfiniteScrollEnabled {
             handleAutoSwitchIfNeeded(rawOffset: rawOffset)
@@ -413,18 +410,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         dragStartTime = Date().timeIntervalSince1970
         cancelSwitchHold()
-        pendingSeamlessSwitch = 0 // 新的拖拽开始，重置自动切换标记
+        pendingSeamlessSwitch = 0 
         onInteractionChanged?(true)
+        LogManager.shared.log("拖拽开始: offset=\(scrollView.contentOffset.y), infinite=\(isInfiniteScrollEnabled)", category: "阅读器")
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         onInteractionChanged?(false)
-        print("DEBUG_DRAG_END: switchReady=\(switchReady), direction=\(pendingSwitchDirection), infinite=\(isInfiniteScrollEnabled)")
+        LogManager.shared.log("拖拽结束: switchReady=\(switchReady), direction=\(pendingSwitchDirection), infinite=\(isInfiniteScrollEnabled)", category: "阅读器")
         
-        // 非无限流模式：执行松手切换逻辑
         if !isInfiniteScrollEnabled {
             if switchReady && pendingSwitchDirection != 0 && !isTransitioning {
-                print("DEBUG_ACTION: Starting Fade-out Transition")
+                LogManager.shared.log("触发转场: 方向=\(pendingSwitchDirection)", category: "阅读器")
                 let direction = pendingSwitchDirection
                 isTransitioning = true
                 
@@ -432,7 +429,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 UIView.animate(withDuration: 0.25, animations: {
                     self.view.alpha = 0
                 }) { _ in
-                    print("DEBUG_ACTION: Fade-out Complete, Notifying SwiftUI")
+                    LogManager.shared.log("转场淡出完成，通知切换", category: "阅读器")
                     self.onChapterSwitched?(direction)
                 }
                 
@@ -443,7 +440,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             return
         }
         
-        // 无限流模式：检查是否有待执行的无缝切换
         if !decelerate { 
             executeSeamlessSwitchIfNeeded()
         }
@@ -586,9 +582,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        // [DEBUG] 打印判定基础数据
-        // print("DEBUG_HOLD_CHECK: rawOffset=\(rawOffset), isDragging=\(scrollView.isDragging)")
-
         guard !isInfiniteScrollEnabled, scrollView.isDragging else {
             if isInfiniteScrollEnabled && !isShowingSwitchResultHint {
                 hideSwitchHint()
@@ -605,17 +598,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if rawOffset < -10 {
             let pullDistance = -rawOffset
             let isReady = pullDistance > threshold || currentDragDuration > timeThreshold
-            print("DEBUG_PULL_UP: dist=\(pullDistance), duration=\(currentDragDuration), isReady=\(isReady)")
             
             if isReady {
                 if !switchReady {
                     switchReady = true
                     pendingSwitchDirection = -1
                     hapticFeedback()
+                    LogManager.shared.log("满足切章条件(上一章): 距离=\(Int(pullDistance)), 时间=\(String(format: "%.1f", currentDragDuration))", category: "阅读器")
                 }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
                 if pullDistance < cancelThreshold {
+                    if switchReady { LogManager.shared.log("切章已取消", category: "阅读器") }
                     switchReady = false
                 }
                 updateSwitchHint(text: "下拉切换上一章", isTop: true)
@@ -623,17 +617,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         } else if rawOffset > actualMaxScrollY + 10 {
             let pullDistance = rawOffset - actualMaxScrollY
             let isReady = pullDistance > threshold || currentDragDuration > timeThreshold
-            print("DEBUG_PULL_DOWN: dist=\(pullDistance), duration=\(currentDragDuration), isReady=\(isReady)")
             
             if isReady {
                 if !switchReady {
                     switchReady = true
                     pendingSwitchDirection = 1
                     hapticFeedback()
+                    LogManager.shared.log("满足切章条件(下一章): 距离=\(Int(pullDistance)), 时间=\(String(format: "%.1f", currentDragDuration))", category: "阅读器")
                 }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
                 if pullDistance < cancelThreshold {
+                    if switchReady { LogManager.shared.log("切章已取消", category: "阅读器") }
                     switchReady = false
                 }
                 updateSwitchHint(text: "上拉切换下一章", isTop: false)
