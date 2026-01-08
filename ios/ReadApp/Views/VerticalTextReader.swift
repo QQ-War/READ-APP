@@ -13,6 +13,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
     var nextChapterSentences: [String]?
     var prevChapterSentences: [String]?
     var onReachedBottom: (() -> Void)? // 触发预载
+    var onReachedTop: (() -> Void)? // 触发上一章预载
     var onChapterSwitched: ((Int) -> Void)? // 0: 本章, 1: 下一章
     var onInteractionChanged: ((Bool) -> Void)?
     
@@ -22,7 +23,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
     
     func updateUIViewController(_ vc: VerticalTextViewController, context: Context) {
         vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; vc.safeAreaTop = safeAreaTop
-        vc.onReachedBottom = onReachedBottom; vc.onChapterSwitched = onChapterSwitched
+        vc.onReachedBottom = onReachedBottom; vc.onReachedTop = onReachedTop; vc.onChapterSwitched = onChapterSwitched
         vc.onInteractionChanged = onInteractionChanged
         
         let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, prevSentences: prevChapterSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
@@ -56,7 +57,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private let autoSwitchCooldown: TimeInterval = 0.6
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
-    var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
+    var onReachedBottom: (() -> Void)?; var onReachedTop: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
     var isInfiniteScrollEnabled: Bool = true
@@ -342,6 +343,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
             onReachedBottom?()
         }
+        if isInfiniteScrollEnabled && s.contentOffset.y < s.bounds.height {
+            onReachedTop?()
+        }
         
         let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
         if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
@@ -358,15 +362,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             return
         }
         if switchReady && pendingSwitchDirection != 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                guard let self = self else { return }
-                if self.switchReady && self.pendingSwitchDirection != 0 {
-                    self.onChapterSwitched?(self.pendingSwitchDirection)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.cancelSwitchHold() }
-                } else {
-                    self.cancelSwitchHold()
-                }
-            }
+            let direction = pendingSwitchDirection
+            self.onChapterSwitched?(direction)
+            self.cancelSwitchHold()
         } else {
             if !decelerate { onInteractionChanged?(false) }
             cancelSwitchHold()
@@ -667,13 +665,9 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if switchReady && pendingSwitchDirection != 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-                guard let self = self else { return }
-                if self.switchReady && self.pendingSwitchDirection != 0 {
-                    self.onChapterSwitched?(self.pendingSwitchDirection)
-                }
-                self.cancelSwitchHold()
-            }
+            let direction = pendingSwitchDirection
+            self.onChapterSwitched?(direction)
+            self.cancelSwitchHold()
         } else {
             if !decelerate { onInteractionChanged?(false) }
             cancelSwitchHold()
