@@ -54,6 +54,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var isShowingSwitchResultHint = false
     private var suppressAutoSwitchUntil: TimeInterval = 0
     private var dragStartTime: TimeInterval = 0
+    private var isTransitioning = false
     private let dampingFactor: CGFloat = 0.12
     private let chapterGap: CGFloat = 80
     private var lastInfiniteSetting: Bool?
@@ -225,15 +226,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         if layoutNeeded {
-            // 记录旧的 contentOffset 和关键视图的旧位置
-            let oldOffset = scrollView.contentOffset.y
-            let oldNextY = nextContentView.frame.minY
-            let oldCurrY = currentContentView.frame.minY
-            let wasPrevVisible = lastPrevHasContent
-            let oldPrevHeightPlusGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
-            
+            // ... (keep logic inside layoutNeeded)
             isUpdatingLayout = true
             updateLayoutFrames()
+            
+            // 恢复转场状态
+            if isTransitioning {
+                self.view.alpha = 1
+                self.scrollView.isUserInteractionEnabled = true
+                self.isTransitioning = false
+            }
             
             if isChapterSwap {
                 // 向下切章 (C -> N): 旧的 Next 变成了现在的 Current
@@ -316,39 +318,66 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let m = (view.bounds.width - s.layoutWidth) / 2
         let topPadding = safeAreaTop + 10
         
-        var currentY = topPadding
-        var totalH = topPadding
-        
-        if let ps = prevRenderStore {
-            var h0: CGFloat = 0
-            ps.layoutManager.enumerateTextLayoutFragments(from: ps.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h0 = f.layoutFragmentFrame.maxY; return false }
-            prevContentView.isHidden = false
-            prevContentView.frame = CGRect(x: m, y: currentY, width: ps.layoutWidth, height: h0)
-            currentY += h0 + chapterGap
-            totalH += h0 + chapterGap
-            lastPrevContentHeight = h0
-            lastPrevHasContent = true
+        if isInfiniteScrollEnabled {
+            // 无限流模式：堆叠布局
+            var currentY = topPadding
+            var totalH = topPadding
+            
+            if let ps = prevRenderStore {
+                var h0: CGFloat = 0
+                ps.layoutManager.enumerateTextLayoutFragments(from: ps.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h0 = f.layoutFragmentFrame.maxY; return false }
+                prevContentView.isHidden = false
+                prevContentView.frame = CGRect(x: m, y: currentY, width: ps.layoutWidth, height: h0)
+                currentY += h0 + chapterGap
+                totalH += h0 + chapterGap
+                lastPrevContentHeight = h0
+                lastPrevHasContent = true
+            } else {
+                prevContentView.isHidden = true
+                lastPrevContentHeight = 0
+                lastPrevHasContent = false
+            }
+            
+            currentContentView.frame = CGRect(x: m, y: currentY, width: s.layoutWidth, height: h1)
+            totalH += h1
+            
+            if let ns = nextRenderStore {
+                var h2: CGFloat = 0
+                ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
+                nextContentView.isHidden = false
+                nextContentView.frame = CGRect(x: m, y: currentY + h1 + chapterGap, width: ns.layoutWidth, height: h2)
+                totalH += h2 + chapterGap
+            } else {
+                nextContentView.isHidden = true
+            }
+            let extraBottom: CGFloat = 100
+            scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
         } else {
-            prevContentView.isHidden = true
-            lastPrevContentHeight = 0
+            // 非无限流模式：单章布局，预览内容放在边界外（弹性区）
+            currentContentView.frame = CGRect(x: m, y: topPadding, width: s.layoutWidth, height: h1)
+            scrollView.contentSize = CGSize(width: view.bounds.width, height: topPadding + h1 + 40)
+            
+            if let ps = prevRenderStore {
+                var h0: CGFloat = 0
+                ps.layoutManager.enumerateTextLayoutFragments(from: ps.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h0 = f.layoutFragmentFrame.maxY; return false }
+                prevContentView.isHidden = false
+                // 放在顶部边缘上方，只有下拉弹性时可见
+                prevContentView.frame = CGRect(x: m, y: topPadding - h0 - chapterGap, width: ps.layoutWidth, height: h0)
+            } else {
+                prevContentView.isHidden = true
+            }
+            
+            if let ns = nextRenderStore {
+                var h2: CGFloat = 0
+                ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
+                nextContentView.isHidden = false
+                // 放在底部边缘下方，只有上拉弹性时可见
+                nextContentView.frame = CGRect(x: m, y: topPadding + h1 + chapterGap, width: ns.layoutWidth, height: h2)
+            } else {
+                nextContentView.isHidden = true
+            }
             lastPrevHasContent = false
         }
-        
-        currentContentView.frame = CGRect(x: m, y: currentY, width: s.layoutWidth, height: h1)
-        totalH += h1
-        
-        if let ns = nextRenderStore {
-            var h2: CGFloat = 0
-            ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
-            nextContentView.isHidden = false
-            nextContentView.frame = CGRect(x: m, y: currentY + h1 + chapterGap, width: ns.layoutWidth, height: h2)
-            totalH += h2 + chapterGap
-        } else {
-            nextContentView.isHidden = true
-        }
-        // 还原占位：仅保留极小缓冲，依靠预载机制实现连续
-        let extraBottom: CGFloat = 100
-        scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
     }
 
     func scrollViewDidScroll(_ s: UIScrollView) {
@@ -399,11 +428,19 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         // 非无限流模式：执行松手切换逻辑
         if !isInfiniteScrollEnabled {
-            if switchReady && pendingSwitchDirection != 0 {
+            if switchReady && pendingSwitchDirection != 0 && !isTransitioning {
                 let direction = pendingSwitchDirection
-                // 关键优化：停止当前的滚动/回弹动量，防止在数据切换过程中物理引擎产生跳变
-                scrollView.setContentOffset(scrollView.contentOffset, animated: false)
-                self.onChapterSwitched?(direction)
+                isTransitioning = true
+                
+                // 锁定交互并执行淡出动画
+                scrollView.isUserInteractionEnabled = false
+                UIView.animate(withDuration: 0.25, animations: {
+                    self.view.alpha = 0
+                }) { _ in
+                    // 动画完成后再通知切换，此时物理引擎已经静止且视图不可见，彻底消除震颤感
+                    self.onChapterSwitched?(direction)
+                }
+                
                 self.cancelSwitchHold()
                 return
             }
