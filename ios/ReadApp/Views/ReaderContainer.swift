@@ -172,6 +172,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
     func updatePreferences(_ prefs: UserPreferences) {
         let oldP = self.preferences!; self.preferences = prefs
+        if let v = verticalVC, v.isInfiniteScrollEnabled != prefs.isInfiniteScrollEnabled {
+            v.isInfiniteScrollEnabled = prefs.isInfiniteScrollEnabled
+            if !isMangaMode && currentReadingMode == .vertical {
+                updateVerticalAdjacent()
+            }
+        }
         if (oldP.fontSize != prefs.fontSize || oldP.lineSpacing != prefs.lineSpacing) && !isMangaMode { 
             reRenderCurrentContent() 
         } else if !isMangaMode && currentReadingMode == .vertical {
@@ -298,6 +304,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     private func updateVerticalAdjacent(secondaryIndices: Set<Int> = []) {
         guard let v = verticalVC, preferences != nil, ttsManager != nil else { return }
+        v.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
         let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil

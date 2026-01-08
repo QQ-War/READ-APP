@@ -52,6 +52,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var switchWorkItem: DispatchWorkItem?
     private var hintWorkItem: DispatchWorkItem?
     private var isShowingSwitchResultHint = false
+    private var suppressAutoSwitchUntil: TimeInterval = 0
     private let dampingFactor: CGFloat = 0.12
     private let chapterGap: CGFloat = 80
     private var lastInfiniteSetting: Bool?
@@ -112,7 +113,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
-    @objc private func handleTap() { onTapMenu?() }
+    @objc private func handleTap() {
+        pendingSeamlessSwitch = 0
+        suppressAutoSwitchUntil = Date().timeIntervalSince1970 + 0.6
+        cancelSwitchHold()
+        onTapMenu?()
+    }
     @objc private func handleLongPress(_ g: UILongPressGestureRecognizer) {
         guard g.state == .began else { return }
         let p = g.location(in: scrollView)
@@ -515,6 +521,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     private func handleAutoSwitchIfNeeded(rawOffset: CGFloat) {
+        if Date().timeIntervalSince1970 < suppressAutoSwitchUntil { return }
         if pendingSeamlessSwitch != 0 { return }
         
         // 只有当旧章节已经完全滚出视野，且接缝处在屏幕上方一定距离外时，才标记切换
