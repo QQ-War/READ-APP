@@ -15,6 +15,7 @@ class TTSManager: NSObject, ObservableObject {
     @Published var preloadedIndices: Set<Int> = []
     @Published var currentSentenceDuration: TimeInterval = 0
     var currentBaseSentenceIndex: Int = 0
+    private var currentSentenceOffset: Int = 0
     
     private var audioPlayer: AVAudioPlayer?
     private let speechSynthesizer = AVSpeechSynthesizer()
@@ -55,6 +56,10 @@ class TTSManager: NSObject, ObservableObject {
 
     private func cacheAudio(_ data: Data, for index: Int) {
         preloadStateQueue.sync { audioCache[index] = data }
+    }
+
+    private func removeCachedAudio(for index: Int) {
+        preloadStateQueue.sync { audioCache.removeValue(forKey: index) }
     }
 
     private func clearAudioCache() {
@@ -226,7 +231,7 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    func startReading(text: String, chapters: [BookChapter], currentIndex: Int, bookUrl: String, bookSourceUrl: String?, bookTitle: String, coverUrl: String?, onChapterChange: @escaping (Int) -> Void, processedSentences: [String]? = nil, textProcessor: ((String) -> String)? = nil, startAtSentenceIndex: Int? = nil, shouldSpeakChapterTitle: Bool = true) {
+    func startReading(text: String, chapters: [BookChapter], currentIndex: Int, bookUrl: String, bookSourceUrl: String?, bookTitle: String, coverUrl: String?, onChapterChange: @escaping (Int) -> Void, processedSentences: [String]? = nil, textProcessor: ((String) -> String)? = nil, startAtSentenceIndex: Int? = nil, startAtSentenceOffset: Int? = nil, shouldSpeakChapterTitle: Bool = true) {
         self.chapters = chapters
         self.currentChapterIndex = currentIndex
         self.bookUrl = bookUrl
@@ -252,14 +257,20 @@ class TTSManager: NSObject, ObservableObject {
             sentences = splitTextIntoSentences(text)
         }
         totalSentences = sentences.count
+        currentSentenceOffset = 0
         
         if let externalIndex = startAtSentenceIndex, externalIndex < sentences.count {
             currentSentenceIndex = externalIndex
+            if let offset = startAtSentenceOffset {
+                currentSentenceOffset = min(max(0, offset), sentences[externalIndex].utf16.count)
+            }
         } else if let progress = UserPreferences.shared.getTTSProgress(bookUrl: bookUrl),
                   progress.chapterIndex == currentIndex && progress.sentenceIndex < sentences.count {
             currentSentenceIndex = progress.sentenceIndex
+            currentSentenceOffset = min(max(0, progress.sentenceOffset), sentences[currentSentenceIndex].utf16.count)
         } else {
             currentSentenceIndex = 0
+            currentSentenceOffset = 0
         }
         
         logger.log("开始朗读: \(bookTitle), 章节索引: \(currentIndex), 起始段落: \(currentSentenceIndex)", category: "TTS")
@@ -280,7 +291,8 @@ class TTSManager: NSObject, ObservableObject {
             currentSentenceIndex -= 1
             audioPlayer?.stop()
             audioPlayer = nil
-            UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex)
+            currentSentenceOffset = 0
+            UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
             if isPlaying { speakNextSentence() }
         }
     }
@@ -290,7 +302,8 @@ class TTSManager: NSObject, ObservableObject {
             currentSentenceIndex += 1
             audioPlayer?.stop()
             audioPlayer = nil
-            UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex)
+            currentSentenceOffset = 0
+            UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
             if isPlaying { speakNextSentence() }
         }
     }
@@ -372,7 +385,11 @@ class TTSManager: NSObject, ObservableObject {
     }
     
     private func splitTextIntoSentences(_ text: String) -> [String] {
-        return removeSVGTags(text).components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let processed = textProcessor?(text) ?? removeSVGTags(text)
+        return processed
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private func ttsId(for sentence: String, isChapterTitle: Bool = false) -> String? {
@@ -416,10 +433,28 @@ class TTSManager: NSObject, ObservableObject {
         if currentSentenceIndex >= sentences.count { nextChapter(); return }
         let sentence = sentences[currentSentenceIndex]
         if isPunctuationOnly(sentence) { currentSentenceIndex += 1; speakNextSentence(); return }
-        UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex)
-        if UserPreferences.shared.useSystemTTS { speakWithSystemTTS(text: sentence); return }
+        UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
+        let sentenceToSpeak: String
+        if currentSentenceOffset > 0 {
+            let idx = String.Index(utf16Offset: min(currentSentenceOffset, sentence.utf16.count), in: sentence)
+            sentenceToSpeak = String(sentence[idx...])
+        } else {
+            sentenceToSpeak = sentence
+        }
+        currentSentenceOffset = 0
+        if sentenceToSpeak != sentence {
+            let sentenceIndex = currentSentenceIndex
+            removeCachedAudio(for: sentenceIndex)
+            DispatchQueue.main.async { self.preloadedIndices.remove(sentenceIndex) }
+        }
+        if sentenceToSpeak.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            currentSentenceIndex += 1
+            speakNextSentence()
+            return
+        }
+        if UserPreferences.shared.useSystemTTS { speakWithSystemTTS(text: sentenceToSpeak); return }
         startPreloading()
-        guard let url = buildAudioURL(for: sentence) else { stop(); return }
+        guard let url = buildAudioURL(for: sentenceToSpeak) else { stop(); return }
         playAudio(url: url)
         if currentChapterIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title) }
     }
@@ -607,6 +642,7 @@ class TTSManager: NSObject, ObservableObject {
         audioPlayer = nil
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
         isPlaying = false; isPaused = false; currentSentenceIndex = 0; currentBaseSentenceIndex = 0; sentences = []
+        currentSentenceOffset = 0
         isLoading = false; clearAudioCache(); updatePreloadQueue([]); setIsPreloading(false); clearNextChapterCache(); nextChapterSentences.removeAll()
         coverArtwork = nil; endBackgroundTask()
         logger.log("TTS 停止", category: "TTS")
@@ -630,7 +666,7 @@ class TTSManager: NSObject, ObservableObject {
         audioPlayer?.stop(); audioPlayer = nil
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
         if !nextChapterSentences.isEmpty {
-            sentences = nextChapterSentences; totalSentences = sentences.count; currentSentenceIndex = 0
+            sentences = nextChapterSentences; totalSentences = sentences.count; currentSentenceIndex = 0; currentSentenceOffset = 0
             preloadedIndices = moveNextChapterCacheToCurrent()
             nextChapterSentences.removeAll()
             isPlaying = true; isPaused = false; isLoading = false
@@ -643,7 +679,7 @@ class TTSManager: NSObject, ObservableObject {
         Task {
             if let content = try? await APIService.shared.fetchChapterContent(bookUrl: bookUrl, bookSourceUrl: bookSourceUrl, index: currentChapterIndex) {
                 await MainActor.run {
-                    sentences = splitTextIntoSentences(content); totalSentences = sentences.count; currentSentenceIndex = 0
+                    sentences = splitTextIntoSentences(content); totalSentences = sentences.count; currentSentenceIndex = 0; currentSentenceOffset = 0
                     clearAudioCache(); updatePreloadQueue([]); setIsPreloading(false); preloadedIndices.removeAll()
                     isPlaying = true; isPaused = false
                     if currentChapterIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title) }
@@ -668,13 +704,18 @@ class TTSManager: NSObject, ObservableObject {
         let snapshotSentences = self.sentences
         let snapshotSentenceIdx = self.currentSentenceIndex
         let snapshotBaseIdx = self.currentBaseSentenceIndex
+        let snapshotOffset = self.currentSentenceOffset
         let snapshotTitle = snapshotChapterIdx < chapters.count ? chapters[snapshotChapterIdx].title : nil
         let absoluteSentenceIdx = snapshotSentenceIdx + snapshotBaseIdx
-        UserPreferences.shared.saveTTSProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, sentenceIndex: absoluteSentenceIdx)
+        UserPreferences.shared.saveTTSProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, sentenceIndex: absoluteSentenceIdx, sentenceOffset: snapshotOffset)
         Task {
             guard !snapshotSentences.isEmpty else { return }
             var bodyIndex = 0
             for i in 0..<min(snapshotSentenceIdx, snapshotSentences.count) { bodyIndex += snapshotSentences[i].utf16.count + 1 }
+            if snapshotSentenceIdx < snapshotSentences.count {
+                let maxOffset = snapshotSentences[snapshotSentenceIdx].utf16.count
+                bodyIndex += min(max(0, snapshotOffset), maxOffset)
+            }
             let totalLen = snapshotSentences.reduce(0) { $0 + $1.utf16.count + 1 }
             let pos = totalLen > 0 ? Double(bodyIndex) / Double(totalLen) : 0.0
             UserPreferences.shared.saveReadingProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, pageIndex: 0, bodyCharIndex: bodyIndex)
@@ -710,6 +751,9 @@ extension TTSManager: AVAudioPlayerDelegate {
         }
     }
     func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
-        currentSentenceIndex += 1; speakNextSentence()
+        DispatchQueue.main.async {
+            self.currentSentenceIndex += 1
+            self.speakNextSentence()
+        }
     }
 }

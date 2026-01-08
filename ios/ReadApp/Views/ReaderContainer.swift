@@ -285,11 +285,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             let imgs = extractMangaImageSentences(from: rawContent)
             self.contentSentences = imgs.isEmpty ? removeHTMLAndSVG(rawContent).components(separatedBy: "\n") : imgs
         } else {
-            let processed = applyReplaceRules(to: removeHTMLAndSVG(rawContent))
-            // 核心修改：在此处进行 trim，确保后续所有逻辑（分页、渲染）使用的数据都是干净的
-            self.contentSentences = processed.components(separatedBy: "\n")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
+            self.contentSentences = ReadingTextProcessor.splitSentences(rawContent, rules: replaceRuleViewModel?.rules)
             prepareRenderStore(); performPagination()
         }
         setupReaderMode(); updateProgressUI()
@@ -353,15 +349,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         } else {
             guard currentChapterIndex < chapters.count else { return }
             let startPos = currentStartPosition()
-            var ttsSentences = contentSentences
-            if startPos.offset > 0 && startPos.index < ttsSentences.count {
-                let sentence = ttsSentences[startPos.index]
-                let utf16Count = sentence.utf16.count
-                let clamped = min(startPos.offset, utf16Count)
-                let idx = String.Index(utf16Offset: clamped, in: sentence)
-                let tail = String(sentence[idx...])
-                if !tail.isEmpty { ttsSentences[startPos.index] = tail }
-            }
+            let ttsSentences = contentSentences
             ttsManager.startReading(
                 text: rawContent,
                 chapters: chapters,
@@ -374,7 +362,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     DispatchQueue.main.async { self?.jumpToChapter(newIndex) }
                 },
                 processedSentences: ttsSentences,
+                textProcessor: { [rules = replaceRuleViewModel?.rules] text in
+                    ReadingTextProcessor.prepareText(text, rules: rules)
+                },
                 startAtSentenceIndex: startPos.index,
+                startAtSentenceOffset: startPos.offset,
                 shouldSpeakChapterTitle: startPos.index == 0 && startPos.offset == 0
             )
         }

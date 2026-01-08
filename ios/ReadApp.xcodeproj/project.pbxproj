@@ -37,6 +37,7 @@
 		A100000D0000000000000001 /* CacheManagementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E0000000000000001 /* CacheManagementService.swift */; };
 		A100000F0000000000000001 /* ChapterContentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000100000000000000001 /* ChapterContentCache.swift */; };
 		A10000110000000000000001 /* Data+Append.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000120000000000000001 /* Data+Append.swift */; };
+		A10000130000000000000001 /* ReadingTextProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000140000000000000001 /* ReadingTextProcessor.swift */; };
 		1A000009000000000000001 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000010000000000000001 /* Models.swift */; };
 		1A000011000000000000001 /* BookListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000012000000000000001 /* BookListView.swift */; };
 		1A000015000000000000001 /* TTSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000016000000000000001 /* TTSManager.swift */; };
@@ -97,6 +98,7 @@
 		A100000E0000000000000001 /* CacheManagementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheManagementService.swift; sourceTree = "<group>"; };
 		A10000100000000000000001 /* ChapterContentCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterContentCache.swift; sourceTree = "<group>"; };
 		A10000120000000000000001 /* Data+Append.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Append.swift"; sourceTree = "<group>"; };
+		A10000140000000000000001 /* ReadingTextProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTextProcessor.swift; sourceTree = "<group>"; };
 		1A000010000000000000001 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		1A000012000000000000001 /* BookListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookListView.swift; sourceTree = "<group>"; };
 		1A000016000000000000001 /* TTSManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSManager.swift; sourceTree = "<group>"; };
@@ -236,6 +238,7 @@
 				A100000E0000000000000001 /* CacheManagementService.swift */,
 				A10000100000000000000001 /* ChapterContentCache.swift */,
 				A10000120000000000000001 /* Data+Append.swift */,
+				A10000140000000000000001 /* ReadingTextProcessor.swift */,
 				1A000016000000000000001 /* TTSManager.swift */,
 				1A000024000000000000002 /* LogManager.swift */,
 			);
@@ -348,6 +351,7 @@
 				A100000D0000000000000001 /* CacheManagementService.swift in Sources */,
 				A100000F0000000000000001 /* ChapterContentCache.swift in Sources */,
 				A10000110000000000000001 /* Data+Append.swift in Sources */,
+				A10000130000000000000001 /* ReadingTextProcessor.swift in Sources */,
 				1A000009000000000000001 /* Models.swift in Sources */,
 				1A00003A000000000000003 /* BookSource.swift in Sources */,
 				1A000011000000000000001 /* BookListView.swift in Sources */,

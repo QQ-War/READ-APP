@@ -361,17 +361,21 @@ class UserPreferences: ObservableObject {
         }
     }
     
-    // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex)
-    private var ttsProgress: [String: (Int, Int)] {
+    // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex, sentenceOffset)
+    private var ttsProgress: [String: (Int, Int, Int)] {
         get {
             if let data = UserDefaults.standard.data(forKey: "ttsProgress"),
                let dict = try? JSONDecoder().decode([String: [Int]].self, from: data) {
-                return dict.mapValues { ($0[0], $0[1]) }
+                return dict.mapValues {
+                    if $0.count >= 3 { return ($0[0], $0[1], $0[2]) }
+                    if $0.count >= 2 { return ($0[0], $0[1], 0) }
+                    return ($0.first ?? 0, 0, 0)
+                }
             }
             return [:]
         }
         set {
-            let dict = newValue.mapValues { [$0.0, $0.1] }
+            let dict = newValue.mapValues { [$0.0, $0.1, $0.2] }
             if let data = try? JSONEncoder().encode(dict) {
                 UserDefaults.standard.set(data, forKey: "ttsProgress")
             }
@@ -402,13 +406,13 @@ class UserPreferences: ObservableObject {
         }
     }
     
-    func saveTTSProgress(bookUrl: String, chapterIndex: Int, sentenceIndex: Int) {
+    func saveTTSProgress(bookUrl: String, chapterIndex: Int, sentenceIndex: Int, sentenceOffset: Int = 0) {
         var progress = ttsProgress
-        progress[bookUrl] = (chapterIndex, sentenceIndex)
+        progress[bookUrl] = (chapterIndex, sentenceIndex, sentenceOffset)
         ttsProgress = progress
     }
     
-    func getTTSProgress(bookUrl: String) -> (chapterIndex: Int, sentenceIndex: Int)? {
+    func getTTSProgress(bookUrl: String) -> (chapterIndex: Int, sentenceIndex: Int, sentenceOffset: Int)? {
         return ttsProgress[bookUrl]
     }
 
