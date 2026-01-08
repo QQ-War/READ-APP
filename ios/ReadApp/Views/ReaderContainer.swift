@@ -172,6 +172,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
     func updatePreferences(_ prefs: UserPreferences) {
         let oldP = self.preferences!; self.preferences = prefs
+        // print("DEBUG_PREFS_SYNC: infinite=\(prefs.isInfiniteScrollEnabled)")
         if let v = verticalVC, v.isInfiniteScrollEnabled != prefs.isInfiniteScrollEnabled {
             v.isInfiniteScrollEnabled = prefs.isInfiniteScrollEnabled
             if !isMangaMode && currentReadingMode == .vertical {
@@ -237,7 +238,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 }
                 loadChapterContent(at: currentChapterIndex)
             }
-        } catch { print("Load chapters failed") } }
+        } catch { } }
     }
     
     private func loadChapterContent(at index: Int, startAtEnd: Bool = false) {
@@ -276,7 +277,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     }
                     self.prefetchAdjacentChapters(index: index)
                 }
-            } catch { print("Content load failed") }
+            } catch { }
         }
     }
     
