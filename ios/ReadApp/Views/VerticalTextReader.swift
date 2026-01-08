@@ -352,7 +352,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         // 预载判定 (仅限无限流)
-        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
+        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 1.3 {
             onReachedBottom?()
         }
         
