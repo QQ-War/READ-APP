@@ -50,6 +50,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var pendingSwitchDirection: Int = 0
     private var switchReady = false
     private var switchWorkItem: DispatchWorkItem?
+    private var hintWorkItem: DispatchWorkItem?
+    private var isShowingSwitchResultHint = false
     private let dampingFactor: CGFloat = 0.12
     private let chapterGap: CGFloat = 80
     private var lastInfiniteSetting: Bool?
@@ -346,10 +348,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let rawOffset = s.contentOffset.y
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
-        // 1. 无限滚动自动切换
+        // 1. 无限滚动标记切换（不在滚动中切章）
         if isInfiniteScrollEnabled {
             handleAutoSwitchIfNeeded(rawOffset: rawOffset)
-            executeSeamlessSwitchIfNeeded() // 尝试在滚动中自动切换
         }
         
         // 2. 边缘拉动切换
@@ -357,17 +358,21 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let hasNext = nextRenderStore != nil
         let maxScrollY = max(0, s.contentSize.height - s.bounds.height)
         
-        if !isInfiniteScrollEnabled || (rawOffset < -10 && !hasPrev) || (rawOffset > maxScrollY + 10 && !hasNext) {
+        if !isInfiniteScrollEnabled {
             handleHoldSwitchIfNeeded(rawOffset: rawOffset)
         } else {
-            hideSwitchHint()
+            if !isShowingSwitchResultHint {
+                hideSwitchHint()
+            }
         }
         
-        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2.5 {
-            onReachedBottom?()
-        }
-        if isInfiniteScrollEnabled && s.contentOffset.y < s.bounds.height * 1.2 {
-            onReachedTop?()
+        if isInfiniteScrollEnabled {
+            if s.contentOffset.y > s.contentSize.height - s.bounds.height * 1.5 {
+                onReachedBottom?()
+            }
+            if s.contentOffset.y < s.bounds.height * 0.6 {
+                onReachedTop?()
+            }
         }
         
         let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
@@ -430,6 +435,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             
             if safeToSwitch {
                 pendingSeamlessSwitch = 0
+                showSwitchResultHint(direction: dir)
                 onChapterSwitched?(dir)
             }
         }
@@ -504,6 +510,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     private func hideSwitchHint() {
         guard switchHintLabel.alpha > 0 else { return }
+        isShowingSwitchResultHint = false
         UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 0 }
     }
 
@@ -534,24 +541,27 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
+        guard scrollView.isDragging else {
+            if !switchReady { cancelSwitchHold() }
+            return
+        }
+        
         let threshold: CGFloat = 70 // 适中的拉动阈值
-        let topThreshold: CGFloat = -threshold
-        
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let bottomThreshold = actualMaxScrollY + threshold
+        let dragTranslation = scrollView.panGestureRecognizer.translation(in: scrollView).y
         
-        if rawOffset < -10 {
-            // 下拉
-            if rawOffset < topThreshold {
+        if rawOffset <= 0 {
+            let pullDistance = max(-rawOffset, max(0, dragTranslation))
+            if pullDistance >= threshold {
                 if !switchReady { switchReady = true; pendingSwitchDirection = -1; hapticFeedback() }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
                 switchReady = false; pendingSwitchDirection = -1
                 updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
-        } else if rawOffset > actualMaxScrollY + 10 {
-            // 上拉
-            if rawOffset > bottomThreshold {
+        } else if rawOffset >= actualMaxScrollY {
+            let pullDistance = max(rawOffset - actualMaxScrollY, max(0, -dragTranslation))
+            if pullDistance >= threshold {
                 if !switchReady { switchReady = true; pendingSwitchDirection = 1; hapticFeedback() }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
@@ -559,10 +569,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 updateSwitchHint(text: "上拉切换下一章", isTop: false)
             }
         } else {
-            // 回到正常滚动区域
-            if !scrollView.isDragging && !switchReady {
-                cancelSwitchHold()
-            }
+            cancelSwitchHold()
         }
     }
     
@@ -574,19 +581,33 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func cancelSwitchHold() {
         switchWorkItem?.cancel()
         switchWorkItem = nil
+        hintWorkItem?.cancel()
+        hintWorkItem = nil
         pendingSwitchDirection = 0
         switchReady = false
+        isShowingSwitchResultHint = false
         hideSwitchHint()
     }
 
     func applyScrollBehaviorIfNeeded() {
         if lastInfiniteSetting == isInfiniteScrollEnabled { return }
         lastInfiniteSetting = isInfiniteScrollEnabled
-        // 移除硬编码的 contentInset，恢复 UIKit 原生弹性手感
-        scrollView.contentInset = .zero
+        scrollView.bounces = true
         if isInfiniteScrollEnabled {
             cancelSwitchHold()
         }
+    }
+    
+    private func showSwitchResultHint(direction: Int) {
+        hintWorkItem?.cancel()
+        isShowingSwitchResultHint = true
+        let isTop = direction < 0
+        updateSwitchHint(text: direction > 0 ? "已切换下一章" : "已切换上一章", isTop: isTop)
+        let work = DispatchWorkItem { [weak self] in
+            self?.hideSwitchHint()
+        }
+        hintWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: work)
     }
 }
 

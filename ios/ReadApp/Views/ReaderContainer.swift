@@ -540,7 +540,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func prefetchAdjacentChapters(index: Int) {
         if isMangaMode { return }
-        
+        prefetchNextChapterOnly(index: index)
+        prefetchPrevChapterOnly(index: index)
+    }
+    
+    private func prefetchNextChapterOnly(index: Int) {
+        if isMangaMode { return }
         let nextIdx = index + 1
         if nextIdx < chapters.count {
             if nextChapterStore == nil && fetchingNextIndex != nextIdx {
@@ -572,7 +577,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             nextChapterStore = nil
             nextChapterSentences = nil
         }
-
+    }
+    
+    private func prefetchPrevChapterOnly(index: Int) {
+        if isMangaMode { return }
         let prevIdx = index - 1
         if prevIdx >= 0 {
             if prevChapterStore == nil && fetchingPrevIndex != prevIdx {
@@ -686,11 +694,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         v.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
         v.onReachedBottom = { [weak self] in 
             guard let self = self else { return }
-            self.prefetchAdjacentChapters(index: self.currentChapterIndex)
+            self.prefetchNextChapterOnly(index: self.currentChapterIndex)
         }
         v.onReachedTop = { [weak self] in
             guard let self = self else { return }
-            self.prefetchAdjacentChapters(index: self.currentChapterIndex)
+            self.prefetchPrevChapterOnly(index: self.currentChapterIndex)
         }
         v.onChapterSwitched = { [weak self] offset in 
             guard let self = self else { return }
