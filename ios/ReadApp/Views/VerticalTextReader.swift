@@ -159,7 +159,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let prevChanged = self.prevSentences != trimmedPrevSentences
         
         // 核心优化：检测是否发生了章节置换（即上一章的内容现在变成了本章内容）
-        // 如果 sentences 等于旧的 nextSentences，说明发生了向下滑动切换
         let isChapterSwap = (trimmedSentences == self.nextSentences) && !trimmedSentences.isEmpty
         let isChapterSwapToPrev = (trimmedSentences == self.prevSentences) && !trimmedSentences.isEmpty
         let oldPrevHeightWithGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
@@ -186,10 +185,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             
             // 执行无感置换
             if isChapterSwap {
-                // 旧的 offset.y 肯定很大（因为它包含了 previousContentHeight）
-                // 新的 offset.y 应该减去 previousContentHeight + 80 (间距)
                 let adjustment = previousContentHeight + chapterGap
-                // 只有当 adjustment 合理时才调整，防止跳变
                 if adjustment > 0 {
                     let newY = max(0, scrollView.contentOffset.y - adjustment)
                     scrollView.setContentOffset(CGPoint(x: 0, y: newY), animated: false)
@@ -269,7 +265,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let p = NSMutableParagraphStyle()
         p.lineSpacing = lineSpacing
         p.alignment = .justified
-        // 移除 p.firstLineHeadIndent = fontSize * 1.5
         fullAttr.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: fontSize), .foregroundColor: UIColor.label, .paragraphStyle: p]))
         
         return fullAttr
@@ -323,15 +318,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     func scrollViewDidScroll(_ s: UIScrollView) {
         if isUpdatingLayout { return }
-        
         let rawOffset = s.contentOffset.y
         let contentInsetBottom = s.contentInset.bottom
-        
-        if !isInfiniteScrollEnabled {
-            // 移除手动设置 contentOffset 的阻尼逻辑，这会产生冲突
-            // 我们通过 alwaysBounceVertical = true 让系统自动处理阻尼
-        }
-        
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
         if isInfiniteScrollEnabled {
@@ -340,12 +328,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             handleHoldSwitchIfNeeded(rawOffset: rawOffset)
         }
         
-        // 预载判定 (仅限无限流)
         if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
             onReachedBottom?()
         }
         
-        // 进度汇报
         let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
         if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
     }
@@ -358,17 +344,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if isInfiniteScrollEnabled {
             if !decelerate { onInteractionChanged?(false) }
-            // 无限流不需要在这里取消，由触发逻辑控制
             return
         }
-        // 如果在切换就绪状态，延迟检查阻尼回弹后再决定是否切换
         if switchReady && pendingSwitchDirection != 0 {
-            // 延迟一点时间让阻尼回弹开始
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 guard let self = self else { return }
                 if self.switchReady && self.pendingSwitchDirection != 0 {
                     self.onChapterSwitched?(self.pendingSwitchDirection)
-                    // 执行切换后延迟取消
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.cancelSwitchHold() }
                 } else {
                     self.cancelSwitchHold()
@@ -417,16 +399,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         return f != nil ? s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f!.rangeInElement.location) : 0
     }
     func scrollToCharOffset(_ o: Int, animated: Bool) {
-        guard let s = renderStore else { return }
-        
-        // 查找最接近的段落索引，防止直接使用 charOffset 定位到 fragment 中间
         let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
         scrollToSentence(index: index, animated: animated)
     }
-}
-
-private extension VerticalTextViewController {
-    func setupSwitchHint() {
+    
+    private func setupSwitchHint() {
         switchHintLabel.alpha = 0
         switchHintLabel.textAlignment = .center
         switchHintLabel.font = .systemFont(ofSize: 12, weight: .semibold)
@@ -437,7 +414,7 @@ private extension VerticalTextViewController {
         view.addSubview(switchHintLabel)
     }
 
-    func updateSwitchHint(text: String, isTop: Bool) {
+    private func updateSwitchHint(text: String, isTop: Bool) {
         switchHintLabel.text = "  \(text)  "
         switchHintLabel.sizeToFit()
         let width = min(view.bounds.width - 40, max(120, switchHintLabel.bounds.width))
@@ -453,12 +430,12 @@ private extension VerticalTextViewController {
         }
     }
 
-    func hideSwitchHint() {
+    private func hideSwitchHint() {
         guard switchHintLabel.alpha > 0 else { return }
         UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 0 }
     }
 
-    func handleAutoSwitchIfNeeded(rawOffset: CGFloat) {
+    private func handleAutoSwitchIfNeeded(rawOffset: CGFloat) {
         if let _ = prevRenderStore {
             let triggerTop = currentContentView.frame.minY - 20
             if rawOffset < triggerTop {
@@ -498,16 +475,10 @@ private extension VerticalTextViewController {
             }
         }
         
-        // 如果不在拖拽且不在超过范围，则取消。但在回弹过程中不立即取消 switchReady，由跳转逻辑判定
         if !scrollView.isDragging {
-            if topOver <= 0 && bottomOver <= 0 {
-                cancelSwitchHold()
-            }
+            if topOver <= 0 && bottomOver <= 0 { cancelSwitchHold() }
         } else {
-            if topOver <= 0 && bottomOver <= 0 {
-                // 在拖拽中滑回了正常区域
-                cancelSwitchHold()
-            }
+            if topOver <= 0 && bottomOver <= 0 { cancelSwitchHold() }
         }
     }
 
@@ -543,16 +514,6 @@ private extension VerticalTextViewController {
     }
 }
 
-@available(iOS 16.0, *)
-extension VerticalTextViewController: UIEditMenuInteractionDelegate {
-    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
-        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
-            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
-        }
-        return UIMenu(children: [addAction] + suggestedActions)
-    }
-}
-
 class VerticalTextContentView: UIView {
     private var renderStore: TextKit2RenderStore?; private var highlightIndex: Int?; private var secondaryIndices: Set<Int> = []; private var isPlayingHighlight: Bool = false; private var paragraphStarts: [Int] = []; private var margin: CGFloat = 20
     override init(frame: CGRect) { super.init(frame: frame); self.backgroundColor = .clear }
@@ -572,7 +533,6 @@ class VerticalTextContentView: UIView {
                 s.layoutManager.enumerateTextLayoutFragments(from: s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: r.location)!, options: [.ensuresLayout]) { f in
                     if s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(r) { return false }
                     for line in f.textLineFragments { 
-                        // 这里 line.typographicBounds 已经相对于 fragment 的坐标了
                         let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y)
                         ctx?.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath)
                         ctx?.fillPath() 
@@ -582,22 +542,16 @@ class VerticalTextContentView: UIView {
             }
             ctx?.restoreGState()
         }
-        
-        // 关键修复：绘图时不要受 View 坐标影响，LayoutManager 里的 frame 是相对于其布局容器的
         ctx?.saveGState()
         let sL = s.layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: rect.minY))?.rangeInElement.location ?? s.contentStorage.documentRange.location
         s.layoutManager.enumerateTextLayoutFragments(from: sL, options: [.ensuresLayout]) { f in
             if f.layoutFragmentFrame.minY > rect.maxY { return false }
-            if f.layoutFragmentFrame.maxY >= rect.minY { 
-                f.draw(at: f.layoutFragmentFrame.origin, in: ctx!) 
-            }
+            if f.layoutFragmentFrame.maxY >= rect.minY { f.draw(at: f.layoutFragmentFrame.origin, in: ctx!) }
             return true
         }
         ctx?.restoreGState()
     }
 }
-
-enum VerticalReaderTask { case scrollToTop; case scrollToIndex(Int) }
 
 // MARK: - Manga Reader Controller
 class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
@@ -622,7 +576,6 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         scrollView.delegate = self
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.alwaysBounceVertical = true
-        // 设置 contentInset 让阻尼效果生效
         scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
         view.addSubview(scrollView)
         
@@ -647,38 +600,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         scrollView.frame = view.bounds
-        // 保持 contentInset 一致，底部使用固定100pt作为阻尼空间
         scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
-    }
-
-    private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let topThreshold: CGFloat = -safeAreaTop - 80
-        let topOver = topThreshold - rawOffset
-        let bottomInset: CGFloat = 100
-        let adjustedBottomThreshold = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height + bottomInset)
-        let bottomThreshold = adjustedBottomThreshold + 80
-        let bottomOver = rawOffset - bottomThreshold
-
-        if scrollView.isDragging {
-            if topOver > 0 {
-                beginSwitchHold(direction: -1, isTop: true)
-                return
-            }
-            if bottomOver > 0 {
-                beginSwitchHold(direction: 1, isTop: false)
-                return
-            }
-        }
-        
-        // 只有当滑动回到正常区域时才取消就绪状态
-        if topOver <= 0 && bottomOver <= 0 {
-            // 如果已经在回弹过程中，不要立即取消，让切换逻辑有机会执行
-            if scrollView.isDragging {
-                cancelSwitchHold()
-            } else if !switchReady {
-                cancelSwitchHold()
-            }
-        }
     }
     
     @objc private func handleTap() { onToggleMenu?() }
@@ -724,7 +646,6 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if switchReady && pendingSwitchDirection != 0 {
-            // 延迟检查阻尼回弹
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 guard let self = self else { return }
                 if self.switchReady && self.pendingSwitchDirection != 0 {
@@ -791,15 +712,11 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         }
         
         if !scrollView.isDragging {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                guard let self = self else { return }
-                if self.switchReady && self.pendingSwitchDirection != 0 {
-                    self.onChapterSwitched?(self.pendingSwitchDirection)
-                }
-                self.cancelSwitchHold()
+            if topOver <= 0 && bottomOver <= 0 {
+                if !switchReady { cancelSwitchHold() }
             }
-        } else if topOver <= 0 && bottomOver <= 0 {
-            cancelSwitchHold()
+        } else {
+            if topOver <= 0 && bottomOver <= 0 { cancelSwitchHold() }
         }
     }
 
