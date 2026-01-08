@@ -406,8 +406,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         return max(0, idx)
     }
     func getCurrentCharOffset() -> Int {
-        guard let s = renderStore else { return 0 }; let f = s.layoutManager.textLayoutFragment(for: CGPoint(x: 10, y: scrollView.contentOffset.y - (safeAreaTop + 10) + 5))
-        return f != nil ? s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f!.rangeInElement.location) : 0
+        guard let s = renderStore, let viewIfLoaded = viewIfLoaded else { return 0 }
+        let point = CGPoint(x: 10, y: scrollView.contentOffset.y - (safeAreaTop + 10) + 5)
+        if let f = s.layoutManager.textLayoutFragment(for: point) {
+            return s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+        }
+        return 0
     }
     func scrollToCharOffset(_ o: Int, animated: Bool) {
         let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
@@ -634,7 +638,9 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                 if let u = URL(string: url), let (data, _) = try? await URLSession.shared.data(from: u), let img = UIImage(data: data) {
                     await MainActor.run {
                         iv.image = img
-                        iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: img.size.height / img.size.width).isActive = true
+                        if img.size.width > 0 {
+                            iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: img.size.height / img.size.width).isActive = true
+                        }
                     }
                 }
             }

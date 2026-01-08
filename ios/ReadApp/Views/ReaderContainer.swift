@@ -295,16 +295,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func updateVerticalAdjacent(secondaryIndices: Set<Int> = []) {
-        guard !isMangaMode, currentReadingMode == .vertical else { return }
+        guard let v = verticalVC, preferences != nil, ttsManager != nil else { return }
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
         let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
-        verticalVC?.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
         let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
         let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
-        let highlightIndex = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
-        verticalVC?.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: ttsManager.isPlaying)
+        
+        let highlightIdx = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
+        v.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: highlightIdx, secondaryIndices: secondaryIndices, isPlaying: ttsManager.isPlaying)
     }
+
 
     private func setupReaderMode() {
         if isMangaMode {
@@ -628,7 +629,18 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func setupVerticalMode() {
-        let v = VerticalTextViewController(); v.onVisibleIndexChanged = { [weak self] idx in self?.onProgressChanged?(self?.currentChapterIndex ?? 0, Double(idx) / Double(max(1, self?.contentSentences.count ?? 1))) }
+        guard preferences != nil, ttsManager != nil else {
+            // 如果依赖尚未注入，推迟初始化
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in self?.setupVerticalMode() }
+            return
+        }
+        
+        let v = VerticalTextViewController()
+        v.onVisibleIndexChanged = { [weak self] idx in 
+            guard let self = self else { return }
+            let count = max(1, self.contentSentences.count)
+            self.onProgressChanged?(self.currentChapterIndex, Double(idx) / Double(count)) 
+        }
         v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
         v.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
         v.onReachedBottom = { [weak self] in 
