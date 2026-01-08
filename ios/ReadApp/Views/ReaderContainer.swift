@@ -546,38 +546,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
     }
 
-    private func prefetchNextChapterOnly() {
-        guard !isMangaMode, currentChapterIndex + 1 < chapters.count else { return }
-        prefetchNextTask?.cancel()
-        let index = currentChapterIndex + 1
-        prefetchNextTask = Task { if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: 0) {
-            await MainActor.run { guard !Task.isCancelled else { return }
-                let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                let title = self.chapters[index].title; let attr = self.createAttrString(processed, title: title); let spec = self.currentLayoutSpec
-                let store = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
-                let res = self.performSilentPagination(for: store, sentences: sents, title: title)
-                self.nextChapterStore = store; self.nextChapterPages = res.pages; self.nextChapterPageInfos = res.pageInfos; self.nextChapterSentences = sents; self.nextChapterRawContent = content
-                self.updateVerticalAdjacent()
-            }
-        } }
-    }
-
-    private func prefetchPrevChapterOnly() {
-        guard !isMangaMode, currentChapterIndex - 1 >= 0 else { return }
-        prefetchPrevTask?.cancel()
-        let index = currentChapterIndex - 1
-        prefetchPrevTask = Task { if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: 0) {
-            await MainActor.run { guard !Task.isCancelled else { return }
-                let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                let title = self.chapters[index].title; let attr = self.createAttrString(processed, title: title); let spec = self.currentLayoutSpec
-                let store = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
-                let res = self.performSilentPagination(for: store, sentences: sents, title: title)
-                self.prevChapterStore = store; self.prevChapterPages = res.pages; self.prevChapterPageInfos = res.pageInfos; self.prevChapterSentences = sents; self.prevChapterRawContent = content
-                self.updateVerticalAdjacent()
-            }
-        } }
-    }
-
     private func performSilentPagination(for store: TextKit2RenderStore, sentences: [String], title: String) -> TextKit2Paginator.PaginationResult {
         let spec = currentLayoutSpec
         var pS: [Int] = []
@@ -638,10 +606,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let v = VerticalTextViewController(); v.onVisibleIndexChanged = { [weak self] idx in self?.onProgressChanged?(self?.currentChapterIndex ?? 0, Double(idx) / Double(max(1, self?.contentSentences.count ?? 1))) }
         v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
         v.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
-        v.onReachedBottom = { [weak self] in self?.prefetchNextChapterOnly() }
-        v.onReachedTop = { [weak self] in self?.prefetchPrevChapterOnly() }
         v.onChapterSwitched = { [weak self] offset in 
             guard let self = self else { return }
+            
+            // 如果关闭了无限流，禁止滚动自动切换章节
+            if !self.preferences.isInfiniteScrollEnabled { return }
             
             // 连跳保护
             let now = Date().timeIntervalSince1970
