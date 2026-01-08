@@ -78,16 +78,17 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
 
 // MARK: - UIKit 核心容器
 class ReaderContainerViewController: UIViewController, UIPageViewControllerDataSource, UIPageViewControllerDelegate, UIScrollViewDelegate {
-    var book: Book!; var chapters: [BookChapter] = []; var preferences: UserPreferences!; var ttsManager: TTSManager!; var replaceRuleViewModel: ReplaceRuleViewModel?
+    var book: Book?; var chapters: [BookChapter] = []; var preferences: UserPreferences?; var ttsManager: TTSManager?; var replaceRuleViewModel: ReplaceRuleViewModel?
     var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?
     var onChapterIndexChanged: ((Int) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?
     
     private var safeAreaTop: CGFloat = 47; private var safeAreaBottom: CGFloat = 34
     private var currentLayoutSpec: ReaderLayoutSpec {
+        let margin = preferences?.pageHorizontalMargin ?? 20
         return ReaderLayoutSpec(
             topInset: max(safeAreaTop, view.safeAreaInsets.top) + 15,
             bottomInset: max(safeAreaBottom, view.safeAreaInsets.bottom) + 40,
-            sideMargin: preferences.pageHorizontalMargin + 8,
+            sideMargin: margin + 8,
             pageSize: view.bounds.size
         )
     }
@@ -111,7 +112,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var nextChapterPageInfos: [TK2PageInfo] = []; private var prevChapterPageInfos: [TK2PageInfo] = []
     private var nextChapterSentences: [String]?; private var prevChapterSentences: [String]?
     private var nextChapterRawContent: String?; private var prevChapterRawContent: String?
-
+    
     private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
     private let progressLabel = UILabel()
     private var lastLayoutSignature: String = ""
@@ -119,26 +120,30 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private let prefetcher = ChapterPrefetcher()
     private var lastChapterSwitchTime: TimeInterval = 0
     private let chapterSwitchCooldown: TimeInterval = 1.0
-    private lazy var ttsSync = TTSSyncController(ttsManager: ttsManager)
+    private lazy var ttsSync: TTSSyncController? = {
+        guard let manager = ttsManager else { return nil }
+        return TTSSyncController(ttsManager: manager)
+    }()
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         setupProgressLabel()
-        currentChapterIndex = book.durChapterIndex ?? 0
+        currentChapterIndex = book?.durChapterIndex ?? 0
         lastReportedChapterIndex = currentChapterIndex
-        currentReadingMode = preferences.readingMode
+        currentReadingMode = preferences?.readingMode ?? .vertical
         loadChapters()
         setupTTSObservers()
     }
     
     private func setupTTSObservers() {
-        ttsManager.$currentSentenceIndex
+        guard let manager = ttsManager else { return }
+        manager.$currentSentenceIndex
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.syncTTSState() }
             .store(in: &cancellables)
             
-        ttsManager.$isPlaying
+        manager.$isPlaying
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.syncTTSState() }
             .store(in: &cancellables)
@@ -170,8 +175,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
     func updatePreferences(_ prefs: UserPreferences) {
-        let oldP = self.preferences!; self.preferences = prefs
-        if (oldP.fontSize != prefs.fontSize || oldP.lineSpacing != prefs.lineSpacing) && !isMangaMode { 
+        let oldP = self.preferences
+        self.preferences = prefs
+        if let old = oldP, (old.fontSize != prefs.fontSize || old.lineSpacing != prefs.lineSpacing) && !isMangaMode { 
             reRenderCurrentContent() 
         } else if !isMangaMode && currentReadingMode == .vertical {
             updateVerticalAdjacent()
@@ -219,13 +225,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func loadChapters() {
+        guard let book = book else { return }
         Task { do {
             let list = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             await MainActor.run {
                 self.chapters = list; self.onChaptersLoaded?(list)
                 // 如果 TTS 正在播放这本书，优先同步到 TTS 的章节
-                if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
-                    self.currentChapterIndex = ttsManager.currentChapterIndex
+                if let tts = ttsManager, tts.isPlaying && tts.bookUrl == book.bookUrl {
+                    self.currentChapterIndex = tts.currentChapterIndex
                     self.onChapterIndexChanged?(self.currentChapterIndex)
                 }
                 loadChapterContent(at: currentChapterIndex)
@@ -234,11 +241,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func loadChapterContent(at index: Int, startAtEnd: Bool = false) {
+        guard let book = book else { return }
         loadToken += 1; let token = loadToken
         Task { [weak self] in
             guard let self = self else { return }
             do {
-                let isM = book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
+                let isM = book.type == 2 || (preferences?.manualMangaUrls.contains(book.bookUrl ?? "") ?? false)
                 let content = try await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: isM ? 2 : 0)
                 await MainActor.run {
                     guard self.loadToken == token else { return }
@@ -248,15 +256,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     if self.isFirstLoad && !self.isMangaMode {
                         self.isFirstLoad = false
                         // 优先检查 TTS 状态：如果正在播放同一本书的当前章节，则定位到 TTS 句子
-                        if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
-                            let sentenceIdx = self.ttsManager.currentSentenceIndex
+                        if let tts = self.ttsManager, tts.isPlaying && tts.bookUrl == self.book?.bookUrl && tts.currentChapterIndex == index {
+                            let sentenceIdx = tts.currentSentenceIndex
                             if self.currentReadingMode == .horizontal {
                                 self.syncHorizontalPageToTTS(sentenceIndex: sentenceIdx)
                             } else {
                                 self.verticalVC?.scrollToSentence(index: sentenceIdx, animated: false)
                             }
                         } else {
-                            let pos = self.book.durChapterPos ?? 0
+                            let pos = self.book?.durChapterPos ?? 0
                             let targetPage = Int(round(pos * Double(max(1, self.pages.count))))
                             self.updateHorizontalPage(to: targetPage, animated: false)
                             self.verticalVC?.scrollToProgress(pos)
@@ -296,18 +304,19 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func updateVerticalAdjacent(secondaryIndices: Set<Int> = []) {
-        guard !isMangaMode, currentReadingMode == .vertical else { return }
+        guard !isMangaMode, currentReadingMode == .vertical, let prefs = preferences, let tts = ttsManager else { return }
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
         let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
-        verticalVC?.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
-        let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
-        let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
-        let highlightIndex = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
-        verticalVC?.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: ttsManager.isPlaying)
+        verticalVC?.isInfiniteScrollEnabled = prefs.isInfiniteScrollEnabled
+        let nextSentences = prefs.isInfiniteScrollEnabled ? nextChapterSentences : nil
+        let prevSentences = prefs.isInfiniteScrollEnabled ? prevChapterSentences : nil
+        let highlightIndex = tts.isPlaying ? tts.currentSentenceIndex : nil
+        verticalVC?.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: prefs.fontSize, lineSpacing: prefs.lineSpacing, margin: prefs.pageHorizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: tts.isPlaying)
     }
 
     private func setupReaderMode() {
+        guard let prefs = preferences, let tts = ttsManager else { return }
         if isMangaMode {
             verticalVC?.view.removeFromSuperview(); verticalVC = nil
             horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
@@ -327,9 +336,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
                 let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
                 let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
-                let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
-                let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
-                verticalVC?.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+                let nextSentences = prefs.isInfiniteScrollEnabled ? nextChapterSentences : nil
+                let prevSentences = prefs.isInfiniteScrollEnabled ? prevChapterSentences : nil
+                verticalVC?.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: prefs.fontSize, lineSpacing: prefs.lineSpacing, margin: prefs.pageHorizontalMargin, highlightIndex: tts.isPlaying ? tts.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: tts.isPlaying)
             }
         } else {
             if horizontalVC == nil {
@@ -343,7 +352,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     func toggleTTS() {
-        ttsSync.toggle { [weak self] in
+        ttsSync?.toggle { [weak self] in
             self?.makeTTSStartContext()
         }
     }
@@ -643,12 +652,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
     func syncTTSState() {
+        guard let tts = ttsManager else { return }
         if isMangaMode || isUserInteracting { return }
-        let hIndex = ttsManager.currentSentenceIndex
+        let hIndex = tts.currentSentenceIndex
         if currentReadingMode == .vertical {
-            updateVerticalAdjacent(secondaryIndices: Set(ttsManager.preloadedIndices))
+            updateVerticalAdjacent(secondaryIndices: Set(tts.preloadedIndices))
         }
-        ttsSync.syncReading(
+        ttsSync?.syncReading(
             isMangaMode: isMangaMode,
             isUserInteracting: isUserInteracting,
             readingMode: currentReadingMode,
@@ -666,7 +676,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var pS: [Int] = []
         for s in contentSentences { 
             pS.append(curr)
-            curr += (s.count + 2 + 1) // 计入全角空格和换行符
+            curr += (s.utf16.count + 2 + 1) // 计入全角空格和换行符
         }
         
         guard sentenceIndex < pS.count else { return }
@@ -674,7 +684,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         if let t = pages.firstIndex(where: { NSLocationInRange(o, $0.globalRange) }), t != currentPageIndex { 
             // 只有当 TTS 正在播放且不是用户正在手动翻页时才自动跳转
-            if ttsManager.isPlaying && !isUserInteracting {
+            if let tts = ttsManager, tts.isPlaying && !isUserInteracting {
                 updateHorizontalPage(to: t, animated: true) 
             }
         }
@@ -702,7 +712,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func makeTTSStartContext() -> TTSStartContext? {
-        guard currentChapterIndex < chapters.count else { return nil }
+        guard currentChapterIndex < chapters.count, let book = book else { return nil }
         let position = currentReadingPosition()
         var ttsSentences = contentSentences
         if position.sentenceOffset > 0 && position.sentenceIndex < ttsSentences.count {
