@@ -52,6 +52,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var switchWorkItem: DispatchWorkItem?
     private var hintWorkItem: DispatchWorkItem?
     private var isShowingSwitchResultHint = false
+    private var lastViewSize: CGSize = .zero
     var isInfiniteScrollEnabled: Bool = true {
         didSet {
             if oldValue != isInfiniteScrollEnabled {
@@ -116,7 +117,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if !isUpdatingLayout { scrollView.frame = view.bounds; updateLayoutFrames() }
+        if view.bounds.size != lastViewSize {
+            lastViewSize = view.bounds.size
+            if !isUpdatingLayout { 
+                scrollView.frame = view.bounds
+                updateLayoutFrames() 
+            }
+        }
     }
     
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
@@ -490,13 +497,20 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         if !isInfiniteScrollEnabled {
             if switchReady && pendingSwitchDirection != 0 && !isTransitioning {
-                LogManager.shared.log("执行转场淡出, 方向=\(pendingSwitchDirection)", category: "阅读器")
                 let direction = pendingSwitchDirection
+                LogManager.shared.log("执行转场淡出, 方向=\(direction)", category: "阅读器")
                 isTransitioning = true
                 scrollView.isUserInteractionEnabled = false
-                UIView.animate(withDuration: 0.25, animations: { self.view.alpha = 0 }) { _ in
+                
+                // 停止当前的滚动速度，防止回弹干扰转场
+                scrollView.setContentOffset(scrollView.contentOffset, animated: false)
+                
+                UIView.animate(withDuration: 0.2, animations: { 
+                    self.view.alpha = 0 
+                }) { _ in
                     LogManager.shared.log("转场淡出完成, 通知切章", category: "阅读器")
                     self.onChapterSwitched?(direction)
+                    // 注意：这里的 alpha 恢复逻辑在 update 方法中处理
                 }
                 self.cancelSwitchHold()
                 return
@@ -596,16 +610,22 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     private func updateSwitchHint(text: String, isTop: Bool) {
-        switchHintLabel.text = "  \(text)  "
-        switchHintLabel.sizeToFit()
-        let width = min(view.bounds.width - 40, max(120, switchHintLabel.bounds.width))
-        let bottomSafe = max(0, view.safeAreaInsets.bottom)
-        switchHintLabel.frame = CGRect(
-            x: (view.bounds.width - width) / 2,
-            y: isTop ? (safeAreaTop + 12) : (view.bounds.height - bottomSafe - 36),
-            width: width,
-            height: 24
-        )
+        if switchHintLabel.text != "  \(text)  " {
+            switchHintLabel.text = "  \(text)  "
+            switchHintLabel.sizeToFit()
+            let width = min(view.bounds.width - 40, max(120, switchHintLabel.bounds.width))
+            let bottomSafe = max(0, view.safeAreaInsets.bottom)
+            let newFrame = CGRect(
+                x: (view.bounds.width - width) / 2,
+                y: isTop ? (safeAreaTop + 12) : (view.bounds.height - bottomSafe - 36),
+                width: width,
+                height: 24
+            )
+            if switchHintLabel.frame != newFrame {
+                switchHintLabel.frame = newFrame
+            }
+        }
+        
         if switchHintLabel.alpha == 0 {
             UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 1 }
         }
@@ -652,33 +672,39 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         let threshold: CGFloat = 80 
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let currentDragDuration = Date().timeIntervalSince1970 - dragStartTime
 
         if rawOffset < -5 {
             let pullDistance = -rawOffset
-            let isReady = pullDistance > threshold || currentDragDuration > 1.2
-            if isReady {
+            if pullDistance > threshold {
                 if !switchReady { 
                     switchReady = true; pendingSwitchDirection = -1; hapticFeedback() 
-                    LogManager.shared.log("满足切章(上): 距离=\(Int(pullDistance)), 时间=\(String(format: "%.1f", currentDragDuration))", category: "阅读器")
+                    LogManager.shared.log("满足切章(上): 距离=\(Int(pullDistance))", category: "阅读器")
                 }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
-                if pullDistance < 20 { switchReady = false }
-                updateSwitchHint(text: "下拉切换上一章", isTop: true)
+                // 如果已经 Ready，只要不缩回 10pt 以内就保持 Ready，增加稳定性
+                if pullDistance < 10 { switchReady = false }
+                if !switchReady {
+                    updateSwitchHint(text: "下拉切换上一章", isTop: true)
+                } else {
+                    updateSwitchHint(text: "松开切换上一章", isTop: true)
+                }
             }
         } else if rawOffset > actualMaxScrollY + 5 {
             let pullDistance = rawOffset - actualMaxScrollY
-            let isReady = pullDistance > threshold || currentDragDuration > 1.2
-            if isReady {
+            if pullDistance > threshold {
                 if !switchReady { 
                     switchReady = true; pendingSwitchDirection = 1; hapticFeedback() 
-                    LogManager.shared.log("满足切章(下): 距离=\(Int(pullDistance)), 阈值=\(Int(actualMaxScrollY)), 时间=\(String(format: "%.1f", currentDragDuration))", category: "阅读器")
+                    LogManager.shared.log("满足切章(下): 距离=\(Int(pullDistance))", category: "阅读器")
                 }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
-                if pullDistance < 20 { switchReady = false }
-                updateSwitchHint(text: "上拉切换下一章", isTop: false)
+                if pullDistance < 10 { switchReady = false }
+                if !switchReady {
+                    updateSwitchHint(text: "上拉切换下一章", isTop: false)
+                } else {
+                    updateSwitchHint(text: "松开切换下一章", isTop: false)
+                }
             }
         } else {
             if !switchReady && rawOffset > -2 && rawOffset < actualMaxScrollY + 2 { hideSwitchHint() }
@@ -771,6 +797,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     let scrollView = UIScrollView()
     let stackView = UIStackView()
     private let switchHintLabel = UILabel()
+    private var lastViewSize: CGSize = .zero
     private var pendingSwitchDirection: Int = 0
     private var switchReady = false
     private var switchWorkItem: DispatchWorkItem?
@@ -812,8 +839,11 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        scrollView.frame = view.bounds
-        scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
+        if view.bounds.size != lastViewSize {
+            lastViewSize = view.bounds.size
+            scrollView.frame = view.bounds
+            scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
+        }
     }
     
     @objc private func handleTap() { onToggleMenu?() }
@@ -877,15 +907,20 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func updateSwitchHint(text: String, isTop: Bool) {
-        switchHintLabel.text = "  \(text)  "
-        switchHintLabel.sizeToFit()
-        let width = min(view.bounds.width - 40, max(120, switchHintLabel.bounds.width))
-        let bottomSafe = max(0, view.safeAreaInsets.bottom)
-        switchHintLabel.frame = CGRect(
-            x: (view.bounds.width - width) / 2,
-            y: isTop ? (safeAreaTop + 12) : (view.bounds.height - bottomSafe - 36),
-            width: width, height: 24
-        )
+        if switchHintLabel.text != "  \(text)  " {
+            switchHintLabel.text = "  \(text)  "
+            switchHintLabel.sizeToFit()
+            let width = min(view.bounds.width - 40, max(120, switchHintLabel.bounds.width))
+            let bottomSafe = max(0, view.safeAreaInsets.bottom)
+            let newFrame = CGRect(
+                x: (view.bounds.width - width) / 2,
+                y: isTop ? (safeAreaTop + 12) : (view.bounds.height - bottomSafe - 36),
+                width: width, height: 24
+            )
+            if switchHintLabel.frame != newFrame {
+                switchHintLabel.frame = newFrame
+            }
+        }
         if switchHintLabel.alpha == 0 { UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 1 } }
     }
 
@@ -910,8 +945,12 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                 }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
-                switchReady = false; pendingSwitchDirection = -1
-                updateSwitchHint(text: "继续下拉切换上一章", isTop: true)
+                if rawOffset > -safeAreaTop - 15 { switchReady = false }
+                if !switchReady {
+                    updateSwitchHint(text: "继续下拉切换上一章", isTop: true)
+                } else {
+                    updateSwitchHint(text: "松开切换上一章", isTop: true)
+                }
             }
         } else if rawOffset > actualMaxScrollY + 10 {
             if rawOffset > bottomThreshold {
@@ -922,8 +961,12 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                 }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
-                switchReady = false; pendingSwitchDirection = 1
-                updateSwitchHint(text: "继续上拉切换下一章", isTop: false)
+                if rawOffset < actualMaxScrollY + 15 { switchReady = false }
+                if !switchReady {
+                    updateSwitchHint(text: "继续上拉切换下一章", isTop: false)
+                } else {
+                    updateSwitchHint(text: "松开切换下一章", isTop: false)
+                }
             }
         } else {
             if !scrollView.isDragging && rawOffset >= -safeAreaTop - 5 && rawOffset <= actualMaxScrollY + 5 {
