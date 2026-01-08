@@ -150,7 +150,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     @discardableResult
     func update(sentences: [String], nextSentences: [String]?, prevSentences: [String]?, title: String?, nextTitle: String?, prevTitle: String?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
         self.lastMargin = margin
-        // 预处理句子，去除首尾空白以统一缩进控制
         let trimmedSentences = sentences.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedNextSentences = (nextSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedPrevSentences = (prevSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -159,26 +158,23 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let nextChanged = self.nextSentences != trimmedNextSentences
         let prevChanged = self.prevSentences != trimmedPrevSentences
         
-        // 核心优化：检测是否发生了章节置换（即上一章的内容现在变成了本章内容）
         let isChapterSwap = (trimmedSentences == self.nextSentences) && !trimmedSentences.isEmpty
         let isChapterSwapToPrev = (trimmedSentences == self.prevSentences) && !trimmedSentences.isEmpty
         let oldPrevHeightWithGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
         
+        var layoutNeeded = false
+        
         if contentChanged || renderStore == nil {
             self.previousContentHeight = currentContentView.frame.height
-            
             self.currentSentences = trimmedSentences; self.lastFontSize = fontSize; self.lastLineSpacing = lineSpacing; isUpdatingLayout = true
             
-            // 重新计算 paragraphStarts，需要考虑标题的偏移
             let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
             let titleLen = titleText.utf16.count
             var pS: [Int] = []; var cP = titleLen
             for (idx, s) in trimmedSentences.enumerated() { 
                 pS.append(cP)
-                cP += (s.utf16.count + 2) // 2 为全角空格
-                if idx < trimmedSentences.count - 1 {
-                    cP += 1 // 1 为换行符
-                }
+                cP += (s.utf16.count + 2) 
+                if idx < trimmedSentences.count - 1 { cP += 1 }
             }; paragraphStarts = pS
             
             let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
@@ -186,10 +182,39 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
             calculateSentenceOffsets(); isUpdatingLayout = false
             currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
-            
-            // 执行无感置换操作前，先同步布局以获取准确高度
-            if viewIfLoaded != nil { updateLayoutFrames() }
-            
+            layoutNeeded = true
+        }
+        
+        if nextChanged {
+            self.nextSentences = trimmedNextSentences
+            if trimmedNextSentences.isEmpty {
+                nextRenderStore = nil
+                nextContentView.isHidden = true
+            } else {
+                let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
+                if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
+                else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
+            }
+            layoutNeeded = true
+        }
+        
+        if prevChanged {
+            self.prevSentences = trimmedPrevSentences
+            if trimmedPrevSentences.isEmpty {
+                prevRenderStore = nil
+                prevContentView.isHidden = true
+            } else {
+                let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
+                if let s = prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
+                else { prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                prevContentView.update(renderStore: prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
+            }
+            layoutNeeded = true
+        }
+        
+        if layoutNeeded {
+            updateLayoutFrames()
             if isChapterSwap {
                 let adjustment = previousContentHeight + chapterGap
                 if adjustment > 0 {
@@ -202,58 +227,22 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                     let newY = max(0, scrollView.contentOffset.y + adjustment)
                     scrollView.setContentOffset(CGPoint(x: 0, y: newY), animated: false)
                 }
-            }
-            return true
-        }
-        
-        var layoutNeeded = false
-        if nextChanged {
-            self.nextSentences = trimmedNextSentences
-            if trimmedNextSentences.isEmpty {
-                nextRenderStore = nil
-                nextContentView.isHidden = true
-                layoutNeeded = true
-            } else {
-                let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
-                if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
-                else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
-                layoutNeeded = true
+            } else if prevChanged && !isChapterSwapToPrev {
+                let newPrevHeightWithGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
+                let delta = newPrevHeightWithGap - oldPrevHeightWithGap
+                if delta != 0 {
+                    scrollView.setContentOffset(CGPoint(x: 0, y: max(0, scrollView.contentOffset.y + delta)), animated: false)
+                }
             }
         }
-        
-        if prevChanged {
-            self.prevSentences = trimmedPrevSentences
-            if trimmedPrevSentences.isEmpty {
-                prevRenderStore = nil
-                prevContentView.isHidden = true
-                layoutNeeded = true
-            } else {
-                let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
-                if let s = prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
-                else { prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                prevContentView.update(renderStore: prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
-                layoutNeeded = true
-            }
-        }
-        
-        if layoutNeeded { updateLayoutFrames() }
         
         if lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices {
             lastHighlightIndex = highlightIndex; lastSecondaryIndices = secondaryIndices
             currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
         }
         
-        let newPrevHeightWithGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
-        if prevChanged && !isChapterSwapToPrev {
-            let delta = newPrevHeightWithGap - oldPrevHeightWithGap
-            if delta != 0 {
-                scrollView.setContentOffset(CGPoint(x: 0, y: max(0, scrollView.contentOffset.y + delta)), animated: false)
-            }
-        }
-        
         applyScrollBehaviorIfNeeded()
-        return false
+        return contentChanged
     }
 
     private func createAttr(_ sents: [String], title: String?, fontSize: CGFloat, lineSpacing: CGFloat) -> NSAttributedString {
@@ -469,34 +458,28 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let topThreshold: CGFloat = -80
+        let threshold: CGFloat = 80
+        let topThreshold: CGFloat = -threshold
         let topOver = topThreshold - rawOffset
         
         let contentInsetBottom = scrollView.contentInset.bottom
         let adjustedBottomThreshold = max(0, scrollView.contentSize.height - scrollView.bounds.height + contentInsetBottom)
-        let bottomThreshold = adjustedBottomThreshold + 80
+        let bottomThreshold = adjustedBottomThreshold + threshold
         let bottomOver = rawOffset - bottomThreshold
         
-        if scrollView.isDragging {
-            if topOver > 0 {
-                switchReady = true
-                pendingSwitchDirection = -1
-                updateSwitchHint(text: "松手切换上一章", isTop: true)
-                return
-            }
-            if bottomOver > 0 {
-                switchReady = true
-                pendingSwitchDirection = 1
-                updateSwitchHint(text: "松手切换下一章", isTop: false)
-                return
-            }
-        }
-        
-        if !scrollView.isDragging {
-            // 松手回弹过程中增加容忍度，不要立即取消
-            if topOver <= -40 && bottomOver <= -40 { cancelSwitchHold() }
+        if topOver > 0 {
+            if !switchReady { switchReady = true; pendingSwitchDirection = -1; updateSwitchHint(text: "松开切换上一章", isTop: true) }
+        } else if bottomOver > 0 {
+            if !switchReady { switchReady = true; pendingSwitchDirection = 1; updateSwitchHint(text: "松开切换下一章", isTop: false) }
         } else {
-            if topOver <= 0 && bottomOver <= 0 { cancelSwitchHold() }
+            // 在阈值范围内，如果在拉动，且之前是Ready状态，则变回普通状态
+            if scrollView.isDragging && switchReady {
+                switchReady = false
+                pendingSwitchDirection = 0
+                updateSwitchHint(text: topOver > -threshold/2 ? "继续下拉切换上一章" : "继续上拉切换下一章", isTop: rawOffset < 0)
+            } else if !scrollView.isDragging && rawOffset > -20 && rawOffset < adjustedBottomThreshold + 20 {
+                cancelSwitchHold()
+            }
         }
     }
 
@@ -713,30 +696,26 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let topThreshold: CGFloat = -safeAreaTop - 80
+        let threshold: CGFloat = 80
+        let topThreshold: CGFloat = -safeAreaTop - threshold
         let topOver = topThreshold - rawOffset
         let bottomInset: CGFloat = 100
         let adjustedBottomThreshold = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height + bottomInset)
-        let bottomThreshold = adjustedBottomThreshold + 80
+        let bottomThreshold = adjustedBottomThreshold + threshold
         let bottomOver = rawOffset - bottomThreshold
 
-        if scrollView.isDragging {
-            if topOver > 0 {
-                beginSwitchHold(direction: -1, isTop: true)
-                return
-            }
-            if bottomOver > 0 {
-                beginSwitchHold(direction: 1, isTop: false)
-                return
-            }
-        }
-        
-        if !scrollView.isDragging {
-            if topOver <= -40 && bottomOver <= -40 {
-                if !switchReady { cancelSwitchHold() }
-            }
+        if topOver > 0 {
+            if !switchReady { switchReady = true; pendingSwitchDirection = -1; updateSwitchHint(text: "松开切换上一章", isTop: true) }
+        } else if bottomOver > 0 {
+            if !switchReady { switchReady = true; pendingSwitchDirection = 1; updateSwitchHint(text: "松开切换下一章", isTop: false) }
         } else {
-            if topOver <= 0 && bottomOver <= 0 { cancelSwitchHold() }
+            if scrollView.isDragging && switchReady {
+                switchReady = false
+                pendingSwitchDirection = 0
+                updateSwitchHint(text: topOver > -threshold/2 ? "继续下拉切换上一章" : "继续上拉切换下一章", isTop: rawOffset < 0)
+            } else if !scrollView.isDragging && rawOffset > -safeAreaTop-20 && rawOffset < adjustedBottomThreshold + 20 {
+                cancelSwitchHold()
+            }
         }
     }
 
