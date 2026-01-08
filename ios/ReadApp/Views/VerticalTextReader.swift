@@ -54,8 +54,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var lastInfiniteSetting: Bool?
     private var lastAutoSwitchTime: TimeInterval = 0
     private let autoSwitchCooldown: TimeInterval = 0.6
-    private var lastPrefetchTriggerTime: TimeInterval = 0
-    private let prefetchCooldown: TimeInterval = 0.8
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var onReachedBottom: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
@@ -354,13 +352,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         // 预载判定 (仅限无限流)
-        if isInfiniteScrollEnabled {
-            let now = Date().timeIntervalSince1970
-            if s.contentOffset.y > s.contentSize.height - s.bounds.height * 1.3,
-               now - lastPrefetchTriggerTime > prefetchCooldown {
-                lastPrefetchTriggerTime = now
-                onReachedBottom?()
-            }
+        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
+            onReachedBottom?()
         }
         
         // 进度汇报
