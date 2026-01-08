@@ -292,7 +292,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         }
         
         // 3. 绘制文字 (直接使用原始坐标)
-        let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: info.range.location)!
+        guard let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: info.range.location) else { return }
         s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
             if frame.minY >= info.yOffset + info.actualContentHeight { return false }

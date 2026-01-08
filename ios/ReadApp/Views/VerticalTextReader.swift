@@ -173,9 +173,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             // 重新计算 paragraphStarts，需要考虑标题的偏移
             let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
             let titleLen = titleText.utf16.count
-            var pS: [Int] = []; var cP = titleLen; for s in trimmedSentences { 
+            var pS: [Int] = []; var cP = titleLen; for (i, s) in trimmedSentences.enumerated() { 
                 pS.append(cP)
-                cP += s.count + 2 + 1 // 2 为全角空格，1 为换行符
+                cP += s.utf16.count + 2
+                if i < trimmedSentences.count - 1 {
+                    cP += 1 // 换行符
+                }
             }; paragraphStarts = pS
             
             let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
@@ -586,7 +589,8 @@ class VerticalTextContentView: UIView {
                 guard i < paragraphStarts.count else { continue }
                 let start = paragraphStarts[i], end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length, r = NSRange(location: start, length: max(0, end - start))
                 ctx?.setFillColor(((i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)).cgColor)
-                s.layoutManager.enumerateTextLayoutFragments(from: s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: r.location)!, options: [.ensuresLayout]) { f in
+                guard let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: r.location) else { continue }
+                s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { f in
                     if s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(r) { return false }
                     for line in f.textLineFragments { 
                         // 这里 line.typographicBounds 已经相对于 fragment 的坐标了
@@ -602,11 +606,12 @@ class VerticalTextContentView: UIView {
         
         // 关键修复：绘图时不要受 View 坐标影响，LayoutManager 里的 frame 是相对于其布局容器的
         ctx?.saveGState()
+        guard let ctx = ctx else { return }
         let sL = s.layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: rect.minY))?.rangeInElement.location ?? s.contentStorage.documentRange.location
         s.layoutManager.enumerateTextLayoutFragments(from: sL, options: [.ensuresLayout]) { f in
             if f.layoutFragmentFrame.minY > rect.maxY { return false }
             if f.layoutFragmentFrame.maxY >= rect.minY { 
-                f.draw(at: f.layoutFragmentFrame.origin, in: ctx!) 
+                f.draw(at: f.layoutFragmentFrame.origin, in: ctx) 
             }
             return true
         }

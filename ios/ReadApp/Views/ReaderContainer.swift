@@ -545,9 +545,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let spec = currentLayoutSpec
         var pS: [Int] = []
         var c = title.isEmpty ? 0 : (title + "\n").utf16.count
-        for s in sentences {
+        for (i, s) in sentences.enumerated() {
             pS.append(c)
-            c += (s.utf16.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
+            c += (s.utf16.count + 2)
+            if i < sentences.count - 1 {
+                c += 1
+            }
         }
         return TextKit2Paginator.paginate(renderStore: store, pageSize: spec.pageSize, paragraphStarts: pS, prefixLen: title.isEmpty ? 0 : (title + "\n").utf16.count, topInset: spec.topInset, bottomInset: spec.bottomInset)
     }
@@ -589,9 +592,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard let s = renderStore else { return }; let spec = currentLayoutSpec
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
-        var starts: [Int] = []; var curr = pLen; for sent in contentSentences { 
+        var starts: [Int] = []; var curr = pLen
+        for (i, sent) in contentSentences.enumerated() { 
             starts.append(curr)
-            curr += (sent.utf16.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
+            curr += (sent.utf16.count + 2)
+            if i < contentSentences.count - 1 {
+                curr += 1 // 换行符
+            }
         }
         let res = TextKit2Paginator.paginate(renderStore: s, pageSize: spec.pageSize, paragraphStarts: starts, prefixLen: pLen, topInset: spec.topInset, bottomInset: spec.bottomInset)
         self.pages = res.pages; self.pageInfos = res.pageInfos
@@ -604,7 +611,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         v.onVisibleIndexChanged = { [weak self] i in self?.handleVerticalScroll(to: i) }
         v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
         v.onAddReplaceRule = { [weak self] t in self?.onAddReplaceRuleWithText?(t) }
-        v.onChapterSwitched = { [weak self] d in self?.jumpToChapter(self!.currentChapterIndex + d) }
+        v.onChapterSwitched = { [weak self] d in 
+            guard let self = self else { return }
+            self.jumpToChapter(self.currentChapterIndex + d) 
+        }
         v.onReachedBottom = { [weak self] in self?.prefetchNextChapterOnly() }
         v.onInteractionChanged = { [weak self] i in self?.isUserInteracting = i }
         v.safeAreaTop = safeAreaTop
@@ -677,9 +687,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         var curr = pLen
         var pS: [Int] = []
-        for s in contentSentences { 
+        for (i, s) in contentSentences.enumerated() { 
             pS.append(curr)
-            curr += (s.utf16.count + 2 + 1) // 计入全角空格和换行符
+            curr += (s.utf16.count + 2)
+            if i < contentSentences.count - 1 {
+                curr += 1
+            }
         }
         
         guard sentenceIndex < pS.count else { return }
