@@ -358,20 +358,21 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if isInfiniteScrollEnabled {
             if !decelerate { onInteractionChanged?(false) }
-            cancelSwitchHold()
+            // 无限流不需要在这里取消，由触发逻辑控制
             return
         }
         // 如果在切换就绪状态，延迟检查阻尼回弹后再决定是否切换
         if switchReady && pendingSwitchDirection != 0 {
-            // 延迟一点时间让阻尼回弹完成
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            // 延迟一点时间让阻尼回弹开始
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 guard let self = self else { return }
-                // 检查是否仍然在切换就绪状态
                 if self.switchReady && self.pendingSwitchDirection != 0 {
-                    // 触发章节切换
                     self.onChapterSwitched?(self.pendingSwitchDirection)
+                    // 执行切换后延迟取消
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.cancelSwitchHold() }
+                } else {
+                    self.cancelSwitchHold()
                 }
-                self.cancelSwitchHold()
             }
         } else {
             if !decelerate { onInteractionChanged?(false) }
@@ -497,9 +498,16 @@ private extension VerticalTextViewController {
             }
         }
         
-        // 如果不在拖拽且不在超过范围，则取消。但在拖拽结束瞬间不立即取消，由 scrollViewDidEndDragging 处理
-        if topOver <= 0 && bottomOver <= 0 {
-            cancelSwitchHold()
+        // 如果不在拖拽且不在超过范围，则取消。但在回弹过程中不立即取消 switchReady，由跳转逻辑判定
+        if !scrollView.isDragging {
+            if topOver <= 0 && bottomOver <= 0 {
+                cancelSwitchHold()
+            }
+        } else {
+            if topOver <= 0 && bottomOver <= 0 {
+                // 在拖拽中滑回了正常区域
+                cancelSwitchHold()
+            }
         }
     }
 
@@ -641,10 +649,38 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         scrollView.frame = view.bounds
         // 保持 contentInset 一致，底部使用固定100pt作为阻尼空间
         scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
-        // 初始 offset 设置为负值，触发顶部阻尼
-        if scrollView.contentOffset.y > -100 {
-            scrollView.contentOffset = CGPoint(x: 0, y: -100)
+    }
+
+    private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
+        let topThreshold: CGFloat = -safeAreaTop - 80
+        let topOver = topThreshold - rawOffset
+        let bottomInset: CGFloat = 100
+        let adjustedBottomThreshold = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height + bottomInset)
+        let bottomThreshold = adjustedBottomThreshold + 80
+        let bottomOver = rawOffset - bottomThreshold
+
+        if scrollView.isDragging {
+            if topOver > 0 {
+                beginSwitchHold(direction: -1, isTop: true)
+                return
+            }
+            if bottomOver > 0 {
+                beginSwitchHold(direction: 1, isTop: false)
+                return
+            }
         }
+        
+        // 只有当滑动回到正常区域时才取消就绪状态
+        if topOver <= 0 && bottomOver <= 0 {
+            // 如果已经在回弹过程中，不要立即取消，让切换逻辑有机会执行
+            if scrollView.isDragging {
+                cancelSwitchHold()
+            } else if !switchReady {
+                cancelSwitchHold()
+            }
+        }
+    }
+
     }
     
     @objc private func handleTap() { onToggleMenu?() }

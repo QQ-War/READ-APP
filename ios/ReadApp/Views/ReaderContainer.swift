@@ -631,6 +631,78 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         v.onChapterSwitched = { [weak self] offset in 
             guard let self = self else { return }
             
+            // 如果关闭了无限流，执行普通跳转
+            if !self.preferences.isInfiniteScrollEnabled {
+                let target = self.currentChapterIndex + offset
+                guard target >= 0 && target < self.chapters.count else { return }
+                self.jumpToChapter(target, startAtEnd: offset < 0)
+                return
+            }
+            
+            // 连跳保护
+            let now = Date().timeIntervalSince1970
+            guard now - self.lastChapterSwitchTime > self.chapterSwitchCooldown else { return }
+            
+            let target = self.currentChapterIndex + offset
+            guard target >= 0 && target < self.chapters.count else { return }
+            
+            self.lastChapterSwitchTime = now
+            self.switchChapterSeamlessly(offset: offset)
+        }
+        v.onInteractionChanged = { [weak self] interacting in self?.isUserInteracting = interacting }
+        addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
+        
+        let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+        let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
+        let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
+        let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
+        let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
+        v.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+        self.verticalVC = v
+    }
+
+    private func switchChapterSeamlessly(offset: Int) {
+        guard offset != 0 else { return }
+        
+        // 只有当预加载数据存在时才执行无感置换
+        let canSwap = (offset > 0 && nextChapterStore != nil) || (offset < 0 && prevChapterStore != nil)
+        
+        if canSwap {
+            if offset > 0 {
+                prevChapterStore = renderStore; prevChapterPages = pages; prevChapterPageInfos = pageInfos; prevChapterSentences = contentSentences; prevChapterRawContent = rawContent
+                renderStore = nextChapterStore; pages = nextChapterPages; pageInfos = nextChapterPageInfos; contentSentences = nextChapterSentences ?? []; rawContent = nextChapterRawContent ?? ""
+                nextChapterStore = nil; nextChapterPages = []; nextChapterPageInfos = []
+            } else {
+                nextChapterStore = renderStore; nextChapterPages = pages; nextChapterPageInfos = pageInfos; nextChapterSentences = contentSentences; nextChapterRawContent = rawContent
+                renderStore = prevChapterStore; pages = prevChapterPages; pageInfos = prevChapterPageInfos; contentSentences = prevChapterSentences ?? []; rawContent = prevChapterRawContent ?? ""
+                prevChapterStore = nil; prevChapterPages = []; prevChapterPageInfos = []
+            }
+            
+            self.currentChapterIndex += offset
+            self.lastReportedChapterIndex = self.currentChapterIndex
+            self.onChapterIndexChanged?(self.currentChapterIndex)
+            
+            // 更新段落起始点
+            let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+            let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
+            var starts: [Int] = []; var curr = pLen; for sent in contentSentences { 
+                starts.append(curr)
+                curr += (sent.utf16.count + 2 + 1)
+            }
+            self.currentParagraphStarts = starts
+            
+            // 关键：更新垂直阅读器，它内部会根据 contentSentences 的变化执行无感偏移逻辑
+            updateVerticalAdjacent()
+            prefetchAdjacentChapters(index: currentChapterIndex)
+        } else {
+            // 如果没预加载好，退回到普通跳转
+            jumpToChapter(currentChapterIndex + offset, startAtEnd: offset < 0)
+        }
+    }
+
+        v.onChapterSwitched = { [weak self] offset in 
+            guard let self = self else { return }
+            
             // 如果关闭了无限流，禁止滚动自动切换章节
             if !self.preferences.isInfiniteScrollEnabled { return }
             
