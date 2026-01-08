@@ -53,6 +53,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var hintWorkItem: DispatchWorkItem?
     private var isShowingSwitchResultHint = false
     private var suppressAutoSwitchUntil: TimeInterval = 0
+    private var dragStartTime: TimeInterval = 0
     private let dampingFactor: CGFloat = 0.12
     private let chapterGap: CGFloat = 80
     private var lastInfiniteSetting: Bool?
@@ -387,47 +388,40 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        dragStartTime = Date().timeIntervalSince1970
         cancelSwitchHold()
         pendingSeamlessSwitch = 0 // 新的拖拽开始，重置自动切换标记
         onInteractionChanged?(true)
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        // 无限流模式：检查是否有待执行的无缝切换
-        if isInfiniteScrollEnabled {
-            if !decelerate { 
-                onInteractionChanged?(false) 
-                executeSeamlessSwitchIfNeeded()
+        onInteractionChanged?(false)
+        
+        // 非无限流模式：执行松手切换逻辑
+        if !isInfiniteScrollEnabled {
+            if switchReady && pendingSwitchDirection != 0 {
+                // 只要达到 Ready 状态，松手那一刻立即触发逻辑，无视回弹动画
+                let direction = pendingSwitchDirection
+                self.onChapterSwitched?(direction)
+                self.cancelSwitchHold()
+                return
             }
+            cancelSwitchHold()
             return
         }
         
-        // 非无限流模式：执行松手切换逻辑
-        if switchReady && pendingSwitchDirection != 0 {
-            if decelerate {
-                return
-            }
-            let direction = pendingSwitchDirection
-            self.onChapterSwitched?(direction)
-            self.cancelSwitchHold()
-        } else {
-            if !decelerate { onInteractionChanged?(false) }
-            cancelSwitchHold()
+        // 无限流模式：检查是否有待执行的无缝切换
+        if !decelerate { 
+            executeSeamlessSwitchIfNeeded()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        onInteractionChanged?(false)
         if !isInfiniteScrollEnabled {
-            if switchReady && pendingSwitchDirection != 0 {
-                let direction = pendingSwitchDirection
-                self.onChapterSwitched?(direction)
-            }
             cancelSwitchHold()
-            onInteractionChanged?(false)
             return
         }
-        cancelSwitchHold()
-        onInteractionChanged?(false)
         executeSeamlessSwitchIfNeeded()
     }
     
@@ -559,34 +553,53 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        guard scrollView.isDragging else {
-            if !switchReady { cancelSwitchHold() }
+        guard !isInfiniteScrollEnabled, scrollView.isDragging else {
+            if isInfiniteScrollEnabled && !isShowingSwitchResultHint {
+                hideSwitchHint()
+            }
             return
         }
         
-        let threshold: CGFloat = 70 // 适中的拉动阈值
+        let threshold: CGFloat = 80 // 距离阈值
+        let timeThreshold: TimeInterval = 0.8 // 时间阈值
+        let currentDragDuration = Date().timeIntervalSince1970 - dragStartTime
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
         
-        if rawOffset <= 0 {
-            let pullDistance = max(0, -rawOffset)
-            if pullDistance >= threshold {
-                if !switchReady { switchReady = true; pendingSwitchDirection = -1; hapticFeedback() }
+        if rawOffset < -10 {
+            let pullDistance = -rawOffset
+            let isReady = pullDistance > threshold || currentDragDuration > timeThreshold
+            if isReady {
+                if !switchReady {
+                    switchReady = true
+                    pendingSwitchDirection = -1
+                    hapticFeedback()
+                }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
-                switchReady = false; pendingSwitchDirection = -1
+                switchReady = false
+                pendingSwitchDirection = -1
                 updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
-        } else if rawOffset >= actualMaxScrollY {
-            let pullDistance = max(0, rawOffset - actualMaxScrollY)
-            if pullDistance >= threshold {
-                if !switchReady { switchReady = true; pendingSwitchDirection = 1; hapticFeedback() }
+        } else if rawOffset > actualMaxScrollY + 10 {
+            let pullDistance = rawOffset - actualMaxScrollY
+            let isReady = pullDistance > threshold || currentDragDuration > timeThreshold
+            if isReady {
+                if !switchReady {
+                    switchReady = true
+                    pendingSwitchDirection = 1
+                    hapticFeedback()
+                }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
-                switchReady = false; pendingSwitchDirection = 1
+                switchReady = false
+                pendingSwitchDirection = 1
                 updateSwitchHint(text: "上拉切换下一章", isTop: false)
             }
         } else {
-            cancelSwitchHold()
+            // 在正文区域稍微宽容一点，不要立即 cancel，防止微小拉动就闪烁提示
+            if !switchReady && rawOffset > -5 && rawOffset < actualMaxScrollY + 5 {
+                hideSwitchHint()
+            }
         }
     }
     
