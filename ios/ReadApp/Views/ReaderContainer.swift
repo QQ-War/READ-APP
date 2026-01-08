@@ -651,6 +651,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.switchChapterSeamlessly(offset: offset)
         }
         v.onInteractionChanged = { [weak self] interacting in self?.isUserInteracting = interacting }
+        self.verticalVC = v
         addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
         
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
@@ -659,7 +660,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
         let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
         v.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
-        self.verticalVC = v
     }
 
     private func switchChapterSeamlessly(offset: Int) {

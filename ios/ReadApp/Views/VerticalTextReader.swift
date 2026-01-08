@@ -181,11 +181,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             }; paragraphStarts = pS
             
             let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
-            if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
-            else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+            if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) } 
+            else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
             calculateSentenceOffsets(); isUpdatingLayout = false
             currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
-            updateLayoutFrames()
+            if viewIfLoaded != nil { updateLayoutFrames() }
             
             // 执行无感置换
             if isChapterSwap {

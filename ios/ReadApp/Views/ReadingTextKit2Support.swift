@@ -302,15 +302,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
             let fragmentOffset = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
             let isParagraphStart = self.paragraphStarts.contains(fragmentOffset)
             
-            if !isParagraphStart && fragmentOffset > self.chapterPrefixLen {
-                 // 对非段落起点的片段，如果它带有 paragraphStyle，且其首行缩进不为0，则需要特殊处理
-                 // 注意：TextKit2 绘图通常直接使用存储的属性。如果直接修改 attributedString 会影响性能。
-                 // 这里的方案是在 draw 之前微调 context 或者使用特殊的渲染方式。
-                 // 但由于 fragment.draw 是黑盒，我们尝试在分页时解决，或者在这里进行更精细的绘制控制。
-                 fragment.draw(at: frame.origin, in: ctx)
-            } else {
-                 fragment.draw(at: frame.origin, in: ctx)
-            }
+            fragment.draw(at: frame.origin, in: ctx)
             return true
         }
         
