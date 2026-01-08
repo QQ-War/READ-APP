@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - TK1
+      - seperate
     paths:
       - "ios/**"
       - ".github/workflows/ios.yml"
