@@ -541,23 +541,27 @@ class VerticalTextContentView: UIView {
                 guard i < paragraphStarts.count else { continue }
                 let start = paragraphStarts[i], end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length, r = NSRange(location: start, length: max(0, end - start))
                 ctx?.setFillColor(((i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)).cgColor)
-                s.layoutManager.enumerateTextLayoutFragments(from: s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: r.location)!, options: [.ensuresLayout]) { f in
-                    if s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(r) { return false }
-                    for line in f.textLineFragments { 
-                        let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y)
-                        ctx?.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath)
-                        ctx?.fillPath() 
+                
+                if let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: r.location) {
+                    s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { f in
+                        if s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(r) { return false }
+                        for line in f.textLineFragments { 
+                            let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y)
+                            ctx?.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath)
+                            ctx?.fillPath() 
+                        }
+                        return true
                     }
-                    return true
                 }
             }
             ctx?.restoreGState()
         }
         ctx?.saveGState()
+        guard let context = ctx else { return }
         let sL = s.layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: rect.minY))?.rangeInElement.location ?? s.contentStorage.documentRange.location
         s.layoutManager.enumerateTextLayoutFragments(from: sL, options: [.ensuresLayout]) { f in
             if f.layoutFragmentFrame.minY > rect.maxY { return false }
-            if f.layoutFragmentFrame.maxY >= rect.minY { f.draw(at: f.layoutFragmentFrame.origin, in: ctx!) }
+            if f.layoutFragmentFrame.maxY >= rect.minY { f.draw(at: f.layoutFragmentFrame.origin, in: context) }
             return true
         }
         ctx?.restoreGState()
