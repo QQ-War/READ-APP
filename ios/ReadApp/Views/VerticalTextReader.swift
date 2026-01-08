@@ -158,14 +158,15 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     @discardableResult
     func update(sentences: [String], nextSentences: [String]?, prevSentences: [String]?, title: String?, nextTitle: String?, prevTitle: String?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
+        let marginChanged = self.lastMargin != margin
         self.lastMargin = margin
         let trimmedSentences = sentences.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedNextSentences = (nextSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedPrevSentences = (prevSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         
-        let contentChanged = self.currentSentences != trimmedSentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing
-        let nextChanged = self.nextSentences != trimmedNextSentences
-        let prevChanged = self.prevSentences != trimmedPrevSentences
+        let contentChanged = self.currentSentences != trimmedSentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing || marginChanged
+        let nextChanged = self.nextSentences != trimmedNextSentences || marginChanged
+        let prevChanged = self.prevSentences != trimmedPrevSentences || marginChanged
         
         let isChapterSwap = (trimmedSentences == self.nextSentences) && !trimmedSentences.isEmpty
         let isChapterSwapToPrev = (trimmedSentences == self.prevSentences) && !trimmedSentences.isEmpty
