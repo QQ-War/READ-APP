@@ -432,10 +432,21 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         self.currentPageIndex = targetPage
         self.onChapterIndexChanged?(self.currentChapterIndex)
         
+        // 更新段落起始位置，确保渲染和 TTS 同步正常
+        let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+        let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
+        var starts: [Int] = []; var curr = pLen; for sent in contentSentences { 
+            starts.append(curr)
+            curr += (sent.utf16.count + 2 + 1)
+        }
+        self.currentParagraphStarts = starts
+
         if let v = currentVC {
             v.chapterOffset = 0
             if let rv = v.view.subviews.first as? ReadContent2View {
                 rv.renderStore = self.renderStore
+                rv.paragraphStarts = self.currentParagraphStarts
+                rv.chapterPrefixLen = pLen
             }
         }
         
@@ -476,11 +487,18 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let vc = PageContentViewController(pageIndex: i, chapterOffset: offset); let pV = ReadContent2View(frame: .zero)
         let aS = (offset == 0) ? renderStore : (offset > 0 ? nextChapterStore : prevChapterStore)
         let aI = (offset == 0) ? pageInfos : (offset > 0 ? nextChapterPageInfos : prevChapterPageInfos)
+        let aPS = (offset == 0) ? currentParagraphStarts : [] // 预载章节暂时不传 paragraphStarts，切换后会更新
+        let title = (offset == 0) ? (chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "") : "" // 简单处理
+        
         pV.renderStore = aS; if i < aI.count { 
             let info = aI[i]; pV.pageInfo = TK2PageInfo(range: info.range, yOffset: info.yOffset, pageHeight: info.pageHeight, actualContentHeight: info.actualContentHeight, startSentenceIndex: info.startSentenceIndex, contentInset: currentLayoutSpec.topInset)
         }
         pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.onToggleMenu?() } else { self?.handlePageTap(isNext: loc == .right) } }
-        pV.horizontalInset = currentLayoutSpec.sideMargin; vc.view.addSubview(pV); pV.translatesAutoresizingMaskIntoConstraints = false
+        pV.horizontalInset = currentLayoutSpec.sideMargin
+        pV.paragraphStarts = aPS
+        pV.chapterPrefixLen = title.isEmpty ? 0 : (title + "\n").utf16.count
+        
+        vc.view.addSubview(pV); pV.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([pV.topAnchor.constraint(equalTo: vc.view.topAnchor), pV.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor), pV.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor), pV.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor)])
         return vc
     }
@@ -523,8 +541,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if index + 1 < chapters.count {
             prefetchNextTask = Task { if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index + 1, contentType: 0) {
                 await MainActor.run { guard !Task.isCancelled else { return }
-                    let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                    let title = self.chapters[index + 1].title; let attr = self.createAttrString(processed, title: title); let spec = self.currentLayoutSpec
+                    let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                    let title = self.chapters[index + 1].title; let attr = self.createAttrString(sents.joined(separator: "\n"), title: title); let spec = self.currentLayoutSpec
                     let store = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
                     let res = self.performSilentPagination(for: store, sentences: sents, title: title)
                     self.nextChapterStore = store; self.nextChapterPages = res.pages; self.nextChapterPageInfos = res.pageInfos; self.nextChapterSentences = sents; self.nextChapterRawContent = content
@@ -535,8 +553,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if index - 1 >= 0 {
             prefetchPrevTask = Task { if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index - 1, contentType: 0) {
                 await MainActor.run { guard !Task.isCancelled else { return }
-                    let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                    let title = self.chapters[index - 1].title; let attr = self.createAttrString(processed, title: title); let spec = self.currentLayoutSpec
+                    let processed = self.applyReplaceRules(to: self.removeHTMLAndSVG(content)); let sents = processed.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                    let title = self.chapters[index - 1].title; let attr = self.createAttrString(sents.joined(separator: "\n"), title: title); let spec = self.currentLayoutSpec
                     let store = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, spec.pageSize.width - spec.sideMargin * 2))
                     let res = self.performSilentPagination(for: store, sentences: sents, title: title)
                     self.prevChapterStore = store; self.prevChapterPages = res.pages; self.prevChapterPageInfos = res.pageInfos; self.prevChapterSentences = sents; self.prevChapterRawContent = content
@@ -552,7 +570,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var c = title.isEmpty ? 0 : (title + "\n").utf16.count
         for s in sentences {
             pS.append(c)
-            c += (s.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
+            c += (s.utf16.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
         }
         return TextKit2Paginator.paginate(renderStore: store, pageSize: spec.pageSize, paragraphStarts: pS, prefixLen: title.isEmpty ? 0 : (title + "\n").utf16.count, topInset: spec.topInset, bottomInset: spec.bottomInset)
     }
@@ -595,7 +613,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
         var starts: [Int] = []; var curr = pLen; for sent in contentSentences { 
             starts.append(curr)
-            curr += (sent.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
+            curr += (sent.utf16.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
         }
         let res = TextKit2Paginator.paginate(renderStore: s, pageSize: spec.pageSize, paragraphStarts: starts, prefixLen: pLen, topInset: spec.topInset, bottomInset: spec.bottomInset)
         self.pages = res.pages; self.pageInfos = res.pageInfos
@@ -606,6 +624,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let v = VerticalTextViewController(); v.onVisibleIndexChanged = { [weak self] idx in self?.onProgressChanged?(self?.currentChapterIndex ?? 0, Double(idx) / Double(max(1, self?.contentSentences.count ?? 1))) }
         v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
         v.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
+        v.onReachedBottom = { [weak self] in 
+            guard let self = self else { return }
+            self.prefetchAdjacentChapters(index: self.currentChapterIndex)
+        }
         v.onChapterSwitched = { [weak self] offset in 
             guard let self = self else { return }
             
@@ -675,7 +697,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var pS: [Int] = []
         for s in contentSentences { 
             pS.append(curr)
-            curr += (s.count + 2 + 1) // 计入全角空格和换行符
+            curr += (s.utf16.count + 2 + 1) // 计入全角空格和换行符
         }
         
         guard sentenceIndex < pS.count else { return }

@@ -174,7 +174,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             let titleLen = titleText.utf16.count
             var pS: [Int] = []; var cP = titleLen; for s in trimmedSentences { 
                 pS.append(cP)
-                cP += s.count + 2 + 1 // 2 为全角空格，1 为换行符
+                cP += s.utf16.count + 2 + 1 // 2 为全角空格，1 为换行符
             }; paragraphStarts = pS
             
             let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
@@ -328,19 +328,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let contentInsetBottom = s.contentInset.bottom
         
         if !isInfiniteScrollEnabled {
-            // 顶部阻尼：contentOffset.y < -contentInset.top 时触发
-            let topInset: CGFloat = 0
-            if rawOffset < topInset {
-                let over = topInset - rawOffset
-                s.contentOffset.y = topInset - over * dampingFactor
-            }
-            
-            // 底部阻尼：contentOffset.y > adjustedContentHeight 时触发
-            let adjustedContentHeight = max(0, s.contentSize.height - s.bounds.height + contentInsetBottom)
-            if rawOffset > adjustedContentHeight {
-                let over = rawOffset - adjustedContentHeight
-                s.contentOffset.y = adjustedContentHeight + over * dampingFactor
-            }
+            // 移除手动设置 contentOffset 的阻尼逻辑，这会产生冲突
+            // 我们通过 alwaysBounceVertical = true 让系统自动处理阻尼
         }
         
         let y = s.contentOffset.y - (safeAreaTop + 10)
@@ -508,7 +497,8 @@ private extension VerticalTextViewController {
             }
         }
         
-        if !scrollView.isDragging || (topOver <= 0 && bottomOver <= 0) {
+        // 如果不在拖拽且不在超过范围，则取消。但在拖拽结束瞬间不立即取消，由 scrollViewDidEndDragging 处理
+        if topOver <= 0 && bottomOver <= 0 {
             cancelSwitchHold()
         }
     }
