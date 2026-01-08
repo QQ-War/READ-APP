@@ -186,9 +186,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
             calculateSentenceOffsets(); isUpdatingLayout = false
             currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
+            
+            // 执行无感置换操作前，先同步布局以获取准确高度
             if viewIfLoaded != nil { updateLayoutFrames() }
             
-            // 执行无感置换
             if isChapterSwap {
                 let adjustment = previousContentHeight + chapterGap
                 if adjustment > 0 {
@@ -205,18 +206,19 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             return true
         }
         
+        var layoutNeeded = false
         if nextChanged {
             self.nextSentences = trimmedNextSentences
             if trimmedNextSentences.isEmpty {
                 nextRenderStore = nil
                 nextContentView.isHidden = true
-                updateLayoutFrames()
+                layoutNeeded = true
             } else {
                 let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
                 if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
                 else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
                 nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
-                updateLayoutFrames()
+                layoutNeeded = true
             }
         }
         
@@ -225,15 +227,17 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if trimmedPrevSentences.isEmpty {
                 prevRenderStore = nil
                 prevContentView.isHidden = true
-                updateLayoutFrames()
+                layoutNeeded = true
             } else {
                 let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
                 if let s = prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
                 else { prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
                 prevContentView.update(renderStore: prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
-                updateLayoutFrames()
+                layoutNeeded = true
             }
         }
+        
+        if layoutNeeded { updateLayoutFrames() }
         
         if lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices {
             lastHighlightIndex = highlightIndex; lastSecondaryIndices = secondaryIndices
@@ -489,7 +493,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         if !scrollView.isDragging {
-            if topOver <= 0 && bottomOver <= 0 { cancelSwitchHold() }
+            // 松手回弹过程中增加容忍度，不要立即取消
+            if topOver <= -40 && bottomOver <= -40 { cancelSwitchHold() }
         } else {
             if topOver <= 0 && bottomOver <= 0 { cancelSwitchHold() }
         }
@@ -727,7 +732,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         }
         
         if !scrollView.isDragging {
-            if topOver <= 0 && bottomOver <= 0 {
+            if topOver <= -40 && bottomOver <= -40 {
                 if !switchReady { cancelSwitchHold() }
             }
         } else {
