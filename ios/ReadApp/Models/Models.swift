@@ -354,6 +354,12 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    @Published var verticalThreshold: CGFloat {
+        didSet {
+            UserDefaults.standard.set(verticalThreshold, forKey: "verticalThreshold")
+        }
+    }
+
     /// 是否强制使用服务器代理加载漫画图片
     @Published var forceMangaProxy: Bool {
         didSet {
@@ -448,6 +454,8 @@ class UserPreferences: ObservableObject {
         
         self.isVerboseLoggingEnabled = UserDefaults.standard.bool(forKey: "isVerboseLoggingEnabled")
         self.isInfiniteScrollEnabled = UserDefaults.standard.object(forKey: "isInfiniteScrollEnabled") as? Bool ?? true
+        let savedVerticalThreshold = CGFloat(UserDefaults.standard.float(forKey: "verticalThreshold"))
+        self.verticalThreshold = savedVerticalThreshold == 0 ? 80 : savedVerticalThreshold
         self.forceMangaProxy = UserDefaults.standard.bool(forKey: "forceMangaProxy")
         
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")

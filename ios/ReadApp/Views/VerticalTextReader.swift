@@ -5,6 +5,7 @@ import UIKit
 struct VerticalTextReader: UIViewControllerRepresentable {
     let sentences: [String]; let fontSize: CGFloat; let lineSpacing: CGFloat; let horizontalMargin: CGFloat; let highlightIndex: Int?; let secondaryIndices: Set<Int>; let isPlayingHighlight: Bool; let chapterUrl: String?
     let title: String?; let nextTitle: String?; let prevTitle: String?
+    let verticalThreshold: CGFloat
     @Binding var currentVisibleIndex: Int; @Binding var pendingScrollIndex: Int?
     var forceScrollToTop: Bool = false; var onScrollFinished: (() -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var safeAreaTop: CGFloat = 0
@@ -25,6 +26,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
         vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; vc.safeAreaTop = safeAreaTop
         vc.onReachedBottom = onReachedBottom; vc.onReachedTop = onReachedTop; vc.onChapterSwitched = onChapterSwitched
         vc.onInteractionChanged = onInteractionChanged
+        vc.threshold = verticalThreshold
         
         let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, prevSentences: prevChapterSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
         
@@ -71,6 +73,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var onReachedBottom: (() -> Void)?; var onReachedTop: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
+    var threshold: CGFloat = 80
     
     private var renderStore: TextKit2RenderStore?; private var nextRenderStore: TextKit2RenderStore?; private var prevRenderStore: TextKit2RenderStore?
     private var currentSentences: [String] = []; private var nextSentences: [String] = []; private var prevSentences: [String] = []
@@ -670,7 +673,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             return
         }
         
-        let threshold: CGFloat = 80 
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
 
         if rawOffset < -5 {
@@ -808,6 +810,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var onToggleMenu: (() -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0
+    var threshold: CGFloat = 80
     private var imageUrls: [String] = []
 
     override func viewDidLoad() {
@@ -930,7 +933,6 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let threshold: CGFloat = 80
         let topThreshold: CGFloat = -safeAreaTop - threshold
         
         let actualMaxScrollY = max(-safeAreaTop, stackView.frame.height - scrollView.bounds.height)

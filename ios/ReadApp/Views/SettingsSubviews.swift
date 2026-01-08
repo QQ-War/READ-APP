@@ -117,6 +117,22 @@ struct ReadingSettingsView: View {
                 
                 if preferences.readingMode == .vertical {
                     Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
+                    
+                    if !preferences.isInfiniteScrollEnabled {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("切章触发拉伸距离")
+                                Spacer()
+                                Text("\(Int(preferences.verticalThreshold)) pt")
+                                    .foregroundColor(.secondary)
+                            }
+                            Slider(value: $preferences.verticalThreshold, in: 50...150, step: 5)
+                            Text("数值越小越灵敏，数值越大拉伸感越强")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
                 }
             }
             

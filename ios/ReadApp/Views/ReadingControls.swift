@@ -291,6 +291,19 @@ struct ReaderOptionsSheet: View {
                     if preferences.readingMode == .vertical {
                         Section(header: Text("上下滚动")) {
                             Toggle("开启无限流", isOn: $preferences.isInfiniteScrollEnabled)
+                            
+                            if !preferences.isInfiniteScrollEnabled {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Text("切章触发拉伸距离")
+                                        Spacer()
+                                        Text("\(Int(preferences.verticalThreshold)) pt")
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Slider(value: $preferences.verticalThreshold, in: 50...150, step: 5)
+                                }
+                                .padding(.vertical, 4)
+                            }
                         }
                     }
                 }

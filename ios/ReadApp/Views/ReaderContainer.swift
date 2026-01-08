@@ -65,6 +65,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
         vc.updateLayout(safeArea: safeAreaInsets)
         vc.updatePreferences(preferences)
         vc.updateReplaceRules(replaceRuleViewModel.rules)
+        vc.verticalThreshold = preferences.verticalThreshold
         
         // 外部跳转检测逻辑优化
         if !vc.isInternalTransitioning && vc.lastReportedChapterIndex != currentChapterIndex {
@@ -94,6 +95,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     private(set) var currentChapterIndex: Int = 0
     var lastReportedChapterIndex: Int = -1
+    var verticalThreshold: CGFloat = 80 {
+        didSet {
+            verticalVC?.threshold = verticalThreshold
+            mangaVC?.threshold = verticalThreshold
+        }
+    }
     private(set) var currentReadingMode: ReadingMode = .vertical
     var isInternalTransitioning = false
     private var isFirstLoad = true
@@ -719,6 +726,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.switchChapterSeamlessly(offset: offset)
         }
         v.onInteractionChanged = { [weak self] interacting in self?.isUserInteracting = interacting }
+        v.threshold = verticalThreshold
         self.verticalVC = v
         addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
         
@@ -779,6 +787,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 self.lastChapterSwitchTime = now
                 self.jumpToChapter(target, startAtEnd: offset < 0)
             }
+            vc.threshold = verticalThreshold
             addChild(vc); view.insertSubview(vc.view, at: 0); vc.view.frame = view.bounds; vc.didMove(toParent: self)
             self.mangaVC = vc
         }
