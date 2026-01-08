@@ -190,6 +190,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val readingFontSize: StateFlow<Float> = _readingFontSize.asStateFlow()
     private val _readingHorizontalPadding = MutableStateFlow(24f)
     val readingHorizontalPadding: StateFlow<Float> = _readingHorizontalPadding.asStateFlow()
+    private val _infiniteScrollEnabled = MutableStateFlow(true)
+    val infiniteScrollEnabled: StateFlow<Boolean> = _infiniteScrollEnabled.asStateFlow()
     private val _loggingEnabled = MutableStateFlow(false)
     val loggingEnabled: StateFlow<Boolean> = _loggingEnabled.asStateFlow()
     private val _bookshelfSortByRecent = MutableStateFlow(false)
@@ -202,6 +204,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val manualMangaUrls: StateFlow<Set<String>> = _manualMangaUrls.asStateFlow()
     private val _forceMangaProxy = MutableStateFlow(false)
     val forceMangaProxy: StateFlow<Boolean> = _forceMangaProxy.asStateFlow()
+
+    private val _prevChapterIndex = MutableStateFlow<Int?>(null)
+    val prevChapterIndex: StateFlow<Int?> = _prevChapterIndex.asStateFlow()
+    private val _nextChapterIndex = MutableStateFlow<Int?>(null)
+    val nextChapterIndex: StateFlow<Int?> = _nextChapterIndex.asStateFlow()
+    private val _prevChapterContent = MutableStateFlow<String?>(null)
+    val prevChapterContent: StateFlow<String?> = _prevChapterContent.asStateFlow()
+    private val _nextChapterContent = MutableStateFlow<String?>(null)
+    val nextChapterContent: StateFlow<String?> = _nextChapterContent.asStateFlow()
     private val _readingMode = MutableStateFlow(com.readapp.data.ReadingMode.Vertical)
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = _readingMode.asStateFlow()
     private val _lockPageOnTTS = MutableStateFlow(false)
@@ -254,6 +265,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _preloadCount.value = preferences.preloadCount.first().toInt()
             _readingFontSize.value = preferences.readingFontSize.first()
             _readingHorizontalPadding.value = preferences.readingHorizontalPadding.first()
+            _infiniteScrollEnabled.value = preferences.infiniteScrollEnabled.first()
             _loggingEnabled.value = preferences.loggingEnabled.first()
             _bookshelfSortByRecent.value = preferences.bookshelfSortByRecent.first()
             _searchSourcesFromBookshelf.value = preferences.searchSourcesFromBookshelf.first()
@@ -1119,6 +1131,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _currentParagraphIndex.value = book.durChapterProgress ?: -1
         _currentChapterContent.value = ""
         currentParagraphs = emptyList()
+        clearAdjacentChapterCache()
         chapterContentCache.clear()
         resetPlayback()
         viewModelScope.launch { loadChapters(book) }
@@ -1132,6 +1145,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _currentChapterIndex.value = index
         _currentChapterContent.value = ""
         currentParagraphs = emptyList()
+        clearAdjacentChapterCache()
         if (shouldContinuePlaying) {
             startPlayback()
         } else {
@@ -1148,6 +1162,36 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun nextChapter() {
         if (_currentChapterIndex.value < _chapters.value.lastIndex) {
             setCurrentChapter(_currentChapterIndex.value + 1)
+        }
+    }
+
+    fun switchChapterFromInfiniteScroll(direction: Int, anchorParagraphIndex: Int) {
+        val target = _currentChapterIndex.value + direction
+        if (target !in _chapters.value.indices) return
+        val shouldContinuePlaying = _keepPlaying.value
+        stopPlayback("chapter_change")
+        _currentChapterIndex.value = target
+        _currentChapterContent.value = ""
+        currentParagraphs = emptyList()
+        _pendingScrollIndex.value = anchorParagraphIndex.coerceAtLeast(0)
+
+        val preloadedContent = when (direction) {
+            -1 -> if (_prevChapterIndex.value == target) _prevChapterContent.value else null
+            1 -> if (_nextChapterIndex.value == target) _nextChapterContent.value else null
+            else -> null
+        }
+
+        if (!preloadedContent.isNullOrBlank()) {
+            updateChapterContent(target, preloadedContent)
+            if (shouldContinuePlaying) {
+                startPlayback()
+            }
+        } else {
+            if (shouldContinuePlaying) {
+                startPlayback()
+            } else {
+                viewModelScope.launch { loadChapterContent(target) }
+            }
         }
     }
 
@@ -1328,6 +1372,89 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         currentParagraphs = parseParagraphs(content)
         currentSentences = currentParagraphs
         _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
+        viewModelScope.launch { prefetchAdjacentChapters() }
+    }
+
+    private fun clearAdjacentChapterCache() {
+        _prevChapterIndex.value = null
+        _nextChapterIndex.value = null
+        _prevChapterContent.value = null
+        _nextChapterContent.value = null
+    }
+
+    private fun isMangaBook(book: Book?): Boolean {
+        val bookUrl = book?.bookUrl ?: return false
+        return _manualMangaUrls.value.contains(bookUrl) || book.type == 2
+    }
+
+    private suspend fun prefetchAdjacentChapters() {
+        if (!_infiniteScrollEnabled.value) {
+            clearAdjacentChapterCache()
+            return
+        }
+        val book = _selectedBook.value ?: return
+        if (isMangaBook(book)) {
+            clearAdjacentChapterCache()
+            return
+        }
+        val chapters = _chapters.value
+        if (chapters.isEmpty()) return
+        val current = _currentChapterIndex.value
+        val prevIndex = if (current > 0) current - 1 else null
+        val nextIndex = if (current < chapters.lastIndex) current + 1 else null
+
+        _prevChapterIndex.value = prevIndex
+        _nextChapterIndex.value = nextIndex
+
+        val effectiveType = 0
+        val prevContent = prevIndex?.let { fetchChapterContentForIndex(it, effectiveType) }
+        val nextContent = nextIndex?.let { fetchChapterContentForIndex(it, effectiveType) }
+
+        _prevChapterContent.value = prevContent
+        _nextChapterContent.value = nextContent
+
+        val preloaded = mutableSetOf<Int>()
+        if (!prevContent.isNullOrBlank()) preloaded.add(prevIndex ?: -1)
+        if (!nextContent.isNullOrBlank()) preloaded.add(nextIndex ?: -1)
+        _preloadedChapters.value = preloaded.filter { it >= 0 }.toSet()
+    }
+
+    private suspend fun fetchChapterContentForIndex(index: Int, effectiveType: Int): String? {
+        val book = _selectedBook.value ?: return null
+        val chapter = _chapters.value.getOrNull(index) ?: return null
+        val bookUrl = book.bookUrl ?: return null
+        val cacheKey = "${index}_${effectiveType}"
+        val cachedInMemory = chapterContentCache[cacheKey]
+        if (!cachedInMemory.isNullOrBlank()) {
+            return cachedInMemory
+        }
+
+        val cachedOnDisk = localCache.loadChapter(bookUrl, index)
+        if (!cachedOnDisk.isNullOrBlank()) {
+            return cachedOnDisk
+        }
+
+        return try {
+            val result = repository.fetchChapterContent(
+                currentServerEndpoint(),
+                _publicServerAddress.value.ifBlank { null },
+                _accessToken.value,
+                bookUrl,
+                book.origin,
+                chapter.index,
+                effectiveType
+            )
+            result.getOrNull()?.let { content ->
+                val cleaned = cleanChapterContent(content)
+                val resolved = if (cleaned.isNotBlank()) cleaned else content.trim()
+                localCache.saveChapter(bookUrl, index, resolved)
+                chapterContentCache[cacheKey] = resolved
+                resolved
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "预取章节失败: $index", e)
+            null
+        }
     }
     private fun parseParagraphs(content: String): List<String> {
         val lines = content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
@@ -1441,6 +1568,17 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updatePreloadCount(count: Int) { _preloadCount.value = count.coerceIn(1, 10); viewModelScope.launch { preferences.savePreloadCount(_preloadCount.value.toFloat()) } }
     fun updateReadingFontSize(size: Float) { _readingFontSize.value = size.coerceIn(12f, 28f); viewModelScope.launch { preferences.saveReadingFontSize(_readingFontSize.value) } }
     fun updateReadingHorizontalPadding(padding: Float) { _readingHorizontalPadding.value = padding.coerceIn(8f, 48f); viewModelScope.launch { preferences.saveReadingHorizontalPadding(_readingHorizontalPadding.value) } }
+    fun updateInfiniteScrollEnabled(enabled: Boolean) {
+        _infiniteScrollEnabled.value = enabled
+        viewModelScope.launch {
+            preferences.saveInfiniteScrollEnabled(enabled)
+            if (!enabled) {
+                clearAdjacentChapterCache()
+            } else {
+                prefetchAdjacentChapters()
+            }
+        }
+    }
     fun updateLoggingEnabled(enabled: Boolean) { _loggingEnabled.value = enabled; viewModelScope.launch { preferences.saveLoggingEnabled(enabled) } }
     fun updateBookshelfSortByRecent(enabled: Boolean) { _bookshelfSortByRecent.value = enabled; viewModelScope.launch { preferences.saveBookshelfSortByRecent(enabled); applyBooksFilterAndSort() } }
     fun updateFirstVisibleParagraphIndex(index: Int) {

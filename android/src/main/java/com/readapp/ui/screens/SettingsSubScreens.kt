@@ -150,10 +150,12 @@ fun ReadingSettingsScreen(
     fontSize: Float,
     horizontalPadding: Float,
     darkModeConfig: com.readapp.data.DarkModeConfig,
+    infiniteScrollEnabled: Boolean,
     onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onHorizontalPaddingChange: (Float) -> Unit,
     onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit,
+    onInfiniteScrollEnabledChange: (Boolean) -> Unit,
     onClearCache: () -> Unit,
     onNavigateToCache: () -> Unit,
     onNavigateBack: () -> Unit
@@ -199,6 +201,17 @@ fun ReadingSettingsScreen(
                         RadioButton(selected = readingMode == com.readapp.data.ReadingMode.Horizontal, onClick = { onReadingModeChange(com.readapp.data.ReadingMode.Horizontal) })
                         Text("左右翻页")
                     }
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { onInfiniteScrollEnabledChange(!infiniteScrollEnabled) }
+            ) {
+                Checkbox(checked = infiniteScrollEnabled, onCheckedChange = onInfiniteScrollEnabledChange)
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("启用无限滚动", style = MaterialTheme.typography.titleSmall)
+                    Text("滚动过边界自动切换章节", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 }
             }
 

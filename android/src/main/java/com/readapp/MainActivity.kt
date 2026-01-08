@@ -184,6 +184,9 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val forceMangaProxy by bookViewModel.forceMangaProxy.collectAsState()
                 val manualMangaUrls by bookViewModel.manualMangaUrls.collectAsState()
                 val serverUrl by bookViewModel.serverAddress.collectAsState()
+                val infiniteScrollEnabled by bookViewModel.infiniteScrollEnabled.collectAsState()
+                val prevChapterContent by bookViewModel.prevChapterContent.collectAsState()
+                val nextChapterContent by bookViewModel.nextChapterContent.collectAsState()
 
                 // 进度同步状态
                 val firstVisibleParagraphIndex by bookViewModel.firstVisibleParagraphIndex.collectAsState()
@@ -210,6 +213,10 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                         errorMessage = errorMessage,
                         readingMode = readingMode,
                         onReadingModeChange = { bookViewModel.updateReadingMode(it) },
+                        isInfiniteScrollEnabled = infiniteScrollEnabled,
+                        onInfiniteScrollEnabledChange = { bookViewModel.updateInfiniteScrollEnabled(it) },
+                        prevChapterContent = prevChapterContent,
+                        nextChapterContent = nextChapterContent,
                         lockPageOnTTS = lockPageOnTTS,
                         onLockPageOnTTSChange = { bookViewModel.updateLockPageOnTTS(it) },
                         pageTurningMode = pageTurningMode,
@@ -227,6 +234,9 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                         onClearError = { bookViewModel.clearError() },
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
+                        },
+                        onInfiniteScrollSwitch = { direction, anchorIndex ->
+                            bookViewModel.switchChapterFromInfiniteScroll(direction, anchorIndex)
                         },
                         onLoadChapterContent = { index ->
                             bookViewModel.loadChapterContent(index)
@@ -309,15 +319,18 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val readingFontSize by bookViewModel.readingFontSize.collectAsState()
                 val readingHorizontalPadding by bookViewModel.readingHorizontalPadding.collectAsState()
                 val darkModeConfig by bookViewModel.darkMode.collectAsState()
+                val infiniteScrollEnabled by bookViewModel.infiniteScrollEnabled.collectAsState()
                 ReadingSettingsScreen(
                     readingMode = readingMode,
                     fontSize = readingFontSize,
                     horizontalPadding = readingHorizontalPadding,
                     darkModeConfig = darkModeConfig,
+                    infiniteScrollEnabled = infiniteScrollEnabled,
                     onReadingModeChange = bookViewModel::updateReadingMode,
                     onFontSizeChange = bookViewModel::updateReadingFontSize,
                     onHorizontalPaddingChange = bookViewModel::updateReadingHorizontalPadding,
                     onDarkModeChange = bookViewModel::updateDarkModeConfig,
+                    onInfiniteScrollEnabledChange = bookViewModel::updateInfiniteScrollEnabled,
                     onClearCache = { bookViewModel.clearCache() },
                     onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                     onNavigateBack = { navController.popBackStack() }

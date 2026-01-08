@@ -53,6 +53,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.readapp.data.ReadingMode
 import com.readapp.data.DarkModeConfig
+import com.readapp.ui.components.EdgeHint
 import com.readapp.ui.components.MangaNativeReader
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -67,6 +68,25 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 private enum class ChapterNavIntent {
     NONE, FIRST, LAST
 }
+
+private data class ChapterSection(
+    val chapterIndex: Int,
+    val title: String,
+    val paragraphs: List<String>,
+    val isCurrent: Boolean
+)
+
+private sealed class ReadingListItem {
+    data class ChapterTitle(val chapterIndex: Int, val title: String, val isCurrent: Boolean) : ReadingListItem()
+    data class ParagraphItem(val chapterIndex: Int, val paragraphIndex: Int, val text: String, val isCurrent: Boolean) : ReadingListItem()
+}
+
+private data class SectionOffsets(
+    val currentStart: Int,
+    val currentEndExclusive: Int,
+    val prevStart: Int?,
+    val nextStart: Int?
+)
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -103,6 +123,10 @@ fun ReadingScreen(
     onExit: () -> Unit = {},
     readingMode: ReadingMode = ReadingMode.Vertical,
     onReadingModeChange: (ReadingMode) -> Unit = {},
+    isInfiniteScrollEnabled: Boolean = true,
+    onInfiniteScrollEnabledChange: (Boolean) -> Unit = {},
+    prevChapterContent: String? = null,
+    nextChapterContent: String? = null,
     lockPageOnTTS: Boolean = false,
     onLockPageOnTTSChange: (Boolean) -> Unit = {},
     pageTurningMode: com.readapp.data.PageTurningMode = com.readapp.data.PageTurningMode.Scroll,
@@ -117,6 +141,7 @@ fun ReadingScreen(
     onForceMangaProxyChange: (Boolean) -> Unit = {},
     manualMangaUrls: Set<String> = emptySet(),
     serverUrl: String = "",
+    onInfiniteScrollSwitch: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var showControls by remember { mutableStateOf(false) }
@@ -126,6 +151,10 @@ fun ReadingScreen(
     // 状态机记录翻页意图
     var navIntent by remember { mutableStateOf(ChapterNavIntent.NONE) }
     var lastChapterIndex by remember { mutableStateOf(-1) }
+    var mangaNavIntent by remember { mutableStateOf(ChapterNavIntent.NONE) }
+    var mangaPendingScrollIndex by remember { mutableStateOf<Int?>(null) }
+    var mangaEdgeHint by remember { mutableStateOf<EdgeHint?>(null) }
+    var lastAutoSwitchTime by remember { mutableStateOf(0L) }
     
     // 强制旋转状态
     var isForceLandscape by remember { mutableStateOf(false) }
@@ -177,16 +206,111 @@ fun ReadingScreen(
         chapters.getOrNull(currentChapterIndex)?.url
     }
 
-    val paragraphs = remember(displayContent) {
-        if (displayContent.isNotEmpty()) {
-            displayContent.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-        } else emptyList()
+    val currentParagraphs = remember(displayContent) {
+        parseDisplayParagraphs(displayContent)
     }
 
-    val isMangaMode = remember(paragraphs, book.type, manualMangaUrls) {
+    val isMangaMode = remember(currentParagraphs, book.type, manualMangaUrls) {
         if (manualMangaUrls.contains(book.bookUrl)) return@remember true
-        val imageCount = paragraphs.count { it.contains("__IMG__") }
-        book.type == 2 || (paragraphs.isNotEmpty() && imageCount.toFloat() / paragraphs.size > 0.1f)
+        val imageCount = currentParagraphs.count { it.contains("__IMG__") }
+        book.type == 2 || (currentParagraphs.isNotEmpty() && imageCount.toFloat() / currentParagraphs.size > 0.1f)
+    }
+
+    val prevParagraphs = remember(prevChapterContent) {
+        parseDisplayParagraphs(prevChapterContent.orEmpty())
+    }
+    val nextParagraphs = remember(nextChapterContent) {
+        parseDisplayParagraphs(nextChapterContent.orEmpty())
+    }
+
+    val chapterSections = remember(
+        isInfiniteScrollEnabled,
+        currentChapterIndex,
+        chapters,
+        currentParagraphs,
+        prevParagraphs,
+        nextParagraphs,
+        prevChapterContent,
+        nextChapterContent,
+        isMangaMode
+    ) {
+        if (!isInfiniteScrollEnabled || isMangaMode || currentParagraphs.isEmpty()) {
+            listOf(
+                ChapterSection(
+                    chapterIndex = currentChapterIndex,
+                    title = chapters.getOrNull(currentChapterIndex)?.title ?: "章节",
+                    paragraphs = currentParagraphs,
+                    isCurrent = true
+                )
+            )
+        } else {
+            buildList {
+                val prevIndex = currentChapterIndex - 1
+                if (prevIndex >= 0 && prevChapterContent != null && prevParagraphs.isNotEmpty()) {
+                    add(
+                        ChapterSection(
+                            chapterIndex = prevIndex,
+                            title = chapters.getOrNull(prevIndex)?.title ?: "上一章",
+                            paragraphs = prevParagraphs,
+                            isCurrent = false
+                        )
+                    )
+                }
+                add(
+                    ChapterSection(
+                        chapterIndex = currentChapterIndex,
+                        title = chapters.getOrNull(currentChapterIndex)?.title ?: "章节",
+                        paragraphs = currentParagraphs,
+                        isCurrent = true
+                    )
+                )
+                val nextIndex = currentChapterIndex + 1
+                if (nextIndex < chapters.size && nextChapterContent != null && nextParagraphs.isNotEmpty()) {
+                    add(
+                        ChapterSection(
+                            chapterIndex = nextIndex,
+                            title = chapters.getOrNull(nextIndex)?.title ?: "下一章",
+                            paragraphs = nextParagraphs,
+                            isCurrent = false
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    val listItems = remember(chapterSections) {
+        buildList {
+            chapterSections.forEach { section ->
+                add(ReadingListItem.ChapterTitle(section.chapterIndex, section.title, section.isCurrent))
+                section.paragraphs.forEachIndexed { index, text ->
+                    add(ReadingListItem.ParagraphItem(section.chapterIndex, index, text, section.isCurrent))
+                }
+            }
+        }
+    }
+
+    val sectionOffsets = remember(chapterSections, currentChapterIndex) {
+        var offset = 0
+        var currentStart = 0
+        var currentEnd = 0
+        var prevStart: Int? = null
+        var nextStart: Int? = null
+        chapterSections.forEach { section ->
+            val start = offset
+            val count = 1 + section.paragraphs.size
+            val end = start + count
+            if (section.isCurrent) {
+                currentStart = start
+                currentEnd = end
+            } else if (section.chapterIndex < currentChapterIndex) {
+                prevStart = start
+            } else if (section.chapterIndex > currentChapterIndex) {
+                nextStart = start
+            }
+            offset = end
+        }
+        SectionOffsets(currentStart, currentEnd, prevStart, nextStart)
     }
 
     // 监听切章并分发意图
@@ -200,18 +324,84 @@ fun ReadingScreen(
         }
     }
 
-    // 上报垂直滚动进度
-    LaunchedEffect(scrollState.firstVisibleItemIndex) {
-        if (readingMode == ReadingMode.Vertical && !isMangaMode) {
-            onScrollUpdate((scrollState.firstVisibleItemIndex - 1).coerceAtLeast(0))
+    LaunchedEffect(currentChapterIndex, isMangaMode) {
+        if (isMangaMode && mangaNavIntent == ChapterNavIntent.NONE) {
+            mangaNavIntent = ChapterNavIntent.FIRST
         }
     }
 
+    LaunchedEffect(scrollState, isInfiniteScrollEnabled, isMangaMode, readingMode, sectionOffsets) {
+        snapshotFlow { scrollState.firstVisibleItemIndex to scrollState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { (index, scrolling) ->
+                if (!isInfiniteScrollEnabled || isMangaMode || readingMode != ReadingMode.Vertical) return@collect
+                if (scrolling) return@collect
+                val now = System.currentTimeMillis()
+                if (now - lastAutoSwitchTime < 800) return@collect
+                val nextStart = sectionOffsets.nextStart
+                if (nextStart != null && index >= nextStart + 1) {
+                    val anchorIndex = (index - nextStart - 1).coerceAtLeast(0)
+                    onInfiniteScrollSwitch(1, anchorIndex)
+                    lastAutoSwitchTime = now
+                    return@collect
+                }
+                val prevStart = sectionOffsets.prevStart
+                if (prevStart != null && index <= sectionOffsets.currentStart - 2) {
+                    val anchorIndex = (index - prevStart - 1).coerceAtLeast(0)
+                    onInfiniteScrollSwitch(-1, anchorIndex)
+                    lastAutoSwitchTime = now
+                }
+            }
+    }
+
+    // 上报垂直滚动进度
+    LaunchedEffect(scrollState, readingMode, isMangaMode, isInfiniteScrollEnabled, sectionOffsets) {
+        snapshotFlow { scrollState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .collect { index ->
+                if (readingMode != ReadingMode.Vertical || isMangaMode) return@collect
+                if (!isInfiniteScrollEnabled) {
+                    onScrollUpdate((index - 1).coerceAtLeast(0))
+                    return@collect
+                }
+                if (index in (sectionOffsets.currentStart + 1) until sectionOffsets.currentEndExclusive) {
+                    onScrollUpdate((index - sectionOffsets.currentStart - 1).coerceAtLeast(0))
+                }
+            }
+    }
+
     // 处理挂起的滚动 (垂直模式)
-    LaunchedEffect(pendingScrollIndex, isMangaMode, readingMode) {
+    LaunchedEffect(pendingScrollIndex, isMangaMode, readingMode, isInfiniteScrollEnabled, sectionOffsets) {
         if (readingMode == ReadingMode.Vertical && !isMangaMode && pendingScrollIndex != null) {
-            scrollState.scrollToItem(pendingScrollIndex + 1)
+            val target = if (isInfiniteScrollEnabled) {
+                sectionOffsets.currentStart + 1 + pendingScrollIndex
+            } else {
+                pendingScrollIndex + 1
+            }
+            scrollState.scrollToItem(target.coerceAtLeast(0))
             onScrollConsumed()
+        }
+    }
+
+    LaunchedEffect(isMangaMode, mangaNavIntent, currentParagraphs) {
+        if (!isMangaMode) return@LaunchedEffect
+        when (mangaNavIntent) {
+            ChapterNavIntent.FIRST -> {
+                mangaPendingScrollIndex = 0
+                mangaNavIntent = ChapterNavIntent.NONE
+            }
+            ChapterNavIntent.LAST -> {
+                mangaPendingScrollIndex = (currentParagraphs.size - 1).coerceAtLeast(0)
+                mangaNavIntent = ChapterNavIntent.NONE
+            }
+            else -> Unit
+        }
+    }
+
+    LaunchedEffect(mangaPendingScrollIndex) {
+        if (mangaPendingScrollIndex != null) {
+            kotlinx.coroutines.delay(16)
+            mangaPendingScrollIndex = null
         }
     }
 
@@ -222,31 +412,32 @@ fun ReadingScreen(
     ) {
         if (isMangaMode) {
             MangaNativeReader(
-                paragraphs = paragraphs,
+                paragraphs = currentParagraphs,
                 serverUrl = serverUrl,
                 chapterUrl = currentChapterUrl,
                 forceProxy = forceMangaProxy,
-                pendingScrollIndex = pendingScrollIndex,
+                pendingScrollIndex = mangaPendingScrollIndex,
                 onToggleControls = { showControls = !showControls },
                 onScroll = { onScrollUpdate(it) },
+                onEdgeHint = { hint -> mangaEdgeHint = hint },
+                onEdgeSwitch = { direction ->
+                    if (direction < 0 && currentChapterIndex > 0) {
+                        mangaNavIntent = ChapterNavIntent.LAST
+                        onChapterClick(currentChapterIndex - 1)
+                    } else if (direction > 0 && currentChapterIndex < chapters.size - 1) {
+                        mangaNavIntent = ChapterNavIntent.FIRST
+                        onChapterClick(currentChapterIndex + 1)
+                    }
+                },
                 modifier = Modifier.fillMaxSize()
             )
-            LaunchedEffect(pendingScrollIndex) { if (pendingScrollIndex != null) onScrollConsumed() }
         } else if (readingMode == ReadingMode.Vertical) {
             LazyColumn(
                 state = scrollState,
                 modifier = Modifier.fillMaxSize().clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { showControls = !showControls },
                 contentPadding = contentPadding
             ) {
-                item {
-                    Text(
-                        text = if (currentChapterIndex < chapters.size) chapters[currentChapterIndex].title else "章节",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = AppDimens.PaddingLarge)
-                    )
-                }
-                if (paragraphs.isEmpty()) {
+                if (currentParagraphs.isEmpty()) {
                     item {
                         Column(modifier = Modifier.fillMaxWidth().padding(vertical = AppDimens.PaddingLarge), horizontalAlignment = Alignment.CenterHorizontally) {
                             if (isContentLoading) CircularProgressIndicator()
@@ -254,17 +445,35 @@ fun ReadingScreen(
                         }
                     }
                 } else {
-                    itemsIndexed(items = paragraphs, key = { i, _ -> "${currentChapterIndex}_$i" }) { index, p ->
-                        ParagraphItem(
-                            text = p, 
-                            isPlaying = isPlaying && index == currentPlayingParagraph, // 修正：必须处于播放状态才高亮
-                            isPreloaded = preloadedParagraphs.contains(index), 
-                            fontSize = readingFontSize, 
-                            chapterUrl = currentChapterUrl, 
-                            serverUrl = serverUrl, 
-                            forceProxy = forceMangaProxy, 
-                            modifier = Modifier.fillMaxWidth().padding(bottom = AppDimens.PaddingMedium)
-                        )
+                    itemsIndexed(items = listItems, key = { _, item ->
+                        when (item) {
+                            is ReadingListItem.ChapterTitle -> "title_${item.chapterIndex}"
+                            is ReadingListItem.ParagraphItem -> "p_${item.chapterIndex}_${item.paragraphIndex}"
+                        }
+                    }) { _, item ->
+                        when (item) {
+                            is ReadingListItem.ChapterTitle -> {
+                                Text(
+                                    text = item.title,
+                                    style = if (item.isCurrent) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
+                                    color = if (item.isCurrent) MaterialTheme.colorScheme.onSurface else MaterialTheme.customColors.textSecondary,
+                                    modifier = Modifier.padding(bottom = AppDimens.PaddingLarge)
+                                )
+                            }
+                            is ReadingListItem.ParagraphItem -> {
+                                val chapterUrlForItem = chapters.getOrNull(item.chapterIndex)?.url
+                                ParagraphItem(
+                                    text = item.text,
+                                    isPlaying = item.isCurrent && isPlaying && item.paragraphIndex == currentPlayingParagraph,
+                                    isPreloaded = item.isCurrent && preloadedParagraphs.contains(item.paragraphIndex),
+                                    fontSize = readingFontSize,
+                                    chapterUrl = chapterUrlForItem,
+                                    serverUrl = serverUrl,
+                                    forceProxy = forceMangaProxy,
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = AppDimens.PaddingMedium)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -278,7 +487,7 @@ fun ReadingScreen(
                 val lineHeightPx = with(LocalDensity.current) { (readingFontSize * 1.8f).sp.toPx() }
                 val density = LocalDensity.current
                 val availableConstraints = remember(constraints, contentPadding, density) { adjustedConstraints(constraints, contentPadding, density) }
-                val paginatedPages = rememberPaginatedText(paragraphs, style, availableConstraints, lineHeightPx, headerText, headerFontSize)
+                val paginatedPages = rememberPaginatedText(currentParagraphs, style, availableConstraints, lineHeightPx, headerText, headerFontSize)
                 
                 key(currentChapterIndex) { // 强行重置 Pager 状态
                     val pagerState = rememberPagerState(initialPage = 0, pageCount = { paginatedPages.pages.size.coerceAtLeast(1) })
@@ -362,9 +571,22 @@ fun ReadingScreen(
             )
         }
 
+        mangaEdgeHint?.let { hint ->
+            EdgeSwitchHint(
+                text = hint.text,
+                isTop = hint.isTop,
+                modifier = Modifier.align(if (hint.isTop) Alignment.TopCenter else Alignment.BottomCenter)
+            )
+        }
+
         if (showChapterList) ChapterListDialog(chapters, currentChapterIndex, preloadedChapters, book.bookUrl ?: "", onChapter = { onChapterClick(it); showChapterList = false }, onDismiss = { showChapterList = false })
-        if (showFontDialog) FontSizeDialog(readingFontSize, onReadingFontSizeChange, readingHorizontalPadding, onReadingHorizontalPaddingChange, lockPageOnTTS, onLockPageOnTTSChange, pageTurningMode, onPageTurningModeChange, darkModeConfig, onDarkModeChange, forceMangaProxy, onForceMangaProxyChange, readingMode, onReadingModeChange, isMangaMode, onDismiss = { showFontDialog = false })
+        if (showFontDialog) FontSizeDialog(readingFontSize, onReadingFontSizeChange, readingHorizontalPadding, onReadingHorizontalPaddingChange, lockPageOnTTS, onLockPageOnTTSChange, pageTurningMode, onPageTurningModeChange, darkModeConfig, onDarkModeChange, forceMangaProxy, onForceMangaProxyChange, readingMode, onReadingModeChange, isInfiniteScrollEnabled, onInfiniteScrollEnabledChange, isMangaMode, onDismiss = { showFontDialog = false })
     }
+}
+
+private fun parseDisplayParagraphs(content: String): List<String> {
+    if (content.isBlank()) return emptyList()
+    return content.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
 }
 
 @Composable
@@ -472,6 +694,23 @@ private fun TopControlBar(title: String, chapter: String, onBack: () -> Unit, on
                 Text(text = chapter, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.customColors.textSecondary, maxLines = 1)
             }
         }
+    }
+}
+
+@Composable
+private fun EdgeSwitchHint(text: String, isTop: Boolean, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.padding(top = if (isTop) 8.dp else 0.dp, bottom = if (isTop) 0.dp else 12.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        shape = RoundedCornerShape(12.dp),
+        shadowElevation = 4.dp
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+        )
     }
 }
 
@@ -586,7 +825,7 @@ private fun BottomControlBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
+private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, infiniteScrollEnabled: Boolean, onInfiniteScrollEnabledChange: (Boolean) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("阅读选项") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (!isManga) {
@@ -597,6 +836,13 @@ private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hP
             if (isManga) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onForceProxy(!forceProxy) }) { Column(modifier = Modifier.weight(1f)) { Text("强制服务器代理", style = MaterialTheme.typography.bodyLarge); Text("如果漫画加载失败请开启", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline) }; Switch(checked = forceProxy, onCheckedChange = onForceProxy) }
             if (!isManga) {
                 Divider()
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onInfiniteScrollEnabledChange(!infiniteScrollEnabled) }) {
+                    Checkbox(checked = infiniteScrollEnabled, onCheckedChange = onInfiniteScrollEnabledChange)
+                    Column(modifier = Modifier.padding(start = 8.dp)) {
+                        Text("启用无限滚动", style = MaterialTheme.typography.bodyMedium)
+                        Text("滚动过边界自动切换章节", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                }
                 Column { Text("字体大小: ${fontSize.toInt()}sp", style = MaterialTheme.typography.labelMedium); Slider(value = fontSize, onValueChange = onFontSize, valueRange = 12f..30f) }
                 Column { Text("页面边距: ${hPadding.toInt()}dp", style = MaterialTheme.typography.labelMedium); Slider(value = hPadding, onValueChange = onHPadding, valueRange = 0f..50f) }
                 Divider()
@@ -607,8 +853,8 @@ private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hP
 }
 
 @Composable
-private fun FontSizeDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
-    ReaderOptionsDialog(fontSize, onFontSize, hPadding, onHPadding, lockTTS, onLockTTS, turnMode, onTurnMode, darkConfig, onDark, forceProxy, onForceProxy, mode, onMode, isManga, onDismiss)
+private fun FontSizeDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, infiniteScrollEnabled: Boolean, onInfiniteScrollEnabledChange: (Boolean) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
+    ReaderOptionsDialog(fontSize, onFontSize, hPadding, onHPadding, lockTTS, onLockTTS, turnMode, onTurnMode, darkConfig, onDark, forceProxy, onForceProxy, mode, onMode, infiniteScrollEnabled, onInfiniteScrollEnabledChange, isManga, onDismiss)
 }
 
 @Composable

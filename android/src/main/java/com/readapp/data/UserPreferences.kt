@@ -57,6 +57,7 @@ class UserPreferences(private val context: Context) {
         val PreferredSearchSourceUrls = stringPreferencesKey("preferredSearchSourceUrls")
         val ManualMangaUrls = stringPreferencesKey("manualMangaUrls")
         val ForceMangaProxy = booleanPreferencesKey("forceMangaProxy")
+        val InfiniteScrollEnabled = booleanPreferencesKey("infiniteScrollEnabled")
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080/api/5" }
@@ -70,6 +71,7 @@ class UserPreferences(private val context: Context) {
     val preferredSearchSourceUrls: Flow<String> = context.dataStore.data.map { it[Keys.PreferredSearchSourceUrls] ?: "" }
     val manualMangaUrls: Flow<String> = context.dataStore.data.map { it[Keys.ManualMangaUrls] ?: "" }
     val forceMangaProxy: Flow<Boolean> = context.dataStore.data.map { it[Keys.ForceMangaProxy] ?: false }
+    val infiniteScrollEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.InfiniteScrollEnabled] ?: true }
     val narrationTtsId: Flow<String> = context.dataStore.data.map { it[Keys.NarrationTtsId] ?: "" }
     val dialogueTtsId: Flow<String> = context.dataStore.data.map { it[Keys.DialogueTtsId] ?: "" }
     val speakerTtsMapping: Flow<String> = context.dataStore.data.map { it[Keys.SpeakerTtsMapping] ?: "" }
@@ -183,6 +185,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveForceMangaProxy(value: Boolean) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.ForceMangaProxy] = value
+        }
+    }
+
+    suspend fun saveInfiniteScrollEnabled(value: Boolean) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.InfiniteScrollEnabled] = value
         }
     }
 
