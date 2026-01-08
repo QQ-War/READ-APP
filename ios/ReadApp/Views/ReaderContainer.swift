@@ -304,8 +304,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
         let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
-        let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
-        let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
+        
+        // 始终尝试传递预加载内容。
+        // 在非无限流模式下，这能让用户在拉动边缘时看到上一章/下一章的“预览”，增强平滑感
+        let nextSentences = nextChapterSentences
+        let prevSentences = prevChapterSentences
         
         let highlightIdx = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
         v.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: highlightIdx, secondaryIndices: secondaryIndices, isPlaying: ttsManager.isPlaying)
@@ -701,17 +704,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         v.onChapterSwitched = { [weak self] offset in 
             guard let self = self else { return }
-            if !self.preferences.isInfiniteScrollEnabled {
-                let target = self.currentChapterIndex + offset
-                guard target >= 0 && target < self.chapters.count else { return }
-                self.jumpToChapter(target, startAtEnd: offset < 0)
-                return
-            }
             let now = Date().timeIntervalSince1970
             guard now - self.lastChapterSwitchTime > self.chapterSwitchCooldown else { return }
             let target = self.currentChapterIndex + offset
             guard target >= 0 && target < self.chapters.count else { return }
             self.lastChapterSwitchTime = now
+            
+            // 关键改动：即便不是无限流，只要预加载数据可用，就优先使用无缝切换。
+            // 无缝切换会自动处理坐标偏移，消除切章时的“瞬间跳变/颤动”
             self.switchChapterSeamlessly(offset: offset)
         }
         v.onInteractionChanged = { [weak self] interacting in self?.isUserInteracting = interacting }

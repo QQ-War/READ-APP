@@ -400,8 +400,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         // 非无限流模式：执行松手切换逻辑
         if !isInfiniteScrollEnabled {
             if switchReady && pendingSwitchDirection != 0 {
-                // 只要达到 Ready 状态，松手那一刻立即触发逻辑，无视回弹动画
                 let direction = pendingSwitchDirection
+                // 关键优化：停止当前的滚动/回弹动量，防止在数据切换过程中物理引擎产生跳变
+                scrollView.setContentOffset(scrollView.contentOffset, animated: false)
                 self.onChapterSwitched?(direction)
                 self.cancelSwitchHold()
                 return
@@ -560,14 +561,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             return
         }
         
-        let threshold: CGFloat = 80 // 距离阈值
-        let timeThreshold: TimeInterval = 0.8 // 时间阈值
+        let threshold: CGFloat = 80 // 触发阈值
+        let cancelThreshold: CGFloat = 30 // 回滑到这个距离以内就取消
+        let timeThreshold: TimeInterval = 1.0 // 时间阈值
         let currentDragDuration = Date().timeIntervalSince1970 - dragStartTime
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
         
         if rawOffset < -10 {
             let pullDistance = -rawOffset
             let isReady = pullDistance > threshold || currentDragDuration > timeThreshold
+            
             if isReady {
                 if !switchReady {
                     switchReady = true
@@ -576,13 +579,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
-                switchReady = false
-                pendingSwitchDirection = -1
+                // 如果用户往回滑了，且距离较近，取消 Ready 状态
+                if pullDistance < cancelThreshold {
+                    switchReady = false
+                }
                 updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
         } else if rawOffset > actualMaxScrollY + 10 {
             let pullDistance = rawOffset - actualMaxScrollY
             let isReady = pullDistance > threshold || currentDragDuration > timeThreshold
+            
             if isReady {
                 if !switchReady {
                     switchReady = true
@@ -591,14 +597,15 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
-                switchReady = false
-                pendingSwitchDirection = 1
+                if pullDistance < cancelThreshold {
+                    switchReady = false
+                }
                 updateSwitchHint(text: "上拉切换下一章", isTop: false)
             }
         } else {
-            // 在正文区域稍微宽容一点，不要立即 cancel，防止微小拉动就闪烁提示
-            if !switchReady && rawOffset > -5 && rawOffset < actualMaxScrollY + 5 {
-                hideSwitchHint()
+            // 回到正文区域，重置
+            if rawOffset > -5 && rawOffset < actualMaxScrollY + 5 {
+                cancelSwitchHold()
             }
         }
     }
