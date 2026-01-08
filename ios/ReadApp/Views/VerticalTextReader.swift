@@ -404,6 +404,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         // 非无限流模式：执行松手切换逻辑
         if switchReady && pendingSwitchDirection != 0 {
+            if decelerate {
+                return
+            }
             let direction = pendingSwitchDirection
             self.onChapterSwitched?(direction)
             self.cancelSwitchHold()
@@ -414,11 +417,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        if !isInfiniteScrollEnabled {
+            if switchReady && pendingSwitchDirection != 0 {
+                let direction = pendingSwitchDirection
+                self.onChapterSwitched?(direction)
+            }
+            cancelSwitchHold()
+            onInteractionChanged?(false)
+            return
+        }
         cancelSwitchHold()
         onInteractionChanged?(false)
-        if isInfiniteScrollEnabled {
-            executeSeamlessSwitchIfNeeded()
-        }
+        executeSeamlessSwitchIfNeeded()
     }
     
     private func executeSeamlessSwitchIfNeeded() {
@@ -556,10 +566,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         let threshold: CGFloat = 70 // 适中的拉动阈值
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let dragTranslation = scrollView.panGestureRecognizer.translation(in: scrollView).y
         
         if rawOffset <= 0 {
-            let pullDistance = max(-rawOffset, max(0, dragTranslation))
+            let pullDistance = max(0, -rawOffset)
             if pullDistance >= threshold {
                 if !switchReady { switchReady = true; pendingSwitchDirection = -1; hapticFeedback() }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
@@ -568,7 +577,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
         } else if rawOffset >= actualMaxScrollY {
-            let pullDistance = max(rawOffset - actualMaxScrollY, max(0, -dragTranslation))
+            let pullDistance = max(0, rawOffset - actualMaxScrollY)
             if pullDistance >= threshold {
                 if !switchReady { switchReady = true; pendingSwitchDirection = 1; hapticFeedback() }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
