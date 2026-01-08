@@ -547,7 +547,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var c = title.isEmpty ? 0 : (title + "\n").utf16.count
         for s in sentences {
             pS.append(c)
-            c += (s.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
+            c += (s.utf16.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
         }
         return TextKit2Paginator.paginate(renderStore: store, pageSize: spec.pageSize, paragraphStarts: pS, prefixLen: title.isEmpty ? 0 : (title + "\n").utf16.count, topInset: spec.topInset, bottomInset: spec.bottomInset)
     }
@@ -591,7 +591,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let pLen = title.isEmpty ? 0 : (title + "\n").utf16.count
         var starts: [Int] = []; var curr = pLen; for sent in contentSentences { 
             starts.append(curr)
-            curr += (sent.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
+            curr += (sent.utf16.count + 2 + 1) // 2 是全角空格 "　　" 的长度，1 是换行符
         }
         let res = TextKit2Paginator.paginate(renderStore: s, pageSize: spec.pageSize, paragraphStarts: starts, prefixLen: pLen, topInset: spec.topInset, bottomInset: spec.bottomInset)
         self.pages = res.pages; self.pageInfos = res.pageInfos
@@ -619,6 +619,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
         let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
         v.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+    }
+
+    private func handleVerticalScroll(to index: Int) {
+        guard !isInternalTransitioning else { return }
+        let total = max(1, contentSentences.count)
+        let pos = Double(index) / Double(total)
+        self.onProgressChanged?(currentChapterIndex, pos)
+    }
+    
+    private func prefetchNextChapterOnly() {
+        prefetchAdjacentChapters(index: currentChapterIndex)
     }
     
     private func setupMangaMode() {
