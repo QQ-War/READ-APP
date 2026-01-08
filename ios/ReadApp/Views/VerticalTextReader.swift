@@ -738,3 +738,13 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         pendingSwitchDirection = 0; switchReady = false; hideSwitchHint()
     }
 }
+
+@available(iOS 16.0, *)
+extension VerticalTextViewController: UIEditMenuInteractionDelegate {
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
+            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
+        }
+        return UIMenu(children: [addAction] + suggestedActions)
+    }
+}
