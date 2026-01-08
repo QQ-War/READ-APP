@@ -378,9 +378,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let h = UIPageViewController(transitionStyle: preferences.pageTurningMode == .simulation ? .pageCurl : .scroll, navigationOrientation: .horizontal, options: nil)
         h.dataSource = self; h.delegate = self
         addChild(h); view.insertSubview(h.view, belowSubview: progressLabel); h.didMove(toParent: self)
-        horizontalVC = h; updateHorizontalPage(to: currentPageIndex, animated: false)
-    }
-        }
         
         for recognizer in h.gestureRecognizers where recognizer is UITapGestureRecognizer {
             recognizer.isEnabled = false
@@ -622,17 +619,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
         let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
         v.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
-    }
-        v.onInteractionChanged = { [weak self] interacting in self?.isUserInteracting = interacting }
-        addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
-        
-        let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
-        let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
-        let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
-        let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
-        let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
-        v.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
-        self.verticalVC = v
     }
     
     private func setupMangaMode() {
