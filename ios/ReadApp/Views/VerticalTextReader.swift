@@ -318,19 +318,29 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         } else {
             nextContentView.isHidden = true
         }
-        scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + 200)
+        let extraBottom = isInfiniteScrollEnabled ? 200 : 40
+        scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
     }
 
     func scrollViewDidScroll(_ s: UIScrollView) {
         if isUpdatingLayout { return }
         let rawOffset = s.contentOffset.y
-        let contentInsetBottom = s.contentInset.bottom
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
+        // 1. 无限滚动自动切换
         if isInfiniteScrollEnabled {
             handleAutoSwitchIfNeeded(rawOffset: rawOffset)
-        } else {
+        }
+        
+        // 2. 边缘拉动切换 (如果关闭了无限模式，或者在无限模式下到达了没有预加载内容的边缘)
+        let hasPrev = prevRenderStore != nil
+        let hasNext = nextRenderStore != nil
+        let maxScrollY = max(0, s.contentSize.height - s.bounds.height)
+        
+        if !isInfiniteScrollEnabled || (rawOffset < -20 && !hasPrev) || (rawOffset > maxScrollY + 20 && !hasNext) {
             handleHoldSwitchIfNeeded(rawOffset: rawOffset)
+        } else if !switchReady {
+            hideSwitchHint()
         }
         
         if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2 {
@@ -442,15 +452,20 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     private func handleAutoSwitchIfNeeded(rawOffset: CGFloat) {
+        if switchReady { return }
+        
+        // 增加切换的稳定性：如果在拖拽中，延迟切换时机或增加阈值
+        let isDragging = scrollView.isDragging
+        
         if let _ = prevRenderStore {
-            let triggerTop = currentContentView.frame.minY - 20
+            let triggerTop = currentContentView.frame.minY - chapterGap - (isDragging ? 150 : 20)
             if rawOffset < triggerTop {
                 triggerAutoSwitch(direction: -1, isTop: true)
                 return
             }
         }
         if let _ = nextRenderStore {
-            let triggerBottom = nextContentView.frame.minY - 20
+            let triggerBottom = nextContentView.frame.minY + (isDragging ? 150 : 20) - scrollView.bounds.height
             if rawOffset > triggerBottom {
                 triggerAutoSwitch(direction: 1, isTop: false)
             }
@@ -460,27 +475,40 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
         let threshold: CGFloat = 80
         let topThreshold: CGFloat = -threshold
-        let topOver = topThreshold - rawOffset
         
-        let contentInsetBottom = scrollView.contentInset.bottom
-        let adjustedBottomThreshold = max(0, scrollView.contentSize.height - scrollView.bounds.height + contentInsetBottom)
-        let bottomThreshold = adjustedBottomThreshold + threshold
-        let bottomOver = rawOffset - bottomThreshold
+        let maxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height + scrollView.contentInset.bottom)
+        let bottomThreshold = maxScrollY + threshold
         
-        if topOver > 0 {
-            if !switchReady { switchReady = true; pendingSwitchDirection = -1; updateSwitchHint(text: "松开切换上一章", isTop: true) }
-        } else if bottomOver > 0 {
-            if !switchReady { switchReady = true; pendingSwitchDirection = 1; updateSwitchHint(text: "松开切换下一章", isTop: false) }
-        } else {
-            // 在阈值范围内，如果在拉动，且之前是Ready状态，则变回普通状态
-            if scrollView.isDragging && switchReady {
-                switchReady = false
-                pendingSwitchDirection = 0
-                updateSwitchHint(text: topOver > -threshold/2 ? "继续下拉切换上一章" : "继续上拉切换下一章", isTop: rawOffset < 0)
-            } else if !scrollView.isDragging && rawOffset > -20 && rawOffset < adjustedBottomThreshold + 20 {
-                cancelSwitchHold()
+        if rawOffset < -10 {
+            if rawOffset < topThreshold {
+                if !switchReady {
+                    switchReady = true; pendingSwitchDirection = -1
+                    hapticFeedback()
+                }
+                updateSwitchHint(text: "松开切换上一章", isTop: true)
+            } else {
+                switchReady = false; pendingSwitchDirection = -1
+                updateSwitchHint(text: "继续下拉切换上一章", isTop: true)
             }
+        } else if rawOffset > maxScrollY + 10 {
+            if rawOffset > bottomThreshold {
+                if !switchReady {
+                    switchReady = true; pendingSwitchDirection = 1
+                    hapticFeedback()
+                }
+                updateSwitchHint(text: "松开切换下一章", isTop: false)
+            } else {
+                switchReady = false; pendingSwitchDirection = 1
+                updateSwitchHint(text: "继续上拉切换下一章", isTop: false)
+            }
+        } else if !scrollView.isDragging && !switchReady {
+            cancelSwitchHold()
         }
+    }
+    
+    private func hapticFeedback() {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
     }
 
     func cancelSwitchHold() {
@@ -635,16 +663,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
 
     func scrollViewDidScroll(_ s: UIScrollView) {
         let rawOffset = s.contentOffset.y
-        let topEdge: CGFloat = -safeAreaTop
-        let bottomEdge = max(-safeAreaTop, s.contentSize.height - s.bounds.height + 40)
-        
-        if rawOffset < topEdge {
-            s.contentOffset.y = topEdge + (rawOffset - topEdge) * dampingFactor
-        } else if rawOffset > bottomEdge {
-            s.contentOffset.y = bottomEdge + (rawOffset - bottomEdge) * dampingFactor
-        }
-        
-        handleHoldSwitchIfNeeded(rawOffset: s.contentOffset.y)
+        handleHoldSwitchIfNeeded(rawOffset: rawOffset)
     }
     
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -698,24 +717,37 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
         let threshold: CGFloat = 80
         let topThreshold: CGFloat = -safeAreaTop - threshold
-        let topOver = topThreshold - rawOffset
+        
         let bottomInset: CGFloat = 100
-        let adjustedBottomThreshold = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height + bottomInset)
-        let bottomThreshold = adjustedBottomThreshold + threshold
-        let bottomOver = rawOffset - bottomThreshold
-
-        if topOver > 0 {
-            if !switchReady { switchReady = true; pendingSwitchDirection = -1; updateSwitchHint(text: "松开切换上一章", isTop: true) }
-        } else if bottomOver > 0 {
-            if !switchReady { switchReady = true; pendingSwitchDirection = 1; updateSwitchHint(text: "松开切换下一章", isTop: false) }
-        } else {
-            if scrollView.isDragging && switchReady {
-                switchReady = false
-                pendingSwitchDirection = 0
-                updateSwitchHint(text: topOver > -threshold/2 ? "继续下拉切换上一章" : "继续上拉切换下一章", isTop: rawOffset < 0)
-            } else if !scrollView.isDragging && rawOffset > -safeAreaTop-20 && rawOffset < adjustedBottomThreshold + 20 {
-                cancelSwitchHold()
+        let maxScrollY = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height + bottomInset)
+        let bottomThreshold = maxScrollY + threshold
+        
+        if rawOffset < -safeAreaTop - 10 {
+            if rawOffset < topThreshold {
+                if !switchReady {
+                    switchReady = true; pendingSwitchDirection = -1
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
+                }
+                updateSwitchHint(text: "松开切换上一章", isTop: true)
+            } else {
+                switchReady = false; pendingSwitchDirection = -1
+                updateSwitchHint(text: "继续下拉切换上一章", isTop: true)
             }
+        } else if rawOffset > maxScrollY - bottomInset + 10 {
+            if rawOffset > bottomThreshold {
+                if !switchReady {
+                    switchReady = true; pendingSwitchDirection = 1
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
+                }
+                updateSwitchHint(text: "松开切换下一章", isTop: false)
+            } else {
+                switchReady = false; pendingSwitchDirection = 1
+                updateSwitchHint(text: "继续上拉切换下一章", isTop: false)
+            }
+        } else if !scrollView.isDragging && !switchReady {
+            cancelSwitchHold()
         }
     }
 
