@@ -341,10 +341,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
     }
 
-        let extraBottom: CGFloat = isInfiniteScrollEnabled ? 200 : 40
-        scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
-    }
-
     func scrollViewDidScroll(_ s: UIScrollView) {
         if isUpdatingLayout { return }
         let rawOffset = s.contentOffset.y
