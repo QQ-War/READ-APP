@@ -70,7 +70,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var onReachedBottom: (() -> Void)?; var onReachedTop: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
-    var isInfiniteScrollEnabled: Bool = true
     
     private var renderStore: TextKit2RenderStore?; private var nextRenderStore: TextKit2RenderStore?; private var prevRenderStore: TextKit2RenderStore?
     private var currentSentences: [String] = []; private var nextSentences: [String] = []; private var prevSentences: [String] = []
@@ -169,6 +168,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func update(sentences: [String], nextSentences: [String]?, prevSentences: [String]?, title: String?, nextTitle: String?, prevTitle: String?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
         let marginChanged = self.lastMargin != margin
         self.lastMargin = margin
+        
+        let modeChanged = self.lastInfiniteSetting != isInfiniteScrollEnabled
+        self.lastInfiniteSetting = isInfiniteScrollEnabled
+        
         let trimmedSentences = sentences.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedNextSentences = (nextSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedPrevSentences = (prevSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -179,9 +182,84 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         let isChapterSwap = (trimmedSentences == self.nextSentences) && !trimmedSentences.isEmpty
         let isChapterSwapToPrev = (trimmedSentences == self.prevSentences) && !trimmedSentences.isEmpty
-        let oldPrevHeightWithGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
         
-        var layoutNeeded = false
+        var layoutNeeded = modeChanged // 关键：如果模式变了，必须重新布局
+        
+        if contentChanged || renderStore == nil {
+            self.previousContentHeight = currentContentView.frame.height
+            self.currentSentences = trimmedSentences; self.lastFontSize = fontSize; self.lastLineSpacing = lineSpacing; isUpdatingLayout = true
+            
+            let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
+            let titleLen = titleText.utf16.count
+            var pS: [Int] = []; var cP = titleLen
+            for (idx, s) in trimmedSentences.enumerated() { 
+                pS.append(cP)
+                cP += (s.utf16.count + 2) 
+                if idx < trimmedSentences.count - 1 { cP += 1 } 
+            }; paragraphStarts = pS
+            
+            let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
+            if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) } 
+            else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
+            calculateSentenceOffsets(); isUpdatingLayout = false
+            currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
+            layoutNeeded = true
+        }
+        
+        if nextChanged {
+            self.nextSentences = trimmedNextSentences
+            if trimmedNextSentences.isEmpty {
+                nextRenderStore = nil
+                nextContentView.isHidden = true
+            } else {
+                let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
+                if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
+                else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
+            }
+            layoutNeeded = true
+        }
+        
+        if prevChanged {
+            self.prevSentences = trimmedPrevSentences
+            if trimmedPrevSentences.isEmpty {
+                prevRenderStore = nil
+                prevContentView.isHidden = true
+            } else {
+                let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
+                if let s = prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
+                else { prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                prevContentView.update(renderStore: prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
+            }
+            layoutNeeded = true
+        }
+        
+        if layoutNeeded {
+            let oldOffset = scrollView.contentOffset.y
+            let oldCurrY = currentContentView.frame.minY
+            let wasPrevVisible = lastPrevHasContent
+            let oldPrevHeightPlusGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
+            
+            isUpdatingLayout = true
+            updateLayoutFrames()
+            
+            if isTransitioning {
+                self.view.alpha = 1
+                self.scrollView.isUserInteractionEnabled = true
+                self.isTransitioning = false
+            } else if isInfiniteScrollEnabled {
+                if isChapterSwap {
+                    if wasPrevVisible { scrollView.contentOffset.y = max(0, oldOffset - oldPrevHeightPlusGap) }
+                } else if isChapterSwapToPrev {
+                    let newPrevHeightPlusGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
+                    scrollView.contentOffset.y = oldOffset + newPrevHeightPlusGap
+                } else if prevChanged && !isChapterSwapToPrev {
+                    let displacement = currentContentView.frame.minY - oldCurrY
+                    if displacement != 0 { scrollView.contentOffset.y = oldOffset + displacement }
+                }
+            }
+            isUpdatingLayout = false
+        }
         
         if contentChanged || renderStore == nil {
             self.previousContentHeight = currentContentView.frame.height
@@ -323,11 +401,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let m = (view.bounds.width - s.layoutWidth) / 2
         let topPadding = safeAreaTop + 10
         
+        LogManager.shared.log("执行布局: 模式=\(isInfiniteScrollEnabled ? "无限" : "非无限"), 内容H=\(Int(h1))", category: "阅读器")
+
         if isInfiniteScrollEnabled {
-            // 无限流模式：堆叠布局
             var currentY = topPadding
             var totalH = topPadding
-            
             if let ps = prevRenderStore {
                 var h0: CGFloat = 0
                 ps.layoutManager.enumerateTextLayoutFragments(from: ps.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h0 = f.layoutFragmentFrame.maxY; return false }
@@ -342,45 +420,38 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 lastPrevContentHeight = 0
                 lastPrevHasContent = false
             }
-            
             currentContentView.frame = CGRect(x: m, y: currentY, width: s.layoutWidth, height: h1)
             totalH += h1
-            
             if let ns = nextRenderStore {
                 var h2: CGFloat = 0
                 ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
                 nextContentView.isHidden = false
                 nextContentView.frame = CGRect(x: m, y: currentY + h1 + chapterGap, width: ns.layoutWidth, height: h2)
                 totalH += h2 + chapterGap
-            } else {
-                nextContentView.isHidden = true
-            }
+            } else { nextContentView.isHidden = true }
             scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + 100)
         } else {
-            // 非无限流模式：contentSize 严格等于当前章节内容，预览放在外面
+            // 非无限流：ContentSize 仅为当前章
             currentContentView.frame = CGRect(x: m, y: topPadding, width: s.layoutWidth, height: h1)
             scrollView.contentSize = CGSize(width: view.bounds.width, height: topPadding + h1)
             
+            // 预览内容放置在 100px 间距外
             if let ps = prevRenderStore {
                 var h0: CGFloat = 0
                 ps.layoutManager.enumerateTextLayoutFragments(from: ps.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h0 = f.layoutFragmentFrame.maxY; return false }
                 prevContentView.isHidden = false
-                prevContentView.frame = CGRect(x: m, y: topPadding - h0, width: ps.layoutWidth, height: h0)
-            } else {
-                prevContentView.isHidden = true
-            }
+                prevContentView.frame = CGRect(x: m, y: topPadding - h0 - 100, width: ps.layoutWidth, height: h0)
+            } else { prevContentView.isHidden = true }
             
             if let ns = nextRenderStore {
                 var h2: CGFloat = 0
                 ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
                 nextContentView.isHidden = false
-                nextContentView.frame = CGRect(x: m, y: topPadding + h1, width: ns.layoutWidth, height: h2)
-            } else {
-                nextContentView.isHidden = true
-            }
+                nextContentView.frame = CGRect(x: m, y: topPadding + h1 + 100, width: ns.layoutWidth, height: h2)
+            } else { nextContentView.isHidden = true }
             lastPrevHasContent = false
         }
-        LogManager.shared.log("布局完成: 无限=\(isInfiniteScrollEnabled), contentH=\(Int(h1)), size=\(scrollView.contentSize)", category: "阅读器")
+        LogManager.shared.log("布局结果: contentSize=\(scrollView.contentSize)", category: "阅读器")
     }
 
     func scrollViewDidScroll(_ s: UIScrollView) {
@@ -388,28 +459,21 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let rawOffset = s.contentOffset.y
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
-        // 1. 无限滚动标记切换
-        if isInfiniteScrollEnabled {
-            handleAutoSwitchIfNeeded(rawOffset: rawOffset)
+        let actualMaxScrollY = max(0, s.contentSize.height - s.bounds.height)
+        if rawOffset < -10 || rawOffset > actualMaxScrollY + 10 {
+            LogManager.shared.log("边缘检查: offset=\(Int(rawOffset)), max=\(Int(actualMaxScrollY)), size=\(Int(s.contentSize.height))", category: "阅读器")
         }
-        
-        // 2. 边缘拉动切换判定
+
+        if isInfiniteScrollEnabled { handleAutoSwitchIfNeeded(rawOffset: rawOffset) }
         handleHoldSwitchIfNeeded(rawOffset: rawOffset)
         
         if isInfiniteScrollEnabled {
-            if s.contentOffset.y > s.contentSize.height - s.bounds.height * 1.5 {
-                onReachedBottom?()
-            }
-            if s.contentOffset.y < s.bounds.height * 0.6 {
-                onReachedTop?()
-            }
+            if s.contentOffset.y > s.contentSize.height - s.bounds.height * 1.5 { onReachedBottom?() }
+            if s.contentOffset.y < s.bounds.height * 0.6 { onReachedTop?() }
         }
         
         let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
-        if idx != lastReportedIndex { 
-            lastReportedIndex = idx; 
-            onVisibleIndexChanged?(idx) 
-        }
+        if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
