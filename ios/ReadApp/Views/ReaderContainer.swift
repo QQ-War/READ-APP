@@ -374,14 +374,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func setupHorizontalMode() {
+        guard let preferences = preferences else { return }
         let h = UIPageViewController(transitionStyle: preferences.pageTurningMode == .simulation ? .pageCurl : .scroll, navigationOrientation: .horizontal, options: nil)
-        h.dataSource = self; h.delegate = self; addChild(h); view.insertSubview(h.view, at: 0); h.didMove(toParent: self)
-        
-        // 监听内部滚动视图以检测用户交互
-        for view in h.view.subviews {
-            if let scrollView = view as? UIScrollView {
-                scrollView.delegate = self
-            }
+        h.dataSource = self; h.delegate = self
+        addChild(h); view.insertSubview(h.view, belowSubview: progressLabel); h.didMove(toParent: self)
+        horizontalVC = h; updateHorizontalPage(to: currentPageIndex, animated: false)
+    }
         }
         
         for recognizer in h.gestureRecognizers where recognizer is UITapGestureRecognizer {
@@ -505,6 +503,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func prefetchAdjacentChapters(index: Int) {
+        guard let book = book else { return }
         if isMangaMode { return }
         prefetcher.prefetchAdjacent(
             book: book,
@@ -558,6 +557,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func createAttrString(_ text: String, title: String) -> NSAttributedString {
         let fullAttr = NSMutableAttributedString()
+        guard let preferences = preferences else { return fullAttr }
         if !title.isEmpty { 
             let p = NSMutableParagraphStyle()
             p.alignment = .center
@@ -602,21 +602,27 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func setupVerticalMode() {
-        let v = VerticalTextViewController(); v.onVisibleIndexChanged = { [weak self] idx in self?.onProgressChanged?(self?.currentChapterIndex ?? 0, Double(idx) / Double(max(1, self?.contentSentences.count ?? 1))) }
-        v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
+        guard let preferences = preferences, let ttsManager = ttsManager else { return }
+        let v = VerticalTextViewController()
+        v.onVisibleIndexChanged = { [weak self] i in self?.handleVerticalScroll(to: i) }
+        v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
+        v.onAddReplaceRule = { [weak self] t in self?.onAddReplaceRuleWithText?(t) }
+        v.onChapterSwitched = { [weak self] d in self?.jumpToChapter(self!.currentChapterIndex + d) }
+        v.onReachedBottom = { [weak self] in self?.prefetchNextChapterOnly() }
+        v.onInteractionChanged = { [weak self] i in self?.isUserInteracting = i }
+        v.safeAreaTop = safeAreaTop
         v.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
-        v.onChapterSwitched = { [weak self] offset in 
-            guard let self = self else { return }
-            // 连跳保护
-            let now = Date().timeIntervalSince1970
-            guard now - self.lastChapterSwitchTime > self.chapterSwitchCooldown else { return }
-            
-            let target = self.currentChapterIndex + offset
-            guard target >= 0 && target < self.chapters.count else { return }
-            
-            self.lastChapterSwitchTime = now
-            self.jumpToChapter(target, startAtEnd: offset < 0)
-        }
+        
+        addChild(v); view.insertSubview(v.view, belowSubview: progressLabel); v.didMove(toParent: self)
+        verticalVC = v
+        
+        let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+        let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
+        let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
+        let nextSentences = preferences.isInfiniteScrollEnabled ? nextChapterSentences : nil
+        let prevSentences = preferences.isInfiniteScrollEnabled ? prevChapterSentences : nil
+        v.update(sentences: contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+    }
         v.onInteractionChanged = { [weak self] interacting in self?.isUserInteracting = interacting }
         addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
         
