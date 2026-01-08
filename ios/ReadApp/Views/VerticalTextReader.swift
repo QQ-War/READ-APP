@@ -336,8 +336,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         } else {
             nextContentView.isHidden = true
         }
-        // 无限流模式下增加底部占位，保证预载缓冲空间，防止滑到底部卡住
-        let extraBottom: CGFloat = isInfiniteScrollEnabled ? 1200 : 100
+        // 还原占位：仅保留极小缓冲，依靠预载机制实现连续
+        let extraBottom: CGFloat = 100
         scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
     }
 
@@ -363,10 +363,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             hideSwitchHint()
         }
         
-        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 3 {
+        if isInfiniteScrollEnabled && s.contentOffset.y > s.contentSize.height - s.bounds.height * 2.5 {
             onReachedBottom?()
         }
-        if isInfiniteScrollEnabled && s.contentOffset.y < s.bounds.height * 1.5 {
+        if isInfiniteScrollEnabled && s.contentOffset.y < s.bounds.height * 1.2 {
             onReachedTop?()
         }
         
@@ -534,37 +534,33 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let threshold: CGFloat = 80 // 恢复到 80，配合较大的 inset 体验更好
+        let threshold: CGFloat = 70 // 适中的拉动阈值
         let topThreshold: CGFloat = -threshold
         
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
         let bottomThreshold = actualMaxScrollY + threshold
         
         if rawOffset < -10 {
+            // 下拉
             if rawOffset < topThreshold {
-                if !switchReady {
-                    switchReady = true; pendingSwitchDirection = -1
-                    hapticFeedback()
-                }
+                if !switchReady { switchReady = true; pendingSwitchDirection = -1; hapticFeedback() }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
                 switchReady = false; pendingSwitchDirection = -1
-                updateSwitchHint(text: "继续下拉切换上一章", isTop: true)
+                updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
         } else if rawOffset > actualMaxScrollY + 10 {
+            // 上拉
             if rawOffset > bottomThreshold {
-                if !switchReady {
-                    switchReady = true; pendingSwitchDirection = 1
-                    hapticFeedback()
-                }
+                if !switchReady { switchReady = true; pendingSwitchDirection = 1; hapticFeedback() }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
                 switchReady = false; pendingSwitchDirection = 1
-                updateSwitchHint(text: "继续上拉切换下一章", isTop: false)
+                updateSwitchHint(text: "上拉切换下一章", isTop: false)
             }
         } else {
-            // 只有当完全回到正常区域才取消，防止抖动导致提示消失
-            if !scrollView.isDragging && rawOffset >= -5 && rawOffset <= actualMaxScrollY + 5 {
+            // 回到正常滚动区域
+            if !scrollView.isDragging && !switchReady {
                 cancelSwitchHold()
             }
         }
@@ -586,12 +582,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func applyScrollBehaviorIfNeeded() {
         if lastInfiniteSetting == isInfiniteScrollEnabled { return }
         lastInfiniteSetting = isInfiniteScrollEnabled
+        // 移除硬编码的 contentInset，恢复 UIKit 原生弹性手感
+        scrollView.contentInset = .zero
         if isInfiniteScrollEnabled {
-            scrollView.contentInset = .zero
             cancelSwitchHold()
-        } else {
-            // 恢复较大的 bottom inset，保证上拉切章时有足够的弹簧空间
-            scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 120, right: 0)
         }
     }
 }
