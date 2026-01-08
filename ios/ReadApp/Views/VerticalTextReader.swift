@@ -318,7 +318,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         } else {
             nextContentView.isHidden = true
         }
-        let extraBottom = isInfiniteScrollEnabled ? 200 : 40
+        let extraBottom: CGFloat = isInfiniteScrollEnabled ? 200 : 40
         scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
     }
 
@@ -407,7 +407,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         return max(0, idx)
     }
     func getCurrentCharOffset() -> Int {
-        guard let s = renderStore, let viewIfLoaded = viewIfLoaded else { return 0 }
+        guard let s = renderStore, viewIfLoaded != nil else { return 0 }
         let point = CGPoint(x: 10, y: scrollView.contentOffset.y - (safeAreaTop + 10) + 5)
         if let f = s.layoutManager.textLayoutFragment(for: point) {
             return s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
