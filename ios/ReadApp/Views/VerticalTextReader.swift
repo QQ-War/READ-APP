@@ -52,9 +52,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var switchWorkItem: DispatchWorkItem?
     private var hintWorkItem: DispatchWorkItem?
     private var isShowingSwitchResultHint = false
+    var isInfiniteScrollEnabled: Bool = true {
+        didSet {
+            if oldValue != isInfiniteScrollEnabled {
+                LogManager.shared.log("模式变更: \(oldValue ? "无限" : "非无限") -> \(isInfiniteScrollEnabled ? "无限" : "非无限")", category: "阅读器")
+            }
+        }
+    }
+    private var isTransitioning = false
     private var suppressAutoSwitchUntil: TimeInterval = 0
     private var dragStartTime: TimeInterval = 0
-    private var isTransitioning = false
     private let dampingFactor: CGFloat = 0.12
     private let chapterGap: CGFloat = 80
     private var lastInfiniteSetting: Bool?
@@ -348,19 +355,17 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             } else {
                 nextContentView.isHidden = true
             }
-            let extraBottom: CGFloat = 100
-            scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + extraBottom)
+            scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + 100)
         } else {
-            // 非无限流模式：单章布局，预览内容放在边界外（弹性区）
+            // 非无限流模式：contentSize 严格等于当前章节内容，预览放在外面
             currentContentView.frame = CGRect(x: m, y: topPadding, width: s.layoutWidth, height: h1)
-            scrollView.contentSize = CGSize(width: view.bounds.width, height: topPadding + h1 + 40)
+            scrollView.contentSize = CGSize(width: view.bounds.width, height: topPadding + h1)
             
             if let ps = prevRenderStore {
                 var h0: CGFloat = 0
                 ps.layoutManager.enumerateTextLayoutFragments(from: ps.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h0 = f.layoutFragmentFrame.maxY; return false }
                 prevContentView.isHidden = false
-                // 放在顶部边缘上方，只有下拉弹性时可见
-                prevContentView.frame = CGRect(x: m, y: topPadding - h0 - chapterGap, width: ps.layoutWidth, height: h0)
+                prevContentView.frame = CGRect(x: m, y: topPadding - h0, width: ps.layoutWidth, height: h0)
             } else {
                 prevContentView.isHidden = true
             }
@@ -369,13 +374,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 var h2: CGFloat = 0
                 ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
                 nextContentView.isHidden = false
-                // 放在底部边缘下方，只有上拉弹性时可见
-                nextContentView.frame = CGRect(x: m, y: topPadding + h1 + chapterGap, width: ns.layoutWidth, height: h2)
+                nextContentView.frame = CGRect(x: m, y: topPadding + h1, width: ns.layoutWidth, height: h2)
             } else {
                 nextContentView.isHidden = true
             }
             lastPrevHasContent = false
         }
+        LogManager.shared.log("布局完成: 无限=\(isInfiniteScrollEnabled), contentH=\(Int(h1)), size=\(scrollView.contentSize)", category: "阅读器")
     }
 
     func scrollViewDidScroll(_ s: UIScrollView) {
@@ -412,27 +417,23 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         cancelSwitchHold()
         pendingSeamlessSwitch = 0 
         onInteractionChanged?(true)
-        LogManager.shared.log("拖拽开始: offset=\(scrollView.contentOffset.y), infinite=\(isInfiniteScrollEnabled)", category: "阅读器")
+        LogManager.shared.log("拖拽开始: offset=\(Int(scrollView.contentOffset.y)), infinite=\(isInfiniteScrollEnabled)", category: "阅读器")
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         onInteractionChanged?(false)
-        LogManager.shared.log("拖拽结束: switchReady=\(switchReady), direction=\(pendingSwitchDirection), infinite=\(isInfiniteScrollEnabled)", category: "阅读器")
+        LogManager.shared.log("拖拽结束: ready=\(switchReady), dir=\(pendingSwitchDirection), infinite=\(isInfiniteScrollEnabled)", category: "阅读器")
         
         if !isInfiniteScrollEnabled {
             if switchReady && pendingSwitchDirection != 0 && !isTransitioning {
-                LogManager.shared.log("触发转场: 方向=\(pendingSwitchDirection)", category: "阅读器")
+                LogManager.shared.log("执行转场淡出, 方向=\(pendingSwitchDirection)", category: "阅读器")
                 let direction = pendingSwitchDirection
                 isTransitioning = true
-                
                 scrollView.isUserInteractionEnabled = false
-                UIView.animate(withDuration: 0.25, animations: {
-                    self.view.alpha = 0
-                }) { _ in
-                    LogManager.shared.log("转场淡出完成，通知切换", category: "阅读器")
+                UIView.animate(withDuration: 0.25, animations: { self.view.alpha = 0 }) { _ in
+                    LogManager.shared.log("转场淡出完成, 通知切章", category: "阅读器")
                     self.onChapterSwitched?(direction)
                 }
-                
                 self.cancelSwitchHold()
                 return
             }
@@ -440,9 +441,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             return
         }
         
-        if !decelerate { 
-            executeSeamlessSwitchIfNeeded()
-        }
+        if !decelerate { executeSeamlessSwitchIfNeeded() }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
@@ -583,60 +582,42 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
         guard !isInfiniteScrollEnabled, scrollView.isDragging else {
-            if isInfiniteScrollEnabled && !isShowingSwitchResultHint {
-                hideSwitchHint()
-            }
+            if isInfiniteScrollEnabled && !isShowingSwitchResultHint { hideSwitchHint() }
             return
         }
         
         let threshold: CGFloat = 80 
-        let cancelThreshold: CGFloat = 30 
-        let timeThreshold: TimeInterval = 1.0 
-        let currentDragDuration = Date().timeIntervalSince1970 - dragStartTime
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        
-        if rawOffset < -10 {
+        let currentDragDuration = Date().timeIntervalSince1970 - dragStartTime
+
+        if rawOffset < -5 {
             let pullDistance = -rawOffset
-            let isReady = pullDistance > threshold || currentDragDuration > timeThreshold
-            
+            let isReady = pullDistance > threshold || currentDragDuration > 1.2
             if isReady {
-                if !switchReady {
-                    switchReady = true
-                    pendingSwitchDirection = -1
-                    hapticFeedback()
-                    LogManager.shared.log("满足切章条件(上一章): 距离=\(Int(pullDistance)), 时间=\(String(format: "%.1f", currentDragDuration))", category: "阅读器")
+                if !switchReady { 
+                    switchReady = true; pendingSwitchDirection = -1; hapticFeedback() 
+                    LogManager.shared.log("满足切章(上): 距离=\(Int(pullDistance)), 时间=\(String(format: "%.1f", currentDragDuration))", category: "阅读器")
                 }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
-                if pullDistance < cancelThreshold {
-                    if switchReady { LogManager.shared.log("切章已取消", category: "阅读器") }
-                    switchReady = false
-                }
+                if pullDistance < 20 { switchReady = false }
                 updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
-        } else if rawOffset > actualMaxScrollY + 10 {
+        } else if rawOffset > actualMaxScrollY + 5 {
             let pullDistance = rawOffset - actualMaxScrollY
-            let isReady = pullDistance > threshold || currentDragDuration > timeThreshold
-            
+            let isReady = pullDistance > threshold || currentDragDuration > 1.2
             if isReady {
-                if !switchReady {
-                    switchReady = true
-                    pendingSwitchDirection = 1
-                    hapticFeedback()
-                    LogManager.shared.log("满足切章条件(下一章): 距离=\(Int(pullDistance)), 时间=\(String(format: "%.1f", currentDragDuration))", category: "阅读器")
+                if !switchReady { 
+                    switchReady = true; pendingSwitchDirection = 1; hapticFeedback() 
+                    LogManager.shared.log("满足切章(下): 距离=\(Int(pullDistance)), 阈值=\(Int(actualMaxScrollY)), 时间=\(String(format: "%.1f", currentDragDuration))", category: "阅读器")
                 }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
-                if pullDistance < cancelThreshold {
-                    if switchReady { LogManager.shared.log("切章已取消", category: "阅读器") }
-                    switchReady = false
-                }
+                if pullDistance < 20 { switchReady = false }
                 updateSwitchHint(text: "上拉切换下一章", isTop: false)
             }
         } else {
-            if rawOffset > -5 && rawOffset < actualMaxScrollY + 5 {
-                cancelSwitchHold()
-            }
+            if !switchReady && rawOffset > -2 && rawOffset < actualMaxScrollY + 2 { hideSwitchHint() }
         }
     }
     
