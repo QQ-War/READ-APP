@@ -171,9 +171,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             // 重新计算 paragraphStarts，需要考虑标题的偏移
             let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
             let titleLen = titleText.utf16.count
-            var pS: [Int] = []; var cP = titleLen; for s in trimmedSentences { 
+            var pS: [Int] = []; var cP = titleLen
+            for (idx, s) in trimmedSentences.enumerated() { 
                 pS.append(cP)
-                cP += s.utf16.count + 2 + 1 // 2 为全角空格，1 为换行符
+                cP += (s.utf16.count + 2) // 2 为全角空格
+                if idx < trimmedSentences.count - 1 {
+                    cP += 1 // 1 为换行符
+                }
             }; paragraphStarts = pS
             
             let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
@@ -272,7 +276,14 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     private func calculateSentenceOffsets() {
         guard let s = renderStore else { return }; s.layoutManager.ensureLayout(for: s.contentStorage.documentRange); var o: [CGFloat] = []
-        for start in paragraphStarts { if let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: start), let f = s.layoutManager.textLayoutFragment(for: loc) { o.append(f.layoutFragmentFrame.minY) } else { o.append(o.last ?? 0) } }
+        let totalLen = s.attributedString.length
+        for start in paragraphStarts { 
+            if start < totalLen, let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: start), let f = s.layoutManager.textLayoutFragment(for: loc) { 
+                o.append(f.layoutFragmentFrame.minY) 
+            } else { 
+                o.append(o.last ?? 0) 
+            } 
+        }
         sentenceYOffsets = o
     }
 
