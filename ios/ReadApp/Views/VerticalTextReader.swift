@@ -427,11 +427,15 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         return max(0, idx)
     }
     func getCurrentCharOffset() -> Int {
-        guard let s = renderStore else { return 0 }; let f = s.layoutManager.textLayoutFragment(for: CGPoint(x: 10, y: scrollView.contentOffset.y - (safeAreaTop + 10) + 5))
-        return f != nil ? s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f!.rangeInElement.location) : 0
+        guard let s = renderStore else { return 0 }
+        let p = CGPoint(x: 20, y: scrollView.contentOffset.y + safeAreaTop + 20)
+        if let f = s.layoutManager.textLayoutFragment(for: p) {
+            return s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+        }
+        return 0
     }
     func scrollToCharOffset(_ o: Int, animated: Bool) {
-        guard let s = renderStore else { return }
+        guard renderStore != nil else { return }
         
         // 查找最接近的段落索引，防止直接使用 charOffset 定位到 fragment 中间
         let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
@@ -582,31 +586,29 @@ class VerticalTextContentView: UIView {
         if forceRedraw { setNeedsDisplay() }
     }
     override func draw(_ rect: CGRect) {
-        guard let s = renderStore else { return }; let ctx = UIGraphicsGetCurrentContext()
+        guard let s = renderStore, let ctx = UIGraphicsGetCurrentContext() else { return }
         if isPlayingHighlight {
-            ctx?.saveGState()
+            ctx.saveGState()
             for i in ([highlightIndex].compactMap{$0} + Array(secondaryIndices)) {
                 guard i < paragraphStarts.count else { continue }
                 let start = paragraphStarts[i], end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length, r = NSRange(location: start, length: max(0, end - start))
-                ctx?.setFillColor(((i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)).cgColor)
+                ctx.setFillColor(((i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)).cgColor)
                 guard let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: r.location) else { continue }
                 s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { f in
                     if s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(r) { return false }
                     for line in f.textLineFragments { 
-                        // 这里 line.typographicBounds 已经相对于 fragment 的坐标了
                         let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y)
-                        ctx?.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath)
-                        ctx?.fillPath() 
+                        ctx.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath)
+                        ctx.fillPath() 
                     }
                     return true
                 }
             }
-            ctx?.restoreGState()
+            ctx.restoreGState()
         }
         
         // 关键修复：绘图时不要受 View 坐标影响，LayoutManager 里的 frame 是相对于其布局容器的
-        ctx?.saveGState()
-        guard let ctx = ctx else { return }
+        ctx.saveGState()
         let sL = s.layoutManager.textLayoutFragment(for: CGPoint(x: 0, y: rect.minY))?.rangeInElement.location ?? s.contentStorage.documentRange.location
         s.layoutManager.enumerateTextLayoutFragments(from: sL, options: [.ensuresLayout]) { f in
             if f.layoutFragmentFrame.minY > rect.maxY { return false }
@@ -615,7 +617,7 @@ class VerticalTextContentView: UIView {
             }
             return true
         }
-        ctx?.restoreGState()
+        ctx.restoreGState()
     }
 }
 
