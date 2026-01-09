@@ -7,10 +7,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.readapp.data.ReadApiService
-import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
 import com.readapp.data.model.Book
 import com.readapp.data.model.BookSource
+import com.readapp.data.repo.BookRepository
+import com.readapp.data.repo.SourceRepository
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,9 +28,11 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
 
     private val userPreferences = UserPreferences(application)
     private val accessTokenState = MutableStateFlow("")
-    val repository = ReadRepository { endpoint -> // Make repository public for BookSearchViewModel Factory
+    private val readRepository = ReadRepository { endpoint ->
         ReadApiService.create(endpoint) { accessTokenState.value }
     }
+    val bookRepository = BookRepository(readRepository)
+    private val sourceRepository = SourceRepository(readRepository)
 
     // Source List State
     private val _sources = MutableStateFlow<List<BookSource>>(emptyList())
@@ -95,7 +98,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
 
             val deferredResults = enabledSources.map { source ->
                 async {
-                    repository.searchBook(
+                    bookRepository.searchBook(
                         baseUrl = baseUrl,
                         publicUrl = publicUrl,
                         accessToken = token,
@@ -129,7 +132,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
                 return@launch
             }
 
-            repository.getBookSources(
+            sourceRepository.getBookSources(
                 context = getApplication<Application>().applicationContext,
                 baseUrl = serverUrl,
                 publicUrl = publicUrl,
@@ -161,7 +164,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
             val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
             val token = userPreferences.accessToken.first()
 
-            val result = repository.deleteBookSource(
+            val result = sourceRepository.deleteBookSource(
                 context = getApplication<Application>().applicationContext,
                 baseUrl = serverUrl,
                 publicUrl = publicUrl,
@@ -187,7 +190,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
             val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
             val token = userPreferences.accessToken.first()
 
-            val result = repository.toggleBookSource(
+            val result = sourceRepository.toggleBookSource(
                 context = getApplication<Application>().applicationContext,
                 baseUrl = serverUrl,
                 publicUrl = publicUrl,
@@ -207,7 +210,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
         val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
         val token = userPreferences.accessToken.first()
 
-        return repository.getBookSourceDetail(serverUrl, publicUrl, token, id).getOrNull()
+        return sourceRepository.getBookSourceDetail(serverUrl, publicUrl, token, id).getOrNull()
     }
 
     suspend fun fetchExploreKinds(bookSourceUrl: String): String? {
@@ -215,7 +218,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
         val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
         val token = userPreferences.accessToken.first()
 
-        return repository.fetchExploreKinds(serverUrl, publicUrl, token, bookSourceUrl).getOrNull()
+        return sourceRepository.fetchExploreKinds(serverUrl, publicUrl, token, bookSourceUrl).getOrNull()
     }
 
     suspend fun exploreBook(bookSourceUrl: String, ruleFindUrl: String, page: Int): Result<List<Book>> {
@@ -223,7 +226,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
         val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
         val token = userPreferences.accessToken.first()
 
-        return repository.exploreBook(serverUrl, publicUrl, token, bookSourceUrl, ruleFindUrl, page)
+        return sourceRepository.exploreBook(serverUrl, publicUrl, token, bookSourceUrl, ruleFindUrl, page)
     }
 
     suspend fun saveSource(jsonContent: String): Result<Any> {
@@ -231,7 +234,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
         val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
         val token = userPreferences.accessToken.first()
 
-        return repository.saveBookSource(serverUrl, publicUrl, token, jsonContent)
+        return sourceRepository.saveBookSource(serverUrl, publicUrl, token, jsonContent)
     }
 
     fun saveBookToBookshelf(book: Book) {
@@ -244,7 +247,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
 
             // Note: Currently no specific error handling for saveBook, just logs for now.
             // A separate StateFlow could be used for UI feedback if needed.
-            repository.saveBook(
+            bookRepository.saveBook(
                 baseUrl = baseUrl,
                 publicUrl = publicUrl,
                 accessToken = token,

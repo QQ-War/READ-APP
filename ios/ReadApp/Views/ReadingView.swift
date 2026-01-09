@@ -7,6 +7,7 @@ struct ReadingView: View {
     @EnvironmentObject var apiService: APIService
     @StateObject var ttsManager = TTSManager.shared
     @StateObject var preferences = UserPreferences.shared
+    @StateObject private var readerSettings = ReaderSettingsStore(preferences: UserPreferences.shared)
     @StateObject private var replaceRuleViewModel = ReplaceRuleViewModel()
 
     @State var chapters: [BookChapter] = []
@@ -34,7 +35,7 @@ struct ReadingView: View {
     }
 
     private var currentChapterIsManga: Bool {
-        book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
+        book.type == 2 || readerSettings.manualMangaUrls.contains(book.bookUrl ?? "")
     }
 
     var body: some View {
@@ -45,7 +46,7 @@ struct ReadingView: View {
                     
                     ReaderContainerRepresentable(
                         book: book,
-                        preferences: preferences,
+                        readerSettings: readerSettings,
                         ttsManager: ttsManager,
                         replaceRuleViewModel: replaceRuleViewModel,
                         chapters: $chapters,
@@ -55,7 +56,7 @@ struct ReadingView: View {
                                             onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
                                             onProgressChanged: { _, pos in self.currentPos = pos },
                                             onToggleTTS: { action in self.toggleTTSAction = action },
-                                            readingMode: preferences.readingMode,
+                                            readingMode: readerSettings.readingMode,
                                             safeAreaInsets: fullScreenProxy.safeAreaInsets
                                         )                    .ignoresSafeArea()
 

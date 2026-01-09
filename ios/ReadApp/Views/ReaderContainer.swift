@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import Combine
 
 // MARK: - 布局规范
 struct ReaderLayoutSpec {
@@ -13,7 +12,7 @@ struct ReaderLayoutSpec {
 // MARK: - SwiftUI 桥接入口
 struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     let book: Book
-    @ObservedObject var preferences: UserPreferences
+    @ObservedObject var readerSettings: ReaderSettingsStore
     @ObservedObject var ttsManager: TTSManager
     @ObservedObject var replaceRuleViewModel: ReplaceRuleViewModel
     
@@ -49,7 +48,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     
     func makeUIViewController(context: Context) -> ReaderContainerViewController {
         let vc = ReaderContainerViewController()
-        vc.book = book; vc.preferences = preferences; vc.ttsManager = ttsManager
+        vc.book = book; vc.readerSettings = readerSettings; vc.ttsManager = ttsManager
         vc.replaceRuleViewModel = replaceRuleViewModel
         vc.onToggleMenu = onToggleMenu; vc.onAddReplaceRuleWithText = { onAddReplaceRule($0) }
         vc.onChapterIndexChanged = { idx in context.coordinator.handleChapterChange(idx) }
@@ -63,9 +62,9 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: ReaderContainerViewController, context: Context) {
         context.coordinator.parent = self
         vc.updateLayout(safeArea: safeAreaInsets)
-        vc.updatePreferences(preferences)
+        vc.updateSettings(readerSettings)
         vc.updateReplaceRules(replaceRuleViewModel.rules)
-        vc.verticalThreshold = preferences.verticalThreshold
+        vc.verticalThreshold = readerSettings.verticalThreshold
         
         // 外部跳转检测逻辑优化
         if !vc.isInternalTransitioning && vc.lastReportedChapterIndex != currentChapterIndex {
@@ -79,7 +78,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
 
 // MARK: - UIKit 核心容器
 class ReaderContainerViewController: UIViewController, UIPageViewControllerDataSource, UIPageViewControllerDelegate, UIScrollViewDelegate {
-    var book: Book!; var chapters: [BookChapter] = []; var preferences: UserPreferences!; var ttsManager: TTSManager!; var replaceRuleViewModel: ReplaceRuleViewModel?
+    var book: Book!; var chapters: [BookChapter] = []; var readerSettings: ReaderSettingsStore!; var ttsManager: TTSManager!; var replaceRuleViewModel: ReplaceRuleViewModel?
     var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?
     var onChapterIndexChanged: ((Int) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?
     
@@ -88,7 +87,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         return ReaderLayoutSpec(
             topInset: max(safeAreaTop, view.safeAreaInsets.top) + 15,
             bottomInset: max(safeAreaBottom, view.safeAreaInsets.bottom) + 40,
-            sideMargin: preferences.pageHorizontalMargin + 8,
+            sideMargin: readerSettings.pageHorizontalMargin + 8,
             pageSize: view.bounds.size
         )
     }
@@ -105,7 +104,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     var isInternalTransitioning = false
     private var isFirstLoad = true
     private var isUserInteracting = false
-    private var cancellables: Set<AnyCancellable> = []
+    private var ttsCoordinator: ReaderTtsCoordinator?
     
     private var chapterBuilder: ReaderChapterBuilder?
     private var currentCache: ChapterCache = .empty
@@ -118,9 +117,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private let progressLabel = UILabel()
     private var lastLayoutSignature: String = ""
     private var loadToken: Int = 0
-    private var fetchingNextIndex: Int?
-    private var fetchingPrevIndex: Int?
-    private var prefetchNextTask: Task<Void, Never>?; private var prefetchPrevTask: Task<Void, Never>?
+    private let prefetchCoordinator = ReaderPrefetchCoordinator()
     private var lastChapterSwitchTime: TimeInterval = 0
     private let chapterSwitchCooldown: TimeInterval = 1.0
 
@@ -130,22 +127,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         setupProgressLabel()
         currentChapterIndex = book.durChapterIndex ?? 0
         lastReportedChapterIndex = currentChapterIndex
-        currentReadingMode = preferences.readingMode
-        chapterBuilder = ReaderChapterBuilder(preferences: preferences, replaceRules: replaceRuleViewModel?.rules)
+        currentReadingMode = readerSettings.readingMode
+        chapterBuilder = ReaderChapterBuilder(readerSettings: readerSettings, replaceRules: replaceRuleViewModel?.rules)
         loadChapters()
-        setupTTSObservers()
-    }
-    
-    private func setupTTSObservers() {
-        ttsManager.$currentSentenceIndex
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.syncTTSState() }
-            .store(in: &cancellables)
-            
-        ttsManager.$isPlaying
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.syncTTSState() }
-            .store(in: &cancellables)
+        ttsCoordinator = ReaderTtsCoordinator(reader: self, ttsManager: ttsManager)
+        ttsCoordinator?.start()
     }
     
     private func setupProgressLabel() {
@@ -173,17 +159,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
-    func updatePreferences(_ prefs: UserPreferences) {
-        let oldP = self.preferences!; self.preferences = prefs
-        chapterBuilder?.updatePreferences(prefs)
-        // print("DEBUG_PREFS_SYNC: infinite=\(prefs.isInfiniteScrollEnabled)")
-        if let v = verticalVC, v.isInfiniteScrollEnabled != prefs.isInfiniteScrollEnabled {
-            v.isInfiniteScrollEnabled = prefs.isInfiniteScrollEnabled
+    func updateSettings(_ settings: ReaderSettingsStore) {
+        let oldSettings = self.readerSettings!
+        self.readerSettings = settings
+        chapterBuilder?.updateSettings(settings)
+        if let v = verticalVC, v.isInfiniteScrollEnabled != settings.isInfiniteScrollEnabled {
+            v.isInfiniteScrollEnabled = settings.isInfiniteScrollEnabled
             if !isMangaMode && currentReadingMode == .vertical {
                 updateVerticalAdjacent()
             }
         }
-        if (oldP.fontSize != prefs.fontSize || oldP.lineSpacing != prefs.lineSpacing) && !isMangaMode { 
+        if (oldSettings.fontSize != settings.fontSize || oldSettings.lineSpacing != settings.lineSpacing) && !isMangaMode {
             reRenderCurrentContent() 
         } else if !isMangaMode && currentReadingMode == .vertical {
             updateVerticalAdjacent()
@@ -251,7 +237,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         Task { [weak self] in
             guard let self = self else { return }
             do {
-                let isM = book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
+                let isM = book.type == 2 || readerSettings.manualMangaUrls.contains(book.bookUrl ?? "")
                 let content = try await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: isM ? 2 : 0)
                 await MainActor.run {
                     guard self.loadToken == token else { return }
@@ -318,8 +304,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func updateVerticalAdjacent(secondaryIndices: Set<Int> = []) {
-        guard let v = verticalVC, preferences != nil, ttsManager != nil else { return }
-        v.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
+        guard let v = verticalVC, readerSettings != nil, ttsManager != nil else { return }
+        v.isInfiniteScrollEnabled = readerSettings.isInfiniteScrollEnabled
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
         let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
@@ -330,7 +316,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let prevSentences = prevCache.contentSentences.isEmpty ? nil : prevCache.contentSentences
         
         let highlightIdx = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
-        v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: highlightIdx, secondaryIndices: secondaryIndices, isPlaying: ttsManager.isPlaying)
+        v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: readerSettings.fontSize, lineSpacing: readerSettings.lineSpacing, margin: readerSettings.pageHorizontalMargin, highlightIndex: highlightIdx, secondaryIndices: secondaryIndices, isPlaying: ttsManager.isPlaying)
     }
 
 
@@ -411,7 +397,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func setupHorizontalMode() {
-        let h = UIPageViewController(transitionStyle: preferences.pageTurningMode == .simulation ? .pageCurl : .scroll, navigationOrientation: .horizontal, options: nil)
+        let h = UIPageViewController(transitionStyle: readerSettings.pageTurningMode == .simulation ? .pageCurl : .scroll, navigationOrientation: .horizontal, options: nil)
         h.dataSource = self; h.delegate = self; addChild(h); view.insertSubview(h.view, at: 0); h.didMove(toParent: self)
         
         // 监听内部滚动视图以检测用户交互
@@ -551,81 +537,74 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func prefetchAdjacentChapters(index: Int) {
-        if isMangaMode { return }
-        prefetchNextChapterOnly(index: index)
-        prefetchPrevChapterOnly(index: index)
+        guard let builder = chapterBuilder else { return }
+        prefetchCoordinator.prefetchAdjacent(
+            book: book,
+            chapters: chapters,
+            index: index,
+            contentType: 0,
+            layoutSpec: currentLayoutSpec,
+            builder: builder,
+            nextCache: nextCache,
+            prevCache: prevCache,
+            isMangaMode: isMangaMode,
+            onNextCache: { [weak self] cache in
+                guard let self = self, self.currentChapterIndex == index else { return }
+                self.nextCache = cache
+                self.updateVerticalAdjacent()
+            },
+            onPrevCache: { [weak self] cache in
+                guard let self = self, self.currentChapterIndex == index else { return }
+                self.prevCache = cache
+                self.updateVerticalAdjacent()
+            },
+            onResetNext: { [weak self] in self?.nextCache = .empty },
+            onResetPrev: { [weak self] in self?.prevCache = .empty }
+        )
     }
     
     private func prefetchNextChapterOnly(index: Int) {
-        if isMangaMode { return }
-        let nextIdx = index + 1
-        if nextIdx < chapters.count {
-            if nextCache.renderStore == nil && fetchingNextIndex != nextIdx {
-                prefetchNextTask?.cancel()
-                fetchingNextIndex = nextIdx
-                prefetchNextTask = Task { [weak self] in
-                    guard let self = self else { return }
-                    defer { if self.fetchingNextIndex == nextIdx { self.fetchingNextIndex = nil } }
-                    do {
-                        if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: nextIdx, contentType: 0) {
-                            await MainActor.run { 
-                                guard !Task.isCancelled, self.currentChapterIndex == index else { return }
-                                guard let builder = self.chapterBuilder else { return }
-                                let title = self.chapters[nextIdx].title
-                                self.nextCache = builder.buildTextCache(
-                                    rawContent: content,
-                                    title: title,
-                                    layoutSpec: self.currentLayoutSpec,
-                                    reuseStore: nil
-                                )
-                                self.updateVerticalAdjacent()
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            prefetchNextTask?.cancel()
-            nextCache = .empty
-        }
+        guard let builder = chapterBuilder else { return }
+        prefetchCoordinator.prefetchNextOnly(
+            book: book,
+            chapters: chapters,
+            index: index,
+            contentType: 0,
+            layoutSpec: currentLayoutSpec,
+            builder: builder,
+            nextCache: nextCache,
+            isMangaMode: isMangaMode,
+            onNextCache: { [weak self] cache in
+                guard let self = self, self.currentChapterIndex == index else { return }
+                self.nextCache = cache
+                self.updateVerticalAdjacent()
+            },
+            onResetNext: { [weak self] in self?.nextCache = .empty }
+        )
     }
     
     private func prefetchPrevChapterOnly(index: Int) {
-        if isMangaMode { return }
-        let prevIdx = index - 1
-        if prevIdx >= 0 {
-            if prevCache.renderStore == nil && fetchingPrevIndex != prevIdx {
-                prefetchPrevTask?.cancel()
-                fetchingPrevIndex = prevIdx
-                prefetchPrevTask = Task { [weak self] in
-                    guard let self = self else { return }
-                    defer { if self.fetchingPrevIndex == prevIdx { self.fetchingPrevIndex = nil } }
-                    do {
-                        if let content = try? await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: prevIdx, contentType: 0) {
-                            await MainActor.run { 
-                                guard !Task.isCancelled, self.currentChapterIndex == index else { return }
-                                guard let builder = self.chapterBuilder else { return }
-                                let title = self.chapters[prevIdx].title
-                                self.prevCache = builder.buildTextCache(
-                                    rawContent: content,
-                                    title: title,
-                                    layoutSpec: self.currentLayoutSpec,
-                                    reuseStore: nil
-                                )
-                                self.updateVerticalAdjacent()
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            prefetchPrevTask?.cancel()
-            prevCache = .empty
-        }
+        guard let builder = chapterBuilder else { return }
+        prefetchCoordinator.prefetchPrevOnly(
+            book: book,
+            chapters: chapters,
+            index: index,
+            contentType: 0,
+            layoutSpec: currentLayoutSpec,
+            builder: builder,
+            prevCache: prevCache,
+            isMangaMode: isMangaMode,
+            onPrevCache: { [weak self] cache in
+                guard let self = self, self.currentChapterIndex == index else { return }
+                self.prevCache = cache
+                self.updateVerticalAdjacent()
+            },
+            onResetPrev: { [weak self] in self?.prevCache = .empty }
+        )
     }
 
     private func setupVerticalMode() {
-        guard preferences != nil, ttsManager != nil else {
+        guard readerSettings != nil, ttsManager != nil else {
             // 如果依赖尚未注入，推迟初始化
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in self?.setupVerticalMode() }
             return
@@ -638,7 +617,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.onProgressChanged?(self.currentChapterIndex, Double(idx) / Double(count)) 
         }
         v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
-        v.isInfiniteScrollEnabled = preferences.isInfiniteScrollEnabled
+        v.isInfiniteScrollEnabled = readerSettings.isInfiniteScrollEnabled
         v.onReachedBottom = { [weak self] in 
             guard let self = self else { return }
             self.prefetchNextChapterOnly(index: self.currentChapterIndex)
@@ -649,7 +628,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         v.onChapterSwitched = { [weak self] offset in 
             guard let self = self else { return }
-            if !self.preferences.isInfiniteScrollEnabled {
+            if !self.readerSettings.isInfiniteScrollEnabled {
                 let target = self.currentChapterIndex + offset
                 guard target >= 0 && target < self.chapters.count else { return }
                 self.jumpToChapter(target, startAtEnd: offset < 0)
@@ -670,9 +649,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
         let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
-        let nextSentences = preferences.isInfiniteScrollEnabled ? (nextCache.contentSentences.isEmpty ? nil : nextCache.contentSentences) : nil
-        let prevSentences = preferences.isInfiniteScrollEnabled ? (prevCache.contentSentences.isEmpty ? nil : prevCache.contentSentences) : nil
-        v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: preferences.fontSize, lineSpacing: preferences.lineSpacing, margin: preferences.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+        let nextSentences = readerSettings.isInfiniteScrollEnabled ? (nextCache.contentSentences.isEmpty ? nil : nextCache.contentSentences) : nil
+        let prevSentences = readerSettings.isInfiniteScrollEnabled ? (prevCache.contentSentences.isEmpty ? nil : prevCache.contentSentences) : nil
+        v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: readerSettings.fontSize, lineSpacing: readerSettings.lineSpacing, margin: readerSettings.pageHorizontalMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
     }
 
     private func switchChapterSeamlessly(offset: Int) {
@@ -742,6 +721,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 updateHorizontalPage(to: t, animated: true) 
             }
         }
+    }
+    deinit {
+        prefetchCoordinator.cancel()
+        ttsCoordinator?.stop()
     }
     private func currentStartPosition() -> (index: Int, offset: Int) {
         guard !currentCache.contentSentences.isEmpty else { return (0, 0) }

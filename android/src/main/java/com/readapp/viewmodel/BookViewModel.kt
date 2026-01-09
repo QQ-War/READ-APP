@@ -8,22 +8,19 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.common.PlaybackException
 import android.content.ComponentName
-import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import com.readapp.data.ReadApiService
 import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
-import com.readapp.data.ReadingMode
-import com.readapp.data.DarkModeConfig
 import com.readapp.data.LocalCacheManager
 import com.readapp.data.ChapterContentRepository
-import com.readapp.data.ChapterContentPolicy
-import com.readapp.media.AudioCache
+import com.readapp.data.repo.AuthRepository
+import com.readapp.data.repo.BookRepository
+import com.readapp.data.repo.ReplaceRuleRepository
+import com.readapp.data.repo.SourceRepository
+import com.readapp.data.repo.TtsRepository
 import com.readapp.media.ReadAudioService
 import com.readapp.data.model.Book
 import com.readapp.data.model.Chapter
@@ -44,10 +41,6 @@ import java.util.Locale
 
 import com.readapp.data.model.ReplaceRule
 import com.readapp.ui.state.ReaderUiState
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import android.widget.Toast
 
@@ -68,94 +61,54 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     // ==================== Dependencies & Player Management ====================
 
-    private val appContext = getApplication<Application>()
+    internal val appContext = getApplication<Application>()
     val preferences = UserPreferences(appContext)
     private val readerSettings = ReaderSettingsStore(preferences, viewModelScope)
     private val localCache = LocalCacheManager(appContext)
     val repository = ReadRepository { endpoint ->
         ReadApiService.create(endpoint) { accessToken.value }
     }
-    private val chapterContentRepository = ChapterContentRepository(repository, localCache)
-
-    private var mediaController: MediaController? = null
-    private val controllerListener = ControllerListener()
-    private var textToSpeech: TextToSpeech? = null
-    private var isTtsInitialized = false
-
-    private val httpClient = OkHttpClient()
-    private val preloadingIndices = mutableSetOf<Int>()
-    private var preloadJob: Job? = null
-    private var startOffsetOverrideIndex: Int? = null
-    private var startOffsetOverrideChars: Int = 0
+    internal val authRepository = AuthRepository(repository)
+    internal val bookRepository = BookRepository(repository)
+    private val sourceRepository = SourceRepository(repository)
+    private val ttsRepository = TtsRepository(repository)
+    private val replaceRuleRepository = ReplaceRuleRepository(repository)
+    internal val chapterContentRepository = ChapterContentRepository(repository, localCache)
+    private val ttsController = TtsController(this)
+    private val readerInteractor = ReaderInteractor(this)
 
 
     // ==================== 涔︾睄鐩稿叧鐘舵€?====================
 
-    private var currentSentences: List<String> = emptyList()
-    private var currentParagraphs: List<String> = emptyList()
-    private var isReadingChapterTitle = false
+    internal var currentSentences: List<String> = emptyList()
+    internal var currentParagraphs: List<String> = emptyList()
+    internal var isReadingChapterTitle = false
     private var currentSearchQuery = ""
     private var allBooks: List<Book> = emptyList()
     private val logFile = File(appContext.filesDir, LOG_FILE_NAME)
 
-    private val _books = MutableStateFlow<List<Book>>(emptyList())
-    val books: StateFlow<List<Book>> = _books.asStateFlow()
-
-    private val _selectedBook = MutableStateFlow<Book?>(null)
-    val selectedBook: StateFlow<Book?> = _selectedBook.asStateFlow()
-
-    private val _chapters = MutableStateFlow<List<Chapter>>(emptyList())
-    val chapters: StateFlow<List<Chapter>> = _chapters.asStateFlow()
-
-    private val _currentChapterIndex = MutableStateFlow(0)
-    val currentChapterIndex: StateFlow<Int> = _currentChapterIndex.asStateFlow()
-
-    private val _currentChapterContent = MutableStateFlow("")
-    val currentChapterContent: StateFlow<String> = _currentChapterContent.asStateFlow()
-
-    val currentChapterTitle: String
-        get() = _chapters.value.getOrNull(_currentChapterIndex.value)?.title ?: ""
-
-    // ==================== 娈佃惤鐩稿叧鐘舵€?====================
-
-    private val _currentParagraphIndex = MutableStateFlow(-1)
-    val currentParagraphIndex: StateFlow<Int> = _currentParagraphIndex.asStateFlow()
-    private val _firstVisibleParagraphIndex = MutableStateFlow(0)
-    val firstVisibleParagraphIndex: StateFlow<Int> = _firstVisibleParagraphIndex.asStateFlow()
-    private val _pendingScrollIndex = MutableStateFlow<Int?>(null)
-    val pendingScrollIndex: StateFlow<Int?> = _pendingScrollIndex.asStateFlow()
-
-    private val _currentParagraphStartOffset = MutableStateFlow(0)
-    val currentParagraphStartOffset: StateFlow<Int> = _currentParagraphStartOffset.asStateFlow()
-
-    private val _totalParagraphs = MutableStateFlow(1)
-    val totalParagraphs: StateFlow<Int> = _totalParagraphs.asStateFlow()
-
-    private val _preloadedParagraphs = MutableStateFlow<Set<Int>>(emptySet())
-    val preloadedParagraphs: StateFlow<Set<Int>> = _preloadedParagraphs.asStateFlow()
-    private val _preloadedChapters = MutableStateFlow<Set<Int>>(emptySet())
-    val preloadedChapters: StateFlow<Set<Int>> = _preloadedChapters.asStateFlow()
+    
 
     // ==================== TTS 鎾斁鐘舵€?====================
 
-    private val _isPlaying = MutableStateFlow(false)
+    internal val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-    private val _keepPlaying = MutableStateFlow(false)
+    internal val _keepPlaying = MutableStateFlow(false)
     val isPlayingUi: StateFlow<Boolean> = combine(_isPlaying, _keepPlaying) { playing, keep ->
         playing || keep
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
-    private val _isPaused = MutableStateFlow(false)
+    internal val _isPaused = MutableStateFlow(false)
     val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
-    private val _showTtsControls = MutableStateFlow(false)
+    internal val _showTtsControls = MutableStateFlow(false)
     val showTtsControls: StateFlow<Boolean> = _showTtsControls.asStateFlow()
 
-    private val _currentTime = MutableStateFlow("00:00")
+    internal val _currentTime = MutableStateFlow("00:00")
     val currentTime: StateFlow<String> = _currentTime.asStateFlow()
 
-    private val _totalTime = MutableStateFlow("00:00")
+    internal val _totalTime = MutableStateFlow("00:00")
     val totalTime: StateFlow<String> = _totalTime.asStateFlow()
 
-    private val _playbackProgress = MutableStateFlow(0f)
+    internal val _playbackProgress = MutableStateFlow(0f)
     val playbackProgress: StateFlow<Float> = _playbackProgress.asStateFlow()
 
     // ==================== 鍑€鍖栬鍒欑姸鎬?====================
@@ -165,11 +118,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     // ==================== TTS 璁剧疆 & 鍏朵粬 ====================
     // (No changes in this section, keeping it compact)
-    private val _selectedTtsEngine = MutableStateFlow("")
+    internal val _selectedTtsEngine = MutableStateFlow("")
     val selectedTtsEngine: StateFlow<String> = _selectedTtsEngine.asStateFlow()
-    private val _useSystemTts = MutableStateFlow(false)
+    internal val _useSystemTts = MutableStateFlow(false)
     val useSystemTts: StateFlow<Boolean> = _useSystemTts.asStateFlow()
-    private val _systemVoiceId = MutableStateFlow("")
+    internal val _systemVoiceId = MutableStateFlow("")
     val systemVoiceId: StateFlow<String> = _systemVoiceId.asStateFlow()
     private val _narrationTtsEngine = MutableStateFlow("")
     val narrationTtsEngine: StateFlow<String> = _narrationTtsEngine.asStateFlow()
@@ -183,12 +136,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val _availableBookSources = MutableStateFlow<List<com.readapp.data.model.BookSource>>(emptyList())
     val availableBookSources: StateFlow<List<com.readapp.data.model.BookSource>> = _availableBookSources.asStateFlow()
 
-    private val _availableSystemVoices = MutableStateFlow<List<Voice>>(emptyList())
+    internal val _availableSystemVoices = MutableStateFlow<List<Voice>>(emptyList())
     val availableSystemVoices: StateFlow<List<Voice>> = _availableSystemVoices.asStateFlow()
 
-    private val _speechSpeed = MutableStateFlow(20)
+    internal val _speechSpeed = MutableStateFlow(20)
     val speechSpeed: StateFlow<Int> = _speechSpeed.asStateFlow()
-    private val _preloadCount = MutableStateFlow(3)
+    internal val _preloadCount = MutableStateFlow(3)
     val preloadCount: StateFlow<Int> = _preloadCount.asStateFlow()
     val readingFontSize: StateFlow<Float> = readerSettings.readingFontSize
     val readingHorizontalPadding: StateFlow<Float> = readerSettings.readingHorizontalPadding
@@ -204,28 +157,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val manualMangaUrls: StateFlow<Set<String>> = readerSettings.manualMangaUrls
     val forceMangaProxy: StateFlow<Boolean> = readerSettings.forceMangaProxy
 
-
-    private val _prevChapterIndex = MutableStateFlow<Int?>(null)
-    val prevChapterIndex: StateFlow<Int?> = _prevChapterIndex.asStateFlow()
-    private val _nextChapterIndex = MutableStateFlow<Int?>(null)
-    val nextChapterIndex: StateFlow<Int?> = _nextChapterIndex.asStateFlow()
-    private val _prevChapterContent = MutableStateFlow<String?>(null)
-    val prevChapterContent: StateFlow<String?> = _prevChapterContent.asStateFlow()
-    private val _nextChapterContent = MutableStateFlow<String?>(null)
-    val nextChapterContent: StateFlow<String?> = _nextChapterContent.asStateFlow()
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = readerSettings.readingMode
     val lockPageOnTTS: StateFlow<Boolean> = readerSettings.lockPageOnTTS
     val pageTurningMode: StateFlow<com.readapp.data.PageTurningMode> = readerSettings.pageTurningMode
     val darkMode: StateFlow<com.readapp.data.DarkModeConfig> = readerSettings.darkMode
     private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080/api/5")
     val serverAddress: StateFlow<String> = _serverAddress.asStateFlow()
-    private val _publicServerAddress = MutableStateFlow("")
+    internal val _publicServerAddress = MutableStateFlow("")
     val publicServerAddress: StateFlow<String> = _publicServerAddress.asStateFlow()
-    private val _accessToken = MutableStateFlow("")
+    internal val _accessToken = MutableStateFlow("")
     val accessToken: StateFlow<String> = _accessToken.asStateFlow()
     private val _username = MutableStateFlow("")
     val username: StateFlow<String> = _username.asStateFlow()
-    private val _errorMessage = MutableStateFlow<String?>(null)
+    internal val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -233,85 +177,78 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val onlineSearchResults: StateFlow<List<Book>> = _onlineSearchResults.asStateFlow()
     private val _isOnlineSearching = MutableStateFlow(false)
     val isOnlineSearching: StateFlow<Boolean> = _isOnlineSearching.asStateFlow()
-    private val _isChapterListLoading = MutableStateFlow(false)
+    internal val _isChapterListLoading = MutableStateFlow(false)
     val isChapterListLoading: StateFlow<Boolean> = _isChapterListLoading.asStateFlow()
-    private val _isChapterContentLoading = MutableStateFlow(false)
+    internal val _isChapterContentLoading = MutableStateFlow(false)
     val isChapterContentLoading: StateFlow<Boolean> = _isChapterContentLoading.asStateFlow()
+    private val readerState by lazy {
+        ReaderStateReducer(
+            scope = viewModelScope,
+            errorMessage = errorMessage,
+            isContentLoading = isChapterContentLoading,
+            readingFontSize = readingFontSize,
+            readingHorizontalPadding = readingHorizontalPadding,
+            readingMode = readingMode,
+            lockPageOnTTS = lockPageOnTTS,
+            pageTurningMode = pageTurningMode,
+            darkMode = darkMode,
+            infiniteScrollEnabled = infiniteScrollEnabled,
+            forceMangaProxy = forceMangaProxy,
+            manualMangaUrls = manualMangaUrls,
+            serverAddress = serverAddress
+        )
+    }
+
+    internal val _books = readerState.books
+    val books: StateFlow<List<Book>> = readerState.booksFlow
+
+    internal val _selectedBook = readerState.selectedBook
+    val selectedBook: StateFlow<Book?> = readerState.selectedBookFlow
+
+    internal val _chapters = readerState.chapters
+    val chapters: StateFlow<List<Chapter>> = readerState.chaptersFlow
+
+    internal val _currentChapterIndex = readerState.currentChapterIndex
+    val currentChapterIndex: StateFlow<Int> = readerState.currentChapterIndexFlow
+
+    internal val _currentChapterContent = readerState.currentChapterContent
+    val currentChapterContent: StateFlow<String> = readerState.currentChapterContentFlow
+
+    val currentChapterTitle: String
+        get() = _chapters.value.getOrNull(_currentChapterIndex.value)?.title ?: ""
+
+    // ==================== 娈佃惤鐩稿叧鐘舵€?====================
+
+    internal val _currentParagraphIndex = readerState.currentParagraphIndex
+    val currentParagraphIndex: StateFlow<Int> = readerState.currentParagraphIndexFlow
+    private val _firstVisibleParagraphIndex = readerState.firstVisibleParagraphIndex
+    val firstVisibleParagraphIndex: StateFlow<Int> = readerState.firstVisibleParagraphIndexFlow
+    private val _pendingScrollIndex = readerState.pendingScrollIndex
+    val pendingScrollIndex: StateFlow<Int?> = readerState.pendingScrollIndexFlow
+
+    internal val _currentParagraphStartOffset = readerState.currentParagraphStartOffset
+    val currentParagraphStartOffset: StateFlow<Int> = readerState.currentParagraphStartOffsetFlow
+
+    internal val _totalParagraphs = readerState.totalParagraphs
+    val totalParagraphs: StateFlow<Int> = readerState.totalParagraphsFlow
+
+    internal val _preloadedParagraphs = readerState.preloadedParagraphs
+    val preloadedParagraphs: StateFlow<Set<Int>> = readerState.preloadedParagraphsFlow
+    internal val _preloadedChapters = readerState.preloadedChapters
+    val preloadedChapters: StateFlow<Set<Int>> = readerState.preloadedChaptersFlow
+
+    internal val _prevChapterIndex = readerState.prevChapterIndex
+    val prevChapterIndex: StateFlow<Int?> = readerState.prevChapterIndexFlow
+    internal val _nextChapterIndex = readerState.nextChapterIndex
+    val nextChapterIndex: StateFlow<Int?> = readerState.nextChapterIndexFlow
+    internal val _prevChapterContent = readerState.prevChapterContent
+    val prevChapterContent: StateFlow<String?> = readerState.prevChapterContentFlow
+    internal val _nextChapterContent = readerState.nextChapterContent
+    val nextChapterContent: StateFlow<String?> = readerState.nextChapterContentFlow
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
-    val readerUiState: StateFlow<ReaderUiState> = combine(
-        selectedBook,
-        chapters,
-        currentChapterIndex,
-        currentChapterContent,
-        isChapterContentLoading,
-        errorMessage,
-        readingFontSize,
-        readingHorizontalPadding,
-        readingMode,
-        lockPageOnTTS,
-        pageTurningMode,
-        darkMode,
-        infiniteScrollEnabled,
-        prevChapterContent,
-        nextChapterContent,
-        preloadedParagraphs,
-        preloadedChapters,
-        firstVisibleParagraphIndex,
-        pendingScrollIndex,
-        forceMangaProxy,
-        manualMangaUrls,
-        serverAddress
-    ) { values ->
-        ReaderUiState(
-            book = values[0] as Book?,
-            chapters = values[1] as List<Chapter>,
-            currentChapterIndex = values[2] as Int,
-            currentChapterContent = values[3] as String,
-            isContentLoading = values[4] as Boolean,
-            errorMessage = values[5] as String?,
-            readingFontSize = values[6] as Float,
-            readingHorizontalPadding = values[7] as Float,
-            readingMode = values[8] as com.readapp.data.ReadingMode,
-            lockPageOnTTS = values[9] as Boolean,
-            pageTurningMode = values[10] as com.readapp.data.PageTurningMode,
-            darkModeConfig = values[11] as com.readapp.data.DarkModeConfig,
-            infiniteScrollEnabled = values[12] as Boolean,
-            prevChapterContent = values[13] as String?,
-            nextChapterContent = values[14] as String?,
-            preloadedParagraphs = values[15] as Set<Int>,
-            preloadedChapters = values[16] as Set<Int>,
-            firstVisibleParagraphIndex = values[17] as Int,
-            pendingScrollIndex = values[18] as Int?,
-            forceMangaProxy = values[19] as Boolean,
-            manualMangaUrls = values[20] as Set<String>,
-            serverUrl = values[21] as String
-        )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderUiState(
-        book = null,
-        chapters = emptyList(),
-        currentChapterIndex = 0,
-        currentChapterContent = "",
-        isContentLoading = false,
-        errorMessage = null,
-        readingFontSize = 16f,
-        readingHorizontalPadding = 24f,
-        readingMode = com.readapp.data.ReadingMode.Vertical,
-        lockPageOnTTS = false,
-        pageTurningMode = com.readapp.data.PageTurningMode.Scroll,
-        darkModeConfig = com.readapp.data.DarkModeConfig.OFF,
-        infiniteScrollEnabled = true,
-        prevChapterContent = null,
-        nextChapterContent = null,
-        preloadedParagraphs = emptySet(),
-        preloadedChapters = emptySet(),
-        firstVisibleParagraphIndex = 0,
-        pendingScrollIndex = null,
-        forceMangaProxy = false,
-        manualMangaUrls = emptySet(),
-        serverUrl = ""
-    ))
+    val readerUiState: StateFlow<ReaderUiState> = readerState.readerUiState
 
     fun clearError() { _errorMessage.value = null }
 
@@ -353,408 +290,23 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _isInitialized.value = true
         }
 
-        initSystemTts()
+        ttsController.initSystemTts()
 
         // Connect to MediaSession
         viewModelScope.launch {
             val sessionToken = SessionToken(appContext, ComponentName(appContext, ReadAudioService::class.java))
             val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
             controllerFuture.addListener({
-                mediaController = controllerFuture.get()
-                mediaController?.addListener(controllerListener)
-                _isPlaying.value = mediaController?.isPlaying == true
+                ttsController.bindMediaController(controllerFuture.get())
             }, MoreExecutors.directExecutor())
         }
-    }
-
-    // ==================== Controller Listener ====================
-
-    private fun initSystemTts() {
-        textToSpeech = TextToSpeech(appContext) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                isTtsInitialized = true
-                textToSpeech?.language = Locale.CHINESE
-                textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {
-                        _isPlaying.value = true
-                        _isPaused.value = false
-                    }
-                    override fun onDone(utteranceId: String?) {
-                        if (_keepPlaying.value) {
-                            viewModelScope.launch {
-                                playNextSeamlessly()
-                            }
-                        }
-                    }
-                    override fun onError(utteranceId: String?) {
-                        _errorMessage.value = "系统TTS发生错误"
-                    }
-                })
-                // Load available voices
-                _availableSystemVoices.value = textToSpeech?.voices?.filter { 
-                    it.locale.language.startsWith("zh") || it.locale.language.startsWith("en")
-                } ?: emptyList()
-            }
-        }
-    }
-
-    private inner class ControllerListener : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            _isPlaying.value = isPlaying
-            _isPaused.value = !isPlaying && _currentParagraphIndex.value >= 0
-            if (isPlaying) {
-                _showTtsControls.value = true
-            }
-        }
-
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_ENDED && _keepPlaying.value) {
-                playNextSeamlessly()
-            }
-        }
-
-        override fun onPlayerError(error: PlaybackException) {
-            _errorMessage.value = "播放失败: ${error.errorCodeName}"
-            if (_keepPlaying.value) {
-                viewModelScope.launch {
-                    delay(500)
-                    playNextSeamlessly()
-                }
-            }
-        }
-    }
-
-    // ==================== TTS 鎺у埗鏂规硶 ====================
-
-    fun togglePlayPause() {
-        if (_selectedBook.value == null) return
-        val currentMediaController = mediaController ?: return
-
-        if (currentMediaController.isPlaying) {
-            _keepPlaying.value = false
-            _isPaused.value = true
-            pausePlayback("toggle")
-        } else if (_currentParagraphIndex.value >= 0) {
-            _keepPlaying.value = true
-            _showTtsControls.value = true
-            _isPaused.value = false
-            currentMediaController.play()
-        } else {
-            startPlayback()
-        }
-    }
-    
-    private fun startPlayback(startParagraphIndex: Int = -1, startOffsetInParagraph: Int = 0) {
-        viewModelScope.launch {
-            _isChapterContentLoading.value = true
-            val content = withContext(Dispatchers.IO) { ensureCurrentChapterContent() }
-            _isChapterContentLoading.value = false
-
-            if (content.isNullOrBlank()) {
-                _errorMessage.value = "当前章节内容为空，无法播放。"
-                return@launch
-            }
-
-            _keepPlaying.value = true
-            currentSentences = parseParagraphs(content)
-            currentParagraphs = currentSentences
-            _totalParagraphs.value = currentSentences.size.coerceAtLeast(1)
-            val normalizedStart = if (startParagraphIndex in currentSentences.indices) {
-                startParagraphIndex
-            } else if (_currentParagraphIndex.value >= 0) {
-                _currentParagraphIndex.value
-            } else {
-                0
-            }
-            _currentParagraphIndex.value = normalizedStart
-            val normalizedOffset = if (normalizedStart == startParagraphIndex) {
-                startOffsetInParagraph.coerceAtLeast(0)
-            } else {
-                0
-            }
-            if (normalizedOffset > 0) {
-                startOffsetOverrideIndex = normalizedStart
-                startOffsetOverrideChars = normalizedOffset
-            } else {
-                startOffsetOverrideIndex = null
-                startOffsetOverrideChars = 0
-            }
-            _currentParagraphStartOffset.value = normalizedOffset
-
-            ReadAudioService.startService(appContext) // Ensure service is running
-            _isPaused.value = false
-            
-            if (normalizedStart == 0 && normalizedOffset == 0) {
-                speakChapterTitle()
-            } else {
-                isReadingChapterTitle = false
-                speakParagraph(normalizedStart)
-            }
-            
-            observeProgress()
-        }
-    }
-
-    private fun playNextSeamlessly() {
-        if (isReadingChapterTitle) {
-            isReadingChapterTitle = false
-            speakParagraph(0)
-            return
-        }
-        val nextIndex = _currentParagraphIndex.value + 1
-        speakParagraph(nextIndex)
-    }
-
-    private fun moveToNextChapterForTts(): Boolean {
-        val nextIndex = _currentChapterIndex.value + 1
-        if (nextIndex > _chapters.value.lastIndex) {
-            return false
-        }
-        _currentChapterIndex.value = nextIndex
-        _currentChapterContent.value = ""
-        currentParagraphs = emptyList()
-        currentSentences = emptyList()
-        startPlayback(0, 0)
-        return true
-    }
-
-    private fun speakParagraph(index: Int) {
-        viewModelScope.launch {
-            _currentParagraphIndex.value = index
-            _playbackProgress.value = 0f
-
-            if (index < 0 || index >= currentSentences.size) {
-                if (_keepPlaying.value && moveToNextChapterForTts()) {
-                    return@launch
-                }
-                stopPlayback("finished")
-                return@launch
-            }
-
-            if (startOffsetOverrideIndex != null && startOffsetOverrideIndex != index) {
-                startOffsetOverrideIndex = null
-                startOffsetOverrideChars = 0
-            }
-
-            val sentence = currentSentences.getOrNull(index) ?: return@launch
-            val overrideOffset = if (startOffsetOverrideIndex == index) startOffsetOverrideChars else 0
-            _currentParagraphStartOffset.value = overrideOffset
-            val trimmedSentence = if (overrideOffset in 1 until sentence.length) {
-                sentence.substring(overrideOffset)
-            } else {
-                sentence
-            }
-            if (overrideOffset >= sentence.length) {
-                startOffsetOverrideIndex = null
-                startOffsetOverrideChars = 0
-                _currentParagraphStartOffset.value = 0
-                playNextSeamlessly()
-                return@launch
-            }
-
-            if (_useSystemTts.value) {
-                speakWithSystemTts(trimmedSentence)
-                return@launch
-            }
-
-            val audioCacheKey = generateAudioCacheKey(index, overrideOffset)
-
-            val audioData = AudioCache.get(audioCacheKey) ?: run {
-                val audioUrl = buildTtsAudioUrl(trimmedSentence, false)
-
-                if (audioUrl == null) {
-                    _errorMessage.value = "无法生成TTS链接，请检查TTS设置"
-                    stopPlayback("error")
-                    return@launch
-                }
-
-                val data = fetchAudioBytes(audioUrl)
-                if (data == null) {
-                    _errorMessage.value = "TTS音频下载失败"
-                    stopPlayback("error")
-                    return@launch
-                }
-                AudioCache.put(audioCacheKey, data)
-                _preloadedParagraphs.update { it + index }
-                data
-            }
-
-            playFromService(audioCacheKey)
-            preloadNextParagraphs()
-        }
-    }
-
-    private fun speakWithSystemTts(text: String) {
-        if (!isTtsInitialized) {
-            _errorMessage.value = "系统TTS尚未就绪"
-            return
-        }
-        
-        textToSpeech?.let { tts ->
-            // Set voice if selected
-            if (_systemVoiceId.value.isNotBlank()) {
-                tts.voices?.firstOrNull { it.name == _systemVoiceId.value }?.let {
-                    tts.voice = it
-                }
-            }
-            
-            // Set speech rate: 1.0 is normal. 
-            // Our speedSpeed is 5..50, where 20 is 1.0.
-            tts.setSpeechRate(_speechSpeed.value / 20.0f)
-            
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "paragraph_${_currentParagraphIndex.value}")
-        }
-    }
-
-    private fun preloadNextParagraphs() {
-        if (_useSystemTts.value) return
-        
-        preloadJob?.cancel()
-        preloadJob = viewModelScope.launch(Dispatchers.IO) {
-            val preloadCount = _preloadCount.value
-            if (preloadCount <= 0) return@launch
-
-            val startIndex = _currentParagraphIndex.value + 1
-            val endIndex = (startIndex + preloadCount).coerceAtMost(currentSentences.size)
-            val validIndices = (startIndex until endIndex).toSet()
-            _preloadedParagraphs.update { it.intersect(validIndices) }
-
-            for (i in startIndex until endIndex) {
-                val audioCacheKey = generateAudioCacheKey(i)
-                if (AudioCache.get(audioCacheKey) != null) {
-                    _preloadedParagraphs.update { it + i }
-                    continue
-                }
-                if (!markPreloading(i)) continue
-
-                val sentenceToPreload = currentSentences.getOrNull(i)
-                if (sentenceToPreload.isNullOrBlank() || isPunctuationOnly(sentenceToPreload)) {
-                    unmarkPreloading(i)
-                    continue
-                }
-
-                val audioUrlToPreload = buildTtsAudioUrl(sentenceToPreload, isChapterTitle = false)
-                if (audioUrlToPreload.isNullOrBlank()) {
-                    unmarkPreloading(i)
-                    continue
-                }
-
-                val data = fetchAudioBytes(audioUrlToPreload)
-                if (data != null) {
-                    AudioCache.put(audioCacheKey, data)
-                    _preloadedParagraphs.update { it + i }
-                } else {
-                }
-                unmarkPreloading(i)
-            }
-        }
-    }
-
-    private fun generateAudioCacheKey(index: Int, offsetInParagraph: Int = 0): String {
-        val base = "${_selectedBook.value?.bookUrl}/${_currentChapterIndex.value}/$index"
-        return if (offsetInParagraph > 0) {
-            "$base/$offsetInParagraph"
-        } else {
-            base
-        }
-    }
-
-    private fun clearAudioCache() {
-        AudioCache.clear()
-        _preloadedParagraphs.value = emptySet()
-    }
-
-    private fun markPreloading(index: Int): Boolean = synchronized(preloadingIndices) {
-        preloadingIndices.add(index)
-    }
-
-    private fun unmarkPreloading(index: Int) {
-        synchronized(preloadingIndices) {
-            preloadingIndices.remove(index)
-        }
-    }
-
-    private fun clearPreloadingIndices() {
-        synchronized(preloadingIndices) {
-            preloadingIndices.clear()
-        }
-    }
-
-    private suspend fun fetchAudioBytes(url: String): ByteArray? {
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val request = Request.Builder().url(url).build()
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        return@withContext null
-                    }
-                    val body = response.body ?: return@withContext null
-                    body.bytes().takeIf { it.isNotEmpty() }
-                }
-            }.getOrElse { error ->
-                null
-            }
-        }
-    }
-
-    private fun playFromService(audioCacheKey: String) {
-        val currentMediaController = mediaController ?: return
-        val cacheUri = Uri.Builder()
-            .scheme("tts")
-            .authority("cache")
-            .appendQueryParameter("key", audioCacheKey)
-            .build()
-        val mediaItem = MediaItem.Builder()
-            .setMediaId(audioCacheKey)
-            .setUri(cacheUri)
-            .build()
-        currentMediaController.setMediaItem(mediaItem)
-        currentMediaController.prepare()
-        currentMediaController.play()
-    }
-
-    private fun pausePlayback(reason: String = "unspecified") {
-        if (_useSystemTts.value) {
-            textToSpeech?.stop()
-        } else {
-            mediaController?.pause()
-        }
-    }
-
-    private fun stopPlayback(reason: String = "unspecified") {
-        preloadJob?.cancel()
-        clearAudioCache()
-        clearPreloadingIndices()
-
-        if (reason != "finished") {
-            saveBookProgress()
-        }
-
-        _keepPlaying.value = false
-        _showTtsControls.value = false
-        _isPaused.value = false
-        startOffsetOverrideIndex = null
-        startOffsetOverrideChars = 0
-        _currentParagraphStartOffset.value = 0
-        
-        if (_useSystemTts.value) {
-            textToSpeech?.stop()
-        } else {
-            mediaController?.stop()
-            mediaController?.clearMediaItems()
-        }
-        
-        _currentParagraphIndex.value = -1
-        isReadingChapterTitle = false
-        _preloadedParagraphs.value = emptySet()
-        resetPlayback()
     }
 
     // ==================== 鍑€鍖栬鍒欑姸鎬?====================
 
     fun loadReplaceRules() {
         viewModelScope.launch {
-            repository.fetchReplaceRules(
+            replaceRuleRepository.fetchReplaceRules(
                 currentServerEndpoint(),
                 _publicServerAddress.value.ifBlank { null },
                 _accessToken.value
@@ -768,7 +320,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addReplaceRule(rule: ReplaceRule) {
         viewModelScope.launch {
-            repository.addReplaceRule(
+            replaceRuleRepository.addReplaceRule(
                 currentServerEndpoint(),
                 _publicServerAddress.value.ifBlank { null },
                 _accessToken.value,
@@ -783,7 +335,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteReplaceRule(id: String) {
         viewModelScope.launch {
-            repository.deleteReplaceRule(
+            replaceRuleRepository.deleteReplaceRule(
                 currentServerEndpoint(),
                 _publicServerAddress.value.ifBlank { null },
                 _accessToken.value,
@@ -798,7 +350,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleReplaceRule(id: String, isEnabled: Boolean) {
         viewModelScope.launch {
-            repository.toggleReplaceRule(
+            replaceRuleRepository.toggleReplaceRule(
                 currentServerEndpoint(),
                 _publicServerAddress.value.ifBlank { null },
                 _accessToken.value,
@@ -816,7 +368,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveReplaceRules(jsonContent: String) {
         viewModelScope.launch {
-            repository.saveReplaceRules(
+            replaceRuleRepository.saveReplaceRules(
                 currentServerEndpoint(),
                 _publicServerAddress.value.ifBlank { null },
                 _accessToken.value,
@@ -830,92 +382,31 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun previousParagraph() {
-        val target = _currentParagraphIndex.value - 1
-        if (target >= 0) {
-            _keepPlaying.value = true
-            speakParagraph(target)
-        }
+        ttsController.previousParagraph()
     }
 
     fun nextParagraph() {
-        val target = _currentParagraphIndex.value + 1
-        if (target < currentSentences.size) {
-            _keepPlaying.value = true
-            speakParagraph(target)
-        }
+        ttsController.nextParagraph()
     }
 
     fun startTts(startParagraphIndex: Int = -1, startOffsetInParagraph: Int = 0) {
-        startPlayback(startParagraphIndex, startOffsetInParagraph)
+        ttsController.startTts(startParagraphIndex, startOffsetInParagraph)
     }
-    fun stopTts() { stopPlayback("user") }
-    
-    private fun speakChapterTitle() {
-        viewModelScope.launch {
-            isReadingChapterTitle = true
-            _currentParagraphIndex.value = -1
-            val title = currentChapterTitle
-            if (title.isBlank()) {
-                playNextSeamlessly()
-                return@launch
-            }
-            
-            if (_useSystemTts.value) {
-                speakWithSystemTts(title)
-            } else {
-                val audioUrl = buildTtsAudioUrl(title, isChapterTitle = true)
-                if (audioUrl == null) {
-                    playNextSeamlessly()
-                    return@launch
-                }
-                val data = fetchAudioBytes(audioUrl)
-                if (data == null) {
-                    playNextSeamlessly()
-                    return@launch
-                }
-                val key = "title_${_selectedBook.value?.bookUrl}_${_currentChapterIndex.value}"
-                AudioCache.put(key, data)
-                playFromService(key)
-            }
-        }
-    }
-
-    private fun observeProgress() {
-        viewModelScope.launch {
-            while (_keepPlaying.value) {
-                val currentMediaController = mediaController
-                if (currentMediaController == null || !currentMediaController.isPlaying) {
-                    delay(500)
-                    continue
-                }
-                val duration = currentMediaController.duration
-                val position = currentMediaController.currentPosition
-                if (duration <= 0L || position < 0L || position > duration) {
-                    delay(200)
-                    continue
-                }
-                _playbackProgress.value = (position.toFloat() / duration).coerceIn(0f, 1f)
-                _totalTime.value = formatTime(duration)
-                _currentTime.value = formatTime(position)
-                delay(500)
-            }
-        }
-    }
+    fun stopTts() { ttsController.stopTts() }
+    fun togglePlayPause() { ttsController.togglePlayPause() }
 
     // ==================== 娓呯悊 ====================
 
     override fun onCleared() {
         super.onCleared()
-        stopPlayback("cleared")
-        mediaController?.removeListener(controllerListener)
-        mediaController?.release()
+        ttsController.release()
     }
 
     // =================================================================
     // PASSTHROUGH METHODS (No changes below this line, only player references)
     // =================================================================
     
-    fun saveBookProgress() {
+    internal fun saveBookProgress() {
         val book = _selectedBook.value ?: return
         val bookUrl = book.bookUrl ?: return
         val token = _accessToken.value
@@ -926,7 +417,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val title = _chapters.value.getOrNull(index)?.title ?: book.durChapterTitle
 
         viewModelScope.launch {
-            repository.saveBookProgress(
+            bookRepository.saveBookProgress(
                 currentServerEndpoint(),
                 _publicServerAddress.value.ifBlank { null },
                 token,
@@ -940,14 +431,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun ensureCurrentChapterContent(): String? {
+    internal suspend fun ensureCurrentChapterContent(): String? {
         if (_currentChapterContent.value.isNotBlank()) {
             return _currentChapterContent.value
         }
         return loadChapterContentInternal(_currentChapterIndex.value)
     }
 
-    private fun resetPlayback() {
+    internal fun resetPlayback() {
         _playbackProgress.value = 0f
         _currentTime.value = "00:00"
         _totalTime.value = "00:00"
@@ -958,7 +449,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _isLoading.value = true
             _errorMessage.value = null
             val normalized = if (server.contains("/api/")) server else "$server/api/5"
-            val result = repository.login(normalized, _publicServerAddress.value.ifBlank { null }, username, password)
+            val result = authRepository.login(normalized, _publicServerAddress.value.ifBlank { null }, username, password)
             result.onFailure { error -> _errorMessage.value = error.message }
             val loginData = result.getOrNull()
             if (loginData != null) {
@@ -992,9 +483,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             currentParagraphs = emptyList()
             currentSentences = emptyList()
             chapterContentRepository.clearMemoryCache()
-            stopPlayback("logout")
-            clearAudioCache()
-            clearPreloadingIndices()
+            ttsController.stopTts()
             _availableTtsEngines.value = emptyList()
             _selectedTtsEngine.value = ""
             _narrationTtsEngine.value = ""
@@ -1008,7 +497,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            val result = repository.importBook(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, uri, appContext)
+            val result = bookRepository.importBook(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, uri, appContext)
             result.onFailure { error -> _errorMessage.value = error.message }
             if (result.isSuccess) {
                 refreshBooksInternal(showLoading = false)
@@ -1025,7 +514,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun refreshBooksInternal(showLoading: Boolean = true) {
         if (_accessToken.value.isBlank()) return
         if (showLoading) { _isLoading.value = true }
-        val booksResult = repository.fetchBooks(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value)
+        val booksResult = bookRepository.fetchBooks(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value)
         booksResult.onSuccess { list ->
             allBooks = list
             applyBooksFilterAndSort()
@@ -1048,7 +537,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadBookSources() {
         val (baseUrl, publicUrl, token) = preferences.getCredentials()
         if (token == null) return
-        repository.getBookSources(appContext, baseUrl, publicUrl, token).collect { result ->
+        sourceRepository.getBookSources(appContext, baseUrl, publicUrl, token).collect { result ->
             result.onSuccess { _availableBookSources.value = it }
         }
     }
@@ -1076,7 +565,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
             val deferredResults = targetSources.map { source ->
                 async {
-                    repository.searchBook(
+                    bookRepository.searchBook(
                         baseUrl = baseUrl,
                         publicUrl = publicUrl,
                         accessToken = token,
@@ -1101,7 +590,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            repository.saveBook(
+            bookRepository.saveBook(
                 baseUrl = baseUrl,
                 publicUrl = publicUrl,
                 accessToken = token,
@@ -1122,7 +611,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            repository.deleteBook(
+            bookRepository.deleteBook(
                 baseUrl = baseUrl,
                 publicUrl = publicUrl,
                 accessToken = token,
@@ -1149,7 +638,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            repository.setBookSource(baseUrl, publicUrl, token, oldUrl, newUrl, newSourceUrl)
+            bookRepository.setBookSource(baseUrl, publicUrl, token, oldUrl, newUrl, newSourceUrl)
                 .onSuccess { updatedBook ->
                     refreshBooks()
                     _selectedBook.value = updatedBook
@@ -1169,7 +658,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         
         sources.forEach { source ->
             // 仅使用书名搜索
-            repository.searchBook(baseUrl, publicUrl, token, bookName, source.bookSourceUrl, 1)
+            bookRepository.searchBook(baseUrl, publicUrl, token, bookName, source.bookSourceUrl, 1)
                 .onSuccess { books ->
                     // 本地精滤：书名必须完全一致
                     val exactMatches = books.filter { it.name == bookName }
@@ -1184,7 +673,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectBook(book: Book) {
         if (_selectedBook.value?.bookUrl == book.bookUrl) return
-        stopPlayback("book_change")
+        ttsController.stopTts()
         _selectedBook.value = book
         _showTtsControls.value = false
         _currentChapterIndex.value = book.durChapterIndex ?: 0
@@ -1199,15 +688,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setCurrentChapter(index: Int) {
         if (index !in _chapters.value.indices) return
-        val chapterTitle = _chapters.value.getOrNull(index)?.title.orEmpty()
         val shouldContinuePlaying = _keepPlaying.value
-        stopPlayback("chapter_change")
+        ttsController.stopTts()
         _currentChapterIndex.value = index
         _currentChapterContent.value = ""
         currentParagraphs = emptyList()
         clearAdjacentChapterCache()
         if (shouldContinuePlaying) {
-            startPlayback()
+            ttsController.startTts()
         } else {
             viewModelScope.launch { loadChapterContent(index) }
         }
@@ -1229,7 +717,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val target = _currentChapterIndex.value + direction
         if (target !in _chapters.value.indices) return
         val shouldContinuePlaying = _keepPlaying.value
-        stopPlayback("chapter_change")
+        ttsController.stopTts()
         _currentChapterIndex.value = target
         _currentChapterContent.value = ""
         currentParagraphs = emptyList()
@@ -1244,11 +732,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         if (!preloadedContent.isNullOrBlank()) {
             updateChapterContent(target, preloadedContent)
             if (shouldContinuePlaying) {
-                startPlayback()
+                ttsController.startTts()
             }
         } else {
             if (shouldContinuePlaying) {
-                startPlayback()
+                ttsController.startTts()
             } else {
                 viewModelScope.launch { loadChapterContent(target) }
             }
@@ -1261,7 +749,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteTtsEngine(id: String) {
         viewModelScope.launch {
-            repository.deleteTts(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, id)
+            ttsRepository.deleteTts(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, id)
                 .onSuccess { loadTtsEnginesInternal() }
                 .onFailure { _errorMessage.value = "删除失败: ${it.message}" }
         }
@@ -1269,7 +757,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addTtsEngine(tts: HttpTTS) {
         viewModelScope.launch {
-            repository.addTts(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, tts)
+            ttsRepository.addTts(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, tts)
                 .onSuccess { loadTtsEnginesInternal() }
                 .onFailure { _errorMessage.value = "保存失败: ${it.message}" }
         }
@@ -1277,7 +765,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveTtsBatch(jsonContent: String) {
         viewModelScope.launch {
-            repository.saveTtsBatch(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, jsonContent)
+            ttsRepository.saveTtsBatch(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, jsonContent)
                 .onSuccess { loadTtsEnginesInternal() }
                 .onFailure { _errorMessage.value = "批量导入失败: ${it.message}" }
         }
@@ -1292,7 +780,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            repository.changePassword(baseUrl, publicUrl, token, oldPass, newPass)
+            authRepository.changePassword(baseUrl, publicUrl, token, oldPass, newPass)
                 .onSuccess {
                     onSuccess()
                 }
@@ -1318,7 +806,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             for (i in actualStart..actualEnd) {
                 if (!localCache.isChapterCached(book.bookUrl ?: "", i)) {
                     val chapter = chapters[i]
-                    repository.fetchChapterContent(
+                    bookRepository.fetchChapterContent(
                         currentServerEndpoint(),
                         _publicServerAddress.value.ifBlank { null },
                         _accessToken.value,
@@ -1342,152 +830,17 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         downloadChapters(0, _chapters.value.lastIndex)
     }
 
-    private suspend fun loadChapters(book: Book) {
-        val bookUrl = book.bookUrl ?: return
-        _isChapterListLoading.value = true
-        val chaptersResult = runCatching { repository.fetchChapterList(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, bookUrl, book.origin) }
-            .getOrElse { throwable ->
-                _errorMessage.value = throwable.message
-                Log.e(TAG, "鍔犺浇绔犺妭鍒楄〃澶辫触", throwable)
-                _isChapterListLoading.value = false
-                return
-            }
-        chaptersResult.onSuccess { chapterList ->
-            _chapters.value = chapterList
-            if (chapterList.isNotEmpty()) {
-                val index = _currentChapterIndex.value.coerceIn(0, chapterList.lastIndex)
-                _currentChapterIndex.value = index
-                loadChapterContent(index)
-            }
-            _isChapterListLoading.value = false
-        }.onFailure { error ->
-            _errorMessage.value = error.message
-            Log.e(TAG, "鍔犺浇绔犺妭鍒楄〃澶辫触", error)
-            _isChapterListLoading.value = false
-        }
-    }
+    private suspend fun loadChapters(book: Book) = readerInteractor.loadChapters(book)
 
-    fun loadChapterContent(index: Int) { viewModelScope.launch { loadChapterContentInternal(index) } }
+    fun loadChapterContent(index: Int) { readerInteractor.loadChapterContent(index) }
     fun onChapterChange(index: Int) { setCurrentChapter(index) }
-    private suspend fun loadChapterContentInternal(index: Int): String? {
-        val book = _selectedBook.value ?: return null
-        val chapter = _chapters.value.getOrNull(index) ?: return null
-        val bookUrl = book.bookUrl ?: return null
-        
-        // 判断是否为漫画模式
-        val isManga = manualMangaUrls.value.contains(bookUrl) || book.type == 2
-        val effectiveType = if (isManga) 2 else 0
-        
-        if (_isChapterContentLoading.value) {
-            return _currentChapterContent.value.ifBlank { null }
-        }
-        _isChapterContentLoading.value = true
-        return try {
-            val contentResult = chapterContentRepository.loadChapterContent(
-                serverEndpoint = currentServerEndpoint(),
-                publicServerEndpoint = _publicServerAddress.value.ifBlank { null },
-                accessToken = _accessToken.value,
-                bookUrl = bookUrl,
-                bookOrigin = book.origin,
-                chapterListIndex = index,
-                chapterApiIndex = chapter.index,
-                contentType = effectiveType,
-                policy = ChapterContentPolicy.Default,
-                cacheValidator = { cached -> !isManga || cached.contains("__IMG__") },
-                cleaner = { raw -> cleanChapterContent(raw) }
-            )
-            contentResult.error?.let { error ->
-                _errorMessage.value = "加载失败: ${error.message}"
-            }
-            val resolvedContent = contentResult.content
-            if (!resolvedContent.isNullOrBlank()) {
-                updateChapterContent(index, resolvedContent)
-                resolvedContent
-            } else {
-                if (contentResult.error == null) {
-                    _errorMessage.value = "加载失败: 内容为空"
-                }
-                null
-            }
-        } catch (e: Exception) {
-            _errorMessage.value = "系统异常: ${e.localizedMessage}"
-            Log.e(TAG, "加载章节内容异常", e)
-            null
-        } finally {
-            _isChapterContentLoading.value = false
-        }
-    }
-    private fun updateChapterContent(index: Int, content: String) {
-        _currentChapterContent.value = content
-        currentParagraphs = parseParagraphs(content)
-        currentSentences = currentParagraphs
-        _totalParagraphs.value = currentParagraphs.size.coerceAtLeast(1)
-        viewModelScope.launch { prefetchAdjacentChapters() }
-    }
-
-    private fun clearAdjacentChapterCache() {
-        _prevChapterIndex.value = null
-        _nextChapterIndex.value = null
-        _prevChapterContent.value = null
-        _nextChapterContent.value = null
-    }
-
-    private fun isMangaBook(book: Book?): Boolean {
-        val bookUrl = book?.bookUrl ?: return false
-        return manualMangaUrls.value.contains(bookUrl) || book.type == 2
-    }
-
-    private suspend fun prefetchAdjacentChapters() {
-        if (!infiniteScrollEnabled.value) {
-            clearAdjacentChapterCache()
-            return
-        }
-        val book = _selectedBook.value ?: return
-        if (isMangaBook(book)) {
-            clearAdjacentChapterCache()
-            return
-        }
-        val chapters = _chapters.value
-        if (chapters.isEmpty()) return
-        val current = _currentChapterIndex.value
-        val prevIndex = if (current > 0) current - 1 else null
-        val nextIndex = if (current < chapters.lastIndex) current + 1 else null
-
-        _prevChapterIndex.value = prevIndex
-        _nextChapterIndex.value = nextIndex
-
-        val effectiveType = 0
-        val prevContent = prevIndex?.let { fetchChapterContentForIndex(it, effectiveType) }
-        val nextContent = nextIndex?.let { fetchChapterContentForIndex(it, effectiveType) }
-
-        _prevChapterContent.value = prevContent
-        _nextChapterContent.value = nextContent
-
-        val preloaded = mutableSetOf<Int>()
-        if (!prevContent.isNullOrBlank()) preloaded.add(prevIndex ?: -1)
-        if (!nextContent.isNullOrBlank()) preloaded.add(nextIndex ?: -1)
-        _preloadedChapters.value = preloaded.filter { it >= 0 }.toSet()
-    }
-
-    private suspend fun fetchChapterContentForIndex(index: Int, effectiveType: Int): String? {
-        val book = _selectedBook.value ?: return null
-        val chapter = _chapters.value.getOrNull(index) ?: return null
-        val bookUrl = book.bookUrl ?: return null
-        return chapterContentRepository.loadChapterContent(
-            serverEndpoint = currentServerEndpoint(),
-            publicServerEndpoint = _publicServerAddress.value.ifBlank { null },
-            accessToken = _accessToken.value,
-            bookUrl = bookUrl,
-            bookOrigin = book.origin,
-            chapterListIndex = index,
-            chapterApiIndex = chapter.index,
-            contentType = effectiveType,
-            policy = ChapterContentPolicy.Default,
-            cacheValidator = { true },
-            cleaner = { raw -> cleanChapterContent(raw) }
-        ).content
-    }
-    private fun parseParagraphs(content: String): List<String> {
+    private suspend fun loadChapterContentInternal(index: Int): String? = readerInteractor.loadChapterContentInternal(index)
+    private fun updateChapterContent(index: Int, content: String) = readerInteractor.updateChapterContent(index, content)
+    private fun clearAdjacentChapterCache() = readerInteractor.clearAdjacentChapterCache()
+    private suspend fun prefetchAdjacentChapters() = readerInteractor.prefetchAdjacentChapters()
+    private suspend fun fetchChapterContentForIndex(index: Int, effectiveType: Int): String? =
+        readerInteractor.fetchChapterContentForIndex(index, effectiveType)
+    internal fun parseParagraphs(content: String): List<String> {
         val lines = content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
         val finalParagraphs = mutableListOf<String>()
         
@@ -1528,7 +881,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
         return finalParagraphs
     }
-    private fun cleanChapterContent(raw: String): String {
+    internal fun cleanChapterContent(raw: String): String {
         if (raw.isBlank()) return ""
 
         var content = raw
@@ -1561,12 +914,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadTtsEnginesInternal() {
         if (_accessToken.value.isBlank()) return
         var engines: List<HttpTTS> = emptyList()
-        val enginesResult = repository.fetchTtsEngines(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value)
+        val enginesResult = ttsRepository.fetchTtsEngines(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value)
         enginesResult.onSuccess { list ->
             engines = list
             _availableTtsEngines.value = list
         }.onFailure { error -> _errorMessage.value = error.message }
-        val defaultResult = repository.fetchDefaultTts(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value)
+        val defaultResult = ttsRepository.fetchDefaultTts(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value)
         val defaultId = defaultResult.getOrNull()
         val resolved = listOf(_selectedTtsEngine.value, defaultId, engines.firstOrNull()?.id).firstOrNull { !it.isNullOrBlank() }.orEmpty()
         if (resolved.isNotBlank() && resolved != _selectedTtsEngine.value) {
@@ -1646,14 +999,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updateForceMangaProxy(enabled: Boolean) { readerSettings.updateForceMangaProxy(enabled) }
     fun clearCache() {
         viewModelScope.launch {
-            clearAudioCache()
-            clearPreloadingIndices()
+            ttsController.clearCache()
             chapterContentRepository.clearMemoryCache()
         }
     }
-    private fun buildTtsAudioUrl(sentence: String, isChapterTitle: Boolean): String? {
+    internal fun buildTtsAudioUrl(sentence: String, isChapterTitle: Boolean): String? {
         val ttsId = resolveTtsIdForSentence(sentence, isChapterTitle) ?: return null
-        return repository.buildTtsAudioUrl(currentServerEndpoint(), _accessToken.value, ttsId, sentence, _speechSpeed.value / 20.0)
+        return ttsRepository.buildTtsAudioUrl(currentServerEndpoint(), _accessToken.value, ttsId, sentence, _speechSpeed.value / 20.0)
     }
     private fun applyBooksFilterAndSort() {
         val filtered = if (currentSearchQuery.isBlank()) allBooks else allBooks.filter { it.name.orEmpty().lowercase().contains(currentSearchQuery.lowercase()) || it.author.orEmpty().lowercase().contains(currentSearchQuery.lowercase()) }
@@ -1676,7 +1028,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
         _books.value = sorted
     }
-    private fun isPunctuationOnly(sentence: String): Boolean {
+    internal fun isPunctuationOnly(sentence: String): Boolean {
         val punctuation = "，。！？；、\"“”‘’…—·"
         return sentence.trim().all { it in punctuation }
     }
@@ -1686,11 +1038,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun clearLogs() { runCatching { if (logFile.exists()) { logFile.writeText("") } } }
     private fun appendLog(message: String) { if (!_loggingEnabled.value) return; val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date()); val line = "[$timestamp] $message\n"; runCatching { logFile.appendText(line) } }
 
-    private fun currentServerEndpoint(): String {
+    internal fun currentServerEndpoint(): String {
         return _serverAddress.value
     }
 
-    private fun formatTime(milliseconds: Long): String {
+    internal fun formatTime(milliseconds: Long): String {
         val totalSeconds = milliseconds / 1000
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60

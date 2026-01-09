@@ -1,231 +1,50 @@
-import Foundation
-
-// MARK: - API Response
-struct APIResponse<T: Codable>: Codable {
-    let isSuccess: Bool
-    let errorMsg: String?
-    let data: T?
-}
-
-// MARK: - Book Model
-struct Book: Codable, Identifiable {
-    // 使用持久的备用ID，避免在没有 bookUrl 时因 UUID 变化导致列表状态丢失
-    private let fallbackId = UUID().uuidString
-
-    var id: String { bookUrl ?? fallbackId }
-    let name: String?
-    let author: String?
-    let bookUrl: String?
-    var origin: String?
-    var originName: String?
-    let coverUrl: String?
-    let intro: String?
-    let durChapterTitle: String?
-    let durChapterIndex: Int?
-    let durChapterPos: Double?
-    let totalChapterNum: Int?
-    let latestChapterTitle: String?
-    let kind: String?
-    let type: Int?
-    let durChapterTime: Int64?  // 最后阅读时间（时间戳）
-    
-    var sourceDisplayName: String? // For global search results
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case author
-        case bookUrl
-        case origin
-        case originName
-        case coverUrl
-        case intro
-        case durChapterTitle
-        case durChapterIndex
-        case durChapterPos
-        case totalChapterNum
-        case latestChapterTitle
-        case kind
-        case type
-        case durChapterTime
-    }
-    
-    var displayCoverUrl: String? {
-        if let url = coverUrl, !url.isEmpty {
-            // 如果是相对路径，拼接完整URL
-            if url.hasPrefix("baseurl/") {
-                return APIService.shared.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "") + "/" + url
-            }
-            return url
-        }
-        return nil
-    }
-}
-
-// MARK: - Chapter Model
-struct BookChapter: Codable, Identifiable {
-    var id: String { url }
-    let title: String
-    let url: String
-    let index: Int
-    let isVolume: Bool?
-    let isPay: Bool?
-}
-
-// MARK: - Chapter Content Response
-struct ChapterContentResponse: Codable {
-    let rules: [ReplaceRule]?
-    let text: String
-}
-
-// MARK: - Replace Rule Model
-struct ReplaceRule: Codable, Identifiable, Equatable {
-    let id: String?
-    let name: String
-    let groupname: String?
-    let pattern: String
-    let replacement: String
-    let scope: String?
-    let scopeTitle: Bool?
-    let scopeContent: Bool?
-    let excludeScope: String?
-    let isEnabled: Bool?
-    let isRegex: Bool?
-    let timeoutMillisecond: Int64?
-    let ruleorder: Int?
-
-    // A computed property for Identifiable conformance that is stable.
-    var identifiableId: String {
-        id ?? UUID().uuidString
-    }
-}
-
-// MARK: - Replace Rule Page Info
-struct ReplaceRulePageInfo: Codable {
-    let page: Int
-    let md5: String
-}
-
-// MARK: - Book Import Response
-struct BookImportResponse: Codable {
-    let books: Book
-    let chapters: [BookChapter]
-}
-
-// MARK: - HttpTTS Model
-struct HttpTTS: Codable, Identifiable {
-    let id: String
-    let userid: String?
-    let name: String
-    let url: String
-    let contentType: String?
-    let concurrentRate: String?
-    let loginUrl: String?
-    let loginUi: String?
-    let header: String?
-    let enabledCookieJar: Bool?
-    let loginCheckJs: String?
-    let lastUpdateTime: Int64?
-}
-
-// MARK: - Login Response Model
-struct LoginResponse: Codable {
-    let accessToken: String
-}
-
-// MARK: - User Info Model
-struct UserInfo: Codable {
-    let username: String?
-    let phone: String?
-    let email: String?
-}
-
-// MARK: - User Preferences
-enum ReadingMode: String, CaseIterable, Identifiable {
-    case vertical = "Vertical"
-    case horizontal = "Horizontal"
-
-    var id: String { self.rawValue }
-    var localizedName: String {
-        switch self {
-        case .vertical: return "上下滚动"
-        case .horizontal: return "左右翻页"
-        }
-    }
-}
-
-enum PageTurningMode: String, CaseIterable, Identifiable {
-    case scroll = "Scroll"
-    case simulation = "Simulation"
-
-    var id: String { self.rawValue }
-    var localizedName: String {
-        switch self {
-        case .scroll: return "平滑滑动"
-        case .simulation: return "仿真翻页"
-        }
-    }
-}
-
-enum DarkModeConfig: String, CaseIterable, Identifiable {
-    case off = "Off"
-    case on = "On"
-    case system = "System"
-    
-    var id: String { self.rawValue }
-    var localizedName: String {
-        switch self {
-        case .off: return "关闭"
-        case .on: return "开启"
-        case .system: return "跟随系统"
-        }
-    }
-}
+import SwiftUI
 
 class UserPreferences: ObservableObject {
     static let shared = UserPreferences()
-    
+
     @Published var serverURL: String {
         didSet {
             UserDefaults.standard.set(serverURL, forKey: "serverURL")
         }
     }
-    
+
     @Published var publicServerURL: String {
         didSet {
             UserDefaults.standard.set(publicServerURL, forKey: "publicServerURL")
         }
     }
-    
+
     @Published var accessToken: String {
         didSet {
             UserDefaults.standard.set(accessToken, forKey: "accessToken")
         }
     }
-    
+
     @Published var username: String {
         didSet {
             UserDefaults.standard.set(username, forKey: "username")
         }
     }
-    
+
     @Published var isLoggedIn: Bool {
         didSet {
             UserDefaults.standard.set(isLoggedIn, forKey: "isLoggedIn")
         }
     }
-    
+
     @Published var fontSize: CGFloat {
         didSet {
             UserDefaults.standard.set(fontSize, forKey: "fontSize")
         }
     }
-    
+
     @Published var lineSpacing: CGFloat {
         didSet {
             UserDefaults.standard.set(lineSpacing, forKey: "lineSpacing")
         }
     }
-    
+
     @Published var speechRate: Double {
         didSet {
             UserDefaults.standard.set(speechRate, forKey: "speechRate")
@@ -254,7 +73,7 @@ class UserPreferences: ObservableObject {
             }
         }
     }
-    
+
     @Published var selectedTTSId: String {
         didSet {
             UserDefaults.standard.set(selectedTTSId, forKey: "selectedTTSId")
@@ -272,7 +91,7 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(systemVoiceId, forKey: "systemVoiceId")
         }
     }
-    
+
     @Published var bookshelfSortByRecent: Bool {
         didSet {
             UserDefaults.standard.set(bookshelfSortByRecent, forKey: "bookshelfSortByRecent")
@@ -290,19 +109,19 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(preferredSearchSourceUrls, forKey: "preferredSearchSourceUrls")
         }
     }
-    
+
     @Published var ttsPreloadCount: Int {
         didSet {
             UserDefaults.standard.set(ttsPreloadCount, forKey: "ttsPreloadCount")
         }
     }
-    
+
     @Published var readingMode: ReadingMode {
         didSet {
             UserDefaults.standard.set(readingMode.rawValue, forKey: "readingMode")
         }
     }
-    
+
     @Published var pageHorizontalMargin: CGFloat {
         didSet {
             UserDefaults.standard.set(pageHorizontalMargin, forKey: "pageHorizontalMargin")
@@ -314,7 +133,7 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(pageInterSpacing, forKey: "pageInterSpacing")
         }
     }
-    
+
     @Published var pageTurningMode: PageTurningMode {
         didSet {
             UserDefaults.standard.set(pageTurningMode.rawValue, forKey: "pageTurningMode")
@@ -326,13 +145,13 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(darkMode.rawValue, forKey: "darkMode")
         }
     }
-    
+
     @Published var lockPageOnTTS: Bool {
         didSet {
             UserDefaults.standard.set(lockPageOnTTS, forKey: "lockPageOnTTS")
         }
     }
-    
+
     /// 手动标记为漫画的书籍 URL 集合
     @Published var manualMangaUrls: Set<String> {
         didSet {
@@ -340,14 +159,14 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(array, forKey: "manualMangaUrls")
         }
     }
-    
+
     /// 是否开启详细日志（用于调试漫画等问题）
     @Published var isVerboseLoggingEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isVerboseLoggingEnabled, forKey: "isVerboseLoggingEnabled")
         }
     }
-    
+
     @Published var isInfiniteScrollEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isInfiniteScrollEnabled, forKey: "isInfiniteScrollEnabled")
@@ -366,7 +185,7 @@ class UserPreferences: ObservableObject {
             UserDefaults.standard.set(forceMangaProxy, forKey: "forceMangaProxy")
         }
     }
-    
+
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex, sentenceOffset)
     private var ttsProgress: [String: (Int, Int, Int)] {
         get {
@@ -411,13 +230,13 @@ class UserPreferences: ObservableObject {
             }
         }
     }
-    
+
     func saveTTSProgress(bookUrl: String, chapterIndex: Int, sentenceIndex: Int, sentenceOffset: Int = 0) {
         var progress = ttsProgress
         progress[bookUrl] = (chapterIndex, sentenceIndex, sentenceOffset)
         ttsProgress = progress
     }
-    
+
     func getTTSProgress(bookUrl: String) -> (chapterIndex: Int, sentenceIndex: Int, sentenceOffset: Int)? {
         return ttsProgress[bookUrl]
     }
@@ -428,39 +247,39 @@ class UserPreferences: ObservableObject {
         progress[bookUrl] = (chapterIndex, pageIndex, bodyCharIndex, timestamp)
         readingProgress = progress
     }
-    
+
     func getReadingProgress(bookUrl: String) -> (chapterIndex: Int, pageIndex: Int, bodyCharIndex: Int, timestamp: Int)? {
         return readingProgress[bookUrl]
     }
-    
+
     private init() {
         // 初始化所有属性
         let savedFontSize = CGFloat(UserDefaults.standard.float(forKey: "fontSize"))
         self.fontSize = savedFontSize == 0 ? 18 : savedFontSize
-        
+
         let savedLineSpacing = CGFloat(UserDefaults.standard.float(forKey: "lineSpacing"))
         self.lineSpacing = savedLineSpacing == 0 ? 8 : savedLineSpacing
-        
+
         let savedMargin = CGFloat(UserDefaults.standard.float(forKey: "pageHorizontalMargin"))
         self.pageHorizontalMargin = savedMargin == 0 ? 6 : savedMargin
 
         let savedInterSpacing = CGFloat(UserDefaults.standard.float(forKey: "pageInterSpacing"))
         self.pageInterSpacing = savedInterSpacing == 0 ? 12 : savedInterSpacing
-        
+
         self.lockPageOnTTS = UserDefaults.standard.bool(forKey: "lockPageOnTTS")
-        
+
         let savedManualMangaUrls = UserDefaults.standard.stringArray(forKey: "manualMangaUrls") ?? []
         self.manualMangaUrls = Set(savedManualMangaUrls)
-        
+
         self.isVerboseLoggingEnabled = UserDefaults.standard.bool(forKey: "isVerboseLoggingEnabled")
         self.isInfiniteScrollEnabled = UserDefaults.standard.object(forKey: "isInfiniteScrollEnabled") as? Bool ?? true
         let savedVerticalThreshold = CGFloat(UserDefaults.standard.float(forKey: "verticalThreshold"))
         self.verticalThreshold = savedVerticalThreshold == 0 ? 80 : savedVerticalThreshold
         self.forceMangaProxy = UserDefaults.standard.bool(forKey: "forceMangaProxy")
-        
+
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 100.0 : savedSpeechRate
-        
+
         self.serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? ""
         self.publicServerURL = UserDefaults.standard.string(forKey: "publicServerURL") ?? ""
         self.accessToken = UserDefaults.standard.string(forKey: "accessToken") ?? ""
@@ -489,14 +308,14 @@ class UserPreferences: ObservableObject {
            let savedReadingMode = ReadingMode(rawValue: savedReadingModeString) {
             self.readingMode = savedReadingMode
         } else {
-            self.readingMode = .vertical // Default value
+            self.readingMode = .vertical
         }
 
         if let savedTurningModeString = UserDefaults.standard.string(forKey: "pageTurningMode"),
            let savedTurningMode = PageTurningMode(rawValue: savedTurningModeString) {
             self.pageTurningMode = savedTurningMode
         } else {
-            self.pageTurningMode = .simulation // iOS 默认推荐仿真
+            self.pageTurningMode = .simulation
         }
 
         if let savedDarkModeString = UserDefaults.standard.string(forKey: "darkMode"),
@@ -510,16 +329,10 @@ class UserPreferences: ObservableObject {
         if narrationTTSId.isEmpty { narrationTTSId = selectedTTSId }
         if dialogueTTSId.isEmpty { dialogueTTSId = selectedTTSId }
     }
-    
+
     func logout() {
         accessToken = ""
         username = ""
         isLoggedIn = false
     }
-}
-
-// MARK: - BookSource Page Info
-struct BookSourcePageInfo: Codable {
-    let page: Int
-    let md5: String
 }

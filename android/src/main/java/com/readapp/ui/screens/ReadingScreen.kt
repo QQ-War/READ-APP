@@ -17,8 +17,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +29,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.positionChanged
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
@@ -40,7 +37,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
-import coil.compose.AsyncImage
 import com.readapp.data.LocalCacheManager
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
@@ -578,16 +574,6 @@ private fun parseDisplayParagraphs(content: String): List<String> {
 }
 
 @Composable
-private fun ParagraphItem(text: String, isPlaying: Boolean, isPreloaded: Boolean, fontSize: Float, chapterUrl: String?, serverUrl: String, forceProxy: Boolean, modifier: Modifier = Modifier) {
-    val backgroundColor = when { isPlaying -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f); isPreloaded -> MaterialTheme.customColors.success.copy(alpha = 0.15f); else -> Color.Transparent }
-    Surface(modifier = modifier, color = backgroundColor, shape = RoundedCornerShape(8.dp)) {
-        val imgUrl = remember(text) { """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""".toRegex().find(text)?.groupValues?.get(1) }
-        if (imgUrl != null) AsyncImage(model = imgUrl, contentDescription = null, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), contentScale = ContentScale.FillWidth)
-        else Text(text, style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp), color = MaterialTheme.colorScheme.onSurface, lineHeight = (fontSize * 1.8f).sp, modifier = Modifier.padding(horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp, vertical = if (isPlaying || isPreloaded) 8.dp else 0.dp))
-    }
-}
-
-@Composable
 private fun rememberPaginatedText(paragraphs: List<String>, style: TextStyle, constraints: Constraints, lineHeightPx: Float, headerText: String, headerFontSize: TextUnit): PaginationResult {
     val textMeasurer = rememberTextMeasurer()
     return remember(paragraphs, style, constraints, lineHeightPx, headerText, headerFontSize) {
@@ -669,145 +655,6 @@ private fun handleHorizontalTap(offset: Offset, size: IntSize, show: Boolean, st
         offset.x < width / 3f -> scope.launch { if (state.currentPage > 0) state.animateScrollToPage(state.currentPage - 1) else onPreviousChapter() }
         offset.x < width * 2f / 3f -> onToggleControls(true)
         else -> scope.launch { if (state.currentPage < pages.size - 1) state.animateScrollToPage(state.currentPage + 1) else onNextChapter() }
-    }
-}
-
-@Composable
-private fun TopControlBar(title: String, chapter: String, onBack: () -> Unit, onHeader: () -> Unit) {
-    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), shadowElevation = 4.dp) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = AppDimens.PaddingMedium, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "返回") }
-            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp).clickable(onClick = onHeader)) {
-                Text(text = title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                Text(text = chapter, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.customColors.textSecondary, maxLines = 1)
-            }
-        }
-    }
-}
-
-@Composable
-private fun EdgeSwitchHint(text: String, isTop: Boolean, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.padding(top = if (isTop) 8.dp else 0.dp, bottom = if (isTop) 0.dp else 12.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-        shape = RoundedCornerShape(12.dp),
-        shadowElevation = 4.dp
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun BottomControlBar(
-    isPlaying: Boolean, 
-    isManga: Boolean, 
-    isForceLandscape: Boolean,
-    onToggleRotation: () -> Unit,
-    onPrev: () -> Unit, 
-    onNext: () -> Unit, 
-    onList: () -> Unit, 
-    onPlay: () -> Unit, 
-    onStop: () -> Unit, 
-    onPrevP: () -> Unit, 
-    onNextP: () -> Unit, 
-    onFont: () -> Unit, 
-    canPrev: Boolean, 
-    canNext: Boolean, 
-    showTts: Boolean
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(), 
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f), 
-        shadowElevation = 8.dp,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = AppDimens.PaddingMedium, vertical = 12.dp)
-                .navigationBarsPadding() // 适配系统导航栏
-        ) {
-            // 1. TTS 播放控制层 (仅在显示时可见)
-            if (showTts) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), 
-                    horizontalArrangement = Arrangement.SpaceEvenly, 
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onPrevP) { Icon(Icons.Default.KeyboardArrowUp, null) }
-                    FloatingActionButton(
-                        onClick = onPlay, 
-                        containerColor = MaterialTheme.customColors.gradientStart, 
-                        modifier = Modifier.size(48.dp)
-                    ) { Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White) }
-                    IconButton(onClick = onNextP) { Icon(Icons.Default.KeyboardArrowDown, null) }
-                    IconButton(onClick = onStop) { Icon(Icons.Default.Stop, null, tint = MaterialTheme.colorScheme.error) }
-                }
-                Divider(modifier = Modifier.padding(bottom = 12.dp), color = MaterialTheme.customColors.border.copy(alpha = 0.5f))
-            }
-
-            // 2. 主导航层：上一章 / 下一章 (超大点击区域)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = onPrev,
-                    enabled = canPrev,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Icon(Icons.Default.SkipPrevious, null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("上一章")
-                }
-                Button(
-                    onClick = onNext,
-                    enabled = canNext,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text("下一章")
-                    Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Default.SkipNext, null, modifier = Modifier.size(20.dp))
-                }
-            }
-
-            // 3. 功能按钮层
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ControlButton(Icons.Default.List, "目录", onList)
-                
-                if (isManga) {
-                    ControlButton(
-                        icon = if (isForceLandscape) Icons.Default.ScreenLockRotation else Icons.Default.ScreenRotation,
-                        label = if (isForceLandscape) "锁定竖屏" else "强制横屏",
-                        onClick = onToggleRotation
-                    )
-                } else if (!showTts) {
-                    FloatingActionButton(onClick = onPlay, containerColor = MaterialTheme.customColors.gradientStart, modifier = Modifier.size(56.dp)) { Icon(Icons.Default.VolumeUp, null, tint = Color.White) }
-                }
-
-                if (!isManga) {
-                    ControlButton(Icons.Default.FormatSize, "字体", onFont)
-                } else {
-                    ControlButton(Icons.Default.Settings, "选项", onFont)
-                }
-                
-            }
-        }
     }
 }
 

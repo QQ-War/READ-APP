@@ -1,16 +1,16 @@
 import UIKit
 
 final class ReaderChapterBuilder {
-    private var preferences: UserPreferences
+    private var readerSettings: ReaderSettingsStore
     private var replaceRules: [ReplaceRule]?
 
-    init(preferences: UserPreferences, replaceRules: [ReplaceRule]?) {
-        self.preferences = preferences
+    init(readerSettings: ReaderSettingsStore, replaceRules: [ReplaceRule]?) {
+        self.readerSettings = readerSettings
         self.replaceRules = replaceRules
     }
 
-    func updatePreferences(_ preferences: UserPreferences) {
-        self.preferences = preferences
+    func updateSettings(_ settings: ReaderSettingsStore) {
+        self.readerSettings = settings
     }
 
     func updateReplaceRules(_ rules: [ReplaceRule]?) {
@@ -90,12 +90,12 @@ final class ReaderChapterBuilder {
         if !title.isEmpty {
             let titleStyle = NSMutableParagraphStyle()
             titleStyle.alignment = .center
-            titleStyle.paragraphSpacing = preferences.fontSize * 1.5
+            titleStyle.paragraphSpacing = readerSettings.fontSize * 1.5
             fullAttr.append(
                 NSAttributedString(
                     string: title + "\n",
                     attributes: [
-                        .font: UIFont.systemFont(ofSize: preferences.fontSize + 8, weight: .bold),
+                        .font: UIFont.systemFont(ofSize: readerSettings.fontSize + 8, weight: .bold),
                         .foregroundColor: UIColor.label,
                         .paragraphStyle: titleStyle
                     ]
@@ -104,7 +104,7 @@ final class ReaderChapterBuilder {
         }
 
         let bodyStyle = NSMutableParagraphStyle()
-        bodyStyle.lineSpacing = preferences.lineSpacing
+        bodyStyle.lineSpacing = readerSettings.lineSpacing
         bodyStyle.alignment = .justified
 
         let indentedText = sentences.map { "　　" + $0 }.joined(separator: "\n")
@@ -112,7 +112,7 @@ final class ReaderChapterBuilder {
             NSAttributedString(
                 string: indentedText,
                 attributes: [
-                    .font: UIFont.systemFont(ofSize: preferences.fontSize),
+                    .font: UIFont.systemFont(ofSize: readerSettings.fontSize),
                     .foregroundColor: UIColor.label,
                     .paragraphStyle: bodyStyle
                 ]

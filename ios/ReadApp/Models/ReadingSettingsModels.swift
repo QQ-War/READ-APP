@@ -1,0 +1,43 @@
+import Foundation
+
+// MARK: - User Preferences
+enum ReadingMode: String, CaseIterable, Identifiable {
+    case vertical = "Vertical"
+    case horizontal = "Horizontal"
+
+    var id: String { self.rawValue }
+    var localizedName: String {
+        switch self {
+        case .vertical: return "上下滚动"
+        case .horizontal: return "左右翻页"
+        }
+    }
+}
+
+enum PageTurningMode: String, CaseIterable, Identifiable {
+    case scroll = "Scroll"
+    case simulation = "Simulation"
+
+    var id: String { self.rawValue }
+    var localizedName: String {
+        switch self {
+        case .scroll: return "平滑滑动"
+        case .simulation: return "仿真翻页"
+        }
+    }
+}
+
+enum DarkModeConfig: String, CaseIterable, Identifiable {
+    case off = "Off"
+    case on = "On"
+    case system = "System"
+
+    var id: String { self.rawValue }
+    var localizedName: String {
+        switch self {
+        case .off: return "关闭"
+        case .on: return "开启"
+        case .system: return "跟随系统"
+        }
+    }
+}

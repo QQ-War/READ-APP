@@ -455,7 +455,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val searchViewModel: BookSearchViewModel = viewModel(
                     factory = BookSearchViewModel.Factory(
                         bookSource = bookSource,
-                        repository = bookViewModel.repository,
+                        bookRepository = bookViewModel.bookRepository,
                         userPreferences = bookViewModel.preferences
                     )
                 )

@@ -3,17 +3,17 @@ package com.readapp.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
 import com.readapp.data.model.Book
 import com.readapp.data.model.BookSource
+import com.readapp.data.repo.BookRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class BookSearchViewModel(
     val bookSource: BookSource,
-    private val repository: ReadRepository,
+    private val bookRepository: BookRepository,
     private val userPreferences: UserPreferences
 ) : ViewModel() {
 
@@ -58,7 +58,7 @@ class BookSearchViewModel(
                 return@launch
             }
 
-            repository.searchBook(
+            bookRepository.searchBook(
                 baseUrl = baseUrl,
                 publicUrl = publicUrl,
                 accessToken = token,
@@ -86,7 +86,7 @@ class BookSearchViewModel(
                 return@launch
             }
 
-            repository.saveBook(
+            bookRepository.saveBook(
                 baseUrl = baseUrl,
                 publicUrl = publicUrl,
                 accessToken = token,
@@ -100,12 +100,12 @@ class BookSearchViewModel(
     companion object {
         fun Factory(
             bookSource: BookSource,
-            repository: ReadRepository,
+            bookRepository: BookRepository,
             userPreferences: UserPreferences
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return BookSearchViewModel(bookSource, repository, userPreferences) as T
+                return BookSearchViewModel(bookSource, bookRepository, userPreferences) as T
             }
         }
     }
