@@ -277,6 +277,22 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 }
             }
             isUpdatingLayout = false
+
+            if isInfiniteScrollEnabled && !scrollView.isDragging && !scrollView.isDecelerating {
+                let currentMinY = currentContentView.frame.minY
+                let currentMaxY = currentContentView.frame.maxY
+                let currentOffsetY = scrollView.contentOffset.y
+                let lowerBound = currentMinY - (safeAreaTop + 10) - 20
+                let upperBound = currentMaxY - scrollView.bounds.height + 20
+                if currentOffsetY < lowerBound || currentOffsetY > upperBound {
+                    let targetOffset = max(0, currentMinY - (safeAreaTop + 10))
+                    if abs(currentOffsetY - targetOffset) > 20 {
+                        scrollView.setContentOffset(CGPoint(x: 0, y: targetOffset), animated: false)
+                        suppressAutoSwitchUntil = Date().timeIntervalSince1970 + 0.5
+                        LogManager.shared.log("对齐当前章节: offset=\(Int(currentOffsetY)) -> \(Int(targetOffset))", category: "阅读器")
+                    }
+                }
+            }
         }
 
         if lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices {
