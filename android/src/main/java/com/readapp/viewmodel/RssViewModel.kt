@@ -3,7 +3,7 @@ package com.readapp.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.readapp.data.ReadRepository
+import com.readapp.data.RemoteDataSourceFactory
 import com.readapp.data.RemoteRssSourceManager
 import com.readapp.data.UserPreferences
 import com.readapp.data.model.RssSourceItem
@@ -14,8 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class RssViewModel(
-    private val repository: ReadRepository,
-    private val preferences: UserPreferences
+    private val remoteManager: RemoteRssSourceManager
 ) : ViewModel() {
 
     private val _rssSources = MutableStateFlow<List<RssSourceItem>>(emptyList())
@@ -34,7 +33,7 @@ class RssViewModel(
     val pendingToggles: StateFlow<Set<String>> = _pendingToggles.asStateFlow()
     private val _remoteOperationInProgress = MutableStateFlow(false)
     val remoteOperationInProgress: StateFlow<Boolean> = _remoteOperationInProgress.asStateFlow()
-    private val remoteManager = RemoteRssSourceManager(repository, preferences)
+    private val remoteManager = remoteManager
 
     init {
         refreshSources()
@@ -101,13 +100,14 @@ class RssViewModel(
     }
 
     class Factory(
-        private val repository: ReadRepository,
+        private val remoteDataSourceFactory: RemoteDataSourceFactory,
         private val preferences: UserPreferences
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(RssViewModel::class.java)) {
-                return RssViewModel(repository, preferences) as T
+                val manager = RemoteRssSourceManager(remoteDataSourceFactory, preferences)
+                return RssViewModel(manager) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: $modelClass")
         }

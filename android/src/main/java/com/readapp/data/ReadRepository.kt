@@ -6,7 +6,7 @@ import com.readapp.data.model.ApiResponse
 import com.readapp.data.model.Book
 import com.readapp.data.model.BookSource
 import com.readapp.data.model.Chapter
-import com.readapp.data.model.HttpTTS
+import com.readapp.data.model.LoginResponse
 import com.readapp.data.model.ReplaceRule
 import com.readapp.data.model.RssEditPayload
 import com.readapp.data.model.RssSourceItem
@@ -15,7 +15,6 @@ import com.readapp.data.model.toPayload
 import com.readapp.data.model.RssSourcesResponse
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Response
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +30,7 @@ class ReadRepository(
 
     private val gson = Gson()
     private val SOURCES_CACHE_FILE = "sources_cache.json"
+    private val failoverClient = FailoverClient(apiFactory, readerApiFactory)
 
     private fun saveSourcesToCache(context: Context, sources: List<com.readapp.data.model.BookSource>) {
         val json = gson.toJson(sources)
@@ -44,36 +44,36 @@ class ReadRepository(
         return gson.fromJson(json, Array<com.readapp.data.model.BookSource>::class.java)?.toList()
     }
 
-    suspend fun login(baseUrl: String, publicUrl: String?, username: String, password: String): Result<BookLoginResult> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+    suspend fun login(baseUrl: String, publicUrl: String?, username: String, password: String): Result<LoginResponse> {
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
-            ApiBackend.Read -> executeWithFailover<BookLoginResult> { api ->
+            ApiBackend.Read -> failoverClient.runRead(endpoints) { api ->
                 api.login(username, password)
-            }(endpoints)
-            ApiBackend.Reader -> executeWithFailoverReader<BookLoginResult> { api ->
+            }
+            ApiBackend.Reader -> failoverClient.runReader(endpoints) { api ->
                 api.login(ReaderLoginRequest(username = username, password = password, isLogin = true))
-            }(endpoints)
+            }
         }
     }
 
     suspend fun getUserInfo(baseUrl: String, publicUrl: String?, accessToken: String): Result<com.readapp.data.model.UserInfo> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
-            ApiBackend.Read -> executeWithFailover { it.getUserInfo(accessToken) }(endpoints)
-            ApiBackend.Reader -> executeWithFailoverReader { it.getUserInfo(accessToken) }(endpoints)
+            ApiBackend.Read -> failoverClient.runRead(endpoints) { it.getUserInfo(accessToken) }
+            ApiBackend.Reader -> failoverClient.runReader(endpoints) { it.getUserInfo(accessToken) }
         }
     }
 
     suspend fun changePassword(baseUrl: String, publicUrl: String?, accessToken: String, oldPass: String, newPass: String): Result<String> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
-            ApiBackend.Read -> executeWithFailover { it.changePassword(accessToken, oldPass, newPass) }(endpoints)
+            ApiBackend.Read -> failoverClient.runRead(endpoints) { it.changePassword(accessToken, oldPass, newPass) }
             ApiBackend.Reader -> Result.failure(UnsupportedOperationException("当前服务端不支持修改密码"))
         }
     }
 
     suspend fun fetchBooks(baseUrl: String, publicUrl: String?, accessToken: String): Result<List<Book>> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         val result = when (backend) {
             ApiBackend.Read -> executeWithFailover { it.getBookshelf(accessToken) }(endpoints)
             ApiBackend.Reader -> executeWithFailoverReader { it.getBookshelf(accessToken) }(endpoints)
@@ -88,7 +88,7 @@ class ReadRepository(
         bookUrl: String,
         bookSourceUrl: String?,
     ): Result<List<Chapter>> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.getChapterList(accessToken, bookUrl, bookSourceUrl)
@@ -108,7 +108,7 @@ class ReadRepository(
         index: Int,
         contentType: Int = 0
     ): Result<String> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.getBookContent(accessToken, bookUrl, index, contentType, bookSourceUrl)
@@ -128,7 +128,7 @@ class ReadRepository(
         pos: Double,
         title: String?,
     ): Result<String> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.saveBookProgress(accessToken, bookUrl, index, pos, title)
@@ -150,7 +150,7 @@ class ReadRepository(
         newUrl: String,
         newBookSourceUrl: String
     ): Result<Book> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.setBookSource(accessToken, bookUrl, newUrl, newBookSourceUrl)
@@ -164,49 +164,6 @@ class ReadRepository(
         }
     }
 
-    suspend fun fetchDefaultTts(baseUrl: String, publicUrl: String?, accessToken: String): Result<String> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
-        return when (backend) {
-            ApiBackend.Read -> executeWithFailover { it.getDefaultTts(accessToken) }(endpoints)
-            ApiBackend.Reader -> Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
-        }
-    }
-
-    suspend fun fetchTtsEngines(baseUrl: String, publicUrl: String?, accessToken: String): Result<List<HttpTTS>> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
-        return when (backend) {
-            ApiBackend.Read -> executeWithFailover { it.getAllTts(accessToken) }(endpoints)
-            ApiBackend.Reader -> Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
-        }
-    }
-
-    suspend fun addTts(baseUrl: String, publicUrl: String?, accessToken: String, tts: HttpTTS): Result<String> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
-        return when (backend) {
-            ApiBackend.Read -> executeWithFailover { it.addTts(accessToken, tts) }(endpoints)
-            ApiBackend.Reader -> Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
-        }
-    }
-
-    suspend fun deleteTts(baseUrl: String, publicUrl: String?, accessToken: String, id: String): Result<String> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
-        return when (backend) {
-            ApiBackend.Read -> executeWithFailover { it.delTts(accessToken, id) }(endpoints)
-            ApiBackend.Reader -> Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
-        }
-    }
-
-    suspend fun saveTtsBatch(baseUrl: String, publicUrl: String?, accessToken: String, jsonContent: String): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
-        if (backend == ApiBackend.Reader) {
-            return Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
-        }
-        val requestBody = jsonContent.toRequestBody("text/plain".toMediaTypeOrNull())
-        return executeWithFailover {
-            it.saveTtsBatch(accessToken, requestBody)
-        }(endpoints)
-    }
-
     suspend fun importBook(
         baseUrl: String,
         publicUrl: String?,
@@ -214,9 +171,9 @@ class ReadRepository(
         fileUri: Uri,
         context: Context
     ): Result<Any> {
-        val filePart = createMultipartBodyPart(fileUri, context)
+        val filePart = FileUploadHelper.createMultipartBodyPart(fileUri, context)
             ?: return Result.failure(IllegalArgumentException("无法创建文件部分"))
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.importBook(accessToken, filePart)
@@ -229,7 +186,7 @@ class ReadRepository(
     
     // region Replace Rules
     suspend fun fetchReplaceRules(baseUrl: String, publicUrl: String?, accessToken: String): Result<List<ReplaceRule>> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> {
                 val pageInfoResult = executeWithFailover {
@@ -267,7 +224,7 @@ class ReadRepository(
     }
 
     suspend fun addReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, rule: ReplaceRule): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover { it.addReplaceRule(accessToken, rule) }(endpoints)
             ApiBackend.Reader -> executeWithFailoverReader { it.saveReplaceRule(accessToken, rule) }(endpoints)
@@ -275,7 +232,7 @@ class ReadRepository(
     }
 
     suspend fun deleteReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, rule: ReplaceRule): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover { it.deleteReplaceRule(accessToken, rule.id) }(endpoints)
             ApiBackend.Reader -> executeWithFailoverReader { it.deleteReplaceRule(accessToken, rule) }(endpoints)
@@ -283,7 +240,7 @@ class ReadRepository(
     }
 
     suspend fun toggleReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, rule: ReplaceRule, isEnabled: Boolean): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.toggleReplaceRule(accessToken, rule.id, if (isEnabled) 1 else 0)
@@ -295,7 +252,7 @@ class ReadRepository(
     }
 
     suspend fun saveReplaceRules(baseUrl: String, publicUrl: String?, accessToken: String, jsonContent: String): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         val requestBody = jsonContent.toRequestBody("text/plain".toMediaTypeOrNull())
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
@@ -315,7 +272,7 @@ class ReadRepository(
             emit(Result.success(cachedSources))
         }
 
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         when (backend) {
             ApiBackend.Read -> {
                 val pageInfoResult = executeWithFailover {
@@ -379,7 +336,7 @@ class ReadRepository(
         accessToken: String,
         jsonContent: String
     ): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         val mediaType = if (backend == ApiBackend.Read) "text/plain" else "application/json"
         val requestBody = jsonContent.toRequestBody(mediaType.toMediaTypeOrNull())
         return when (backend) {
@@ -404,7 +361,7 @@ class ReadRepository(
         accessToken: String,
         source: BookSource
     ): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         val result = when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.deleteBookSource(accessToken, source.bookSourceUrl)
@@ -435,7 +392,7 @@ class ReadRepository(
         source: BookSource,
         isEnabled: Boolean
     ): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         val result = when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.toggleBookSource(accessToken, source.bookSourceUrl, if (isEnabled) "1" else "0")
@@ -472,7 +429,7 @@ class ReadRepository(
         accessToken: String,
         id: String
     ): Result<String> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.getBookSourceDetail(accessToken, id)
@@ -493,7 +450,7 @@ class ReadRepository(
         accessToken: String,
         bookSourceUrl: String
     ): Result<String> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.getExploreUrl(accessToken, bookSourceUrl)
@@ -522,7 +479,7 @@ class ReadRepository(
         ruleFindUrl: String,
         page: Int
     ): Result<List<Book>> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.exploreBook(accessToken, bookSourceUrl, ruleFindUrl, page)
@@ -539,7 +496,7 @@ class ReadRepository(
         publicUrl: String?,
         accessToken: String
     ): Result<RssSourcesResponse> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover { it.getRssSources(accessToken) }(endpoints)
             ApiBackend.Reader -> executeWithFailoverReader { it.getRssSources(accessToken) }(endpoints)
@@ -553,7 +510,7 @@ class ReadRepository(
         sourceUrl: String,
         isEnabled: Boolean
     ): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         val status = if (isEnabled) 1 else 0
         return when (backend) {
             ApiBackend.Read -> executeWithFailover { it.stopRssSource(accessToken, sourceUrl, status) }(endpoints)
@@ -568,7 +525,7 @@ class ReadRepository(
         remoteId: String?,
         source: RssSourceItem
     ): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         if (backend != ApiBackend.Read) {
             return Result.failure(UnsupportedOperationException("当前服务端不支持编辑订阅源"))
         }
@@ -585,7 +542,7 @@ class ReadRepository(
         accessToken: String,
         sourceUrl: String
     ): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         if (backend != ApiBackend.Read) {
             return Result.failure(UnsupportedOperationException("当前服务端不支持删除订阅源"))
         }
@@ -602,7 +559,7 @@ class ReadRepository(
         bookSourceUrl: String,
         page: Int
     ): Result<List<Book>> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.searchBook(accessToken, keyword, bookSourceUrl, page)
@@ -619,7 +576,7 @@ class ReadRepository(
         accessToken: String,
         book: Book
     ): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.saveBook(accessToken, book = book)
@@ -636,7 +593,7 @@ class ReadRepository(
         accessToken: String,
         book: Book
     ): Result<Any> {
-        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.deleteBook(accessToken, book = book)
@@ -648,52 +605,11 @@ class ReadRepository(
     }
     // endregion
 
-    private fun createMultipartBodyPart(fileUri: Uri, context: Context): MultipartBody.Part? {
-        return context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
-            val fileBytes = inputStream.readBytes()
-            val requestFile = fileBytes.toRequestBody(
-                context.contentResolver.getType(fileUri)?.toMediaTypeOrNull()
-            )
-            MultipartBody.Part.createFormData(
-                "file",
-                getFileName(fileUri, context),
-                requestFile
-            )
-        }
-    }
-
-    private fun getFileName(uri: Uri, context: Context): String? {
-        var result: String? = null
-        if (uri.scheme == "content") {
-            val cursor = context.contentResolver.query(uri, null, null, null, null)
-            try {
-                if (cursor != null && cursor.moveToFirst()) {
-                    val columnIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    if (columnIndex >= 0) {
-                        result = cursor.getString(columnIndex)
-                    }
-                }
-            } finally {
-                cursor?.close()
-            }
-        }
-        if (result == null) {
-            result = uri.path
-            val cut = result?.lastIndexOf('/')
-            if (cut != -1) {
-                if (cut != null) {
-                    result = result?.substring(cut + 1)
-                }
-            }
-        }
-        return result
-    }
-
     fun buildTtsAudioUrl(baseUrl: String, accessToken: String, ttsId: String, text: String, speechRate: Double): String? {
         if (detectApiBackend(baseUrl) == ApiBackend.Reader) {
             return null
         }
-        val normalized = ensureTrailingSlash(baseUrl)
+        val normalized = BackendResolver.ensureTrailingSlash(baseUrl)
         return "${normalized}tts".toHttpUrlOrNull()?.newBuilder()
             ?.addQueryParameter("accessToken", accessToken)
             ?.addQueryParameter("id", ttsId)
@@ -702,26 +618,6 @@ class ReadRepository(
             ?.build()
             ?.toString()
     }
-
-    private fun resolveBackend(baseUrl: String): ApiBackend = detectApiBackend(baseUrl)
-
-    private fun buildEndpoints(primary: String, secondary: String?, backend: ApiBackend): List<String> {
-        val endpoints = mutableListOf<String>()
-        if (primary.isNotBlank()) {
-            endpoints.add(ensureTrailingSlash(normalizeApiBaseUrl(primary, backend)))
-        }
-        if (!secondary.isNullOrBlank() && secondary != primary) {
-            endpoints.add(ensureTrailingSlash(normalizeApiBaseUrl(secondary, backend)))
-        }
-        return endpoints
-    }
-
-    private fun resolveBackendAndEndpoints(baseUrl: String, publicUrl: String?): Pair<ApiBackend, List<String>> {
-        val backend = resolveBackend(baseUrl)
-        return backend to buildEndpoints(baseUrl, publicUrl, backend)
-    }
-
-    private fun ensureTrailingSlash(url: String): String = if (url.endsWith('/')) url else "$url/"
 
     private fun <T> executeWithFailover(block: suspend (ReadApiService) -> Response<ApiResponse<T>>):
             suspend (List<String>) -> Result<T> = lambda@ { endpoints: List<String> ->
@@ -807,5 +703,3 @@ class ReadRepository(
         return gson.toJson(kinds)
     }
 }
-
-private typealias BookLoginResult = com.readapp.data.model.LoginResponse

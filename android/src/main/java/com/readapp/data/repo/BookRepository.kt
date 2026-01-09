@@ -3,11 +3,18 @@ package com.readapp.data.repo
 import android.content.Context
 import android.net.Uri
 import com.readapp.data.ReadRepository
+import com.readapp.data.RemoteDataSourceFactory
 import com.readapp.data.model.Book
 
-class BookRepository(private val readRepository: ReadRepository) {
+class BookRepository(
+    private val remoteDataSourceFactory: RemoteDataSourceFactory,
+    private val readRepository: ReadRepository
+) {
+    private fun createSource(baseUrl: String, publicUrl: String?) =
+        remoteDataSourceFactory.createBookRemoteDataSource(baseUrl, publicUrl)
+
     suspend fun fetchBooks(baseUrl: String, publicUrl: String?, accessToken: String) =
-        readRepository.fetchBooks(baseUrl, publicUrl, accessToken)
+        createSource(baseUrl, publicUrl).fetchBooks(accessToken)
 
     suspend fun fetchChapterList(
         baseUrl: String,
@@ -15,7 +22,7 @@ class BookRepository(private val readRepository: ReadRepository) {
         accessToken: String,
         bookUrl: String,
         bookSourceUrl: String?
-    ) = readRepository.fetchChapterList(baseUrl, publicUrl, accessToken, bookUrl, bookSourceUrl)
+    ) = createSource(baseUrl, publicUrl).fetchChapterList(accessToken, bookUrl, bookSourceUrl)
 
     suspend fun fetchChapterContent(
         baseUrl: String,
@@ -25,7 +32,7 @@ class BookRepository(private val readRepository: ReadRepository) {
         bookSourceUrl: String?,
         index: Int,
         contentType: Int
-    ) = readRepository.fetchChapterContent(baseUrl, publicUrl, accessToken, bookUrl, bookSourceUrl, index, contentType)
+    ) = createSource(baseUrl, publicUrl).fetchChapterContent(accessToken, bookUrl, bookSourceUrl, index, contentType)
 
     suspend fun saveBookProgress(
         baseUrl: String,
@@ -35,7 +42,7 @@ class BookRepository(private val readRepository: ReadRepository) {
         index: Int,
         pos: Double,
         title: String?
-    ) = readRepository.saveBookProgress(baseUrl, publicUrl, accessToken, bookUrl, index, pos, title)
+    ) = createSource(baseUrl, publicUrl).saveBookProgress(accessToken, bookUrl, index, pos, title)
 
     suspend fun saveBook(baseUrl: String, publicUrl: String?, accessToken: String, book: Book) =
         readRepository.saveBook(baseUrl, publicUrl, accessToken, book)
@@ -50,7 +57,7 @@ class BookRepository(private val readRepository: ReadRepository) {
         oldUrl: String,
         newUrl: String,
         newBookSourceUrl: String
-    ) = readRepository.setBookSource(baseUrl, publicUrl, accessToken, oldUrl, newUrl, newBookSourceUrl)
+    ) = createSource(baseUrl, publicUrl).setBookSource(accessToken, oldUrl, newUrl, newBookSourceUrl)
 
     suspend fun searchBook(
         baseUrl: String,
@@ -59,7 +66,7 @@ class BookRepository(private val readRepository: ReadRepository) {
         keyword: String,
         bookSourceUrl: String,
         page: Int
-    ) = readRepository.searchBook(baseUrl, publicUrl, accessToken, keyword, bookSourceUrl, page)
+    ) = createSource(baseUrl, publicUrl).searchBook(accessToken, keyword, bookSourceUrl, page)
 
     suspend fun importBook(baseUrl: String, publicUrl: String?, accessToken: String, fileUri: Uri, context: Context) =
         readRepository.importBook(baseUrl, publicUrl, accessToken, fileUri, context)

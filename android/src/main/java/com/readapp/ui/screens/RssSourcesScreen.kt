@@ -59,7 +59,7 @@ fun RssSourcesScreen(
 ) {
     val viewModel: RssViewModel = viewModel(
         factory = RssViewModel.Factory(
-            repository = bookViewModel.repository,
+            remoteDataSourceFactory = bookViewModel.remoteDataSourceFactory,
             preferences = bookViewModel.preferences
         )
     )

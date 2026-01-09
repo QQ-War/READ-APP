@@ -22,6 +22,7 @@ import com.readapp.data.ApiBackend
 import com.readapp.data.detectApiBackend
 import com.readapp.data.normalizeApiBaseUrl
 import com.readapp.data.stripApiBasePath
+import com.readapp.data.RemoteDataSourceFactory
 import com.readapp.data.repo.AuthRepository
 import com.readapp.data.repo.BookRepository
 import com.readapp.data.repo.ReplaceRuleRepository
@@ -71,19 +72,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val preferences = UserPreferences(appContext)
     private val readerSettings = ReaderSettingsStore(preferences, viewModelScope)
     private val localCache = LocalCacheManager(appContext)
-    val repository = ReadRepository(
-        apiFactory = { endpoint ->
-            ReadApiService.create(endpoint) { accessToken.value }
-        },
-        readerApiFactory = { endpoint ->
-            ReaderApiService.create(endpoint) { accessToken.value }
-        }
-    )
-    internal val authRepository = AuthRepository(repository)
-    internal val bookRepository = BookRepository(repository)
+    private val apiFactory: (String) -> ReadApiService = { endpoint ->
+        ReadApiService.create(endpoint) { accessToken.value }
+    }
+    private val readerApiFactory: (String) -> ReaderApiService = { endpoint ->
+        ReaderApiService.create(endpoint) { accessToken.value }
+    }
+    private val remoteDataSourceFactory = RemoteDataSourceFactory(apiFactory, readerApiFactory)
+    val repository = ReadRepository(apiFactory, readerApiFactory)
+    internal val authRepository = AuthRepository(remoteDataSourceFactory)
+    internal val bookRepository = BookRepository(remoteDataSourceFactory, repository)
     private val sourceRepository = SourceRepository(repository)
-    private val ttsRepository = TtsRepository(repository)
-    private val replaceRuleRepository = ReplaceRuleRepository(repository)
+    private val ttsRepository = TtsRepository(remoteDataSourceFactory, repository)
+    private val replaceRuleRepository = ReplaceRuleRepository(remoteDataSourceFactory, repository)
     internal val chapterContentRepository = ChapterContentRepository(repository, localCache)
     private val ttsController = TtsController(this)
     private val readerInteractor = ReaderInteractor(this)
