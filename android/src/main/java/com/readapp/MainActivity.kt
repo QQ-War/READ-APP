@@ -169,28 +169,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
 
             // 阅读页面（集成听书功能）
             composable(Screen.Reading.route) {
-                val selectedBook by bookViewModel.selectedBook.collectAsState()
-                val chapters by bookViewModel.chapters.collectAsState()
-                val currentChapterIndex by bookViewModel.currentChapterIndex.collectAsState()
-                val currentChapterContent by bookViewModel.currentChapterContent.collectAsState()
-                val isContentLoading by bookViewModel.isChapterContentLoading.collectAsState()
-                val readingFontSize by bookViewModel.readingFontSize.collectAsState()
-                val readingHorizontalPadding by bookViewModel.readingHorizontalPadding.collectAsState()
-                val errorMessage by bookViewModel.errorMessage.collectAsState()
-                val readingMode by bookViewModel.readingMode.collectAsState()
-                val lockPageOnTTS by bookViewModel.lockPageOnTTS.collectAsState()
-                val pageTurningMode by bookViewModel.pageTurningMode.collectAsState()
-                val darkModeConfig by bookViewModel.darkMode.collectAsState()
-                val forceMangaProxy by bookViewModel.forceMangaProxy.collectAsState()
-                val manualMangaUrls by bookViewModel.manualMangaUrls.collectAsState()
-                val serverUrl by bookViewModel.serverAddress.collectAsState()
-                val infiniteScrollEnabled by bookViewModel.infiniteScrollEnabled.collectAsState()
-                val prevChapterContent by bookViewModel.prevChapterContent.collectAsState()
-                val nextChapterContent by bookViewModel.nextChapterContent.collectAsState()
-
-                // 进度同步状态
-                val firstVisibleParagraphIndex by bookViewModel.firstVisibleParagraphIndex.collectAsState()
-                val pendingScrollIndex by bookViewModel.pendingScrollIndex.collectAsState()
+                val readerState by bookViewModel.readerUiState.collectAsState()
 
                 // TTS 状态
                 val isPlaying by bookViewModel.isPlaying.collectAsState()
@@ -199,38 +178,18 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val currentPlayingParagraph by bookViewModel.currentParagraphIndex.collectAsState()
                 val currentParagraphStartOffset by bookViewModel.currentParagraphStartOffset.collectAsState()
                 val playbackProgress by bookViewModel.playbackProgress.collectAsState()
-                val preloadedParagraphs by bookViewModel.preloadedParagraphs.collectAsState()
 
-                selectedBook?.let { book ->
+                if (readerState.book != null) {
                     ReadingScreen(
-                        book = book,
-                        chapters = chapters,
-                        currentChapterIndex = currentChapterIndex,
-                        currentChapterContent = currentChapterContent,
-                        isContentLoading = isContentLoading,
-                        readingFontSize = readingFontSize,
-                        readingHorizontalPadding = readingHorizontalPadding,
-                        errorMessage = errorMessage,
-                        readingMode = readingMode,
+                        readerState = readerState,
                         onReadingModeChange = { bookViewModel.updateReadingMode(it) },
-                        isInfiniteScrollEnabled = infiniteScrollEnabled,
                         onInfiniteScrollEnabledChange = { bookViewModel.updateInfiniteScrollEnabled(it) },
-                        prevChapterContent = prevChapterContent,
-                        nextChapterContent = nextChapterContent,
-                        lockPageOnTTS = lockPageOnTTS,
                         onLockPageOnTTSChange = { bookViewModel.updateLockPageOnTTS(it) },
-                        pageTurningMode = pageTurningMode,
                         onPageTurningModeChange = { bookViewModel.updatePageTurningMode(it) },
-                        darkModeConfig = darkModeConfig,
                         onDarkModeChange = { bookViewModel.updateDarkModeConfig(it) },
-                        firstVisibleParagraphIndex = firstVisibleParagraphIndex,
                         onScrollUpdate = { bookViewModel.updateFirstVisibleParagraphIndex(it) },
-                        pendingScrollIndex = pendingScrollIndex,
                         onScrollConsumed = { bookViewModel.clearPendingScrollIndex() },
-                        forceMangaProxy = forceMangaProxy,
                         onForceMangaProxyChange = { bookViewModel.updateForceMangaProxy(it) },
-                        manualMangaUrls = manualMangaUrls,
-                        serverUrl = serverUrl,
                         onClearError = { bookViewModel.clearError() },
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
@@ -255,7 +214,6 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                         currentPlayingParagraph = currentPlayingParagraph,
                         currentParagraphStartOffset = currentParagraphStartOffset,
                         playbackProgress = playbackProgress,
-                        preloadedParagraphs = preloadedParagraphs,
                         onPlayPauseClick = {
                             bookViewModel.togglePlayPause()
                         },
@@ -315,17 +273,13 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
             }
 
             composable(Screen.SettingsReading.route) {
-                val readingMode by bookViewModel.readingMode.collectAsState()
-                val readingFontSize by bookViewModel.readingFontSize.collectAsState()
-                val readingHorizontalPadding by bookViewModel.readingHorizontalPadding.collectAsState()
-                val darkModeConfig by bookViewModel.darkMode.collectAsState()
-                val infiniteScrollEnabled by bookViewModel.infiniteScrollEnabled.collectAsState()
+                val readerState by bookViewModel.readerUiState.collectAsState()
                 ReadingSettingsScreen(
-                    readingMode = readingMode,
-                    fontSize = readingFontSize,
-                    horizontalPadding = readingHorizontalPadding,
-                    darkModeConfig = darkModeConfig,
-                    infiniteScrollEnabled = infiniteScrollEnabled,
+                    readingMode = readerState.readingMode,
+                    fontSize = readerState.readingFontSize,
+                    horizontalPadding = readerState.readingHorizontalPadding,
+                    darkModeConfig = readerState.darkModeConfig,
+                    infiniteScrollEnabled = readerState.infiniteScrollEnabled,
                     onReadingModeChange = bookViewModel::updateReadingMode,
                     onFontSizeChange = bookViewModel::updateReadingFontSize,
                     onHorizontalPaddingChange = bookViewModel::updateReadingHorizontalPadding,

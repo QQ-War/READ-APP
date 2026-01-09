@@ -2,6 +2,15 @@ import Foundation
 import Combine
 import UIKit
 
+struct ChapterContentFetchPolicy {
+    let useDiskCache: Bool
+    let useMemoryCache: Bool
+    let saveToCache: Bool
+
+    static let standard = ChapterContentFetchPolicy(useDiskCache: true, useMemoryCache: true, saveToCache: true)
+    static let refresh = ChapterContentFetchPolicy(useDiskCache: false, useMemoryCache: false, saveToCache: true)
+}
+
 class APIService: ObservableObject {
     static let shared = APIService()
     static let apiVersion = 5
@@ -69,15 +78,15 @@ class APIService: ObservableObject {
     }
     
     // MARK: - 获取章节内容
-    func fetchChapterContent(bookUrl: String, bookSourceUrl: String?, index: Int, contentType: Int = 0) async throws -> String {
+    func fetchChapterContent(bookUrl: String, bookSourceUrl: String?, index: Int, contentType: Int = 0, cachePolicy: ChapterContentFetchPolicy = .standard) async throws -> String {
         // 1. 优先尝试从本地磁盘缓存读取
-        if let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
+        if cachePolicy.useDiskCache, let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
             return cachedContent
         }
         
         // 2. 尝试从内存缓存读取
         let cacheKey = "\(bookUrl)_\(index)_\(contentType)"
-        if let cachedContent = await chapterCache.value(for: cacheKey) {
+        if cachePolicy.useMemoryCache, let cachedContent = await chapterCache.value(for: cacheKey) {
             return cachedContent
         }
         
@@ -98,9 +107,11 @@ class APIService: ObservableObject {
         }
         let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
         if apiResponse.isSuccess, let content = apiResponse.data {
-            await chapterCache.insert(content, for: cacheKey)
-            // 同步存入磁盘缓存
-            LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
+            if cachePolicy.saveToCache {
+                await chapterCache.insert(content, for: cacheKey)
+                // 同步存入磁盘缓存
+                LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
+            }
             return content
         } else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节内容失败"])

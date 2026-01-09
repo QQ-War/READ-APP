@@ -21,6 +21,8 @@ import com.readapp.data.UserPreferences
 import com.readapp.data.ReadingMode
 import com.readapp.data.DarkModeConfig
 import com.readapp.data.LocalCacheManager
+import com.readapp.data.ChapterContentRepository
+import com.readapp.data.ChapterContentPolicy
 import com.readapp.media.AudioCache
 import com.readapp.media.ReadAudioService
 import com.readapp.data.model.Book
@@ -41,6 +43,7 @@ import java.util.Date
 import java.util.Locale
 
 import com.readapp.data.model.ReplaceRule
+import com.readapp.ui.state.ReaderUiState
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import android.speech.tts.TextToSpeech
@@ -71,6 +74,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val repository = ReadRepository { endpoint ->
         ReadApiService.create(endpoint) { accessToken.value }
     }
+    private val chapterContentRepository = ChapterContentRepository(repository, localCache)
 
     private var mediaController: MediaController? = null
     private val controllerListener = ControllerListener()
@@ -91,7 +95,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private var isReadingChapterTitle = false
     private var currentSearchQuery = ""
     private var allBooks: List<Book> = emptyList()
-    private val chapterContentCache = mutableMapOf<String, String>()
     private val logFile = File(appContext.filesDir, LOG_FILE_NAME)
 
     private val _books = MutableStateFlow<List<Book>>(emptyList())
@@ -204,6 +207,79 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val manualMangaUrls: StateFlow<Set<String>> = _manualMangaUrls.asStateFlow()
     private val _forceMangaProxy = MutableStateFlow(false)
     val forceMangaProxy: StateFlow<Boolean> = _forceMangaProxy.asStateFlow()
+
+    val readerUiState: StateFlow<ReaderUiState> = combine(
+        selectedBook,
+        chapters,
+        currentChapterIndex,
+        currentChapterContent,
+        isChapterContentLoading,
+        errorMessage,
+        readingFontSize,
+        readingHorizontalPadding,
+        readingMode,
+        lockPageOnTTS,
+        pageTurningMode,
+        darkMode,
+        infiniteScrollEnabled,
+        prevChapterContent,
+        nextChapterContent,
+        preloadedParagraphs,
+        preloadedChapters,
+        firstVisibleParagraphIndex,
+        pendingScrollIndex,
+        forceMangaProxy,
+        manualMangaUrls,
+        serverAddress
+    ) { values ->
+        ReaderUiState(
+            book = values[0] as Book?,
+            chapters = values[1] as List<Chapter>,
+            currentChapterIndex = values[2] as Int,
+            currentChapterContent = values[3] as String,
+            isContentLoading = values[4] as Boolean,
+            errorMessage = values[5] as String?,
+            readingFontSize = values[6] as Float,
+            readingHorizontalPadding = values[7] as Float,
+            readingMode = values[8] as com.readapp.data.ReadingMode,
+            lockPageOnTTS = values[9] as Boolean,
+            pageTurningMode = values[10] as com.readapp.data.PageTurningMode,
+            darkModeConfig = values[11] as com.readapp.data.DarkModeConfig,
+            infiniteScrollEnabled = values[12] as Boolean,
+            prevChapterContent = values[13] as String?,
+            nextChapterContent = values[14] as String?,
+            preloadedParagraphs = values[15] as Set<Int>,
+            preloadedChapters = values[16] as Set<Int>,
+            firstVisibleParagraphIndex = values[17] as Int,
+            pendingScrollIndex = values[18] as Int?,
+            forceMangaProxy = values[19] as Boolean,
+            manualMangaUrls = values[20] as Set<String>,
+            serverUrl = values[21] as String
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderUiState(
+        book = null,
+        chapters = emptyList(),
+        currentChapterIndex = 0,
+        currentChapterContent = "",
+        isContentLoading = false,
+        errorMessage = null,
+        readingFontSize = 16f,
+        readingHorizontalPadding = 24f,
+        readingMode = com.readapp.data.ReadingMode.Vertical,
+        lockPageOnTTS = false,
+        pageTurningMode = com.readapp.data.PageTurningMode.Scroll,
+        darkModeConfig = com.readapp.data.DarkModeConfig.OFF,
+        infiniteScrollEnabled = true,
+        prevChapterContent = null,
+        nextChapterContent = null,
+        preloadedParagraphs = emptySet(),
+        preloadedChapters = emptySet(),
+        firstVisibleParagraphIndex = 0,
+        pendingScrollIndex = null,
+        forceMangaProxy = false,
+        manualMangaUrls = emptySet(),
+        serverUrl = ""
+    ))
 
     private val _prevChapterIndex = MutableStateFlow<Int?>(null)
     val prevChapterIndex: StateFlow<Int?> = _prevChapterIndex.asStateFlow()
@@ -931,7 +1007,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _currentParagraphIndex.value = -1
             currentParagraphs = emptyList()
             currentSentences = emptyList()
-            chapterContentCache.clear()
+            chapterContentRepository.clearMemoryCache()
             stopPlayback("logout")
             clearAudioCache()
             clearPreloadingIndices()
@@ -1132,7 +1208,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _currentChapterContent.value = ""
         currentParagraphs = emptyList()
         clearAdjacentChapterCache()
-        chapterContentCache.clear()
+        chapterContentRepository.clearMemoryCache()
         resetPlayback()
         viewModelScope.launch { loadChapters(book) }
     }
@@ -1318,47 +1394,37 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val isManga = _manualMangaUrls.value.contains(bookUrl) || book.type == 2
         val effectiveType = if (isManga) 2 else 0
         
-        // 1. Check Memory Cache (key 包含类型)
-        val cacheKey = "${index}_${effectiveType}"
-        val cachedInMemory = chapterContentCache[cacheKey]
-        if (!cachedInMemory.isNullOrBlank()) {
-            updateChapterContent(index, cachedInMemory)
-            return cachedInMemory
-        }
-
-        // 2. Check Disk Cache
-        val cachedOnDisk = localCache.loadChapter(bookUrl, index)
-        if (!cachedOnDisk.isNullOrBlank()) {
-            // 如果开启了漫画模式但缓存中没有图片标记，则认为缓存过期
-            val needsRefresh = isManga && !cachedOnDisk.contains("__IMG__")
-            if (!needsRefresh) {
-                updateChapterContent(index, cachedOnDisk)
-                return cachedOnDisk
-            }
-        }
-
         if (_isChapterContentLoading.value) {
             return _currentChapterContent.value.ifBlank { null }
         }
         _isChapterContentLoading.value = true
         return try {
-            val result = repository.fetchChapterContent(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value, bookUrl, book.origin, chapter.index, effectiveType)
-            result.onSuccess { content ->
-                val cleaned = cleanChapterContent(content.orEmpty())
-                val resolved = when {
-                    cleaned.isNotBlank() -> cleaned
-                    content.orEmpty().isNotBlank() -> content.orEmpty().trim()
-                    else -> "章节内容为空"
-                }
-                // Save to disk cache
-                localCache.saveChapter(bookUrl, index, resolved)
-                chapterContentCache[cacheKey] = resolved
-                updateChapterContent(index, resolved)
-            }.onFailure { error ->
+            val contentResult = chapterContentRepository.loadChapterContent(
+                serverEndpoint = currentServerEndpoint(),
+                publicServerEndpoint = _publicServerAddress.value.ifBlank { null },
+                accessToken = _accessToken.value,
+                bookUrl = bookUrl,
+                bookOrigin = book.origin,
+                chapterListIndex = index,
+                chapterApiIndex = chapter.index,
+                contentType = effectiveType,
+                policy = ChapterContentPolicy.Default,
+                cacheValidator = { cached -> !isManga || cached.contains("__IMG__") },
+                cleaner = { raw -> cleanChapterContent(raw) }
+            )
+            contentResult.error?.let { error ->
                 _errorMessage.value = "加载失败: ${error.message}"
-                Log.e(TAG, "加载章节内容失败", error)
             }
-            _currentChapterContent.value
+            val resolvedContent = contentResult.content
+            if (!resolvedContent.isNullOrBlank()) {
+                updateChapterContent(index, resolvedContent)
+                resolvedContent
+            } else {
+                if (contentResult.error == null) {
+                    _errorMessage.value = "加载失败: 内容为空"
+                }
+                null
+            }
         } catch (e: Exception) {
             _errorMessage.value = "系统异常: ${e.localizedMessage}"
             Log.e(TAG, "加载章节内容异常", e)
@@ -1423,38 +1489,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val book = _selectedBook.value ?: return null
         val chapter = _chapters.value.getOrNull(index) ?: return null
         val bookUrl = book.bookUrl ?: return null
-        val cacheKey = "${index}_${effectiveType}"
-        val cachedInMemory = chapterContentCache[cacheKey]
-        if (!cachedInMemory.isNullOrBlank()) {
-            return cachedInMemory
-        }
-
-        val cachedOnDisk = localCache.loadChapter(bookUrl, index)
-        if (!cachedOnDisk.isNullOrBlank()) {
-            return cachedOnDisk
-        }
-
-        return try {
-            val result = repository.fetchChapterContent(
-                currentServerEndpoint(),
-                _publicServerAddress.value.ifBlank { null },
-                _accessToken.value,
-                bookUrl,
-                book.origin,
-                chapter.index,
-                effectiveType
-            )
-            result.getOrNull()?.let { content ->
-                val cleaned = cleanChapterContent(content)
-                val resolved = if (cleaned.isNotBlank()) cleaned else content.trim()
-                localCache.saveChapter(bookUrl, index, resolved)
-                chapterContentCache[cacheKey] = resolved
-                resolved
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "预取章节失败: $index", e)
-            null
-        }
+        return chapterContentRepository.loadChapterContent(
+            serverEndpoint = currentServerEndpoint(),
+            publicServerEndpoint = _publicServerAddress.value.ifBlank { null },
+            accessToken = _accessToken.value,
+            bookUrl = bookUrl,
+            bookOrigin = book.origin,
+            chapterListIndex = index,
+            chapterApiIndex = chapter.index,
+            contentType = effectiveType,
+            policy = ChapterContentPolicy.Default,
+            cacheValidator = { true },
+            cleaner = { raw -> cleanChapterContent(raw) }
+        ).content
     }
     private fun parseParagraphs(content: String): List<String> {
         val lines = content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
@@ -1633,6 +1680,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             clearAudioCache()
             clearPreloadingIndices()
+            chapterContentRepository.clearMemoryCache()
         }
     }
     private fun buildTtsAudioUrl(sentence: String, isChapterTitle: Boolean): String? {

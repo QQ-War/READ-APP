@@ -42,8 +42,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
 import coil.compose.AsyncImage
 import com.readapp.data.LocalCacheManager
-import com.readapp.data.model.Book
-import com.readapp.data.model.Chapter
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
 import kotlinx.coroutines.launch
@@ -55,6 +53,9 @@ import com.readapp.data.ReadingMode
 import com.readapp.data.DarkModeConfig
 import com.readapp.ui.components.EdgeHint
 import com.readapp.ui.components.MangaNativeReader
+import com.readapp.ui.state.ReaderUiState
+import com.readapp.ui.reader.SectionOffsets
+import com.readapp.ui.reader.ChapterTransitionPolicy
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -81,24 +82,10 @@ private sealed class ReadingListItem {
     data class ParagraphItem(val chapterIndex: Int, val paragraphIndex: Int, val text: String, val isCurrent: Boolean) : ReadingListItem()
 }
 
-private data class SectionOffsets(
-    val currentStart: Int,
-    val currentEndExclusive: Int,
-    val prevStart: Int?,
-    val nextStart: Int?
-)
-
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ReadingScreen(
-    book: Book,
-    chapters: List<Chapter>,
-    currentChapterIndex: Int,
-    currentChapterContent: String,
-    isContentLoading: Boolean,
-    readingFontSize: Float,
-    readingHorizontalPadding: Float,
-    errorMessage: String?,
+    readerState: ReaderUiState,
     onClearError: () -> Unit,
     onChapterClick: (Int) -> Unit,
     onLoadChapterContent: (Int) -> Unit,
@@ -109,8 +96,6 @@ fun ReadingScreen(
     currentPlayingParagraph: Int = -1,
     currentParagraphStartOffset: Int = 0,
     playbackProgress: Float = 0f,
-    preloadedParagraphs: Set<Int> = emptySet(),
-    preloadedChapters: Set<Int> = emptySet(),
     showTtsControls: Boolean = false,
     onPlayPauseClick: () -> Unit = {},
     onStartListening: (Int, Int) -> Unit = { _, _ -> },
@@ -121,29 +106,38 @@ fun ReadingScreen(
     onReadingHorizontalPaddingChange: (Float) -> Unit = {},
     onHeaderClick: () -> Unit = {},
     onExit: () -> Unit = {},
-    readingMode: ReadingMode = ReadingMode.Vertical,
     onReadingModeChange: (ReadingMode) -> Unit = {},
-    isInfiniteScrollEnabled: Boolean = true,
     onInfiniteScrollEnabledChange: (Boolean) -> Unit = {},
-    prevChapterContent: String? = null,
-    nextChapterContent: String? = null,
-    lockPageOnTTS: Boolean = false,
     onLockPageOnTTSChange: (Boolean) -> Unit = {},
-    pageTurningMode: com.readapp.data.PageTurningMode = com.readapp.data.PageTurningMode.Scroll,
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit = {},
-    darkModeConfig: DarkModeConfig = DarkModeConfig.OFF,
     onDarkModeChange: (DarkModeConfig) -> Unit = {},
-    firstVisibleParagraphIndex: Int = 0,
     onScrollUpdate: (Int) -> Unit = {},
-    pendingScrollIndex: Int? = null,
     onScrollConsumed: () -> Unit = {},
-    forceMangaProxy: Boolean = false,
     onForceMangaProxyChange: (Boolean) -> Unit = {},
-    manualMangaUrls: Set<String> = emptySet(),
-    serverUrl: String = "",
     onInfiniteScrollSwitch: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
+    val book = readerState.book ?: return
+    val chapters = readerState.chapters
+    val currentChapterIndex = readerState.currentChapterIndex
+    val currentChapterContent = readerState.currentChapterContent
+    val isContentLoading = readerState.isContentLoading
+    val readingFontSize = readerState.readingFontSize
+    val readingHorizontalPadding = readerState.readingHorizontalPadding
+    val errorMessage = readerState.errorMessage
+    val readingMode = readerState.readingMode
+    val isInfiniteScrollEnabled = readerState.infiniteScrollEnabled
+    val prevChapterContent = readerState.prevChapterContent
+    val nextChapterContent = readerState.nextChapterContent
+    val lockPageOnTTS = readerState.lockPageOnTTS
+    val pageTurningMode = readerState.pageTurningMode
+    val darkModeConfig = readerState.darkModeConfig
+    val pendingScrollIndex = readerState.pendingScrollIndex
+    val forceMangaProxy = readerState.forceMangaProxy
+    val manualMangaUrls = readerState.manualMangaUrls
+    val serverUrl = readerState.serverUrl
+    val preloadedParagraphs = readerState.preloadedParagraphs
+    val preloadedChapters = readerState.preloadedChapters
     var showControls by remember { mutableStateOf(false) }
     var showChapterList by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
@@ -154,7 +148,7 @@ fun ReadingScreen(
     var mangaNavIntent by remember { mutableStateOf(ChapterNavIntent.NONE) }
     var mangaPendingScrollIndex by remember { mutableStateOf<Int?>(null) }
     var mangaEdgeHint by remember { mutableStateOf<EdgeHint?>(null) }
-    var lastAutoSwitchTime by remember { mutableStateOf(0L) }
+    val transitionPolicy = remember { ChapterTransitionPolicy() }
     
     // 强制旋转状态
     var isForceLandscape by remember { mutableStateOf(false) }
@@ -320,6 +314,7 @@ fun ReadingScreen(
             if (navIntent == ChapterNavIntent.NONE) {
                 navIntent = ChapterNavIntent.FIRST
             }
+            transitionPolicy.resetCooldown()
             lastChapterIndex = currentChapterIndex
         }
     }
@@ -334,23 +329,15 @@ fun ReadingScreen(
         snapshotFlow { scrollState.firstVisibleItemIndex to scrollState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { (index, scrolling) ->
-                if (!isInfiniteScrollEnabled || isMangaMode || readingMode != ReadingMode.Vertical) return@collect
-                if (scrolling) return@collect
-                val now = System.currentTimeMillis()
-                if (now - lastAutoSwitchTime < 800) return@collect
-                val nextStart = sectionOffsets.nextStart
-                if (nextStart != null && index >= nextStart + 1) {
-                    val anchorIndex = (index - nextStart - 1).coerceAtLeast(0)
-                    onInfiniteScrollSwitch(1, anchorIndex)
-                    lastAutoSwitchTime = now
-                    return@collect
-                }
-                val prevStart = sectionOffsets.prevStart
-                if (prevStart != null && index <= sectionOffsets.currentStart - 2) {
-                    val anchorIndex = (index - prevStart - 1).coerceAtLeast(0)
-                    onInfiniteScrollSwitch(-1, anchorIndex)
-                    lastAutoSwitchTime = now
-                }
+                val action = transitionPolicy.evaluate(
+                    firstVisibleIndex = index,
+                    isScrolling = scrolling,
+                    isInfiniteScrollEnabled = isInfiniteScrollEnabled,
+                    isMangaMode = isMangaMode,
+                    readingMode = readingMode,
+                    offsets = sectionOffsets
+                ) ?: return@collect
+                onInfiniteScrollSwitch(action.direction, action.anchorParagraphIndex)
             }
     }
 
