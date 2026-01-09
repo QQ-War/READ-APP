@@ -51,6 +51,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.readapp.data.ReadingMode
 import com.readapp.data.DarkModeConfig
+import com.readapp.data.model.Chapter
 import com.readapp.ui.components.EdgeHint
 import com.readapp.ui.components.MangaNativeReader
 import com.readapp.ui.state.ReaderUiState
