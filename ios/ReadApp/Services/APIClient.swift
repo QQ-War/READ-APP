@@ -6,14 +6,14 @@ final class APIClient {
     var baseURL: String {
         let serverURL = UserPreferences.shared.serverURL
         let rawServerURL = serverURL.isEmpty ? "http://127.0.0.1:8080" : serverURL
-        let backend = ApiBackendResolver.detect(from: rawServerURL)
+        let backend = UserPreferences.shared.apiBackend
         return ApiBackendResolver.normalizeBaseURL(rawServerURL, backend: backend, apiVersion: APIService.apiVersion)
     }
 
     var publicBaseURL: String? {
         let publicServerURL = UserPreferences.shared.publicServerURL
         guard !publicServerURL.isEmpty else { return nil }
-        let backend = ApiBackendResolver.detect(from: UserPreferences.shared.serverURL)
+        let backend = UserPreferences.shared.apiBackend
         return ApiBackendResolver.normalizeBaseURL(publicServerURL, backend: backend, apiVersion: APIService.apiVersion)
     }
 
@@ -22,9 +22,7 @@ final class APIClient {
     }
 
     var backend: ApiBackend {
-        let serverURL = UserPreferences.shared.serverURL
-        let rawServerURL = serverURL.isEmpty ? "http://127.0.0.1:8080" : serverURL
-        return ApiBackendResolver.detect(from: rawServerURL)
+        return UserPreferences.shared.apiBackend
     }
 
     private init() {}

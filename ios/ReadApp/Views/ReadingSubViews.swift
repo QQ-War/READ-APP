@@ -315,7 +315,7 @@ struct MangaImageView: View {
         if original.hasPrefix("http") {
             return URL(string: original)
         }
-        let baseURL = apiService.baseURL.replacingOccurrences(of: "/api/\(APIService.apiVersion)", with: "")
+        let baseURL = ApiBackendResolver.stripApiBasePath(apiService.baseURL)
         let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
         return URL(string: resolved)
     }

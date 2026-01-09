@@ -24,7 +24,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
+import com.readapp.data.ApiBackend
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     viewModel: com.readapp.viewmodel.BookViewModel,
@@ -33,12 +35,18 @@ fun LoginScreen(
 ) {
     val serverAddressState by viewModel.serverAddress.collectAsState()
     val usernameState by viewModel.username.collectAsState()
+    val apiBackendState by viewModel.apiBackend.collectAsState()
     var serverAddress by rememberSaveable(serverAddressState) { mutableStateOf(serverAddressState) }
     var username by rememberSaveable(usernameState) { mutableStateOf(usernameState) }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    var backendExpanded by remember { mutableStateOf(false) }
+    val backendLabel = when (apiBackendState) {
+        ApiBackend.Read -> "轻阅读"
+        ApiBackend.Reader -> "阅读3"
+    }
     
     Box(
         modifier = modifier
@@ -120,6 +128,54 @@ fun LoginScreen(
                             focusedLabelColor = MaterialTheme.customColors.gradientStart
                         )
                     )
+
+                    ExposedDropdownMenuBox(
+                        expanded = backendExpanded,
+                        onExpandedChange = { backendExpanded = !backendExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = backendLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(),
+                            label = { Text("服务端类型") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Storage,
+                                    contentDescription = null
+                                )
+                            },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = backendExpanded)
+                            },
+                            shape = RoundedCornerShape(AppDimens.CornerRadiusMedium),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.customColors.gradientStart,
+                                focusedLabelColor = MaterialTheme.customColors.gradientStart
+                            )
+                        )
+                        ExposedDropdownMenu(
+                            expanded = backendExpanded,
+                            onDismissRequest = { backendExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("轻阅读") },
+                                onClick = {
+                                    viewModel.updateApiBackend(ApiBackend.Read)
+                                    backendExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("阅读3") },
+                                onClick = {
+                                    viewModel.updateApiBackend(ApiBackend.Reader)
+                                    backendExpanded = false
+                                }
+                            )
+                        }
+                    }
                     
                     // 用户名输入
                     OutlinedTextField(

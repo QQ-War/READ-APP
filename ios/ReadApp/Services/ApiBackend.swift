@@ -1,8 +1,19 @@
 import Foundation
 
-enum ApiBackend {
+enum ApiBackend: String, CaseIterable, Identifiable {
     case read
     case reader
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .read:
+            return "轻阅读"
+        case .reader:
+            return "阅读3"
+        }
+    }
 }
 
 struct ApiBackendResolver {

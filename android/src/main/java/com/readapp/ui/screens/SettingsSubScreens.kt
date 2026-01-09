@@ -24,6 +24,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TopAppBar
+import com.readapp.data.ApiBackend
 import com.readapp.data.model.HttpTTS
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
@@ -35,6 +36,7 @@ fun AccountSettingsView(
     username: String,
     serverUrl: String,
     publicServerUrl: String,
+    backend: ApiBackend,
     onLogout: () -> Unit,
     onConfirmPasswordChange: (String, String) -> Unit,
     onNavigateBack: () -> Unit
@@ -66,6 +68,11 @@ fun AccountSettingsView(
         ) {
             SectionHeader("用户信息")
             SettingsItem(title = "用户名", subtitle = username, icon = Icons.Default.Person) {}
+            val backendLabel = when (backend) {
+                ApiBackend.Read -> "轻阅读"
+                ApiBackend.Reader -> "阅读3"
+            }
+            SettingsItem(title = "服务端类型", subtitle = backendLabel, icon = Icons.Default.Storage) {}
             SettingsItem(title = "局域网服务器", subtitle = serverUrl, icon = Icons.Default.Dns) {}
             if (publicServerUrl.isNotBlank()) {
                 SettingsItem(title = "公网服务器", subtitle = publicServerUrl, icon = Icons.Default.Public) {}

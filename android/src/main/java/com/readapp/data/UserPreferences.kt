@@ -34,6 +34,7 @@ class UserPreferences(private val context: Context) {
 
     private object Keys {
         val ServerUrl = stringPreferencesKey("serverUrl")
+        val ApiBackend = stringPreferencesKey("apiBackend")
         val PublicServerUrl = stringPreferencesKey("publicServerUrl")
         val AccessToken = stringPreferencesKey("accessToken")
         val Username = stringPreferencesKey("username")
@@ -60,7 +61,12 @@ class UserPreferences(private val context: Context) {
         val InfiniteScrollEnabled = booleanPreferencesKey("infiniteScrollEnabled")
     }
 
-    val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080/api/5" }
+    val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080" }
+    val apiBackend: Flow<ApiBackend> = context.dataStore.data.map { prefs ->
+        val raw = prefs[Keys.ApiBackend]
+        raw?.let { runCatching { ApiBackend.valueOf(it) }.getOrNull() }
+            ?: detectApiBackend(prefs[Keys.ServerUrl] ?: "")
+    }
     val publicServerUrl: Flow<String> = context.dataStore.data.map { it[Keys.PublicServerUrl] ?: "" }
     val accessToken: Flow<String> = context.dataStore.data.map { it[Keys.AccessToken] ?: "" }
     val username: Flow<String> = context.dataStore.data.map { it[Keys.Username] ?: "" }
@@ -125,6 +131,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveServerUrl(value: String) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.ServerUrl] = value
+        }
+    }
+
+    suspend fun saveApiBackend(value: ApiBackend) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.ApiBackend] = value.name
         }
     }
 
@@ -248,9 +260,17 @@ class UserPreferences(private val context: Context) {
         }
     }
 
+    suspend fun getApiBackendSetting(): ApiBackend? {
+        val raw = context.dataStore.data.first()[Keys.ApiBackend] ?: return null
+        return runCatching { ApiBackend.valueOf(raw) }.getOrNull()
+    }
+
     suspend fun getCredentials(): Triple<String, String?, String?> {
-        val baseUrl = serverUrl.first()
-        val publicUrl = publicServerUrl.first().ifBlank { null }
+        val backend = apiBackend.first()
+        val baseUrl = normalizeApiBaseUrl(serverUrl.first(), backend)
+        val publicUrl = publicServerUrl.first().ifBlank { null }?.let {
+            normalizeApiBaseUrl(it, backend)
+        }
         val token = accessToken.first().ifBlank { null }
         return Triple(baseUrl, publicUrl, token)
     }

@@ -18,6 +18,10 @@ import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
 import com.readapp.data.LocalCacheManager
 import com.readapp.data.ChapterContentRepository
+import com.readapp.data.ApiBackend
+import com.readapp.data.detectApiBackend
+import com.readapp.data.normalizeApiBaseUrl
+import com.readapp.data.stripApiBasePath
 import com.readapp.data.repo.AuthRepository
 import com.readapp.data.repo.BookRepository
 import com.readapp.data.repo.ReplaceRuleRepository
@@ -168,8 +172,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val lockPageOnTTS: StateFlow<Boolean> = readerSettings.lockPageOnTTS
     val pageTurningMode: StateFlow<com.readapp.data.PageTurningMode> = readerSettings.pageTurningMode
     val darkMode: StateFlow<com.readapp.data.DarkModeConfig> = readerSettings.darkMode
-    private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080/api/5")
+    private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080")
     val serverAddress: StateFlow<String> = _serverAddress.asStateFlow()
+    private val _apiBackend = MutableStateFlow(ApiBackend.Read)
+    val apiBackend: StateFlow<ApiBackend> = _apiBackend.asStateFlow()
     internal val _publicServerAddress = MutableStateFlow("")
     val publicServerAddress: StateFlow<String> = _publicServerAddress.asStateFlow()
     internal val _accessToken = MutableStateFlow("")
@@ -202,7 +208,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             infiniteScrollEnabled = infiniteScrollEnabled,
             forceMangaProxy = forceMangaProxy,
             manualMangaUrls = manualMangaUrls,
-            serverAddress = serverAddress
+            serverAddress = serverAddress,
+            apiBackend = apiBackend
         )
     }
 
@@ -264,8 +271,25 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             // Load all preferences
-            _serverAddress.value = preferences.serverUrl.first()
-            _publicServerAddress.value = preferences.publicServerUrl.first()
+            val storedServer = preferences.serverUrl.first()
+            val storedPublic = preferences.publicServerUrl.first()
+            val storedBackend = preferences.getApiBackendSetting()
+            val detectedBackend = detectApiBackend(storedServer)
+            val resolvedBackend = storedBackend ?: detectedBackend
+            if (storedBackend == null) {
+                preferences.saveApiBackend(resolvedBackend)
+            }
+            val normalizedServer = stripApiBasePath(storedServer)
+            if (normalizedServer != storedServer) {
+                preferences.saveServerUrl(normalizedServer)
+            }
+            val normalizedPublic = if (storedPublic.isBlank()) storedPublic else stripApiBasePath(storedPublic)
+            if (normalizedPublic != storedPublic) {
+                preferences.savePublicServerUrl(normalizedPublic)
+            }
+            _serverAddress.value = normalizedServer
+            _publicServerAddress.value = normalizedPublic
+            _apiBackend.value = resolvedBackend
             _accessToken.value = preferences.accessToken.first()
             _username.value = preferences.username.first()
             _selectedTtsEngine.value = preferences.selectedTtsId.firstOrNull().orEmpty()
@@ -455,17 +479,20 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            val normalized = if (server.contains("/api/")) server else "$server/api/5"
+            val (baseHost, backend) = resolveServerInput(server)
+            val normalized = normalizeApiBaseUrl(baseHost, backend)
             val result = authRepository.login(normalized, _publicServerAddress.value.ifBlank { null }, username, password)
             result.onFailure { error -> _errorMessage.value = error.message }
             val loginData = result.getOrNull()
             if (loginData != null) {
                 _accessToken.value = loginData.accessToken
                 _username.value = username
-                _serverAddress.value = normalized
+                _serverAddress.value = baseHost
+                _apiBackend.value = backend
                 preferences.saveAccessToken(loginData.accessToken)
                 preferences.saveUsername(username)
-                preferences.saveServerUrl(normalized)
+                preferences.saveServerUrl(baseHost)
+                preferences.saveApiBackend(backend)
                 loadTtsEnginesInternal()
                 refreshBooksInternal(showLoading = true)
                 loadReplaceRules()
@@ -951,7 +978,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _speakerTtsMapping.value = updated
         viewModelScope.launch { preferences.saveSpeakerTtsMapping(serializeSpeakerMapping(updated)) }
     }
-    fun updateServerAddress(address: String) { _serverAddress.value = address; viewModelScope.launch { preferences.saveServerUrl(address) } }
+    fun updateServerAddress(address: String) {
+        val (baseHost, backend) = resolveServerInput(address)
+        _serverAddress.value = baseHost
+        _apiBackend.value = backend
+        viewModelScope.launch {
+            preferences.saveServerUrl(baseHost)
+            preferences.saveApiBackend(backend)
+        }
+    }
+    fun updateApiBackend(backend: ApiBackend) {
+        _apiBackend.value = backend
+        viewModelScope.launch { preferences.saveApiBackend(backend) }
+    }
     fun updateSpeechSpeed(speed: Int) { 
         _speechSpeed.value = speed.coerceIn(50, 300) 
         viewModelScope.launch { preferences.saveSpeechRate(_speechSpeed.value.toDouble()) } 
@@ -1046,7 +1085,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private fun appendLog(message: String) { if (!_loggingEnabled.value) return; val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date()); val line = "[$timestamp] $message\n"; runCatching { logFile.appendText(line) } }
 
     internal fun currentServerEndpoint(): String {
-        return _serverAddress.value
+        return normalizeApiBaseUrl(_serverAddress.value, _apiBackend.value)
+    }
+
+    private fun resolveServerInput(server: String): Pair<String, ApiBackend> {
+        val trimmed = server.trim()
+        val hasSuffix = trimmed.contains("/api/") || trimmed.contains("/reader3")
+        val backend = if (hasSuffix) detectApiBackend(trimmed) else _apiBackend.value
+        val baseHost = stripApiBasePath(trimmed)
+        return baseHost to backend
     }
 
     internal fun formatTime(milliseconds: Long): String {

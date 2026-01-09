@@ -27,7 +27,8 @@ class ReaderStateReducer(
     infiniteScrollEnabled: StateFlow<Boolean>,
     forceMangaProxy: StateFlow<Boolean>,
     manualMangaUrls: StateFlow<Set<String>>,
-    serverAddress: StateFlow<String>
+    serverAddress: StateFlow<String>,
+    apiBackend: StateFlow<com.readapp.data.ApiBackend>
 ) {
     internal val books = MutableStateFlow<List<Book>>(emptyList())
     val booksFlow: StateFlow<List<Book>> = books.asStateFlow()
@@ -99,7 +100,8 @@ class ReaderStateReducer(
         pendingScrollIndexFlow,
         forceMangaProxy,
         manualMangaUrls,
-        serverAddress
+        serverAddress,
+        apiBackend
     ) { values ->
         ReaderUiState(
             book = values[0] as Book?,
@@ -123,7 +125,8 @@ class ReaderStateReducer(
             pendingScrollIndex = values[18] as Int?,
             forceMangaProxy = values[19] as Boolean,
             manualMangaUrls = values[20] as Set<String>,
-            serverUrl = values[21] as String
+            serverUrl = values[21] as String,
+            apiBackend = values[22] as com.readapp.data.ApiBackend
         )
     }.stateIn(scope, SharingStarted.Eagerly, ReaderUiState(
         book = null,
@@ -147,6 +150,7 @@ class ReaderStateReducer(
         pendingScrollIndex = null,
         forceMangaProxy = false,
         manualMangaUrls = emptySet(),
-        serverUrl = ""
+        serverUrl = "",
+        apiBackend = com.readapp.data.ApiBackend.Read
     ))
 }

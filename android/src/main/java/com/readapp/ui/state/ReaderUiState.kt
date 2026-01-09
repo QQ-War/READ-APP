@@ -3,6 +3,7 @@ package com.readapp.ui.state
 import com.readapp.data.DarkModeConfig
 import com.readapp.data.PageTurningMode
 import com.readapp.data.ReadingMode
+import com.readapp.data.ApiBackend
 import com.readapp.data.model.Book
 import com.readapp.data.model.Chapter
 
@@ -28,5 +29,6 @@ data class ReaderUiState(
     val pendingScrollIndex: Int?,
     val forceMangaProxy: Boolean,
     val manualMangaUrls: Set<String>,
-    val serverUrl: String
+    val serverUrl: String,
+    val apiBackend: ApiBackend
 )

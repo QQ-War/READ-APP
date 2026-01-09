@@ -259,10 +259,12 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val serverAddress by bookViewModel.serverAddress.collectAsState()
                 val publicServerUrl by bookViewModel.publicServerAddress.collectAsState()
                 val username by bookViewModel.username.collectAsState()
+                val apiBackend by bookViewModel.apiBackend.collectAsState()
                 AccountSettingsView(
                     username = username,
                     serverUrl = serverAddress,
                     publicServerUrl = publicServerUrl,
+                    backend = apiBackend,
                     onLogout = {
                         bookViewModel.logout()
                         navController.navigate(Screen.Login.route) { popUpTo(0) }

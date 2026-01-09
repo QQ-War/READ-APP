@@ -3,6 +3,12 @@ import SwiftUI
 class UserPreferences: ObservableObject {
     static let shared = UserPreferences()
 
+    @Published var apiBackend: ApiBackend {
+        didSet {
+            UserDefaults.standard.set(apiBackend.rawValue, forKey: "apiBackend")
+        }
+    }
+
     @Published var serverURL: String {
         didSet {
             UserDefaults.standard.set(serverURL, forKey: "serverURL")
@@ -280,8 +286,17 @@ class UserPreferences: ObservableObject {
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 100.0 : savedSpeechRate
 
-        self.serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? ""
-        self.publicServerURL = UserDefaults.standard.string(forKey: "publicServerURL") ?? ""
+        let rawServerURL = UserDefaults.standard.string(forKey: "serverURL") ?? ""
+        let rawPublicURL = UserDefaults.standard.string(forKey: "publicServerURL") ?? ""
+        let savedBackendRaw = UserDefaults.standard.string(forKey: "apiBackend")
+        let detectedBackend = ApiBackendResolver.detect(from: rawServerURL)
+        if let savedBackendRaw, let savedBackend = ApiBackend(rawValue: savedBackendRaw) {
+            self.apiBackend = savedBackend
+        } else {
+            self.apiBackend = detectedBackend
+        }
+        self.serverURL = ApiBackendResolver.stripApiBasePath(rawServerURL)
+        self.publicServerURL = ApiBackendResolver.stripApiBasePath(rawPublicURL)
         self.accessToken = UserDefaults.standard.string(forKey: "accessToken") ?? ""
         self.username = UserDefaults.standard.string(forKey: "username") ?? ""
         self.isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")

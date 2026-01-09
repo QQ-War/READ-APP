@@ -19,6 +19,13 @@ struct AccountSettingsView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
+                        Text("服务端类型")
+                        Spacer()
+                        Text(preferences.apiBackend.displayName)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    HStack {
                         Text("局域网服务器")
                         Spacer()
                         Text(preferences.serverURL)
@@ -539,4 +546,3 @@ struct PreferredSourcesView: View {
         }
     }
 }
-

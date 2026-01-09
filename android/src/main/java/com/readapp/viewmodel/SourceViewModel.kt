@@ -128,12 +128,8 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-
-            val serverUrl = userPreferences.serverUrl.first()
-            val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
-            val token = userPreferences.accessToken.first()
-
-            if (token.isBlank()) {
+            val (baseUrl, publicUrl, token) = userPreferences.getCredentials()
+            if (token == null) {
                 _errorMessage.value = "Not logged in"
                 _isLoading.value = false
                 return@launch
@@ -141,7 +137,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
 
             sourceRepository.getBookSources(
                 context = getApplication<Application>().applicationContext,
-                baseUrl = serverUrl,
+                baseUrl = baseUrl,
                 publicUrl = publicUrl,
                 accessToken = token
             ).collect { result ->
@@ -163,10 +159,11 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
         _sources.value = currentSources.filter { it.bookSourceUrl != source.bookSourceUrl }
 
         viewModelScope.launch {
-            val serverUrl = userPreferences.serverUrl.first()
-            val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
-            val token = userPreferences.accessToken.first()
-
+            val (serverUrl, publicUrl, token) = userPreferences.getCredentials()
+            if (token == null) {
+                _errorMessage.value = "Not logged in"
+                return@launch
+            }
             val result = sourceRepository.deleteBookSource(
                 context = getApplication<Application>().applicationContext,
                 baseUrl = serverUrl,
@@ -189,10 +186,11 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
         _sources.value = newSources
 
         viewModelScope.launch {
-            val serverUrl = userPreferences.serverUrl.first()
-            val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
-            val token = userPreferences.accessToken.first()
-
+            val (serverUrl, publicUrl, token) = userPreferences.getCredentials()
+            if (token == null) {
+                _errorMessage.value = "Not logged in"
+                return@launch
+            }
             val result = sourceRepository.toggleBookSource(
                 context = getApplication<Application>().applicationContext,
                 baseUrl = serverUrl,
@@ -209,34 +207,26 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     suspend fun getSourceDetail(id: String): String? {
-        val serverUrl = userPreferences.serverUrl.first()
-        val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
-        val token = userPreferences.accessToken.first()
-
+        val (serverUrl, publicUrl, token) = userPreferences.getCredentials()
+        if (token == null) return null
         return sourceRepository.getBookSourceDetail(serverUrl, publicUrl, token, id).getOrNull()
     }
 
     suspend fun fetchExploreKinds(bookSourceUrl: String): String? {
-        val serverUrl = userPreferences.serverUrl.first()
-        val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
-        val token = userPreferences.accessToken.first()
-
+        val (serverUrl, publicUrl, token) = userPreferences.getCredentials()
+        if (token == null) return null
         return sourceRepository.fetchExploreKinds(serverUrl, publicUrl, token, bookSourceUrl).getOrNull()
     }
 
     suspend fun exploreBook(bookSourceUrl: String, ruleFindUrl: String, page: Int): Result<List<Book>> {
-        val serverUrl = userPreferences.serverUrl.first()
-        val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
-        val token = userPreferences.accessToken.first()
-
+        val (serverUrl, publicUrl, token) = userPreferences.getCredentials()
+        if (token == null) return Result.failure(IllegalStateException("Not logged in"))
         return sourceRepository.exploreBook(serverUrl, publicUrl, token, bookSourceUrl, ruleFindUrl, page)
     }
 
     suspend fun saveSource(jsonContent: String): Result<Any> {
-        val serverUrl = userPreferences.serverUrl.first()
-        val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
-        val token = userPreferences.accessToken.first()
-
+        val (serverUrl, publicUrl, token) = userPreferences.getCredentials()
+        if (token == null) return Result.failure(IllegalStateException("Not logged in"))
         return sourceRepository.saveBookSource(serverUrl, publicUrl, token, jsonContent)
     }
 
@@ -261,14 +251,6 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
     
-    // Helper to get credentials for factory
-    suspend fun UserPreferences.getCredentials(): Triple<String, String?, String?> {
-        val serverUrl = userPreferences.serverUrl.first()
-        val publicUrl = userPreferences.publicServerUrl.first().ifBlank { null }
-        val token = accessToken.first().ifBlank { null }
-        return Triple(serverUrl, publicUrl, token)
-    }
-
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {

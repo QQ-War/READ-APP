@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.TextUnit
 import com.readapp.data.LocalCacheManager
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
+import com.readapp.data.normalizeApiBaseUrl
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -133,6 +134,9 @@ fun ReadingScreen(
     val forceMangaProxy = readerState.forceMangaProxy
     val manualMangaUrls = readerState.manualMangaUrls
     val serverUrl = readerState.serverUrl
+    val serverEndpoint = remember(serverUrl, readerState.apiBackend) {
+        normalizeApiBaseUrl(serverUrl, readerState.apiBackend)
+    }
     val preloadedParagraphs = readerState.preloadedParagraphs
     val preloadedChapters = readerState.preloadedChapters
     var showControls by remember { mutableStateOf(false) }
@@ -397,7 +401,7 @@ fun ReadingScreen(
         if (isMangaMode) {
             MangaNativeReader(
                 paragraphs = currentParagraphs,
-                serverUrl = serverUrl,
+                serverUrl = serverEndpoint,
                 chapterUrl = currentChapterUrl,
                 forceProxy = forceMangaProxy,
                 pendingScrollIndex = mangaPendingScrollIndex,
@@ -452,7 +456,7 @@ fun ReadingScreen(
                                     isPreloaded = item.isCurrent && preloadedParagraphs.contains(item.paragraphIndex),
                                     fontSize = readingFontSize,
                                     chapterUrl = chapterUrlForItem,
-                                    serverUrl = serverUrl,
+                                    serverUrl = serverEndpoint,
                                     forceProxy = forceMangaProxy,
                                     modifier = Modifier.fillMaxWidth().padding(bottom = AppDimens.PaddingMedium)
                                 )

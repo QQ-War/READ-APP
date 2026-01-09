@@ -30,7 +30,7 @@ struct LoginView: View {
                     HStack {
                         Text("服务器:")
                             .foregroundColor(.secondary)
-                        Text(preferences.serverURL)
+                        Text("\(preferences.serverURL) (\(preferences.apiBackend.displayName))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Spacer()
@@ -138,12 +138,49 @@ struct ServerSettingsView: View {
     @State private var testingConnection = false
     @State private var testResult: String?
     @State private var testSuccess: Bool = false
+
+    private var serverBinding: Binding<String> {
+        Binding(
+            get: { preferences.serverURL },
+            set: { newValue in
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                let hasSuffix = trimmed.contains("/api/") || trimmed.contains("/reader3")
+                if hasSuffix {
+                    preferences.apiBackend = ApiBackendResolver.detect(from: trimmed)
+                }
+                preferences.serverURL = ApiBackendResolver.stripApiBasePath(trimmed)
+            }
+        )
+    }
+
+    private var publicServerBinding: Binding<String> {
+        Binding(
+            get: { preferences.publicServerURL },
+            set: { newValue in
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                let hasSuffix = trimmed.contains("/api/") || trimmed.contains("/reader3")
+                if hasSuffix {
+                    preferences.apiBackend = ApiBackendResolver.detect(from: trimmed)
+                }
+                preferences.publicServerURL = ApiBackendResolver.stripApiBasePath(trimmed)
+            }
+        )
+    }
     
     var body: some View {
         NavigationView {
             Form {
+                Section(header: Text("服务端类型")) {
+                    Picker("服务端类型", selection: $preferences.apiBackend) {
+                        ForEach(ApiBackend.allCases) { backend in
+                            Text(backend.displayName).tag(backend)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
                 Section(header: Text("局域网服务器配置")) {
-                    TextField("局域网服务器地址", text: $preferences.serverURL)
+                    TextField("局域网服务器地址", text: serverBinding)
                         .autocapitalization(.none)
                         .keyboardType(.URL)
                         .disableAutocorrection(true)
@@ -154,7 +191,7 @@ struct ServerSettingsView: View {
                 }
                 
                 Section(header: Text("公网服务器配置（可选）")) {
-                    TextField("公网服务器地址", text: $preferences.publicServerURL)
+                    TextField("公网服务器地址", text: publicServerBinding)
                         .autocapitalization(.none)
                         .keyboardType(.URL)
                         .disableAutocorrection(true)
@@ -247,7 +284,7 @@ struct ServerSettingsView: View {
         Task {
             do {
                 let serverURL = preferences.serverURL
-                let backend = ApiBackendResolver.detect(from: serverURL)
+                let backend = preferences.apiBackend
                 let baseURL = ApiBackendResolver.normalizeBaseURL(serverURL, backend: backend, apiVersion: APIService.apiVersion)
                 let testURL: String
                 if backend == .reader {
@@ -328,6 +365,5 @@ struct ServerSettingsView: View {
         }
     }
 }
-
 
 
