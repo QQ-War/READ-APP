@@ -274,7 +274,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
                 let sentenceIdx = self.ttsManager.currentSentenceIndex
                 if self.currentReadingMode == .horizontal {
-                    self.syncHorizontalPageToTTS(sentenceIndex: sentenceIdx)
+                    self.syncHorizontalPageToTTS(sentenceIndex: sentenceIdx, sentenceOffset: self.ttsManager.currentSentenceOffset)
                 } else {
                     self.verticalVC?.scrollToSentence(index: sentenceIdx, animated: false)
                 }
