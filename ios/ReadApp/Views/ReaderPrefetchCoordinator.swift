@@ -68,32 +68,38 @@ final class ReaderPrefetchCoordinator {
         onNextCache: @escaping (ChapterCache) -> Void,
         onResetNext: @escaping () -> Void
     ) {
-        if isMangaMode { return }
         let nextIdx = index + 1
         if nextIdx < chapters.count {
-            if nextCache.renderStore == nil && fetchingNextIndex != nextIdx {
-                nextTask?.cancel()
-                fetchingNextIndex = nextIdx
-                nextTask = Task { [weak self] in
-                    guard let self = self else { return }
-                    defer { if self.fetchingNextIndex == nextIdx { self.fetchingNextIndex = nil } }
-                    if let content = try? await APIService.shared.fetchChapterContent(
-                        bookUrl: book.bookUrl ?? "",
-                        bookSourceUrl: book.origin,
-                        index: nextIdx,
-                        contentType: contentType
-                    ) {
-                        await MainActor.run {
-                            guard !Task.isCancelled else { return }
+            let alreadyHasNext = isMangaMode ? !nextCache.contentSentences.isEmpty : nextCache.renderStore != nil
+            if alreadyHasNext || fetchingNextIndex == nextIdx { return }
+            nextTask?.cancel()
+            fetchingNextIndex = nextIdx
+            nextTask = Task { [weak self] in
+                guard let self = self else { return }
+                defer { if self.fetchingNextIndex == nextIdx { self.fetchingNextIndex = nil } }
+                if let content = try? await APIService.shared.fetchChapterContent(
+                    bookUrl: book.bookUrl ?? "",
+                    bookSourceUrl: book.origin,
+                    index: nextIdx,
+                    contentType: contentType
+                ) {
+                    await MainActor.run {
+                        guard !Task.isCancelled else { return }
+                        let chapterUrl = chapters[nextIdx].url
+                        let cache: ChapterCache
+                        if isMangaMode {
+                            cache = builder.buildMangaCache(rawContent: content, chapterUrl: chapterUrl)
+                        } else {
                             let title = chapters[nextIdx].title
-                            let cache = builder.buildTextCache(
+                            cache = builder.buildTextCache(
                                 rawContent: content,
                                 title: title,
                                 layoutSpec: layoutSpec,
-                                reuseStore: nil
+                                reuseStore: nil,
+                                chapterUrl: chapterUrl
                             )
-                            onNextCache(cache)
                         }
+                        onNextCache(cache)
                     }
                 }
             }
@@ -115,32 +121,38 @@ final class ReaderPrefetchCoordinator {
         onPrevCache: @escaping (ChapterCache) -> Void,
         onResetPrev: @escaping () -> Void
     ) {
-        if isMangaMode { return }
         let prevIdx = index - 1
         if prevIdx >= 0 {
-            if prevCache.renderStore == nil && fetchingPrevIndex != prevIdx {
-                prevTask?.cancel()
-                fetchingPrevIndex = prevIdx
-                prevTask = Task { [weak self] in
-                    guard let self = self else { return }
-                    defer { if self.fetchingPrevIndex == prevIdx { self.fetchingPrevIndex = nil } }
-                    if let content = try? await APIService.shared.fetchChapterContent(
-                        bookUrl: book.bookUrl ?? "",
-                        bookSourceUrl: book.origin,
-                        index: prevIdx,
-                        contentType: contentType
-                    ) {
-                        await MainActor.run {
-                            guard !Task.isCancelled else { return }
+            let alreadyHasPrev = isMangaMode ? !prevCache.contentSentences.isEmpty : prevCache.renderStore != nil
+            if alreadyHasPrev || fetchingPrevIndex == prevIdx { return }
+            prevTask?.cancel()
+            fetchingPrevIndex = prevIdx
+            prevTask = Task { [weak self] in
+                guard let self = self else { return }
+                defer { if self.fetchingPrevIndex == prevIdx { self.fetchingPrevIndex = nil } }
+                if let content = try? await APIService.shared.fetchChapterContent(
+                    bookUrl: book.bookUrl ?? "",
+                    bookSourceUrl: book.origin,
+                    index: prevIdx,
+                    contentType: contentType
+                ) {
+                    await MainActor.run {
+                        guard !Task.isCancelled else { return }
+                        let chapterUrl = chapters[prevIdx].url
+                        let cache: ChapterCache
+                        if isMangaMode {
+                            cache = builder.buildMangaCache(rawContent: content, chapterUrl: chapterUrl)
+                        } else {
                             let title = chapters[prevIdx].title
-                            let cache = builder.buildTextCache(
+                            cache = builder.buildTextCache(
                                 rawContent: content,
                                 title: title,
                                 layoutSpec: layoutSpec,
-                                reuseStore: nil
+                                reuseStore: nil,
+                                chapterUrl: chapterUrl
                             )
-                            onPrevCache(cache)
                         }
+                        onPrevCache(cache)
                     }
                 }
             }

@@ -458,6 +458,22 @@ class TTSManager: NSObject, ObservableObject {
         playAudio(url: url)
         if currentChapterIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title) }
     }
+
+    func updateReadingPosition(to position: ReadingPosition, restartIfPlaying: Bool = true) {
+        guard position.chapterIndex == currentChapterIndex, !sentences.isEmpty else { return }
+        let targetIndex = max(0, min(position.sentenceIndex, sentences.count - 1))
+        currentSentenceIndex = targetIndex
+        let sentenceLength = sentences[targetIndex].utf16.count
+        currentSentenceOffset = max(0, min(position.sentenceOffset, sentenceLength))
+        UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
+        guard restartIfPlaying && isPlaying else { return }
+        audioPlayer?.stop()
+        audioPlayer = nil
+        if UserPreferences.shared.useSystemTTS {
+            if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
+        }
+        speakNextSentence()
+    }
     
     private func speakWithSystemTTS(text: String) {
         isLoading = false

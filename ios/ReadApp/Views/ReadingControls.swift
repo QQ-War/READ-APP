@@ -254,6 +254,14 @@ struct ReaderOptionsSheet: View {
     let isMangaMode: Bool
     @Environment(\.dismiss) var dismiss
 
+    private var verticalSettingsVisible: Bool {
+        preferences.readingMode == .vertical || isMangaMode
+    }
+
+    private var shouldShowSlider: Bool {
+        isMangaMode || !preferences.isInfiniteScrollEnabled
+    }
+
     var body: some View {
         NavigationView {
             Form {
@@ -287,23 +295,25 @@ struct ReaderOptionsSheet: View {
                             Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
                         }
                     }
-                    
-                    if preferences.readingMode == .vertical {
-                        Section(header: Text("上下滚动")) {
+                }
+                
+                if verticalSettingsVisible {
+                    Section(header: Text("上下滚动")) {
+                        if !isMangaMode {
                             Toggle("开启无限流", isOn: $preferences.isInfiniteScrollEnabled)
-                            
-                            if !preferences.isInfiniteScrollEnabled {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Text("切章触发拉伸距离")
-                                        Spacer()
-                                        Text("\(Int(preferences.verticalThreshold)) pt")
-                                            .foregroundColor(.secondary)
-                                    }
-                                    Slider(value: $preferences.verticalThreshold, in: 50...150, step: 5)
+                        }
+
+                        if shouldShowSlider {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("切章触发拉伸距离")
+                                    Spacer()
+                                    Text("\(Int(preferences.verticalThreshold)) pt")
+                                        .foregroundColor(.secondary)
                                 }
-                                .padding(.vertical, 4)
+                                Slider(value: $preferences.verticalThreshold, in: 50...150, step: 5)
                             }
+                            .padding(.vertical, 4)
                         }
                     }
                 }

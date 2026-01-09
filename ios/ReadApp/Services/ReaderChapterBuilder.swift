@@ -21,7 +21,8 @@ final class ReaderChapterBuilder {
         rawContent: String,
         title: String,
         layoutSpec: ReaderLayoutSpec,
-        reuseStore: TextKit2RenderStore?
+        reuseStore: TextKit2RenderStore?,
+        chapterUrl: String? = nil
     ) -> ChapterCache {
         let sentences = ReadingTextProcessor.splitSentences(rawContent, rules: replaceRules)
         let attr = buildAttributedText(sentences: sentences, title: title)
@@ -55,11 +56,11 @@ final class ReaderChapterBuilder {
             paragraphStarts: paragraphStarts,
             chapterPrefixLen: prefixLen,
             isFullyPaginated: true,
-            chapterUrl: nil
+            chapterUrl: chapterUrl
         )
     }
 
-    func buildMangaCache(rawContent: String) -> ChapterCache {
+    func buildMangaCache(rawContent: String, chapterUrl: String? = nil) -> ChapterCache {
         let sentences = buildMangaSentences(rawContent: rawContent)
         return ChapterCache(
             pages: [],
@@ -71,7 +72,7 @@ final class ReaderChapterBuilder {
             paragraphStarts: [],
             chapterPrefixLen: 0,
             isFullyPaginated: false,
-            chapterUrl: nil
+            chapterUrl: chapterUrl
         )
     }
 

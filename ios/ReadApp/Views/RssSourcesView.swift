@@ -2,7 +2,16 @@ import SwiftUI
 
 struct RssSourcesView: View {
     @StateObject private var viewModel = RssSourcesViewModel()
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var showingFilePicker = false
+    @State private var showingURLImportDialog = false
+    @State private var importURL = ""
+    @State private var importResultMessage: String?
+    @State private var showingImportResult = false
+    @State private var showingNewSourceEditor = false
+    @State private var editingCustomSource: RssSource?
+    @State private var detailSource: RssSource?
 
     var body: some View {
         List {
@@ -12,7 +21,7 @@ struct RssSourcesView: View {
                     .foregroundColor(.secondary)
             }
 
-            if viewModel.sources.isEmpty {
+            if viewModel.remoteSources.isEmpty {
                 Section {
                     if viewModel.isLoading {
                         HStack {
@@ -26,16 +35,44 @@ struct RssSourcesView: View {
                     }
                 }
             } else {
-                Section {
-                    ForEach(viewModel.sources) { source in
+                Section(header: Text("官方订阅")) {
+                    ForEach(viewModel.remoteSources) { source in
                         RssSourceRow(
                             source: source,
                             isBusy: viewModel.pendingToggles.contains(source.id),
                             isEnabled: source.enabled,
-                            canToggle: viewModel.canEdit
+                            canToggle: viewModel.canEdit,
+                            onTap: { detailSource = source }
                         ) { isEnabled in
                             Task {
                                 await viewModel.toggle(source: source, enable: isEnabled)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section(header: Text("自定义订阅"),
+                    footer: viewModel.customSources.isEmpty ? Text("添加后可在本地管理订阅。") : nil) {
+                if viewModel.customSources.isEmpty {
+                    Text("尚未添加自定义订阅源，可通过上方菜单新建或导入。")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(viewModel.customSources) { source in
+                        RssSourceRow(
+                            source: source,
+                            isBusy: false,
+                            isEnabled: source.enabled,
+                            canToggle: true,
+                            onTap: { editingCustomSource = source }
+                        ) { isEnabled in
+                            viewModel.toggleCustomSource(source, enable: isEnabled)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                viewModel.deleteCustomSource(source)
+                            } label: {
+                                Label("删除", systemImage: "trash")
                             }
                         }
                     }
@@ -49,6 +86,10 @@ struct RssSourcesView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .refreshable {
+            await viewModel.refresh()
+        }
         .navigationTitle("订阅源")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -57,7 +98,7 @@ struct RssSourcesView: View {
                     Image(systemName: "chevron.left")
                 }
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button(action: {
                     Task {
                         await viewModel.refresh()
@@ -65,8 +106,97 @@ struct RssSourcesView: View {
                 }) {
                     Image(systemName: "arrow.clockwise")
                 }
-                .disabled(viewModel.isLoading)
+                Menu {
+                    Button(action: { showingNewSourceEditor = true }) {
+                        Label("新建订阅源", systemImage: "pencil.and.outline")
+                    }
+                    Button(action: { showingFilePicker = true }) {
+                        Label("本地导入", systemImage: "folder")
+                    }
+                    Button(action: { showingURLImportDialog = true }) {
+                        Label("网络导入", systemImage: "link")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
             }
+        }
+        .sheet(isPresented: $showingFilePicker) {
+            DocumentPicker { url in
+                Task {
+                    do {
+                        let data = try Data(contentsOf: url)
+                        let added = try viewModel.importCustomSources(from: data)
+                        importResultMessage = added.isEmpty ? "未找到有效订阅源" : "成功导入 \(added.count) 个订阅源"
+                    } catch {
+                        importResultMessage = "导入失败: \(error.localizedDescription)"
+                    }
+                    showingImportResult = true
+                }
+            }
+        }
+        .sheet(item: $editingCustomSource) { source in
+            NavigationView {
+                RssSourceEditView(
+                    initialSource: source,
+                    onSave: { updated in
+                        viewModel.addOrUpdateCustomSource(updated)
+                        editingCustomSource = nil
+                    },
+                    onDelete: {
+                        viewModel.deleteCustomSource(source)
+                        editingCustomSource = nil
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showingNewSourceEditor) {
+            NavigationView {
+                RssSourceEditView(initialSource: nil) { newSource in
+                    viewModel.addOrUpdateCustomSource(newSource)
+                    showingNewSourceEditor = false
+                }
+            }
+        }
+        .sheet(item: $detailSource) { source in
+            NavigationView {
+                RssSourceDetailView(source: source)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("关闭") { detailSource = nil }
+                        }
+                    }
+            }
+        }
+        .alert("网络导入", isPresented: $showingURLImportDialog) {
+            TextField("输入订阅 JSON 地址", text: $importURL)
+                .autocapitalization(.none)
+            Button("导入") {
+                Task {
+                    guard let url = URL(string: importURL) else {
+                        importResultMessage = "请输入合法 URL"
+                        showingImportResult = true
+                        return
+                    }
+                    do {
+                        let (data, _) = try await URLSession.shared.data(from: url)
+                        let added = try viewModel.importCustomSources(from: data)
+                        importResultMessage = added.isEmpty ? "未找到有效订阅源" : "成功导入 \(added.count) 个订阅源"
+                    } catch {
+                        importResultMessage = "导入失败: \(error.localizedDescription)"
+                    }
+                    showingImportResult = true
+                }
+                importURL = ""
+            }
+            Button("取消", role: .cancel) { importURL = "" }
+        } message: {
+            Text("请输入合法的订阅源 JSON 地址")
+        }
+        .alert("导入结果", isPresented: $showingImportResult) {
+            Button("确定", role: .cancel) {}
+        } message: {
+            Text(importResultMessage ?? "")
         }
     }
 }
@@ -76,6 +206,7 @@ private struct RssSourceRow: View {
     let isBusy: Bool
     let isEnabled: Bool
     let canToggle: Bool
+    let onTap: (() -> Void)?
     let onToggle: (Bool) -> Void
 
     var body: some View {
@@ -108,5 +239,9 @@ private struct RssSourceRow: View {
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap?()
+        }
     }
 }
