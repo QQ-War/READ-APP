@@ -81,6 +81,9 @@
 		B10000040000000000000001 /* RssService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000030000000000000001 /* RssService.swift */; };
 		B10000060000000000000001 /* RssSourcesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000050000000000000001 /* RssSourcesViewModel.swift */; };
 		B10000080000000000000001 /* RssSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000070000000000000001 /* RssSourcesView.swift */; };
+		B10000110000000000000001 /* LocalRssSourceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000100000000000000001 /* LocalRssSourceStore.swift */; };
+		B10000130000000000000001 /* RssSourceEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000120000000000000001 /* RssSourceEditView.swift */; };
+		B10000150000000000000001 /* RssSourceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000140000000000000001 /* RssSourceDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -158,6 +161,9 @@
 		B10000030000000000000001 /* RssService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssService.swift; sourceTree = "<group>"; };
 		B10000050000000000000001 /* RssSourcesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssSourcesViewModel.swift; sourceTree = "<group>"; };
 		B10000070000000000000001 /* RssSourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssSourcesView.swift; sourceTree = "<group>"; };
+		B10000100000000000000001 /* LocalRssSourceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRssSourceStore.swift; sourceTree = "<group>"; };
+		B10000120000000000000001 /* RssSourceEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssSourceEditView.swift; sourceTree = "<group>"; };
+		B10000140000000000000001 /* RssSourceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RssSourceDetailView.swift; sourceTree = "<group>"; };
 		1A000020000000000000001 /* ReadApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000021000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -245,6 +251,8 @@
 				1A00002E000000000000003 /* ReplaceRuleEditView.swift */,
 				BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */,
 				B10000070000000000000001 /* RssSourcesView.swift */,
+				B10000130000000000000001 /* RssSourceEditView.swift */,
+				B10000150000000000000001 /* RssSourceDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -294,6 +302,7 @@
 				1A0000F90000000000000001 /* ReplaceRuleModels.swift */,
 				1A0000FB0000000000000001 /* TtsModels.swift */,
 				1A0000FD0000000000000001 /* ReadingSettingsModels.swift */,
+				B10000100000000000000001 /* LocalRssSourceStore.swift */,
 				1A0000FF0000000000000001 /* UserPreferences.swift */,
 				1A0001010000000000000001 /* ReaderSettingsStore.swift */,
 				1A000039000000000000003 /* BookSource.swift */,
@@ -434,6 +443,9 @@
 				B10000040000000000000001 /* RssService.swift in Sources */,
 				B10000060000000000000001 /* RssSourcesViewModel.swift in Sources */,
 				B10000080000000000000001 /* RssSourcesView.swift in Sources */,
+				B10000110000000000000001 /* LocalRssSourceStore.swift in Sources */,
+				B10000130000000000000001 /* RssSourceEditView.swift in Sources */,
+				B10000150000000000000001 /* RssSourceDetailView.swift in Sources */,
 				1A000025000000000000002 /* HTMLContentView.swift in Sources */,
 				1A000028000000000000003 /* DocumentPicker.swift in Sources */,
 				1A00002A000000000000003 /* ReplaceRuleListView.swift in Sources */,
