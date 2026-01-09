@@ -8,7 +8,7 @@ final class TTSService {
     }
 
     func fetchTTSList() async throws -> [HttpTTS] {
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "getalltts", queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getAllTts, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
         }
@@ -32,7 +32,7 @@ final class TTSService {
     }
 
     func saveTTS(tts: HttpTTS) async throws {
-        let url = try client.buildURL(endpoint: "addtts", queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
+        let url = try client.buildURL(endpoint: ApiEndpoints.addTts, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
@@ -52,7 +52,7 @@ final class TTSService {
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "id", value: id)
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "deltts", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.deleteTts, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "删除TTS失败"])
         }
@@ -63,7 +63,7 @@ final class TTSService {
     }
 
     func saveTTSBatch(jsonContent: String) async throws {
-        let url = try client.buildURL(endpoint: "savettss", queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
+        let url = try client.buildURL(endpoint: ApiEndpoints.saveTtsBatch, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Content-Type")
@@ -85,7 +85,7 @@ final class TTSService {
         let queryItems = [
             URLQueryItem(name: "accessToken", value: client.accessToken)
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "getDefaultTTS", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getDefaultTts, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "获取默认TTS失败"])
         }

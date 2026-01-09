@@ -15,7 +15,7 @@ final class BooksService {
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "version", value: "1.0.0")
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "getBookshelf", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getBookshelf, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
         }
@@ -37,7 +37,7 @@ final class BooksService {
         }
 
         do {
-            let (data, httpResponse) = try await client.requestWithFailback(endpoint: "getChapterList", queryItems: queryItems)
+            let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getChapterList, queryItems: queryItems)
             guard httpResponse.statusCode == 200 else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
             }
@@ -69,7 +69,7 @@ final class BooksService {
             }
             return items
         }()
-        let url = try client.buildURL(endpoint: "saveBookProgress", queryItems: queryItems)
+        let url = try client.buildURL(endpoint: ApiEndpoints.saveBookProgress, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         let (data, _) = try await URLSession.shared.data(for: request)
@@ -91,7 +91,7 @@ final class BooksService {
             URLQueryItem(name: "key", value: keyword)
         ]
 
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "searchBook", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.searchBook, queryItems: queryItems)
 
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "搜索书籍失败"])
@@ -112,7 +112,7 @@ final class BooksService {
             URLQueryItem(name: "need", value: "true")
         ]
 
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "getBookSourcesExploreUrl", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getExploreUrl, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "获取发现配置失败"])
         }
@@ -138,7 +138,7 @@ final class BooksService {
             URLQueryItem(name: "ruleFindUrl", value: ruleFindUrl)
         ]
 
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "exploreBook", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.exploreBook, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "浏览书源失败"])
         }
@@ -160,7 +160,7 @@ final class BooksService {
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "useReplaceRule", value: "\(useReplaceRule)")
         ]
-        let url = try client.buildURL(endpoint: "saveBook", queryItems: queryItems)
+        let url = try client.buildURL(endpoint: ApiEndpoints.saveBook, queryItems: queryItems)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -189,7 +189,7 @@ final class BooksService {
             URLQueryItem(name: "bookSourceUrl", value: newBookSourceUrl)
         ]
 
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "setBookSource", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.setBookSource, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "换源请求失败"])
         }
@@ -207,7 +207,7 @@ final class BooksService {
         let queryItems = [
             URLQueryItem(name: "accessToken", value: client.accessToken)
         ]
-        let url = try client.buildURL(endpoint: "deleteBook", queryItems: queryItems)
+        let url = try client.buildURL(endpoint: ApiEndpoints.deleteBook, queryItems: queryItems)
 
         struct DeleteBookRequest: Codable {
             let bookUrl: String

@@ -16,7 +16,7 @@ final class BookSourceService {
         var allSources: [BookSource] = []
         for page in 1...pageInfo.page {
             let (data, httpResponse) = try await client.requestWithFailback(
-                endpoint: "getBookSourcesNew",
+                endpoint: ApiEndpoints.getBookSources,
                 queryItems: [
                     URLQueryItem(name: "accessToken", value: client.accessToken),
                     URLQueryItem(name: "md5", value: pageInfo.md5),
@@ -37,7 +37,7 @@ final class BookSourceService {
     }
 
     func saveBookSource(jsonContent: String) async throws {
-        let url = try client.buildURL(endpoint: "saveBookSource", queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
+        let url = try client.buildURL(endpoint: ApiEndpoints.saveBookSource, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -61,7 +61,7 @@ final class BookSourceService {
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "id", value: id)
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "delbookSource", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.deleteBookSource, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "删除书源失败"])
         }
@@ -77,7 +77,7 @@ final class BookSourceService {
             URLQueryItem(name: "id", value: id),
             URLQueryItem(name: "st", value: isEnabled ? "1" : "0")
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "stopbookSource", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.toggleBookSource, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "切换书源状态失败"])
         }
@@ -92,7 +92,7 @@ final class BookSourceService {
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "id", value: id)
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "getbookSources", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getBookSourceDetail, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "获取书源详情失败"])
         }
@@ -111,7 +111,7 @@ final class BookSourceService {
 
     private func fetchBookSourcePageInfo() async throws -> BookSourcePageInfo {
         let (data, httpResponse) = try await client.requestWithFailback(
-            endpoint: "getBookSourcesPage",
+            endpoint: ApiEndpoints.getBookSourcesPage,
             queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)]
         )
         guard httpResponse.statusCode == 200 else {

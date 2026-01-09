@@ -101,7 +101,7 @@ class APIService: ObservableObject {
             queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
         }
         
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "getBookContent", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getBookContent, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
         }

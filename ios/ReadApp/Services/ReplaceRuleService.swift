@@ -16,7 +16,7 @@ final class ReplaceRuleService {
         var allRules: [ReplaceRule] = []
         for page in 1...pageInfo.page {
             let (data, httpResponse) = try await client.requestWithFailback(
-                endpoint: "getReplaceRulesNew",
+                endpoint: ApiEndpoints.getReplaceRules,
                 queryItems: [
                     URLQueryItem(name: "accessToken", value: client.accessToken),
                     URLQueryItem(name: "md5", value: pageInfo.md5),
@@ -37,7 +37,7 @@ final class ReplaceRuleService {
     }
 
     func saveReplaceRule(rule: ReplaceRule) async throws {
-        let url = try client.buildURL(endpoint: "addReplaceRule", queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
+        let url = try client.buildURL(endpoint: ApiEndpoints.addReplaceRule, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -63,7 +63,7 @@ final class ReplaceRuleService {
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "id", value: id)
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "delReplaceRule", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.deleteReplaceRule, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "删除规则失败"])
         }
@@ -79,7 +79,7 @@ final class ReplaceRuleService {
             URLQueryItem(name: "id", value: id),
             URLQueryItem(name: "st", value: isEnabled ? "1" : "0")
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "stopReplaceRules", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.toggleReplaceRule, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "切换规则状态失败"])
         }
@@ -90,7 +90,7 @@ final class ReplaceRuleService {
     }
 
     func saveReplaceRules(jsonContent: String) async throws {
-        let url = try client.buildURL(endpoint: "saverules", queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
+        let url = try client.buildURL(endpoint: ApiEndpoints.saveReplaceRules, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Content-Type")
@@ -107,7 +107,7 @@ final class ReplaceRuleService {
 
     private func fetchReplaceRulePageInfo() async throws -> ReplaceRulePageInfo {
         let (data, httpResponse) = try await client.requestWithFailback(
-            endpoint: "getReplaceRulesPage",
+            endpoint: ApiEndpoints.getReplaceRulesPage,
             queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)]
         )
         guard httpResponse.statusCode == 200 else {

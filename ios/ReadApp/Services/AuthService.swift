@@ -15,7 +15,7 @@ final class AuthService {
             URLQueryItem(name: "password", value: password),
             URLQueryItem(name: "model", value: deviceModel)
         ]
-        let url = try client.buildURL(endpoint: "login", queryItems: queryItems)
+        let url = try client.buildURL(endpoint: ApiEndpoints.login, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 15
@@ -48,7 +48,7 @@ final class AuthService {
             URLQueryItem(name: "password", value: newPassword)
         ]
 
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "changepass", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.changePassword, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "修改密码失败(状态码: \(httpResponse.statusCode))"])
         }

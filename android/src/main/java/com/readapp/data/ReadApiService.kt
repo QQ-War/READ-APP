@@ -27,43 +27,43 @@ import retrofit2.http.Part
 import retrofit2.http.Query
 
 interface ReadApiService {
-    @GET("login")
+    @GET(ApiEndpoints.Login)
     suspend fun login(
         @Query("username") username: String,
         @Query("password") password: String,
         @Query("model") model: String = "android",
     ): Response<ApiResponse<LoginResponse>>
 
-    @GET("getUserInfo")
+    @GET(ApiEndpoints.GetUserInfo)
     suspend fun getUserInfo(
         @Query("accessToken") accessToken: String,
     ): Response<ApiResponse<UserInfo>>
 
-    @GET("changepass")
+    @GET(ApiEndpoints.ChangePassword)
     suspend fun changePassword(
         @Query("accessToken") accessToken: String,
         @Query("oldpassword") oldPass: String,
         @Query("password") newPass: String
     ): Response<ApiResponse<String>>
 
-    @GET("getalltocken")
+    @GET(ApiEndpoints.GetAllTokens)
     suspend fun getAllTokens(
         @Query("accessToken") accessToken: String,
     ): Response<ApiResponse<List<String>>>
 
-    @GET("getBookshelf")
+    @GET(ApiEndpoints.GetBookshelf)
     suspend fun getBookshelf(
         @Query("accessToken") accessToken: String,
     ): Response<ApiResponse<List<Book>>>
 
-    @GET("getChapterList")
+    @GET(ApiEndpoints.GetChapterList)
     suspend fun getChapterList(
         @Query("accessToken") accessToken: String,
         @Query("url") url: String,
         @Query("bookSourceUrl") bookSourceUrl: String? = null,
     ): Response<ApiResponse<List<Chapter>>>
 
-    @GET("getBookContent")
+    @GET(ApiEndpoints.GetBookContent)
     suspend fun getBookContent(
         @Query("accessToken") accessToken: String,
         @Query("url") url: String,
@@ -72,7 +72,7 @@ interface ReadApiService {
         @Query("bookSourceUrl") bookSourceUrl: String? = null,
     ): Response<ApiResponse<String>>
 
-    @GET("saveBookProgress")
+    @GET(ApiEndpoints.SaveBookProgress)
     suspend fun saveBookProgress(
         @Query("accessToken") accessToken: String,
         @Query("url") url: String,
@@ -81,7 +81,7 @@ interface ReadApiService {
         @Query("title") title: String?,
     ): Response<ApiResponse<String>>
 
-    @GET("setBookSource")
+    @GET(ApiEndpoints.SetBookSource)
     suspend fun setBookSource(
         @Query("accessToken") accessToken: String,
         @Query("bookUrl") bookUrl: String,
@@ -89,74 +89,74 @@ interface ReadApiService {
         @Query("bookSourceUrl") bookSourceUrl: String
     ): Response<ApiResponse<Book>>
 
-    @GET("getalltts")
+    @GET(ApiEndpoints.GetAllTts)
     suspend fun getAllTts(
         @Query("accessToken") accessToken: String,
     ): Response<ApiResponse<List<HttpTTS>>>
 
-    @GET("getdefaulttts")
+    @GET(ApiEndpoints.GetDefaultTts)
     suspend fun getDefaultTts(
         @Query("accessToken") accessToken: String,
     ): Response<ApiResponse<String>>
 
-    @POST("addtts")
+    @POST(ApiEndpoints.AddTts)
     suspend fun addTts(
         @Query("accessToken") accessToken: String,
         @Body tts: HttpTTS
     ): Response<ApiResponse<String>>
 
-    @POST("deltts")
+    @POST(ApiEndpoints.DeleteTts)
     suspend fun delTts(
         @Query("accessToken") accessToken: String,
         @Query("id") id: String
     ): Response<ApiResponse<String>>
 
-    @POST("upjson")
+    @POST(ApiEndpoints.SaveTtsBatch)
     suspend fun saveTtsBatch(
         @Query("accessToken") accessToken: String,
         @Body content: RequestBody
     ): Response<ApiResponse<Any>>
 
     @Multipart
-    @POST("importBookPreview")
+    @POST(ApiEndpoints.ImportBookPreview)
     suspend fun importBook(
         @Query("accessToken") accessToken: String,
         @Part file: MultipartBody.Part
     ): Response<ApiResponse<Any>>
 
     // region Replace Rules
-    @GET("getReplaceRulesPage")
+    @GET(ApiEndpoints.GetReplaceRulesPage)
     suspend fun getReplaceRulesPage(
         @Query("accessToken") accessToken: String
     ): Response<ApiResponse<ReplaceRulePageInfo>>
 
-    @GET("getReplaceRulesNew")
+    @GET(ApiEndpoints.GetReplaceRules)
     suspend fun getReplaceRules(
         @Query("accessToken") accessToken: String,
         @Query("md5") md5: String,
         @Query("page") page: Int
     ): Response<ApiResponse<List<ReplaceRule>>>
 
-    @POST("addReplaceRule")
+    @POST(ApiEndpoints.AddReplaceRule)
     suspend fun addReplaceRule(
         @Query("accessToken") accessToken: String,
         @Body rule: ReplaceRule
     ): Response<ApiResponse<Any>>
     
-    @POST("delReplaceRule")
+    @POST(ApiEndpoints.DeleteReplaceRule)
     suspend fun deleteReplaceRule(
         @Query("accessToken") accessToken: String,
         @Query("id") id: String
     ): Response<ApiResponse<Any>>
 
-    @POST("stopReplaceRules")
+    @POST(ApiEndpoints.ToggleReplaceRule)
     suspend fun toggleReplaceRule(
         @Query("accessToken") accessToken: String,
         @Query("id") id: String,
         @Query("st") status: Int
     ): Response<ApiResponse<Any>>
 
-    @POST("saverules")
+    @POST(ApiEndpoints.SaveReplaceRules)
     suspend fun saveReplaceRules(
         @Query("accessToken") accessToken: String,
         @Body content: RequestBody
@@ -164,51 +164,51 @@ interface ReadApiService {
     // endregion
 
     // region Book Sources
-    @GET("getBookSourcesPage")
+    @GET(ApiEndpoints.GetBookSourcesPage)
     suspend fun getBookSourcesPage(
         @Query("accessToken") accessToken: String
     ): Response<ApiResponse<BookSourcePageInfo>>
 
-    @GET("getBookSourcesNew")
+    @GET(ApiEndpoints.GetBookSources)
     suspend fun getBookSourcesNew(
         @Query("accessToken") accessToken: String,
         @Query("md5") md5: String,
         @Query("page") page: Int
     ): Response<ApiResponse<List<BookSource>>>
 
-    @POST("saveBookSource")
+    @POST(ApiEndpoints.SaveBookSource)
     suspend fun saveBookSource(
         @Query("accessToken") accessToken: String,
         @Body content: RequestBody
     ): Response<ApiResponse<Any>>
 
-    @GET("delbookSource")
+    @GET(ApiEndpoints.DeleteBookSource)
     suspend fun deleteBookSource(
         @Query("accessToken") accessToken: String,
         @Query("id") id: String
     ): Response<ApiResponse<Any>>
 
-    @GET("stopbookSource")
+    @GET(ApiEndpoints.ToggleBookSource)
     suspend fun toggleBookSource(
         @Query("accessToken") accessToken: String,
         @Query("id") id: String,
         @Query("st") status: String
     ): Response<ApiResponse<Any>>
 
-    @GET("getbookSources")
+    @GET(ApiEndpoints.GetBookSourceDetail)
     suspend fun getBookSourceDetail(
         @Query("accessToken") accessToken: String,
         @Query("id") id: String
     ): Response<ApiResponse<Map<String, Any>>>
 
-    @GET("getBookSourcesExploreUrl")
+    @GET(ApiEndpoints.GetExploreUrl)
     suspend fun getExploreUrl(
         @Query("accessToken") accessToken: String,
         @Query("bookSourceUrl") bookSourceUrl: String,
         @Query("need") need: String = "true"
     ): Response<ApiResponse<Map<String, String>>>
 
-    @GET("exploreBook")
+    @GET(ApiEndpoints.ExploreBook)
     suspend fun exploreBook(
         @Query("accessToken") accessToken: String,
         @Query("bookSourceUrl") bookSourceUrl: String,
@@ -218,7 +218,7 @@ interface ReadApiService {
     // endregion
 
     // region Book Search
-    @GET("searchBook")
+    @GET(ApiEndpoints.SearchBook)
     suspend fun searchBook(
         @Query("accessToken") accessToken: String,
         @Query("key") keyword: String,
@@ -226,14 +226,14 @@ interface ReadApiService {
         @Query("page") page: Int
     ): Response<ApiResponse<List<Book>>>
 
-    @POST("saveBook")
+    @POST(ApiEndpoints.SaveBook)
     suspend fun saveBook(
         @Query("accessToken") accessToken: String,
         @Query("useReplaceRule") useReplaceRule: Int = 0,
         @Body book: Book
     ): Response<ApiResponse<Any>>
 
-    @POST("deleteBook")
+    @POST(ApiEndpoints.DeleteBook)
     suspend fun deleteBook(
         @Query("accessToken") accessToken: String,
         @Body book: Book

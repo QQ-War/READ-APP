@@ -14,7 +14,7 @@ final class CacheManagementService {
         let queryItems = [
             URLQueryItem(name: "accessToken", value: client.accessToken)
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: "clearAllRemoteCache", queryItems: queryItems)
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.clearAllRemoteCache, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "清除远程缓存失败"])
         }
