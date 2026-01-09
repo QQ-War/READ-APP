@@ -21,7 +21,7 @@ final class RssSourcesViewModel: ObservableObject {
     }
 
     var canModifyRemoteSources: Bool {
-        return canEdit && service.supportsRemoteEditing
+        return canEdit && service.canModifyRemoteRssSources
     }
 
     func refresh() async {
@@ -71,7 +71,7 @@ final class RssSourcesViewModel: ObservableObject {
         defer { pendingToggles.remove(source.id) }
 
         do {
-            try await service.toggleSource(id: source.id, isEnabled: enable)
+            try await service.toggleRssSource(id: source.id, isEnabled: enable)
             if let index = remoteSources.firstIndex(where: { $0.id == source.id }) {
                 remoteSources[index].enabled = enable
             }
