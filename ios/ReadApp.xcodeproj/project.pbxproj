@@ -255,7 +255,7 @@
 				1A00002F000000000000003 /* ReplaceRuleViewModel.swift */,
 				1A00003B000000000000003 /* SourceListViewModel.swift */,
 				0A79963738344134ACDF2305 /* BookSearchViewModel.swift */,
-				B10000060000000000000001 /* RssSourcesViewModel.swift */,
+				B10000050000000000000001 /* RssSourcesViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
