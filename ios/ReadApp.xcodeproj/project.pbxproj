@@ -251,8 +251,8 @@
 				1A00002E000000000000003 /* ReplaceRuleEditView.swift */,
 				BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */,
 				B10000070000000000000001 /* RssSourcesView.swift */,
-				B10000130000000000000001 /* RssSourceEditView.swift */,
-				B10000150000000000000001 /* RssSourceDetailView.swift */,
+				B10000120000000000000001 /* RssSourceEditView.swift */,
+				B10000140000000000000001 /* RssSourceDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
