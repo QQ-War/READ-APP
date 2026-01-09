@@ -5,6 +5,11 @@ final class ReaderPrefetchCoordinator {
     private var prevTask: Task<Void, Never>?
     private var fetchingNextIndex: Int?
     private var fetchingPrevIndex: Int?
+    private var lastNextSkipLogIndex: Int?
+    private var lastPrevSkipLogIndex: Int?
+    private var lastNextSkipLogDate: Date?
+    private var lastPrevSkipLogDate: Date?
+    private let skipLogInterval: TimeInterval = 5
 
     func cancel() {
         nextTask?.cancel()
@@ -72,11 +77,15 @@ final class ReaderPrefetchCoordinator {
         if nextIdx < chapters.count {
             let alreadyHasNext = isMangaMode ? !nextCache.contentSentences.isEmpty : nextCache.renderStore != nil
             if alreadyHasNext {
-                LogManager.shared.log("预取下一章跳过: 已有缓存 index=\(nextIdx)", category: "阅读器")
+                if shouldLogSkip(index: nextIdx, lastIndex: &lastNextSkipLogIndex, lastDate: &lastNextSkipLogDate) {
+                    LogManager.shared.log("预取下一章跳过: 已有缓存 index=\(nextIdx)", category: "阅读器")
+                }
                 return
             }
             if fetchingNextIndex == nextIdx {
-                LogManager.shared.log("预取下一章跳过: 已在预取 index=\(nextIdx)", category: "阅读器")
+                if shouldLogSkip(index: nextIdx, lastIndex: &lastNextSkipLogIndex, lastDate: &lastNextSkipLogDate) {
+                    LogManager.shared.log("预取下一章跳过: 已在预取 index=\(nextIdx)", category: "阅读器")
+                }
                 return
             }
             nextTask?.cancel()
@@ -137,11 +146,15 @@ final class ReaderPrefetchCoordinator {
         if prevIdx >= 0 {
             let alreadyHasPrev = isMangaMode ? !prevCache.contentSentences.isEmpty : prevCache.renderStore != nil
             if alreadyHasPrev {
-                LogManager.shared.log("预取上一章跳过: 已有缓存 index=\(prevIdx)", category: "阅读器")
+                if shouldLogSkip(index: prevIdx, lastIndex: &lastPrevSkipLogIndex, lastDate: &lastPrevSkipLogDate) {
+                    LogManager.shared.log("预取上一章跳过: 已有缓存 index=\(prevIdx)", category: "阅读器")
+                }
                 return
             }
             if fetchingPrevIndex == prevIdx {
-                LogManager.shared.log("预取上一章跳过: 已在预取 index=\(prevIdx)", category: "阅读器")
+                if shouldLogSkip(index: prevIdx, lastIndex: &lastPrevSkipLogIndex, lastDate: &lastPrevSkipLogDate) {
+                    LogManager.shared.log("预取上一章跳过: 已在预取 index=\(prevIdx)", category: "阅读器")
+                }
                 return
             }
             prevTask?.cancel()
@@ -184,5 +197,15 @@ final class ReaderPrefetchCoordinator {
             prevTask?.cancel()
             onResetPrev()
         }
+    }
+
+    private func shouldLogSkip(index: Int, lastIndex: inout Int?, lastDate: inout Date?) -> Bool {
+        let now = Date()
+        if lastIndex != index || lastDate == nil || now.timeIntervalSince(lastDate!) > skipLogInterval {
+            lastIndex = index
+            lastDate = now
+            return true
+        }
+        return false
     }
 }
