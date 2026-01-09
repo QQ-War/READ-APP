@@ -365,6 +365,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         applyScrollBehaviorIfNeeded()
+        checkSeamlessSwitchAfterContentUpdate()
         return contentChanged
     }
 
@@ -664,6 +665,29 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if rawOffset + scrollView.bounds.height < currentTopY - 100 {
                 pendingSeamlessSwitch = -1
             }
+        }
+    }
+
+    private func checkSeamlessSwitchAfterContentUpdate() {
+        guard isInfiniteScrollEnabled, pendingSeamlessSwitch == 0 else { return }
+        let rawOffset = scrollView.contentOffset.y
+
+        if nextRenderStore != nil {
+            let currentBottomY = currentContentView.frame.maxY
+            if rawOffset > currentBottomY + 100 {
+                pendingSeamlessSwitch = 1
+            }
+        }
+
+        if pendingSeamlessSwitch == 0, prevRenderStore != nil {
+            let currentTopY = currentContentView.frame.minY
+            if rawOffset + scrollView.bounds.height < currentTopY - 100 {
+                pendingSeamlessSwitch = -1
+            }
+        }
+
+        if pendingSeamlessSwitch != 0 {
+            executeSeamlessSwitchIfNeeded()
         }
     }
 
