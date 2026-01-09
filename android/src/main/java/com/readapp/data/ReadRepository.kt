@@ -11,6 +11,7 @@ import com.readapp.data.model.ReplaceRule
 import com.readapp.data.model.RssEditPayload
 import com.readapp.data.model.RssSourceItem
 import com.readapp.data.model.RssSourcePayload
+import com.readapp.data.model.toPayload
 import com.readapp.data.model.RssSourcesResponse
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull

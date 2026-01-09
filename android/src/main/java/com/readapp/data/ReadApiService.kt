@@ -7,6 +7,7 @@ import com.readapp.data.model.BookSource
 import com.readapp.data.model.BookSourcePageInfo
 import com.readapp.data.model.Chapter
 import com.readapp.data.model.HttpTTS
+import com.readapp.data.model.RssEditPayload
 import com.readapp.data.model.LoginResponse
 import com.readapp.data.model.ReplaceRule
 import com.readapp.data.model.ReplaceRulePageInfo
