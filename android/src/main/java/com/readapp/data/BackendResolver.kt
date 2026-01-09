@@ -19,7 +19,7 @@ object BackendResolver {
         }
     }
 
-    private fun ensureTrailingSlash(url: String): String = if (url.endsWith('/')) url else "$url/"
+    fun ensureTrailingSlash(url: String): String = if (url.endsWith('/')) url else "$url/"
 
     private fun ensurePublicUrl(baseUrl: String, publicUrl: String?): String =
         publicUrl?.takeIf { it.isNotBlank() } ?: ensureTrailingSlash(baseUrl)

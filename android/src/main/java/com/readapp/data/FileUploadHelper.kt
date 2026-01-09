@@ -41,10 +41,13 @@ object FileUploadHelper {
             }
         }
         if (result == null) {
-            result = uri.path
-            val cut = result?.lastIndexOf('/')
-            if (cut != -1) {
-                result = result?.substring(cut + 1)
+            uri.path?.let { path ->
+                val cut = path.lastIndexOf('/')
+                result = if (cut >= 0) {
+                    path.substring(cut + 1)
+                } else {
+                    path
+                }
             }
         }
         return result

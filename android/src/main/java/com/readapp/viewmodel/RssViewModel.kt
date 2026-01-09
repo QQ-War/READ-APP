@@ -33,8 +33,6 @@ class RssViewModel(
     val pendingToggles: StateFlow<Set<String>> = _pendingToggles.asStateFlow()
     private val _remoteOperationInProgress = MutableStateFlow(false)
     val remoteOperationInProgress: StateFlow<Boolean> = _remoteOperationInProgress.asStateFlow()
-    private val remoteManager = remoteManager
-
     init {
         refreshSources()
     }

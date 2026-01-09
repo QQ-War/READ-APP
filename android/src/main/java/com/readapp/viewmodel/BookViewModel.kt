@@ -17,6 +17,7 @@ import com.readapp.data.ReaderApiService
 import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
 import com.readapp.data.LocalCacheManager
+import com.readapp.data.LocalSourceCache
 import com.readapp.data.ChapterContentRepository
 import com.readapp.data.ApiBackend
 import com.readapp.data.detectApiBackend
@@ -72,17 +73,18 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val preferences = UserPreferences(appContext)
     private val readerSettings = ReaderSettingsStore(preferences, viewModelScope)
     private val localCache = LocalCacheManager(appContext)
+    private val localSourceCache = LocalSourceCache(appContext)
     private val apiFactory: (String) -> ReadApiService = { endpoint ->
         ReadApiService.create(endpoint) { accessToken.value }
     }
     private val readerApiFactory: (String) -> ReaderApiService = { endpoint ->
         ReaderApiService.create(endpoint) { accessToken.value }
     }
-    private val remoteDataSourceFactory = RemoteDataSourceFactory(apiFactory, readerApiFactory)
+    internal val remoteDataSourceFactory = RemoteDataSourceFactory(apiFactory, readerApiFactory)
     val repository = ReadRepository(apiFactory, readerApiFactory)
     internal val authRepository = AuthRepository(remoteDataSourceFactory)
     internal val bookRepository = BookRepository(remoteDataSourceFactory, repository)
-    private val sourceRepository = SourceRepository(repository)
+    private val sourceRepository = SourceRepository(repository, localSourceCache)
     private val ttsRepository = TtsRepository(remoteDataSourceFactory, repository)
     private val replaceRuleRepository = ReplaceRuleRepository(remoteDataSourceFactory, repository)
     internal val chapterContentRepository = ChapterContentRepository(repository, localCache)

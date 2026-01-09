@@ -5,6 +5,7 @@ import com.readapp.data.LocalSourceCache
 import com.readapp.data.ReadRepository
 import com.readapp.data.model.BookSource
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 
 class SourceRepository(
@@ -18,9 +19,11 @@ class SourceRepository(
                 emit(Result.success(cachedSources))
             }
 
-            val result = readRepository.getBookSources(context, baseUrl, publicUrl, accessToken)
+        val remoteFlow = readRepository.getBookSources(context, baseUrl, publicUrl, accessToken)
+        remoteFlow.collect { result ->
             emit(result)
             result.onSuccess { localCache.saveSources(it) }
+        }
         }
 
     suspend fun deleteBookSource(context: Context, baseUrl: String, publicUrl: String?, accessToken: String, source: BookSource) =

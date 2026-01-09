@@ -6,9 +6,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.readapp.data.LocalSourceCache
 import com.readapp.data.ReadApiService
 import com.readapp.data.ReaderApiService
 import com.readapp.data.ReadRepository
+import com.readapp.data.RemoteDataSourceFactory
 import com.readapp.data.UserPreferences
 import com.readapp.data.model.Book
 import com.readapp.data.model.BookSource
@@ -30,16 +32,20 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
 
     private val userPreferences = UserPreferences(application)
     private val accessTokenState = MutableStateFlow("")
+    private val apiFactory: (String) -> ReadApiService = { endpoint ->
+        ReadApiService.create(endpoint) { accessTokenState.value }
+    }
+    private val readerApiFactory: (String) -> ReaderApiService = { endpoint ->
+        ReaderApiService.create(endpoint) { accessTokenState.value }
+    }
+    private val remoteDataSourceFactory = RemoteDataSourceFactory(apiFactory, readerApiFactory)
     private val readRepository = ReadRepository(
-        apiFactory = { endpoint ->
-            ReadApiService.create(endpoint) { accessTokenState.value }
-        },
-        readerApiFactory = { endpoint ->
-            ReaderApiService.create(endpoint) { accessTokenState.value }
-        }
+        apiFactory = apiFactory,
+        readerApiFactory = readerApiFactory
     )
-    val bookRepository = BookRepository(readRepository)
-    private val sourceRepository = SourceRepository(readRepository)
+    val bookRepository = BookRepository(remoteDataSourceFactory, readRepository)
+    private val localSourceCache = LocalSourceCache(application)
+    private val sourceRepository = SourceRepository(readRepository, localSourceCache)
 
     // Source List State
     private val _sources = MutableStateFlow<List<BookSource>>(emptyList())
