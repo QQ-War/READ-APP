@@ -4,6 +4,7 @@ import android.util.Log
 import com.readapp.data.ChapterContentPolicy
 import com.readapp.data.model.Book
 import kotlinx.coroutines.launch
+import androidx.lifecycle.viewModelScope
 
 internal class ReaderInteractor(private val viewModel: BookViewModel) {
     private companion object {

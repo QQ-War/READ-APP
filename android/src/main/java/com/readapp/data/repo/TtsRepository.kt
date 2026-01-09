@@ -19,6 +19,6 @@ class TtsRepository(private val readRepository: ReadRepository) {
     suspend fun saveTtsBatch(baseUrl: String, publicUrl: String?, accessToken: String, jsonContent: String) =
         readRepository.saveTtsBatch(baseUrl, publicUrl, accessToken, jsonContent)
 
-    fun buildTtsAudioUrl(baseUrl: String, accessToken: String, ttsId: String, text: String, speed: Float) =
+    fun buildTtsAudioUrl(baseUrl: String, accessToken: String, ttsId: String, text: String, speed: Double) =
         readRepository.buildTtsAudioUrl(baseUrl, accessToken, ttsId, text, speed)
 }

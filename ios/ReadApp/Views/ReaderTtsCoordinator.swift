@@ -1,4 +1,5 @@
 import Combine
+import Foundation
 
 final class ReaderTtsCoordinator {
     private weak var reader: ReaderContainerViewController?
