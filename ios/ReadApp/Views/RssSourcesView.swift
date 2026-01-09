@@ -33,9 +33,9 @@ struct RssSourcesView: View {
                             isBusy: viewModel.pendingToggles.contains(source.id),
                             isEnabled: source.enabled,
                             canToggle: viewModel.canEdit
-                        ) {
+                        ) { isEnabled in
                             Task {
-                                await viewModel.toggle(source: source, enable: $0)
+                                await viewModel.toggle(source: source, enable: isEnabled)
                             }
                         }
                     }
