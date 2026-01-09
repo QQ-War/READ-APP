@@ -278,25 +278,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             isUpdatingLayout = false
         }
 
-                if isChapterSwap {
-                    if wasPrevVisible {
-                        scrollView.contentOffset.y = max(0, oldOffset - oldPrevHeightPlusGap)
-                    }
-                }
-                else if isChapterSwapToPrev {
-                    let newPrevHeightPlusGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
-                    scrollView.contentOffset.y = oldOffset + newPrevHeightPlusGap
-                }
-                else if prevChanged && !isChapterSwapToPrev {
-                    let displacement = currentContentView.frame.minY - oldCurrY
-                    if displacement != 0 {
-                        scrollView.contentOffset.y = oldOffset + displacement
-                    }
-                }
-            }
-            isUpdatingLayout = false
-        }
-        
         if lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices {
             lastHighlightIndex = highlightIndex; lastSecondaryIndices = secondaryIndices
             currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
