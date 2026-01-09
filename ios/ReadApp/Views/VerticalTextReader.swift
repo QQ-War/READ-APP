@@ -36,6 +36,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
             if changed { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { vc.scrollToSentence(index: sI, animated: false) } } 
             else { vc.scrollToSentence(index: sI, animated: true) }; DispatchQueue.main.async { self.pendingScrollIndex = nil }
         } else if isPlayingHighlight, let hI = highlightIndex {
+            // 这里不再调用整体 update 而是确保可见
             vc.ensureSentenceVisible(index: hI)
         }
     }
@@ -276,75 +277,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             }
             isUpdatingLayout = false
         }
-        
-        if contentChanged || renderStore == nil {
-            self.previousContentHeight = currentContentView.frame.height
-            self.currentSentences = trimmedSentences; self.lastFontSize = fontSize; self.lastLineSpacing = lineSpacing; isUpdatingLayout = true
-            
-            let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
-            let titleLen = titleText.utf16.count
-            var pS: [Int] = []; var cP = titleLen
-            for (idx, s) in trimmedSentences.enumerated() { 
-                pS.append(cP)
-                cP += (s.utf16.count + 2) 
-                if idx < trimmedSentences.count - 1 { cP += 1 }
-            }; paragraphStarts = pS
-            
-            let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
-            if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) } 
-            else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
-            calculateSentenceOffsets(); isUpdatingLayout = false
-            currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
-            layoutNeeded = true
-        }
-        
-        if nextChanged {
-            self.nextSentences = trimmedNextSentences
-            if trimmedNextSentences.isEmpty {
-                nextRenderStore = nil
-                nextContentView.isHidden = true
-            } else {
-                let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
-                if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
-                else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
-            }
-            layoutNeeded = true
-        }
-        
-        if prevChanged {
-            self.prevSentences = trimmedPrevSentences
-            if trimmedPrevSentences.isEmpty {
-                prevRenderStore = nil
-                prevContentView.isHidden = true
-            } else {
-                let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
-                if let s = prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
-                else { prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                prevContentView.update(renderStore: prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
-            }
-            layoutNeeded = true
-        }
-        
-        if layoutNeeded {
-            // 记录旧的 contentOffset 和关键视图的旧位置（仅用于无限流平滑置换）
-            let oldOffset = scrollView.contentOffset.y
-            let oldCurrY = currentContentView.frame.minY
-            let wasPrevVisible = lastPrevHasContent
-            let oldPrevHeightPlusGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
-            
-            isUpdatingLayout = true
-            updateLayoutFrames()
-            
-            // 恢复转场状态
-            if isTransitioning {
-                self.view.alpha = 1
-                self.scrollView.isUserInteractionEnabled = true
-                self.isTransitioning = false
-            } else if isInfiniteScrollEnabled {
-                // 仅在无限流模式下执行无缝偏移补偿
-                let isChapterSwap = (trimmedSentences == self.nextSentences) && !trimmedSentences.isEmpty
-                let isChapterSwapToPrev = (trimmedSentences == self.prevSentences) && !trimmedSentences.isEmpty
 
                 if isChapterSwap {
                     if wasPrevVisible {
@@ -599,6 +531,17 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
         scrollToSentence(index: index, animated: animated)
     }
+
+    func setHighlight(index: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) {
+        if lastHighlightIndex == index && lastSecondaryIndices == secondaryIndices && isPlaying == isPlayingHighlight { return }
+        lastHighlightIndex = index
+        lastSecondaryIndices = secondaryIndices
+        currentContentView.update(renderStore: renderStore, highlightIndex: index, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: lastMargin, forceRedraw: true)
+    }
+    
+    private var isPlayingHighlight: Bool {
+        return currentContentView.isPlayingHighlight
+    }
     
     private func setupSwitchHint() {
         switchHintLabel.alpha = 0
@@ -774,7 +717,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 }
 
 class VerticalTextContentView: UIView {
-    private var renderStore: TextKit2RenderStore?; private var highlightIndex: Int?; private var secondaryIndices: Set<Int> = []; private var isPlayingHighlight: Bool = false; private var paragraphStarts: [Int] = []; private var margin: CGFloat = 20
+    private var renderStore: TextKit2RenderStore?; private var highlightIndex: Int?; private var secondaryIndices: Set<Int> = []; private(set) var isPlayingHighlight: Bool = false; private var paragraphStarts: [Int] = []; private var margin: CGFloat = 20
     override init(frame: CGRect) { super.init(frame: frame); self.backgroundColor = .clear }
     required init?(coder: NSCoder) { fatalError() }
     func update(renderStore: TextKit2RenderStore?, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool, paragraphStarts: [Int], margin: CGFloat, forceRedraw: Bool) {

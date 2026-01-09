@@ -123,6 +123,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var prefetchedMangaNextContent: String?
     private var lastChapterSwitchTime: TimeInterval = 0
     private let chapterSwitchCooldown: TimeInterval = 1.0
+    private var lastLoggedCacheChapterIndex: Int = -1
+    private var lastLoggedNextUrl: String?
+    private var lastLoggedPrevUrl: String?
+    private var lastLoggedNextCount: Int = -1
+    private var lastLoggedPrevCount: Int = -1
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -332,6 +337,28 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         // 在非无限流模式下，这能让用户在拉动边缘时看到上一章/下一章的“预览”，增强平滑感
         let nextSentences = nextCache.contentSentences.isEmpty ? nil : nextCache.contentSentences
         let prevSentences = prevCache.contentSentences.isEmpty ? nil : prevCache.contentSentences
+
+        if readerSettings.isInfiniteScrollEnabled {
+            let nextUrl = nextCache.chapterUrl
+            let prevUrl = prevCache.chapterUrl
+            let nextCount = nextCache.contentSentences.count
+            let prevCount = prevCache.contentSentences.count
+            if currentChapterIndex != lastLoggedCacheChapterIndex ||
+                nextUrl != lastLoggedNextUrl ||
+                prevUrl != lastLoggedPrevUrl ||
+                nextCount != lastLoggedNextCount ||
+                prevCount != lastLoggedPrevCount {
+                lastLoggedCacheChapterIndex = currentChapterIndex
+                lastLoggedNextUrl = nextUrl
+                lastLoggedPrevUrl = prevUrl
+                lastLoggedNextCount = nextCount
+                lastLoggedPrevCount = prevCount
+                LogManager.shared.log(
+                    "无限流缓存状态: cur=\(currentChapterIndex), nextUrl=\(nextUrl ?? "nil"), nextCount=\(nextCount), prevUrl=\(prevUrl ?? "nil"), prevCount=\(prevCount)",
+                    category: "阅读器"
+                )
+            }
+        }
         
         let highlightIdx = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
         v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: readerSettings.fontSize, lineSpacing: readerSettings.lineSpacing, margin: readerSettings.pageHorizontalMargin, highlightIndex: highlightIdx, secondaryIndices: secondaryIndices, isPlaying: ttsManager.isPlaying)
@@ -401,23 +428,33 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         isUserInteracting = true
         pendingTTSPositionSync = true
+        // 进入 Detach 模式：不再跟随 TTS
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
-            isUserInteracting = false
-            syncTTSReadingPositionIfNeeded()
+            // 停止操作后，延迟恢复跟随 (Catch-up)
+            scheduleCatchUp()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        isUserInteracting = false
-        syncTTSReadingPositionIfNeeded()
+        scheduleCatchUp()
     }
 
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-        isUserInteracting = false
-        syncTTSReadingPositionIfNeeded()
+        scheduleCatchUp()
+    }
+
+    private func scheduleCatchUp() {
+        // 延迟 1.5 秒如果没有新交互，则认为用户阅读位置已定，同步 TTS 并恢复 Follow
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self = self, self.isUserInteracting else { return }
+            self.isUserInteracting = false
+            self.syncTTSReadingPositionIfNeeded()
+            // 触发一次即时同步
+            self.syncTTSState()
+        }
     }
 
     private func setupHorizontalMode() {
@@ -587,6 +624,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             onNextCache: { [weak self] cache in
                 guard let self = self, self.currentChapterIndex == index else { return }
                 self.nextCache = cache
+                LogManager.shared.log("应用下一章缓存: baseIndex=\(index), nextUrl=\(cache.chapterUrl ?? "nil"), nextCount=\(cache.contentSentences.count)", category: "阅读器")
                 self.updateVerticalAdjacent()
                 if self.isMangaMode {
                     self.prefetchedMangaNextIndex = index + 1
@@ -596,6 +634,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             onPrevCache: { [weak self] cache in
                 guard let self = self, self.currentChapterIndex == index else { return }
                 self.prevCache = cache
+                LogManager.shared.log("应用上一章缓存: baseIndex=\(index), prevUrl=\(cache.chapterUrl ?? "nil"), prevCount=\(cache.contentSentences.count)", category: "阅读器")
                 self.updateVerticalAdjacent()
             },
             onResetNext: { [weak self] in self?.resetMangaPrefetchedContent() },
@@ -617,6 +656,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             onNextCache: { [weak self] cache in
                 guard let self = self, self.currentChapterIndex == index else { return }
                 self.nextCache = cache
+                LogManager.shared.log("应用下一章缓存: baseIndex=\(index), nextUrl=\(cache.chapterUrl ?? "nil"), nextCount=\(cache.contentSentences.count)", category: "阅读器")
                 self.updateVerticalAdjacent()
             },
             onResetNext: { [weak self] in self?.nextCache = .empty }
@@ -637,6 +677,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             onPrevCache: { [weak self] cache in
                 guard let self = self, self.currentChapterIndex == index else { return }
                 self.prevCache = cache
+                LogManager.shared.log("应用上一章缓存: baseIndex=\(index), prevUrl=\(cache.chapterUrl ?? "nil"), prevCount=\(cache.contentSentences.count)", category: "阅读器")
                 self.updateVerticalAdjacent()
             },
             onResetPrev: { [weak self] in self?.prevCache = .empty }
@@ -748,25 +789,36 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
     func syncTTSState() {
-        if isMangaMode || isUserInteracting { return }
-        let hIndex = ttsManager.currentSentenceIndex
+        if isMangaMode { return }
+        let sentenceIndex = ttsManager.currentSentenceIndex
+        let sentenceOffset = ttsManager.currentSentenceOffset
+        
+        // 1. 垂直模式：局部高亮更新，避免全局刷新
         if currentReadingMode == .vertical { 
-            updateVerticalAdjacent(secondaryIndices: Set(ttsManager.preloadedIndices))
+            verticalVC?.setHighlight(index: sentenceIndex, secondaryIndices: Set(ttsManager.preloadedIndices), isPlaying: ttsManager.isPlaying)
         }
-        else if currentReadingMode == .horizontal && ttsManager.isPlaying { 
-            syncHorizontalPageToTTS(sentenceIndex: hIndex) 
+        
+        // 2. 视口跟随逻辑 (只有在非交互状态下执行)
+        guard !isUserInteracting, ttsManager.isPlaying else { return }
+        
+        if currentReadingMode == .vertical {
+            verticalVC?.ensureSentenceVisible(index: sentenceIndex)
+        } else if currentReadingMode == .horizontal {
+            syncHorizontalPageToTTS(sentenceIndex: sentenceIndex, sentenceOffset: sentenceOffset)
         }
     }
 
-    private func syncHorizontalPageToTTS(sentenceIndex: Int) { 
+    private func syncHorizontalPageToTTS(sentenceIndex: Int, sentenceOffset: Int) { 
         let starts = currentCache.paragraphStarts
         guard sentenceIndex < starts.count else { return }
-        let o = starts[sentenceIndex]
         
-        if let t = currentCache.pages.firstIndex(where: { NSLocationInRange(o, $0.globalRange) }), t != currentPageIndex { 
-            // 只有当 TTS 正在播放且不是用户正在手动翻页时才自动跳转
-            if ttsManager.isPlaying && !isUserInteracting {
-                updateHorizontalPage(to: t, animated: true) 
+        // 计算全局字符偏移量
+        let totalOffset = starts[sentenceIndex] + sentenceOffset
+        
+        // 查找包含该偏移量的精确页码
+        if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(totalOffset, $0.globalRange) }) {
+            if targetPage != currentPageIndex {
+                updateHorizontalPage(to: targetPage, animated: true) 
             }
         }
     }

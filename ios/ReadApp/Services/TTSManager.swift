@@ -14,8 +14,8 @@ class TTSManager: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var preloadedIndices: Set<Int> = []
     @Published var currentSentenceDuration: TimeInterval = 0
+    @Published var currentSentenceOffset: Int = 0
     var currentBaseSentenceIndex: Int = 0
-    private var currentSentenceOffset: Int = 0
     
     private var audioPlayer: AVAudioPlayer?
     private let speechSynthesizer = AVSpeechSynthesizer()
@@ -44,6 +44,7 @@ class TTSManager: NSObject, ObservableObject {
     
     private var isReadingChapterTitle = false
     private var allowChapterTitlePlayback = true
+    private var offsetTimer: Timer?
     
     // 后台保活
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -256,6 +257,16 @@ class TTSManager: NSObject, ObservableObject {
         } else {
             sentences = splitTextIntoSentences(text)
         }
+        
+        // 索引统一：将标题作为 sentences[0]
+        if shouldSpeakChapterTitle && currentIndex < chapters.count {
+            let title = chapters[currentIndex].title
+            if !sentences.contains(title) {
+                sentences.insert(title, at: 0)
+                isReadingChapterTitle = true
+            }
+        }
+        
         totalSentences = sentences.count
         currentSentenceOffset = 0
         
@@ -265,7 +276,7 @@ class TTSManager: NSObject, ObservableObject {
                 currentSentenceOffset = min(max(0, offset), sentences[externalIndex].utf16.count)
             }
         } else if let progress = UserPreferences.shared.getTTSProgress(bookUrl: bookUrl),
-                  progress.chapterIndex == currentIndex && progress.sentenceIndex < sentences.count {
+                   progress.chapterIndex == currentIndex && progress.sentenceIndex < sentences.count {
             currentSentenceIndex = progress.sentenceIndex
             currentSentenceOffset = min(max(0, progress.sentenceOffset), sentences[currentSentenceIndex].utf16.count)
         } else {
@@ -279,12 +290,9 @@ class TTSManager: NSObject, ObservableObject {
         isPlaying = true
         isPaused = false
         
-        if currentSentenceIndex == 0 && allowChapterTitlePlayback {
-            speakChapterTitle()
-        } else {
-            speakNextSentence()
-        }
+        speakNextSentence()
     }
+
     
     func previousSentence() {
         if currentSentenceIndex > 0 {
@@ -430,9 +438,18 @@ class TTSManager: NSObject, ObservableObject {
     
     private func speakNextSentence() {
         guard isPlaying else { return }
+        stopOffsetTimer()
         if currentSentenceIndex >= sentences.count { nextChapter(); return }
         let sentence = sentences[currentSentenceIndex]
         if isPunctuationOnly(sentence) { currentSentenceIndex += 1; speakNextSentence(); return }
+        
+        // 更新是否正在读标题的状态
+        if currentSentenceIndex == 0 && chapters.indices.contains(currentChapterIndex) && sentence == chapters[currentChapterIndex].title {
+            isReadingChapterTitle = true
+        } else {
+            isReadingChapterTitle = false
+        }
+        
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
         let sentenceToSpeak: String
         if currentSentenceOffset > 0 {
@@ -441,20 +458,23 @@ class TTSManager: NSObject, ObservableObject {
         } else {
             sentenceToSpeak = sentence
         }
-        currentSentenceOffset = 0
-        if sentenceToSpeak != sentence {
-            let sentenceIndex = currentSentenceIndex
-            removeCachedAudio(for: sentenceIndex)
-            DispatchQueue.main.async { self.preloadedIndices.remove(sentenceIndex) }
-        }
+        // 注意：不在这里重置 currentSentenceOffset，由播放器开始后通过 Timer 或 Delegate 更新
+        
         if sentenceToSpeak.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             currentSentenceIndex += 1
+            currentSentenceOffset = 0
             speakNextSentence()
             return
         }
         if UserPreferences.shared.useSystemTTS { speakWithSystemTTS(text: sentenceToSpeak); return }
         startPreloading()
-        guard let url = buildAudioURL(for: sentenceToSpeak) else { stop(); return }
+        
+        let targetIdx = isReadingChapterTitle ? -1 : currentSentenceIndex
+        if let cachedData = cachedAudio(for: targetIdx) {
+            playAudioWithData(data: cachedData); return
+        }
+        
+        guard let url = buildAudioURL(for: sentenceToSpeak, isChapterTitle: isReadingChapterTitle) else { stop(); return }
         playAudio(url: url)
         if currentChapterIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title) }
     }
@@ -572,18 +592,39 @@ class TTSManager: NSObject, ObservableObject {
             if audioPlayer?.play() == true {
                 isLoading = false
                 currentSentenceDuration = audioPlayer?.duration ?? 0
+                startOffsetTimer()
                 beginBackgroundTask()
             } else {
-                isLoading = false; currentSentenceIndex += 1; speakNextSentence()
+                isLoading = false; currentSentenceIndex += 1; currentSentenceOffset = 0; speakNextSentence()
             }
         } catch {
-            isLoading = false; currentSentenceIndex += 1; speakNextSentence()
+            isLoading = false; currentSentenceIndex += 1; currentSentenceOffset = 0; speakNextSentence()
         }
+    }
+    
+    private func startOffsetTimer() {
+        stopOffsetTimer()
+        guard !UserPreferences.shared.useSystemTTS else { return }
+        offsetTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+            guard let self = self, let player = self.audioPlayer, player.isPlaying, player.duration > 0 else { return }
+            let progress = player.currentTime / player.duration
+            let sentenceLen = self.sentences.indices.contains(self.currentSentenceIndex) ? self.sentences[self.currentSentenceIndex].utf16.count : 0
+            let newOffset = Int(Double(sentenceLen) * progress)
+            if abs(newOffset - self.currentSentenceOffset) > 2 {
+                DispatchQueue.main.async { self.currentSentenceOffset = newOffset }
+            }
+        }
+    }
+    
+    private func stopOffsetTimer() {
+        offsetTimer?.invalidate()
+        offsetTimer = nil
     }
     
     func pause() {
         if isPlaying && !isPaused {
             isPaused = true
+            stopOffsetTimer()
             if UserPreferences.shared.useSystemTTS { speechSynthesizer.pauseSpeaking(at: .immediate) }
             else { audioPlayer?.pause() }
             startKeepAlive()
@@ -598,7 +639,10 @@ class TTSManager: NSObject, ObservableObject {
                 if speechSynthesizer.isPaused { speechSynthesizer.continueSpeaking() }
                 else { speakNextSentence() }
             } else {
-                if let player = audioPlayer { player.play() }
+                if let player = audioPlayer { 
+                    player.play()
+                    startOffsetTimer()
+                }
                 else { speakNextSentence() }
             }
             updatePlaybackRate()
@@ -751,8 +795,13 @@ extension TTSManager: AVSpeechSynthesizerDelegate {
         DispatchQueue.main.async {
             guard self.isPlaying else { return }
             self.startKeepAlive()
-            if self.isReadingChapterTitle { self.isReadingChapterTitle = false; self.speakNextSentence(); return }
-            self.currentSentenceIndex += 1; self.speakNextSentence()
+            self.currentSentenceIndex += 1; self.currentSentenceOffset = 0; self.speakNextSentence()
+        }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async {
+            self.currentSentenceOffset = characterRange.location
         }
     }
 }
@@ -761,9 +810,9 @@ extension TTSManager: AVAudioPlayerDelegate {
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         DispatchQueue.main.async {
             guard self.isPlaying else { return }
+            self.stopOffsetTimer()
             self.startKeepAlive()
-            if self.isReadingChapterTitle { self.isReadingChapterTitle = false; self.speakNextSentence(); return }
-            self.currentSentenceIndex += 1; self.speakNextSentence()
+            self.currentSentenceIndex += 1; self.currentSentenceOffset = 0; self.speakNextSentence()
         }
     }
     func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
