@@ -88,6 +88,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var lastPrevContentHeight: CGFloat = 0
     private var lastPrevHasContent = false
     private var pendingSelectedText: String?
+    private var lastEdgeLogTime: TimeInterval = 0
     
     // 无限流无缝切换标记 (0: 无, 1: 下一章, -1: 上一章)
     private var pendingSeamlessSwitch: Int = 0
@@ -573,6 +574,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if let _ = nextRenderStore {
             // 当前章节底部坐标
             let currentBottomY = currentContentView.frame.maxY
+            if rawOffset > currentBottomY - 200 {
+                let now = Date().timeIntervalSince1970
+                if now - lastEdgeLogTime > 0.5 {
+                    lastEdgeLogTime = now
+                    LogManager.shared.log("接近下边缘: offset=\(Int(rawOffset)), bottom=\(Int(currentBottomY)), size=\(Int(scrollView.contentSize.height))", category: "阅读器")
+                }
+            }
             // 如果滚动位置已经超过当前章节底部 100 像素（即接缝已在屏幕上方 100px 处）
             if rawOffset > currentBottomY + 100 {
                 pendingSeamlessSwitch = 1
@@ -583,6 +591,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if let _ = prevRenderStore {
             // 当前章节顶部坐标
             let currentTopY = currentContentView.frame.minY
+            if rawOffset + scrollView.bounds.height < currentTopY + 200 {
+                let now = Date().timeIntervalSince1970
+                if now - lastEdgeLogTime > 0.5 {
+                    lastEdgeLogTime = now
+                    LogManager.shared.log("接近上边缘: offset=\(Int(rawOffset)), top=\(Int(currentTopY)), size=\(Int(scrollView.contentSize.height))", category: "阅读器")
+                }
+            }
             // 如果当前章节顶部已经滚出屏幕下方 100 像素
             if rawOffset + scrollView.bounds.height < currentTopY - 100 {
                 pendingSeamlessSwitch = -1
