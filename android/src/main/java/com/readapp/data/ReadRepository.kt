@@ -714,7 +714,7 @@ class ReadRepository(
 
     private fun updateJsonBoolean(json: String, field: String, value: Boolean): String {
         return runCatching {
-            val obj = JsonParser.parseString(json).asJsonObject
+            val obj = JsonParser().parse(json).asJsonObject
             obj.addProperty(field, value)
             gson.toJson(obj)
         }.getOrDefault(json)

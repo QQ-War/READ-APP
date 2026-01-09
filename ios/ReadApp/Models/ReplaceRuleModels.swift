@@ -34,6 +34,36 @@ struct ReplaceRule: Codable, Identifiable, Equatable {
         case order
     }
 
+    init(
+        id: String?,
+        name: String,
+        groupname: String?,
+        pattern: String,
+        replacement: String,
+        scope: String?,
+        scopeTitle: Bool?,
+        scopeContent: Bool?,
+        excludeScope: String?,
+        isEnabled: Bool?,
+        isRegex: Bool?,
+        timeoutMillisecond: Int64?,
+        ruleorder: Int?
+    ) {
+        self.id = id
+        self.name = name
+        self.groupname = groupname
+        self.pattern = pattern
+        self.replacement = replacement
+        self.scope = scope
+        self.scopeTitle = scopeTitle
+        self.scopeContent = scopeContent
+        self.excludeScope = excludeScope
+        self.isEnabled = isEnabled
+        self.isRegex = isRegex
+        self.timeoutMillisecond = timeoutMillisecond
+        self.ruleorder = ruleorder
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let idString = try? container.decode(String.self, forKey: .id) {

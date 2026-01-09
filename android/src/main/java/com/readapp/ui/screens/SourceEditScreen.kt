@@ -148,7 +148,10 @@ fun SourceEditScreen(
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        sourceId?.let { sourceViewModel.deleteSourceById(it) }
+                        val target = sourceList.firstOrNull { it.bookSourceUrl == sourceId }
+                        if (target != null) {
+                            sourceViewModel.deleteSource(target)
+                        }
                         showDeleteConfirm = false
                         onNavigateBack()
                     }
