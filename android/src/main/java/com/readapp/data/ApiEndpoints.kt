@@ -33,4 +33,6 @@ object ApiEndpoints {
     const val SearchBook = "searchBook"
     const val SaveBook = "saveBook"
     const val DeleteBook = "deleteBook"
+    const val GetRssSources = "getRssSourcess"
+    const val StopRssSource = "stopRssSource"
 }

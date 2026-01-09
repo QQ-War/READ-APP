@@ -33,4 +33,6 @@ enum ApiEndpoints {
     static let saveBook = "saveBook"
     static let deleteBook = "deleteBook"
     static let clearAllRemoteCache = "clearAllRemoteCache"
+    static let getRssSources = "getRssSourcess"
+    static let stopRssSource = "stopRssSource"
 }

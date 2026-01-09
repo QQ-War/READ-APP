@@ -38,6 +38,9 @@ struct SettingsView: View {
                 NavigationLink(destination: ContentSettingsView().environmentObject(apiService)) {
                     Label("内容与净化", systemImage: "shield.checkered")
                 }
+                NavigationLink(destination: RssSourcesView()) {
+                    Label("订阅源管理", systemImage: "rss")
+                }
             }
 
             Section(header: Text("系统")) {

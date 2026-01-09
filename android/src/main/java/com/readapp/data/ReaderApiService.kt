@@ -8,6 +8,7 @@ import com.readapp.data.model.BookSource
 import com.readapp.data.model.Chapter
 import com.readapp.data.model.LoginResponse
 import com.readapp.data.model.ReplaceRule
+import com.readapp.data.model.RssSourcesResponse
 import com.readapp.data.model.UserInfo
 import okhttp3.Interceptor
 import okhttp3.MultipartBody
@@ -147,6 +148,18 @@ interface ReaderApiService {
     suspend fun deleteReplaceRule(
         @Query("accessToken") accessToken: String,
         @Body rule: ReplaceRule,
+    ): Response<ApiResponse<Any>>
+
+    @GET(ReaderApiEndpoints.GetRssSources)
+    suspend fun getRssSources(
+        @Query("accessToken") accessToken: String,
+    ): Response<ApiResponse<RssSourcesResponse>>
+
+    @GET(ReaderApiEndpoints.StopRssSource)
+    suspend fun stopRssSource(
+        @Query("accessToken") accessToken: String,
+        @Query("id") id: String,
+        @Query("st") status: Int
     ): Response<ApiResponse<Any>>
 
     @Multipart

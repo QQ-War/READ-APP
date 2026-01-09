@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -92,6 +93,14 @@ fun SettingsScreen(
                     title = "内容与净化",
                     icon = Icons.Default.CleaningServices,
                     onClick = { onNavigateToSubSetting(Screen.SettingsContent.route) }
+                )
+            }
+
+            item {
+                MenuNavigationItem(
+                    title = "订阅源管理",
+                    icon = Icons.Default.RssFeed,
+                    onClick = { onNavigateToSubSetting(Screen.RssSources.route) }
                 )
             }
 

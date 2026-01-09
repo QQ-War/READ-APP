@@ -32,3 +32,19 @@ data class UserInfo(
     @SerializedName("phone") val phone: String? = null,
     @SerializedName("email") val email: String? = null,
 )
+
+data class RssSourcesResponse(
+    @SerializedName("sources") val sources: List<RssSourceItem> = emptyList(),
+    @SerializedName("can") val can: Boolean = false,
+)
+
+data class RssSourceItem(
+    @SerializedName("sourceUrl") val sourceUrl: String,
+    @SerializedName("sourceName") val sourceName: String? = null,
+    @SerializedName("sourceIcon") val sourceIcon: String? = null,
+    @SerializedName("sourceGroup") val sourceGroup: String? = null,
+    @SerializedName("loginUrl") val loginUrl: String? = null,
+    @SerializedName("loginUi") val loginUi: String? = null,
+    @SerializedName("variableComment") val variableComment: String? = null,
+    @SerializedName("enabled") val enabled: Boolean = false,
+)

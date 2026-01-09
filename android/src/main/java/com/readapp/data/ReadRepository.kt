@@ -8,6 +8,7 @@ import com.readapp.data.model.BookSource
 import com.readapp.data.model.Chapter
 import com.readapp.data.model.HttpTTS
 import com.readapp.data.model.ReplaceRule
+import com.readapp.data.model.RssSourcesResponse
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -525,6 +526,34 @@ class ReadRepository(
             ApiBackend.Reader -> executeWithFailoverReader {
                 it.exploreBook(accessToken, bookSourceUrl, ruleFindUrl, page)
             }(endpoints)
+        }
+    }
+
+    // region RSS Sources
+    suspend fun fetchRssSources(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String
+    ): Result<RssSourcesResponse> {
+        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        return when (backend) {
+            ApiBackend.Read -> executeWithFailover { it.getRssSources(accessToken) }(endpoints)
+            ApiBackend.Reader -> executeWithFailoverReader { it.getRssSources(accessToken) }(endpoints)
+        }
+    }
+
+    suspend fun toggleRssSource(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String,
+        sourceUrl: String,
+        isEnabled: Boolean
+    ): Result<Any> {
+        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        val status = if (isEnabled) 1 else 0
+        return when (backend) {
+            ApiBackend.Read -> executeWithFailover { it.stopRssSource(accessToken, sourceUrl, status) }(endpoints)
+            ApiBackend.Reader -> executeWithFailoverReader { it.stopRssSource(accessToken, sourceUrl, status) }(endpoints)
         }
     }
     // endregion

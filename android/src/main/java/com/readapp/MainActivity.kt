@@ -31,6 +31,7 @@ import com.readapp.ui.screens.MainScreen
 import com.readapp.ui.screens.LoginScreen
 import com.readapp.ui.screens.ReadingScreen
 import com.readapp.ui.screens.ReplaceRuleScreen
+import com.readapp.ui.screens.RssSourcesScreen
 import com.readapp.ui.screens.SettingsScreen
 import com.readapp.ui.screens.AccountSettingsView
 import com.readapp.ui.screens.ReadingSettingsScreen
@@ -403,6 +404,13 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 )
             }
             
+            composable(Screen.RssSources.route) {
+                RssSourcesScreen(
+                    bookViewModel = bookViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            
             // 净化规则管理页面
             composable(Screen.ReplaceRules.route) {
                 ReplaceRuleScreen(
@@ -495,6 +503,7 @@ sealed class Screen(val route: String) {
     object SettingsPreferredSources : Screen("settings_preferred_sources")
     object SettingsDebug : Screen("settings_debug")
     object SettingsCache : Screen("settings_cache")
+    object RssSources : Screen("rss_sources")
     object ReplaceRules : Screen("replace_rules")
     object BookSource : Screen("book_source")
     object SourceEdit : Screen("source_edit?id={id}") {

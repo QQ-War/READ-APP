@@ -22,4 +22,6 @@ object ReaderApiEndpoints {
     const val SaveReplaceRules = "saveReplaceRules"
     const val DeleteReplaceRule = "deleteReplaceRule"
     const val ImportBookPreview = "importBookPreview"
+    const val GetRssSources = "getRssSourcess"
+    const val StopRssSource = "stopRssSource"
 }
