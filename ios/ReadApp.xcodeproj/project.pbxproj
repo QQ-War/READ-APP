@@ -77,6 +77,10 @@
 		7B4B2D6E5A2A4C7AA1F0B005 /* SourceExploreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A005 /* SourceExploreView.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B006 /* FullBookSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A006 /* FullBookSource.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B007 /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A007 /* LogView.swift */; };
+		B10000020000000000000001 /* RssModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000010000000000000001 /* RssModels.swift */; };
+		B10000040000000000000000001 /* RssService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000030000000000000001 /* RssService.swift */; };
+		B10000060000000000000001 /* RssSourcesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000050000000000000001 /* RssSourcesViewModel.swift */; };
+		B10000080000000000000001 /* RssSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000070000000000000001 /* RssSourcesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -150,6 +154,10 @@
 		7B4B2D6E5A2A4C7AA1F0A005 /* SourceExploreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceExploreView.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A006 /* FullBookSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullBookSource.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A007 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
+		B10000010000000000000001 /* RssModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/RssModels.swift; sourceTree = "<group>"; };
+		B10000030000000000000001 /* RssService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/RssService.swift; sourceTree = "<group>"; };
+		B10000050000000000000001 /* RssSourcesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModels/RssSourcesViewModel.swift; sourceTree = "<group>"; };
+		B10000070000000000000001 /* RssSourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/RssSourcesView.swift; sourceTree = "<group>"; };
 		1A000020000000000000001 /* ReadApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000021000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -236,6 +244,7 @@
 				1A00002D000000000000003 /* ReplaceRuleListView.swift */,
 				1A00002E000000000000003 /* ReplaceRuleEditView.swift */,
 				BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */,
+				B10000070000000000000001 /* RssSourcesView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -246,6 +255,7 @@
 				1A00002F000000000000003 /* ReplaceRuleViewModel.swift */,
 				1A00003B000000000000003 /* SourceListViewModel.swift */,
 				0A79963738344134ACDF2305 /* BookSearchViewModel.swift */,
+				B10000060000000000000001 /* RssSourcesViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -271,6 +281,7 @@
 				A10000160000000000000001 /* ReaderChapterBuilder.swift */,
 				1A000016000000000000001 /* TTSManager.swift */,
 				1A000024000000000000002 /* LogManager.swift */,
+				B10000030000000000000001 /* RssService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -287,6 +298,7 @@
 				1A0001010000000000000001 /* ReaderSettingsStore.swift */,
 				1A000039000000000000003 /* BookSource.swift */,
 				7B4B2D6E5A2A4C7AA1F0A006 /* FullBookSource.swift */,
+				B10000010000000000000001 /* RssModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -418,6 +430,10 @@
 				7B4B2D6E5A2A4C7AA1F0B007 /* LogView.swift in Sources */,
 				1A000021000000000000002 /* LoginView.swift in Sources */,
 				1A000023000000000000002 /* LogManager.swift in Sources */,
+				B10000020000000000000001 /* RssModels.swift in Sources */,
+				B10000040000000000000001 /* RssService.swift in Sources */,
+				B10000060000000000000001 /* RssSourcesViewModel.swift in Sources */,
+				B10000080000000000000001 /* RssSourcesView.swift in Sources */,
 				1A000025000000000000002 /* HTMLContentView.swift in Sources */,
 				1A000028000000000000003 /* DocumentPicker.swift in Sources */,
 				1A00002A000000000000003 /* ReplaceRuleListView.swift in Sources */,
