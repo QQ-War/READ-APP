@@ -36,8 +36,10 @@ fun SourceEditScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val gson = remember { GsonBuilder().setPrettyPrinting().create() }
+    val sourceList by sourceViewModel.sources.collectAsState()
 
     LaunchedEffect(sourceId) {
+        sourceViewModel.fetchSources()
         if (sourceId != null) {
             isLoading = true
             val content = sourceViewModel.getSourceDetail(sourceId)
