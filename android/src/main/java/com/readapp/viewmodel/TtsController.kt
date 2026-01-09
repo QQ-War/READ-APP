@@ -123,6 +123,11 @@ internal class TtsController(private val viewModel: BookViewModel) {
         clearPreloadingIndices()
     }
 
+    fun jumpToParagraph(index: Int) {
+        if (!viewModel._keepPlaying.value) return
+        speakParagraph(index)
+    }
+
     private inner class ControllerListener : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             viewModel._isPlaying.value = isPlaying

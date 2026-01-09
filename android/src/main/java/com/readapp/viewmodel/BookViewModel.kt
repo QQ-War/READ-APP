@@ -89,6 +89,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val replaceRuleRepository = ReplaceRuleRepository(remoteDataSourceFactory, repository)
     internal val chapterContentRepository = ChapterContentRepository(repository, localCache)
     private val ttsController = TtsController(this)
+    private val ttsSyncCoordinator = TtsSyncCoordinator(this)
     private val readerInteractor = ReaderInteractor(this)
 
 
@@ -428,6 +429,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun stopTts() { ttsController.stopTts() }
     fun togglePlayPause() { ttsController.togglePlayPause() }
+
+    internal fun jumpToParagraphForTts(index: Int) {
+        ttsController.jumpToParagraph(index)
+    }
 
     // ==================== 娓呯悊 ====================
 
@@ -1012,10 +1017,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updateBookshelfSortByRecent(enabled: Boolean) { _bookshelfSortByRecent.value = enabled; viewModelScope.launch { preferences.saveBookshelfSortByRecent(enabled); applyBooksFilterAndSort() } }
     fun updateFirstVisibleParagraphIndex(index: Int) {
         _firstVisibleParagraphIndex.value = index
+        ttsSyncCoordinator.onUiParagraphVisible(index)
     }
 
     fun clearPendingScrollIndex() {
         _pendingScrollIndex.value = null
+    }
+
+    internal fun requestScrollIndexFromTts(index: Int) {
+        _pendingScrollIndex.value = index
     }
 
     fun updateReadingMode(mode: com.readapp.data.ReadingMode) {
