@@ -160,12 +160,12 @@ class APIService: ObservableObject {
         try await replaceRuleService.saveReplaceRule(rule: rule)
     }
     
-    func deleteReplaceRule(id: String) async throws {
-        try await replaceRuleService.deleteReplaceRule(id: id)
+    func deleteReplaceRule(rule: ReplaceRule) async throws {
+        try await replaceRuleService.deleteReplaceRule(rule: rule)
     }
     
-    func toggleReplaceRule(id: String, isEnabled: Bool) async throws {
-        try await replaceRuleService.toggleReplaceRule(id: id, isEnabled: isEnabled)
+    func toggleReplaceRule(rule: ReplaceRule, isEnabled: Bool) async throws {
+        try await replaceRuleService.toggleReplaceRule(rule: rule, isEnabled: isEnabled)
     }
     
     func saveReplaceRules(jsonContent: String) async throws {

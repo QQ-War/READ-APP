@@ -16,6 +16,10 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import coil.request.ErrorResult
 import coil.request.ImageRequest
+import com.readapp.data.ApiBackend
+import com.readapp.data.detectApiBackend
+import com.readapp.data.normalizeApiBaseUrl
+import com.readapp.data.stripApiBasePath
 
 class MangaAdapter(
     var paragraphs: List<String>,
@@ -46,7 +50,7 @@ class MangaAdapter(
         if (imgUrl != null) {
             val finalUrl = resolveUrl(imgUrl)
             val proxyUrl = buildProxyUrl(finalUrl)
-            val requestUrl = if (forceProxy) proxyUrl else finalUrl
+            val requestUrl = if (forceProxy && proxyUrl != null) proxyUrl else finalUrl
             val referer = buildReferer()
 
             holder.imageView.load(requestUrl) {
@@ -80,17 +84,23 @@ class MangaAdapter(
     private fun resolveUrl(imgUrl: String): String {
         return if (imgUrl.startsWith("http")) imgUrl
         else {
-            val base = serverUrl.replace("/api/5", "")
+            val base = stripApiBasePath(serverUrl)
             if (imgUrl.startsWith("/")) "$base$imgUrl" else "$base/$imgUrl"
         }
     }
 
     private fun buildProxyUrl(finalUrl: String): String? {
-        return android.net.Uri.parse(serverUrl).buildUpon()
+        val backend = detectApiBackend(serverUrl)
+        if (backend != ApiBackend.Read) {
+            return null
+        }
+        val base = stripApiBasePath(normalizeApiBaseUrl(serverUrl, backend))
+        return android.net.Uri.parse(base).buildUpon()
             .path("api/5/proxypng")
             .appendQueryParameter("url", finalUrl)
             .appendQueryParameter("accessToken", "")
-            .build().toString()
+            .build()
+            .toString()
     }
 
     private fun buildReferer(): String? {

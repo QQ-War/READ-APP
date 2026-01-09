@@ -247,7 +247,14 @@ struct ServerSettingsView: View {
         Task {
             do {
                 let serverURL = preferences.serverURL
-                let testURL = "\(serverURL)/api/\(APIService.apiVersion)/login?username=test&password=test&model=test"
+                let backend = ApiBackendResolver.detect(from: serverURL)
+                let baseURL = ApiBackendResolver.normalizeBaseURL(serverURL, backend: backend, apiVersion: APIService.apiVersion)
+                let testURL: String
+                if backend == .reader {
+                    testURL = "\(baseURL)/getSystemInfo"
+                } else {
+                    testURL = "\(baseURL)/login?username=test&password=test&model=test"
+                }
                 
                 LogManager.shared.log("测试连接: \(testURL)", category: "连接测试")
                 
@@ -321,7 +328,6 @@ struct ServerSettingsView: View {
         }
     }
 }
-
 
 
 

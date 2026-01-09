@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.readapp.data.ReadApiService
+import com.readapp.data.ReaderApiService
 import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
 import com.readapp.data.model.Book
@@ -29,9 +30,14 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
 
     private val userPreferences = UserPreferences(application)
     private val accessTokenState = MutableStateFlow("")
-    private val readRepository = ReadRepository { endpoint ->
-        ReadApiService.create(endpoint) { accessTokenState.value }
-    }
+    private val readRepository = ReadRepository(
+        apiFactory = { endpoint ->
+            ReadApiService.create(endpoint) { accessTokenState.value }
+        },
+        readerApiFactory = { endpoint ->
+            ReaderApiService.create(endpoint) { accessTokenState.value }
+        }
+    )
     val bookRepository = BookRepository(readRepository)
     private val sourceRepository = SourceRepository(readRepository)
 
@@ -153,12 +159,8 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun deleteSource(source: BookSource) {
-        deleteSourceById(source.bookSourceUrl)
-    }
-
-    fun deleteSourceById(id: String) {
         val currentSources = _sources.value
-        _sources.value = currentSources.filter { it.bookSourceUrl != id }
+        _sources.value = currentSources.filter { it.bookSourceUrl != source.bookSourceUrl }
 
         viewModelScope.launch {
             val serverUrl = userPreferences.serverUrl.first()
@@ -170,7 +172,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
                 baseUrl = serverUrl,
                 publicUrl = publicUrl,
                 accessToken = token,
-                id = id
+                source = source
             )
             if (result.isFailure) {
                 _sources.value = currentSources // Revert
@@ -196,7 +198,7 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
                 baseUrl = serverUrl,
                 publicUrl = publicUrl,
                 accessToken = token,
-                id = source.bookSourceUrl,
+                source = source,
                 isEnabled = !source.enabled
             )
             if (result.isFailure) {

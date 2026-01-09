@@ -27,6 +27,19 @@ This project includes both iOS and Android clients. Both rely on the Read backen
 ### Backend
 - Deploy the Read backend: https://github.com/autobcb/read
 - Configure at least one TTS engine
+- Reader backend (optional): https://github.com/hectorqin/reader
+
+#### Read backend setup
+- Server base URL should include `/api/5` (example: `http://127.0.0.1:8080/api/5`)
+
+#### Reader backend limitations
+The Reader backend does not provide the following APIs, so these features are not available when using `/reader3`:
+- TTS management and playback APIs
+- Change password
+- Clear remote cache
+
+#### Reader backend setup
+- Server base URL should include `/reader3` (example: `http://127.0.0.1:8080/reader3`)
 
 ### iOS
 1. Open the Xcode project:

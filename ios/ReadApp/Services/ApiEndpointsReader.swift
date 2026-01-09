@@ -1,0 +1,25 @@
+import Foundation
+
+enum ApiEndpointsReader {
+    static let login = "login"
+    static let getUserInfo = "getUserInfo"
+    static let getBookshelf = "getBookshelf"
+    static let getChapterList = "getChapterList"
+    static let getBookContent = "getBookContent"
+    static let saveBookProgress = "saveBookProgress"
+    static let setBookSource = "setBookSource"
+    static let searchBook = "searchBook"
+    static let exploreBook = "exploreBook"
+    static let saveBook = "saveBook"
+    static let deleteBook = "deleteBook"
+    static let getBookSources = "getBookSources"
+    static let getBookSource = "getBookSource"
+    static let saveBookSource = "saveBookSource"
+    static let saveBookSources = "saveBookSources"
+    static let deleteBookSource = "deleteBookSource"
+    static let getReplaceRules = "getReplaceRules"
+    static let saveReplaceRule = "saveReplaceRule"
+    static let saveReplaceRules = "saveReplaceRules"
+    static let deleteReplaceRule = "deleteReplaceRule"
+    static let importBookPreview = "importBookPreview"
+}

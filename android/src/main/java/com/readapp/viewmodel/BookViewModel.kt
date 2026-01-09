@@ -13,6 +13,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import com.readapp.data.ReadApiService
+import com.readapp.data.ReaderApiService
 import com.readapp.data.ReadRepository
 import com.readapp.data.UserPreferences
 import com.readapp.data.LocalCacheManager
@@ -66,9 +67,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val preferences = UserPreferences(appContext)
     private val readerSettings = ReaderSettingsStore(preferences, viewModelScope)
     private val localCache = LocalCacheManager(appContext)
-    val repository = ReadRepository { endpoint ->
-        ReadApiService.create(endpoint) { accessToken.value }
-    }
+    val repository = ReadRepository(
+        apiFactory = { endpoint ->
+            ReadApiService.create(endpoint) { accessToken.value }
+        },
+        readerApiFactory = { endpoint ->
+            ReaderApiService.create(endpoint) { accessToken.value }
+        }
+    )
     internal val authRepository = AuthRepository(repository)
     internal val bookRepository = BookRepository(repository)
     private val sourceRepository = SourceRepository(repository)
@@ -334,13 +340,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun deleteReplaceRule(id: String) {
+    fun deleteReplaceRule(rule: ReplaceRule) {
         viewModelScope.launch {
             replaceRuleRepository.deleteReplaceRule(
                 currentServerEndpoint(),
                 _publicServerAddress.value.ifBlank { null },
                 _accessToken.value,
-                id
+                rule
             ).onSuccess {
                 loadReplaceRules()
             }.onFailure {
@@ -349,16 +355,16 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun toggleReplaceRule(id: String, isEnabled: Boolean) {
+    fun toggleReplaceRule(rule: ReplaceRule, isEnabled: Boolean) {
         viewModelScope.launch {
             replaceRuleRepository.toggleReplaceRule(
                 currentServerEndpoint(),
                 _publicServerAddress.value.ifBlank { null },
                 _accessToken.value,
-                id,
+                rule,
                 isEnabled
             ).onSuccess {
-                val updatedRules = _replaceRules.value.map { if (it.id == id) it.copy(isEnabled = isEnabled) else it }
+                val updatedRules = _replaceRules.value.map { if (it.id == rule.id) it.copy(isEnabled = isEnabled) else it }
                 _replaceRules.value = updatedRules
                 loadReplaceRules()
             }.onFailure {

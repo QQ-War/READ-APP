@@ -8,6 +8,9 @@ final class CacheManagementService {
     }
 
     func clearAllRemoteCache() async throws {
+        if client.backend == .reader {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "当前服务端不支持清理缓存"])
+        }
         guard !client.accessToken.isEmpty else {
             throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
         }

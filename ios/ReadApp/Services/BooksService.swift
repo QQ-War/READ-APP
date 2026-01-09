@@ -15,7 +15,8 @@ final class BooksService {
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "version", value: "1.0.0")
         ]
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getBookshelf, queryItems: queryItems)
+        let endpoint = client.backend == .reader ? ApiEndpointsReader.getBookshelf : ApiEndpoints.getBookshelf
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
         }
@@ -37,7 +38,8 @@ final class BooksService {
         }
 
         do {
-            let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getChapterList, queryItems: queryItems)
+            let endpoint = client.backend == .reader ? ApiEndpointsReader.getChapterList : ApiEndpoints.getChapterList
+            let (data, httpResponse) = try await client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)
             guard httpResponse.statusCode == 200 else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
             }
@@ -57,25 +59,48 @@ final class BooksService {
     }
 
     func saveBookProgress(bookUrl: String, index: Int, pos: Double, title: String?) async throws {
-        let queryItems: [URLQueryItem] = {
-            var items = [
-                URLQueryItem(name: "accessToken", value: client.accessToken),
-                URLQueryItem(name: "url", value: bookUrl),
-                URLQueryItem(name: "index", value: "\(index)"),
-                URLQueryItem(name: "pos", value: "\(pos)")
-            ]
-            if let title = title {
-                items.append(URLQueryItem(name: "title", value: title))
+        switch client.backend {
+        case .read:
+            let queryItems: [URLQueryItem] = {
+                var items = [
+                    URLQueryItem(name: "accessToken", value: client.accessToken),
+                    URLQueryItem(name: "url", value: bookUrl),
+                    URLQueryItem(name: "index", value: "\(index)"),
+                    URLQueryItem(name: "pos", value: "\(pos)")
+                ]
+                if let title = title {
+                    items.append(URLQueryItem(name: "title", value: title))
+                }
+                return items
+            }()
+            let url = try client.buildURL(endpoint: ApiEndpoints.saveBookProgress, queryItems: queryItems)
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            let (data, _) = try await URLSession.shared.data(for: request)
+            let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+            if !apiResponse.isSuccess {
+                print("保存进度失败: \(apiResponse.errorMsg ?? "未知错误")")
             }
-            return items
-        }()
-        let url = try client.buildURL(endpoint: ApiEndpoints.saveBookProgress, queryItems: queryItems)
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
-        if !apiResponse.isSuccess {
-            print("保存进度失败: \(apiResponse.errorMsg ?? "未知错误")")
+        case .reader:
+            let queryItems = [
+                URLQueryItem(name: "accessToken", value: client.accessToken)
+            ]
+            let url = try client.buildURL(endpoint: ApiEndpointsReader.saveBookProgress, queryItems: queryItems)
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            struct SaveProgressPayload: Codable {
+                let url: String
+                let index: Int
+                let pos: Double?
+                let title: String?
+            }
+            request.httpBody = try JSONEncoder().encode(SaveProgressPayload(url: bookUrl, index: index, pos: pos, title: title))
+            let (data, _) = try await URLSession.shared.data(for: request)
+            let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+            if !apiResponse.isSuccess {
+                print("保存进度失败: \(apiResponse.errorMsg ?? "未知错误")")
+            }
         }
     }
 
@@ -91,7 +116,8 @@ final class BooksService {
             URLQueryItem(name: "key", value: keyword)
         ]
 
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.searchBook, queryItems: queryItems)
+        let endpoint = client.backend == .reader ? ApiEndpointsReader.searchBook : ApiEndpoints.searchBook
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)
 
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "搜索书籍失败"])
@@ -106,28 +132,45 @@ final class BooksService {
     }
 
     func fetchExploreKinds(bookSourceUrl: String) async throws -> [BookSource.ExploreKind] {
-        let queryItems = [
-            URLQueryItem(name: "accessToken", value: client.accessToken),
-            URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl),
-            URLQueryItem(name: "need", value: "true")
-        ]
+        switch client.backend {
+        case .read:
+            let queryItems = [
+                URLQueryItem(name: "accessToken", value: client.accessToken),
+                URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl),
+                URLQueryItem(name: "need", value: "true")
+            ]
 
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getExploreUrl, queryItems: queryItems)
-        guard httpResponse.statusCode == 200 else {
-            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "获取发现配置失败"])
-        }
-
-        struct ExploreUrlResponse: Codable {
-            let found: String?
-        }
-
-        let apiResponse = try JSONDecoder().decode(APIResponse<ExploreUrlResponse>.self, from: data)
-        if apiResponse.isSuccess, let found = apiResponse.data?.found {
-            if let foundData = found.data(using: .utf8) {
-                return try JSONDecoder().decode([BookSource.ExploreKind].self, from: foundData)
+            let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getExploreUrl, queryItems: queryItems)
+            guard httpResponse.statusCode == 200 else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "获取发现配置失败"])
             }
+
+            struct ExploreUrlResponse: Codable {
+                let found: String?
+            }
+
+            let apiResponse = try JSONDecoder().decode(APIResponse<ExploreUrlResponse>.self, from: data)
+            if apiResponse.isSuccess, let found = apiResponse.data?.found {
+                if let foundData = found.data(using: .utf8) {
+                    return try JSONDecoder().decode([BookSource.ExploreKind].self, from: foundData)
+                }
+            }
+            return []
+        case .reader:
+            let queryItems = [
+                URLQueryItem(name: "accessToken", value: client.accessToken),
+                URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl)
+            ]
+            let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpointsReader.getBookSource, queryItems: queryItems)
+            guard httpResponse.statusCode == 200 else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "获取发现配置失败"])
+            }
+            let apiResponse = try JSONDecoder().decode(APIResponse<BookSource>.self, from: data)
+            if apiResponse.isSuccess, let source = apiResponse.data {
+                return parseExploreKinds(from: source.exploreUrl)
+            }
+            return []
         }
-        return []
     }
 
     func exploreBook(bookSourceUrl: String, ruleFindUrl: String, page: Int = 1) async throws -> [Book] {
@@ -138,7 +181,8 @@ final class BooksService {
             URLQueryItem(name: "ruleFindUrl", value: ruleFindUrl)
         ]
 
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.exploreBook, queryItems: queryItems)
+        let endpoint = client.backend == .reader ? ApiEndpointsReader.exploreBook : ApiEndpoints.exploreBook
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "浏览书源失败"])
         }
@@ -160,7 +204,8 @@ final class BooksService {
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "useReplaceRule", value: "\(useReplaceRule)")
         ]
-        let url = try client.buildURL(endpoint: ApiEndpoints.saveBook, queryItems: queryItems)
+        let endpoint = client.backend == .reader ? ApiEndpointsReader.saveBook : ApiEndpoints.saveBook
+        let url = try client.buildURL(endpoint: endpoint, queryItems: queryItems)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -189,7 +234,8 @@ final class BooksService {
             URLQueryItem(name: "bookSourceUrl", value: newBookSourceUrl)
         ]
 
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.setBookSource, queryItems: queryItems)
+        let endpoint = client.backend == .reader ? ApiEndpointsReader.setBookSource : ApiEndpoints.setBookSource
+        let (data, httpResponse) = try await client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "换源请求失败"])
         }
@@ -207,7 +253,8 @@ final class BooksService {
         let queryItems = [
             URLQueryItem(name: "accessToken", value: client.accessToken)
         ]
-        let url = try client.buildURL(endpoint: ApiEndpoints.deleteBook, queryItems: queryItems)
+        let endpoint = client.backend == .reader ? ApiEndpointsReader.deleteBook : ApiEndpoints.deleteBook
+        let url = try client.buildURL(endpoint: endpoint, queryItems: queryItems)
 
         struct DeleteBookRequest: Codable {
             let bookUrl: String
@@ -272,6 +319,35 @@ final class BooksService {
             }
         } catch let error as NSError {
             throw NSError(domain: "APIService", code: error.code, userInfo: [NSLocalizedDescriptionKey: "上传书籍失败: \(error.localizedDescription)"])
+        }
+    }
+
+    private func parseExploreKinds(from exploreUrl: String?) -> [BookSource.ExploreKind] {
+        guard let exploreUrl, !exploreUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+        let trimmed = exploreUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("[") {
+            if let data = trimmed.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode([BookSource.ExploreKind].self, from: data) {
+                return decoded
+            }
+            return []
+        }
+        let separators = ["::", "##", "："]
+        let entries = trimmed
+            .components(separatedBy: "\n")
+            .flatMap { $0.components(separatedBy: "&&") }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        return entries.map { entry in
+            let parts = separators.first { entry.contains($0) }.map { entry.components(separatedBy: $0) }
+            let rawTitle = parts?.first?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = (rawTitle?.isEmpty == false) ? rawTitle! : entry
+            let rawUrl = parts?.dropFirst().joined(separator: "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let url = (rawUrl?.isEmpty == false) ? rawUrl! : entry
+            return BookSource.ExploreKind(title: title, url: url)
         }
     }
 }

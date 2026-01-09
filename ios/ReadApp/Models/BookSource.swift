@@ -12,6 +12,7 @@ struct BookSource: Codable, Identifiable {
     let lastUpdateTime: Int64?
     let weight: Int?
     let bookSourceComment: String?
+    let exploreUrl: String? = nil
     let respondTime: Int64?
     
     enum CodingKeys: String, CodingKey {
@@ -25,6 +26,7 @@ struct BookSource: Codable, Identifiable {
         case lastUpdateTime
         case weight
         case bookSourceComment
+        case exploreUrl
         case respondTime
     }
     

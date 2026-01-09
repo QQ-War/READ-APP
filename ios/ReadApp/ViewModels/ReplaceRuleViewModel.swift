@@ -40,12 +40,12 @@ class ReplaceRuleViewModel: ObservableObject {
         isLoading = false
     }
 
-    func deleteRule(id: String) async {
+    func deleteRule(rule: ReplaceRule) async {
         isLoading = true
         errorMessage = nil
         
         do {
-            try await apiService.deleteReplaceRule(id: id)
+            try await apiService.deleteReplaceRule(rule: rule)
             // 删除成功后刷新列表
             await fetchRules()
         } catch {
@@ -56,14 +56,14 @@ class ReplaceRuleViewModel: ObservableObject {
         isLoading = false
     }
 
-    func toggleRule(id: String, isEnabled: Bool) async {
+    func toggleRule(rule: ReplaceRule, isEnabled: Bool) async {
         // We don't set isLoading to true for this to make the UI feel more responsive
         errorMessage = nil
         
         do {
-            try await apiService.toggleReplaceRule(id: id, isEnabled: isEnabled)
+            try await apiService.toggleReplaceRule(rule: rule, isEnabled: isEnabled)
             // Optimistically update the local state
-            if rules.contains(where: { $0.id == id }) {
+            if rules.contains(where: { $0.id == rule.id }) {
                 // This is tricky without the full object back. Re-fetching is safer.
                 await fetchRules()
             }

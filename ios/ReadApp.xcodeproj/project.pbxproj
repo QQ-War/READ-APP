@@ -41,6 +41,8 @@
 		A10000110000000000000001 /* Data+Append.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000120000000000000001 /* Data+Append.swift */; };
 		A10000130000000000000001 /* ReadingTextProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000140000000000000001 /* ReadingTextProcessor.swift */; };
 		A10000170000000000000001 /* ApiEndpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000180000000000000001 /* ApiEndpoints.swift */; };
+		A10000270000000000000001 /* ApiBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000280000000000000001 /* ApiBackend.swift */; };
+		A10000290000000000000001 /* ApiEndpointsReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100002A0000000000000001 /* ApiEndpointsReader.swift */; };
 		A10000150000000000000001 /* ReaderChapterBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000160000000000000001 /* ReaderChapterBuilder.swift */; };
 		1A0000F60000000000000001 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F50000000000000001 /* APIModels.swift */; };
 		1A0000F80000000000000001 /* BookModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F70000000000000001 /* BookModels.swift */; };
@@ -112,6 +114,8 @@
 		A10000120000000000000001 /* Data+Append.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Append.swift"; sourceTree = "<group>"; };
 		A10000140000000000000001 /* ReadingTextProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTextProcessor.swift; sourceTree = "<group>"; };
 		A10000180000000000000001 /* ApiEndpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiEndpoints.swift; sourceTree = "<group>"; };
+		A10000280000000000000001 /* ApiBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiBackend.swift; sourceTree = "<group>"; };
+		A100002A0000000000000001 /* ApiEndpointsReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiEndpointsReader.swift; sourceTree = "<group>"; };
 		A10000160000000000000001 /* ReaderChapterBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderChapterBuilder.swift; sourceTree = "<group>"; };
 		1A0000F50000000000000001 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
 		1A0000F70000000000000001 /* BookModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookModels.swift; sourceTree = "<group>"; };
@@ -262,6 +266,8 @@
 				A10000120000000000000001 /* Data+Append.swift */,
 				A10000140000000000000001 /* ReadingTextProcessor.swift */,
 				A10000180000000000000001 /* ApiEndpoints.swift */,
+				A10000280000000000000001 /* ApiBackend.swift */,
+				A100002A0000000000000001 /* ApiEndpointsReader.swift */,
 				A10000160000000000000001 /* ReaderChapterBuilder.swift */,
 				1A000016000000000000001 /* TTSManager.swift */,
 				1A000024000000000000002 /* LogManager.swift */,
@@ -385,6 +391,8 @@
 				A10000110000000000000001 /* Data+Append.swift in Sources */,
 				A10000130000000000000001 /* ReadingTextProcessor.swift in Sources */,
 				A10000170000000000000001 /* ApiEndpoints.swift in Sources */,
+				A10000270000000000000001 /* ApiBackend.swift in Sources */,
+				A10000290000000000000001 /* ApiEndpointsReader.swift in Sources */,
 				A10000150000000000000001 /* ReaderChapterBuilder.swift in Sources */,
 				1A0000F60000000000000001 /* APIModels.swift in Sources */,
 				1A0000F80000000000000001 /* BookModels.swift in Sources */,

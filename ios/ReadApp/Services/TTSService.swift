@@ -8,6 +8,9 @@ final class TTSService {
     }
 
     func fetchTTSList() async throws -> [HttpTTS] {
+        if client.backend == .reader {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "当前服务端不支持TTS"])
+        }
         let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getAllTts, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
         guard httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
@@ -21,6 +24,9 @@ final class TTSService {
     }
 
     func buildTTSAudioURL(ttsId: String, text: String, speechRate: Double) -> URL? {
+        if client.backend == .reader {
+            return nil
+        }
         guard var components = URLComponents(string: "\(client.baseURL)/tts") else { return nil }
         components.queryItems = [
             URLQueryItem(name: "accessToken", value: client.accessToken),
@@ -32,6 +38,9 @@ final class TTSService {
     }
 
     func saveTTS(tts: HttpTTS) async throws {
+        if client.backend == .reader {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "当前服务端不支持TTS"])
+        }
         let url = try client.buildURL(endpoint: ApiEndpoints.addTts, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -48,6 +57,9 @@ final class TTSService {
     }
 
     func deleteTTS(id: String) async throws {
+        if client.backend == .reader {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "当前服务端不支持TTS"])
+        }
         let queryItems = [
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "id", value: id)
@@ -63,6 +75,9 @@ final class TTSService {
     }
 
     func saveTTSBatch(jsonContent: String) async throws {
+        if client.backend == .reader {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "当前服务端不支持TTS"])
+        }
         let url = try client.buildURL(endpoint: ApiEndpoints.saveTtsBatch, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -79,6 +94,9 @@ final class TTSService {
     }
 
     func fetchDefaultTTS() async throws -> String {
+        if client.backend == .reader {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "当前服务端不支持TTS"])
+        }
         guard !client.accessToken.isEmpty else {
             throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
         }

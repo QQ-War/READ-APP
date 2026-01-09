@@ -1,0 +1,25 @@
+package com.readapp.data
+
+object ReaderApiEndpoints {
+    const val Login = "login"
+    const val GetUserInfo = "getUserInfo"
+    const val GetBookshelf = "getBookshelf"
+    const val GetChapterList = "getChapterList"
+    const val GetBookContent = "getBookContent"
+    const val SaveBookProgress = "saveBookProgress"
+    const val SetBookSource = "setBookSource"
+    const val SearchBook = "searchBook"
+    const val ExploreBook = "exploreBook"
+    const val SaveBook = "saveBook"
+    const val DeleteBook = "deleteBook"
+    const val GetBookSources = "getBookSources"
+    const val GetBookSource = "getBookSource"
+    const val SaveBookSource = "saveBookSource"
+    const val SaveBookSources = "saveBookSources"
+    const val DeleteBookSource = "deleteBookSource"
+    const val GetReplaceRules = "getReplaceRules"
+    const val SaveReplaceRule = "saveReplaceRule"
+    const val SaveReplaceRules = "saveReplaceRules"
+    const val DeleteReplaceRule = "deleteReplaceRule"
+    const val ImportBookPreview = "importBookPreview"
+}

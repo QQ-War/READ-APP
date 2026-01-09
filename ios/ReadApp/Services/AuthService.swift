@@ -9,16 +9,35 @@ final class AuthService {
     }
 
     func login(username: String, password: String) async throws -> String {
-        let deviceModel = await MainActor.run { UIDevice.current.model }
-        let queryItems = [
-            URLQueryItem(name: "username", value: username),
-            URLQueryItem(name: "password", value: password),
-            URLQueryItem(name: "model", value: deviceModel)
-        ]
-        let url = try client.buildURL(endpoint: ApiEndpoints.login, queryItems: queryItems)
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 15
+        let request: URLRequest
+        switch client.backend {
+        case .read:
+            let deviceModel = await MainActor.run { UIDevice.current.model }
+            let queryItems = [
+                URLQueryItem(name: "username", value: username),
+                URLQueryItem(name: "password", value: password),
+                URLQueryItem(name: "model", value: deviceModel)
+            ]
+            let url = try client.buildURL(endpoint: ApiEndpoints.login, queryItems: queryItems)
+            var newRequest = URLRequest(url: url)
+            newRequest.httpMethod = "GET"
+            newRequest.timeoutInterval = 15
+            request = newRequest
+        case .reader:
+            let url = try client.buildURL(endpoint: ApiEndpointsReader.login)
+            var newRequest = URLRequest(url: url)
+            newRequest.httpMethod = "POST"
+            newRequest.timeoutInterval = 15
+            newRequest.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            struct LoginPayload: Codable {
+                let username: String
+                let password: String
+                let isLogin: Bool
+            }
+            newRequest.httpBody = try JSONEncoder().encode(LoginPayload(username: username, password: password, isLogin: true))
+            request = newRequest
+        }
+
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
@@ -42,6 +61,9 @@ final class AuthService {
     }
 
     func changePassword(oldPassword: String, newPassword: String) async throws {
+        if client.backend == .reader {
+            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "当前服务端不支持修改密码"])
+        }
         let queryItems = [
             URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "oldpassword", value: oldPassword),

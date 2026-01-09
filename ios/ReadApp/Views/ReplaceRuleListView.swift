@@ -52,7 +52,7 @@ struct ReplaceRuleListView: View {
                                 get: { rule.isEnabled ?? true },
                                 set: { newValue in
                                     Task {
-                                        await viewModel.toggleRule(id: rule.id ?? "", isEnabled: newValue)
+                                        await viewModel.toggleRule(rule: rule, isEnabled: newValue)
                                     }
                                 }
                             )) {
@@ -147,9 +147,7 @@ struct ReplaceRuleListView: View {
         let rulesToDelete = offsets.map { viewModel.rules[$0] }
         Task {
             for rule in rulesToDelete {
-                if let id = rule.id {
-                    await viewModel.deleteRule(id: id)
-                }
+                await viewModel.deleteRule(rule: rule)
             }
         }
     }

@@ -27,6 +27,19 @@ English README: `README.md`
 ### 后端准备
 - 部署轻阅读后端：https://github.com/autobcb/read
 - 在后端配置至少一个 TTS 引擎
+- Reader 后端（可选）：https://github.com/hectorqin/reader
+
+#### Read 后端配置
+- 服务端地址需要包含 `/api/5`（示例：`http://127.0.0.1:8080/api/5`）
+
+#### Reader 后端限制
+由于 Reader 服务端没有提供以下接口，使用 `/reader3` 时这些功能不可用：
+- TTS 管理与播放相关接口
+- 修改密码
+- 清理远端缓存
+
+#### Reader 后端配置
+- 服务端地址需要包含 `/reader3`（示例：`http://127.0.0.1:8080/reader3`）
 
 ### iOS
 1. 打开 Xcode 项目：

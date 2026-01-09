@@ -33,6 +33,9 @@ data class BookSource(
     @SerializedName("bookSourceComment")
     val bookSourceComment: String?,
 
+    @SerializedName("exploreUrl")
+    val exploreUrl: String? = null,
+
     @SerializedName("respondTime")
     val respondTime: Long?
 ) {

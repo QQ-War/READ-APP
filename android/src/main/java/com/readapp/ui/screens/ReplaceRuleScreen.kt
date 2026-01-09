@@ -163,10 +163,10 @@ fun ReplaceRuleScreen(
                                 showEditDialog = true
                             },
                             onToggleEnabled = { isEnabled ->
-                                bookViewModel.toggleReplaceRule(rule.id, isEnabled)
+                                bookViewModel.toggleReplaceRule(rule, isEnabled)
                             },
                             onDelete = {
-                                bookViewModel.deleteReplaceRule(rule.id)
+                                bookViewModel.deleteReplaceRule(rule)
                             }
                         )
                     }
