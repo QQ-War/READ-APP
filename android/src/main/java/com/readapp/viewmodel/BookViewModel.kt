@@ -70,6 +70,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appContext = getApplication<Application>()
     val preferences = UserPreferences(appContext)
+    private val readerSettings = ReaderSettingsStore(preferences, viewModelScope)
     private val localCache = LocalCacheManager(appContext)
     val repository = ReadRepository { endpoint ->
         ReadApiService.create(endpoint) { accessToken.value }
@@ -189,12 +190,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val speechSpeed: StateFlow<Int> = _speechSpeed.asStateFlow()
     private val _preloadCount = MutableStateFlow(3)
     val preloadCount: StateFlow<Int> = _preloadCount.asStateFlow()
-    private val _readingFontSize = MutableStateFlow(16f)
-    val readingFontSize: StateFlow<Float> = _readingFontSize.asStateFlow()
-    private val _readingHorizontalPadding = MutableStateFlow(24f)
-    val readingHorizontalPadding: StateFlow<Float> = _readingHorizontalPadding.asStateFlow()
-    private val _infiniteScrollEnabled = MutableStateFlow(true)
-    val infiniteScrollEnabled: StateFlow<Boolean> = _infiniteScrollEnabled.asStateFlow()
+    val readingFontSize: StateFlow<Float> = readerSettings.readingFontSize
+    val readingHorizontalPadding: StateFlow<Float> = readerSettings.readingHorizontalPadding
+    val infiniteScrollEnabled: StateFlow<Boolean> = readerSettings.infiniteScrollEnabled
     private val _loggingEnabled = MutableStateFlow(false)
     val loggingEnabled: StateFlow<Boolean> = _loggingEnabled.asStateFlow()
     private val _bookshelfSortByRecent = MutableStateFlow(false)
@@ -203,10 +201,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val searchSourcesFromBookshelf: StateFlow<Boolean> = _searchSourcesFromBookshelf.asStateFlow()
     private val _preferredSearchSourceUrls = MutableStateFlow<Set<String>>(emptySet())
     val preferredSearchSourceUrls: StateFlow<Set<String>> = _preferredSearchSourceUrls.asStateFlow()
-    private val _manualMangaUrls = MutableStateFlow<Set<String>>(emptySet())
-    val manualMangaUrls: StateFlow<Set<String>> = _manualMangaUrls.asStateFlow()
-    private val _forceMangaProxy = MutableStateFlow(false)
-    val forceMangaProxy: StateFlow<Boolean> = _forceMangaProxy.asStateFlow()
+    val manualMangaUrls: StateFlow<Set<String>> = readerSettings.manualMangaUrls
+    val forceMangaProxy: StateFlow<Boolean> = readerSettings.forceMangaProxy
 
 
     private val _prevChapterIndex = MutableStateFlow<Int?>(null)
@@ -217,14 +213,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val prevChapterContent: StateFlow<String?> = _prevChapterContent.asStateFlow()
     private val _nextChapterContent = MutableStateFlow<String?>(null)
     val nextChapterContent: StateFlow<String?> = _nextChapterContent.asStateFlow()
-    private val _readingMode = MutableStateFlow(com.readapp.data.ReadingMode.Vertical)
-    val readingMode: StateFlow<com.readapp.data.ReadingMode> = _readingMode.asStateFlow()
-    private val _lockPageOnTTS = MutableStateFlow(false)
-    val lockPageOnTTS: StateFlow<Boolean> = _lockPageOnTTS.asStateFlow()
-    private val _pageTurningMode = MutableStateFlow(com.readapp.data.PageTurningMode.Scroll)
-    val pageTurningMode: StateFlow<com.readapp.data.PageTurningMode> = _pageTurningMode.asStateFlow()
-    private val _darkMode = MutableStateFlow(com.readapp.data.DarkModeConfig.OFF)
-    val darkMode: StateFlow<com.readapp.data.DarkModeConfig> = _darkMode.asStateFlow()
+    val readingMode: StateFlow<com.readapp.data.ReadingMode> = readerSettings.readingMode
+    val lockPageOnTTS: StateFlow<Boolean> = readerSettings.lockPageOnTTS
+    val pageTurningMode: StateFlow<com.readapp.data.PageTurningMode> = readerSettings.pageTurningMode
+    val darkMode: StateFlow<com.readapp.data.DarkModeConfig> = readerSettings.darkMode
     private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080/api/5")
     val serverAddress: StateFlow<String> = _serverAddress.asStateFlow()
     private val _publicServerAddress = MutableStateFlow("")
@@ -340,21 +332,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _speakerTtsMapping.value = parseSpeakerMapping(preferences.speakerTtsMapping.firstOrNull().orEmpty())
             _speechSpeed.value = preferences.speechRate.first().toInt()
             _preloadCount.value = preferences.preloadCount.first().toInt()
-            _readingFontSize.value = preferences.readingFontSize.first()
-            _readingHorizontalPadding.value = preferences.readingHorizontalPadding.first()
-            _infiniteScrollEnabled.value = preferences.infiniteScrollEnabled.first()
             _loggingEnabled.value = preferences.loggingEnabled.first()
             _bookshelfSortByRecent.value = preferences.bookshelfSortByRecent.first()
             _searchSourcesFromBookshelf.value = preferences.searchSourcesFromBookshelf.first()
             val urls = preferences.preferredSearchSourceUrls.first()
             _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
-            val mUrls = preferences.manualMangaUrls.first()
-            _manualMangaUrls.value = if (mUrls.isBlank()) emptySet() else mUrls.split(";").toSet()
-            _forceMangaProxy.value = preferences.forceMangaProxy.first()
-            _readingMode.value = preferences.readingMode.first()
-            _lockPageOnTTS.value = preferences.lockPageOnTTS.first()
-            _pageTurningMode.value = preferences.pageTurningMode.first()
-            _darkMode.value = preferences.darkMode.first()
+            readerSettings.loadInitial()
 
             if (_accessToken.value.isNotBlank()) {
                 _isLoading.value = true
@@ -1328,7 +1311,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val count = actualEnd - actualStart + 1
 
         // 判断是否为漫画模式
-        val isManga = _manualMangaUrls.value.contains(book.bookUrl) || book.type == 2
+        val isManga = manualMangaUrls.value.contains(book.bookUrl) || book.type == 2
         val effectiveType = if (isManga) 2 else 0
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -1392,7 +1375,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val bookUrl = book.bookUrl ?: return null
         
         // 判断是否为漫画模式
-        val isManga = _manualMangaUrls.value.contains(bookUrl) || book.type == 2
+        val isManga = manualMangaUrls.value.contains(bookUrl) || book.type == 2
         val effectiveType = if (isManga) 2 else 0
         
         if (_isChapterContentLoading.value) {
@@ -1451,11 +1434,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun isMangaBook(book: Book?): Boolean {
         val bookUrl = book?.bookUrl ?: return false
-        return _manualMangaUrls.value.contains(bookUrl) || book.type == 2
+        return manualMangaUrls.value.contains(bookUrl) || book.type == 2
     }
 
     private suspend fun prefetchAdjacentChapters() {
-        if (!_infiniteScrollEnabled.value) {
+        if (!infiniteScrollEnabled.value) {
             clearAdjacentChapterCache()
             return
         }
@@ -1614,18 +1597,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { preferences.saveSpeechRate(_speechSpeed.value.toDouble()) } 
     }
     fun updatePreloadCount(count: Int) { _preloadCount.value = count.coerceIn(1, 10); viewModelScope.launch { preferences.savePreloadCount(_preloadCount.value.toFloat()) } }
-    fun updateReadingFontSize(size: Float) { _readingFontSize.value = size.coerceIn(12f, 28f); viewModelScope.launch { preferences.saveReadingFontSize(_readingFontSize.value) } }
-    fun updateReadingHorizontalPadding(padding: Float) { _readingHorizontalPadding.value = padding.coerceIn(8f, 48f); viewModelScope.launch { preferences.saveReadingHorizontalPadding(_readingHorizontalPadding.value) } }
+    fun updateReadingFontSize(size: Float) { readerSettings.updateReadingFontSize(size) }
+    fun updateReadingHorizontalPadding(padding: Float) { readerSettings.updateReadingHorizontalPadding(padding) }
     fun updateInfiniteScrollEnabled(enabled: Boolean) {
-        _infiniteScrollEnabled.value = enabled
-        viewModelScope.launch {
-            preferences.saveInfiniteScrollEnabled(enabled)
-            if (!enabled) {
-                clearAdjacentChapterCache()
-            } else {
-                prefetchAdjacentChapters()
-            }
-        }
+        readerSettings.updateInfiniteScrollEnabled(
+            enabled = enabled,
+            onDisable = { clearAdjacentChapterCache() },
+            onEnable = { viewModelScope.launch { prefetchAdjacentChapters() } }
+        )
     }
     fun updateLoggingEnabled(enabled: Boolean) { _loggingEnabled.value = enabled; viewModelScope.launch { preferences.saveLoggingEnabled(enabled) } }
     fun updateBookshelfSortByRecent(enabled: Boolean) { _bookshelfSortByRecent.value = enabled; viewModelScope.launch { preferences.saveBookshelfSortByRecent(enabled); applyBooksFilterAndSort() } }
@@ -1638,17 +1617,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateReadingMode(mode: com.readapp.data.ReadingMode) {
-        val oldMode = _readingMode.value
-        if (oldMode != mode) {
-            // 模式切换时，同步当前看到的位置
+        readerSettings.updateReadingMode(mode) {
             _pendingScrollIndex.value = _firstVisibleParagraphIndex.value
-            _readingMode.value = mode
-            viewModelScope.launch { preferences.saveReadingMode(mode) }
         }
     }
-    fun updateLockPageOnTTS(enabled: Boolean) { _lockPageOnTTS.value = enabled; viewModelScope.launch { preferences.saveLockPageOnTTS(enabled) } }
-    fun updatePageTurningMode(mode: com.readapp.data.PageTurningMode) { _pageTurningMode.value = mode; viewModelScope.launch { preferences.savePageTurningMode(mode) } }
-    fun updateDarkModeConfig(config: com.readapp.data.DarkModeConfig) { _darkMode.value = config; viewModelScope.launch { preferences.saveDarkMode(config) } }
+    fun updateLockPageOnTTS(enabled: Boolean) { readerSettings.updateLockPageOnTTS(enabled) }
+    fun updatePageTurningMode(mode: com.readapp.data.PageTurningMode) { readerSettings.updatePageTurningMode(mode) }
+    fun updateDarkModeConfig(config: com.readapp.data.DarkModeConfig) { readerSettings.updateDarkModeConfig(config) }
     fun updateSearchSourcesFromBookshelf(enabled: Boolean) { 
         _searchSourcesFromBookshelf.value = enabled
         viewModelScope.launch { 
@@ -1667,16 +1642,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _preferredSearchSourceUrls.value = emptySet()
         viewModelScope.launch { preferences.savePreferredSearchSourceUrls("") }
     }
-    fun toggleManualManga(url: String) {
-        val current = _manualMangaUrls.value.toMutableSet()
-        if (current.contains(url)) current.remove(url) else current.add(url)
-        _manualMangaUrls.value = current
-        viewModelScope.launch { preferences.saveManualMangaUrls(current.joinToString(";")) }
-    }
-    fun updateForceMangaProxy(enabled: Boolean) {
-        _forceMangaProxy.value = enabled
-        viewModelScope.launch { preferences.saveForceMangaProxy(enabled) }
-    }
+    fun toggleManualManga(url: String) { readerSettings.toggleManualManga(url) }
+    fun updateForceMangaProxy(enabled: Boolean) { readerSettings.updateForceMangaProxy(enabled) }
     fun clearCache() {
         viewModelScope.launch {
             clearAudioCache()
