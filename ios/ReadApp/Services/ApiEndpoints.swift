@@ -30,5 +30,7 @@ enum ApiEndpoints {
     static let getExploreUrl = "getBookSourcesExploreUrl"
     static let exploreBook = "exploreBook"
     static let searchBook = "searchBook"
+    static let saveBook = "saveBook"
+    static let deleteBook = "deleteBook"
     static let clearAllRemoteCache = "clearAllRemoteCache"
 }
