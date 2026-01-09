@@ -1,5 +1,6 @@
 package com.readapp.viewmodel
 
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
