@@ -590,16 +590,17 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if let _ = nextRenderStore {
             // 当前章节底部坐标
             let currentBottomY = currentContentView.frame.maxY
-            if rawOffset > currentBottomY - 200 {
+            if rawOffset > currentBottomY - 600 {
                 let now = Date().timeIntervalSince1970
                 if now - lastEdgeLogTime > 0.5 {
                     lastEdgeLogTime = now
                     LogManager.shared.log("接近下边缘: offset=\(Int(rawOffset)), bottom=\(Int(currentBottomY)), size=\(Int(scrollView.contentSize.height))", category: "阅读器")
                 }
             }
-            // 如果滚动位置已经超过当前章节底部 100 像素（即接缝已在屏幕上方 100px 处）
-            if rawOffset > currentBottomY + 100 {
+            // 如果滚动位置接近当前章节底部，提前触发无缝切换
+            if rawOffset > currentBottomY - 200 {
                 pendingSeamlessSwitch = 1
+                LogManager.shared.log("触发下切章: offset=\(Int(rawOffset)), bottom=\(Int(currentBottomY))", category: "阅读器")
                 return
             }
         }
