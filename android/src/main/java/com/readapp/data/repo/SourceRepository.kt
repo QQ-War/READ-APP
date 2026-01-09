@@ -19,11 +19,11 @@ class SourceRepository(
                 emit(Result.success(cachedSources))
             }
 
-        val remoteFlow = readRepository.getBookSources(context, baseUrl, publicUrl, accessToken)
-        remoteFlow.collect { result ->
-            emit(result)
-            result.onSuccess { localCache.saveSources(it) }
-        }
+            val remoteFlow = readRepository.getBookSources(context, baseUrl, publicUrl, accessToken)
+            remoteFlow.collect { result ->
+                emit(result)
+                result.onSuccess { localCache.saveSources(it) }
+            }
         }
 
     suspend fun deleteBookSource(context: Context, baseUrl: String, publicUrl: String?, accessToken: String, source: BookSource) =
