@@ -38,6 +38,22 @@ data class RssSourcesResponse(
     @SerializedName("can") val can: Boolean = false,
 )
 
+data class RssSourcePayload(
+    @SerializedName("sourceUrl") val sourceUrl: String,
+    @SerializedName("sourceName") val sourceName: String?,
+    @SerializedName("sourceIcon") val sourceIcon: String?,
+    @SerializedName("sourceGroup") val sourceGroup: String?,
+    @SerializedName("loginUrl") val loginUrl: String?,
+    @SerializedName("loginUi") val loginUi: String?,
+    @SerializedName("variableComment") val variableComment: String?,
+    @SerializedName("enabled") val enabled: Boolean,
+)
+
+data class RssEditPayload(
+    @SerializedName("json") val json: String,
+    @SerializedName("id") val id: String? = null,
+)
+
 data class RssSourceItem(
     @SerializedName("sourceUrl") val sourceUrl: String,
     @SerializedName("sourceName") val sourceName: String? = null,

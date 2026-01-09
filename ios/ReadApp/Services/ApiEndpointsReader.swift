@@ -24,4 +24,6 @@ enum ApiEndpointsReader {
     static let importBookPreview = "importBookPreview"
     static let getRssSources = "getRssSourcess"
     static let stopRssSource = "stopRssSource"
+    static let saveRssSource = "saveRssSource"
+    static let deleteRssSource = "deleteRssSource"
 }

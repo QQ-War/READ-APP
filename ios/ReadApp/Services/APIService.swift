@@ -28,6 +28,7 @@ class APIService: ObservableObject {
     private let bookSourceService: BookSourceService
     private let cacheManagementService: CacheManagementService
     private let chapterCache: ChapterContentCache
+    private let rssService: RssService
     
     // ... rest of property declarations ...
     
@@ -53,6 +54,7 @@ class APIService: ObservableObject {
         self.bookSourceService = BookSourceService(client: client)
         self.cacheManagementService = CacheManagementService(client: client)
         self.chapterCache = ChapterContentCache(maxEntries: 50)
+        self.rssService = RssService(client: client)
     }
 
     // MARK: - 登录
@@ -239,5 +241,25 @@ class APIService: ObservableObject {
     // MARK: - Default TTS
     func fetchDefaultTTS() async throws -> String {
         try await ttsService.fetchDefaultTTS()
+    }
+
+    func fetchRssSources() async throws -> RssSourcesResponse {
+        try await rssService.fetchRssSources()
+    }
+
+    func toggleRssSource(id: String, isEnabled: Bool) async throws {
+        try await rssService.toggleSource(id: id, isEnabled: isEnabled)
+    }
+
+    func saveRssSource(_ source: RssSource, remoteId: String? = nil) async throws {
+        try await rssService.saveRemoteSource(source, id: remoteId)
+    }
+
+    func deleteRssSource(id: String) async throws {
+        try await rssService.deleteRemoteSource(id: id)
+    }
+
+    var canModifyRemoteRssSources: Bool {
+        rssService.supportsRemoteEditing
     }
 }

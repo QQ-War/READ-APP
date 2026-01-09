@@ -8,15 +8,20 @@ final class RssSourcesViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var canEdit = true
     @Published var pendingToggles: Set<String> = []
+    @Published var isRemoteOperationInProgress = false
 
-    private let service: RssService
+    private let service: APIService
     private let localStore = LocalRssSourceStore.shared
 
-    init(service: RssService = RssService(client: APIClient.shared)) {
+    init(service: APIService = APIService.shared) {
         self.service = service
         Task {
             await refresh()
         }
+    }
+
+    var canModifyRemoteSources: Bool {
+        return canEdit && service.supportsRemoteEditing
     }
 
     func refresh() async {
@@ -30,6 +35,32 @@ final class RssSourcesViewModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    func saveRemoteSource(_ source: RssSource, remoteId: String? = nil) async {
+        guard canEdit else { return }
+        isRemoteOperationInProgress = true
+        defer { isRemoteOperationInProgress = false }
+        errorMessage = nil
+        do {
+            try await service.saveRssSource(source, remoteId: remoteId)
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func deleteRemoteSource(_ source: RssSource) async {
+        guard canEdit else { return }
+        isRemoteOperationInProgress = true
+        defer { isRemoteOperationInProgress = false }
+        errorMessage = nil
+        do {
+            try await service.deleteRssSource(id: source.id)
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func toggle(source: RssSource, enable: Bool) async {

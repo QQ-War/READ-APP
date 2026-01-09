@@ -228,6 +228,18 @@ interface ReadApiService {
         @Query("id") id: String,
         @Query("st") status: Int
     ): Response<ApiResponse<Any>>
+
+    @POST(ApiEndpoints.EditRssSources)
+    suspend fun editRssSources(
+        @Query("accessToken") accessToken: String,
+        @Body payload: RssEditPayload,
+    ): Response<ApiResponse<Any>>
+
+    @GET(ApiEndpoints.DeleteRssSource)
+    suspend fun deleteRssSource(
+        @Query("accessToken") accessToken: String,
+        @Query("id") id: String,
+    ): Response<ApiResponse<Any>>
     // endregion
 
     // region Book Search

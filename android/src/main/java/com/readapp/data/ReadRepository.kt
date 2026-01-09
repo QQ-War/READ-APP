@@ -8,6 +8,9 @@ import com.readapp.data.model.BookSource
 import com.readapp.data.model.Chapter
 import com.readapp.data.model.HttpTTS
 import com.readapp.data.model.ReplaceRule
+import com.readapp.data.model.RssEditPayload
+import com.readapp.data.model.RssSourceItem
+import com.readapp.data.model.RssSourcePayload
 import com.readapp.data.model.RssSourcesResponse
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -555,6 +558,37 @@ class ReadRepository(
             ApiBackend.Read -> executeWithFailover { it.stopRssSource(accessToken, sourceUrl, status) }(endpoints)
             ApiBackend.Reader -> executeWithFailoverReader { it.stopRssSource(accessToken, sourceUrl, status) }(endpoints)
         }
+    }
+
+    suspend fun saveRssSource(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String,
+        remoteId: String?,
+        source: RssSourceItem
+    ): Result<Any> {
+        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        if (backend != ApiBackend.Read) {
+            return Result.failure(UnsupportedOperationException("当前服务端不支持编辑订阅源"))
+        }
+        val payload = RssEditPayload(
+            json = gson.toJson(source.toPayload()),
+            id = remoteId
+        )
+        return executeWithFailover { it.editRssSources(accessToken, payload) }(endpoints)
+    }
+
+    suspend fun deleteRssSource(
+        baseUrl: String,
+        publicUrl: String?,
+        accessToken: String,
+        sourceUrl: String
+    ): Result<Any> {
+        val (backend, endpoints) = resolveBackendAndEndpoints(baseUrl, publicUrl)
+        if (backend != ApiBackend.Read) {
+            return Result.failure(UnsupportedOperationException("当前服务端不支持删除订阅源"))
+        }
+        return executeWithFailover { it.deleteRssSource(accessToken, sourceUrl) }(endpoints)
     }
     // endregion
 

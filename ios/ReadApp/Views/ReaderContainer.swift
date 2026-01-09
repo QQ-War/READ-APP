@@ -286,6 +286,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.verticalVC?.scrollToTop(animated: false)
         }
         self.prefetchAdjacentChapters(index: index)
+        self.syncTTSReadingPositionIfNeeded()
     }
     
     private func reRenderCurrentContent(rawContentOverride: String? = nil) {
@@ -531,19 +532,29 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         isUserInteracting = true
         pendingTTSPositionSync = true
         let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
-        if t >= 0 && t < currentCache.pages.count { 
-            updateHorizontalPage(to: t, animated: true) 
+        var didChangeWithinChapter = false
+        if t >= 0 && t < currentCache.pages.count {
+            updateHorizontalPage(to: t, animated: true)
+            didChangeWithinChapter = true
         } else {
             let targetChapter = isNext ? currentChapterIndex + 1 : currentChapterIndex - 1
-            guard targetChapter >= 0 && targetChapter < chapters.count else { return }
+            guard targetChapter >= 0 && targetChapter < chapters.count else {
+                isUserInteracting = false
+                return
+            }
             
             if isNext, !nextCache.pages.isEmpty {
                 animateToAdjacentChapter(offset: 1, targetPage: 0)
+                didChangeWithinChapter = true
             } else if !isNext, !prevCache.pages.isEmpty {
                 animateToAdjacentChapter(offset: -1, targetPage: prevCache.pages.count - 1)
+                didChangeWithinChapter = true
             } else {
                 jumpToChapter(targetChapter, startAtEnd: !isNext)
             }
+        }
+        if didChangeWithinChapter {
+            scheduleTTSPositionSyncAfterInteraction()
         }
     }
 
@@ -768,6 +779,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         ttsManager.updateReadingPosition(to: position)
     }
 
+    private func scheduleTTSPositionSyncAfterInteraction(delay: TimeInterval = 0.1) {
+        pendingTTSPositionSync = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
+            self.isUserInteracting = false
+            self.syncTTSReadingPositionIfNeeded()
+        }
+    }
+
     private func resetMangaPrefetchedContent() {
         nextCache = .empty
         prefetchedMangaNextIndex = nil
@@ -791,19 +811,30 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: 0, sentenceOffset: 0, charOffset: 0)
         }
         let pageInfos = currentCache.pageInfos ?? []
-        let charOffset: Int
-        if currentReadingMode == .horizontal, currentPageIndex < pageInfos.count {
-            charOffset = pageInfos[currentPageIndex].range.location
-        } else if currentReadingMode == .vertical {
-            charOffset = verticalVC?.getCurrentCharOffset() ?? 0
-        } else {
-            charOffset = 0
-        }
         let starts = currentCache.paragraphStarts
         guard !starts.isEmpty else {
-            return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: 0, sentenceOffset: 0, charOffset: charOffset)
+            return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: 0, sentenceOffset: 0, charOffset: 0)
         }
-        let sentenceIndex = max(0, min((starts.lastIndex(where: { $0 <= charOffset }) ?? 0), currentCache.contentSentences.count - 1))
+
+        var charOffset: Int = 0
+        var preferredSentenceIndex: Int?
+
+        if currentReadingMode == .horizontal, currentPageIndex < pageInfos.count {
+            let pageInfo = pageInfos[currentPageIndex]
+            let clampedIndex = max(0, min(pageInfo.startSentenceIndex, starts.count - 1))
+            preferredSentenceIndex = clampedIndex
+            charOffset = starts[clampedIndex]
+        } else if currentReadingMode == .vertical {
+            charOffset = verticalVC?.getCurrentCharOffset() ?? 0
+        }
+
+        let sentenceIndex: Int
+        if let preferred = preferredSentenceIndex {
+            sentenceIndex = preferred
+        } else {
+            sentenceIndex = max(0, min((starts.lastIndex(where: { $0 <= charOffset }) ?? 0), currentCache.contentSentences.count - 1))
+        }
+
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
         let indentLen = min(2, currentCache.contentSentences[sentenceIndex].utf16.count)

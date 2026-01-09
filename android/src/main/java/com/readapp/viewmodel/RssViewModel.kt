@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.readapp.data.ReadRepository
+import com.readapp.data.RemoteRssSourceManager
 import com.readapp.data.UserPreferences
 import com.readapp.data.model.RssSourceItem
 import com.readapp.data.model.RssSourcesResponse
@@ -31,6 +32,9 @@ class RssViewModel(
 
     private val _pendingToggles = MutableStateFlow<Set<String>>(emptySet())
     val pendingToggles: StateFlow<Set<String>> = _pendingToggles.asStateFlow()
+    private val _remoteOperationInProgress = MutableStateFlow(false)
+    val remoteOperationInProgress: StateFlow<Boolean> = _remoteOperationInProgress.asStateFlow()
+    private val remoteManager = RemoteRssSourceManager(repository, preferences)
 
     init {
         refreshSources()
@@ -38,44 +42,55 @@ class RssViewModel(
 
     fun refreshSources() {
         viewModelScope.launch {
-            val (baseUrl, publicUrl, token) = preferences.getCredentials()
-            if (token == null) {
-                _errorMessage.value = "请先登录"
-                _isLoading.value = false
-                return@launch
-            }
-
             _isLoading.value = true
             _errorMessage.value = null
-            repository.fetchRssSources(baseUrl, publicUrl, token)
-                .onSuccess { response ->
-                    updateSources(response)
-                }
-                .onFailure { error ->
-                    _errorMessage.value = error.message ?: "加载订阅源失败"
-                }
+            val result = remoteManager.fetchSources()
+            result.onSuccess { response ->
+                updateSources(response)
+            }.onFailure { error ->
+                _errorMessage.value = error.message ?: "加载订阅源失败"
+            }
             _isLoading.value = false
+        }
+    }
+
+    fun saveRemoteSource(source: RssSourceItem, remoteId: String? = null) {
+        viewModelScope.launch {
+            _remoteOperationInProgress.value = true
+            val result = remoteManager.saveRemoteSource(remoteId, source)
+            _remoteOperationInProgress.value = false
+            result.onSuccess {
+                refreshSources()
+            }.onFailure { error ->
+                _errorMessage.value = error.message ?: "保存订阅源失败"
+            }
+        }
+    }
+
+    fun deleteRemoteSource(source: RssSourceItem) {
+        viewModelScope.launch {
+            _remoteOperationInProgress.value = true
+            val result = remoteManager.deleteRemoteSource(source.sourceUrl)
+            _remoteOperationInProgress.value = false
+            result.onSuccess {
+                refreshSources()
+            }.onFailure { error ->
+                _errorMessage.value = error.message ?: "删除订阅源失败"
+            }
         }
     }
 
     fun toggleSource(sourceUrl: String, enable: Boolean) {
         viewModelScope.launch {
-            val (baseUrl, publicUrl, token) = preferences.getCredentials()
-            if (token == null) {
-                _errorMessage.value = "请先登录"
-                return@launch
-            }
-
             _pendingToggles.value = _pendingToggles.value + sourceUrl
-            repository.toggleRssSource(baseUrl, publicUrl, token, sourceUrl, enable)
-                .onSuccess {
-                    _rssSources.value = _rssSources.value.map { item ->
-                        if (item.sourceUrl == sourceUrl) item.copy(enabled = enable) else item
-                    }
+            val result = remoteManager.toggleSource(sourceUrl, enable)
+            result.onSuccess {
+                _rssSources.value = _rssSources.value.map { item ->
+                    if (item.sourceUrl == sourceUrl) item.copy(enabled = enable) else item
                 }
-                .onFailure { error ->
-                    _errorMessage.value = error.message ?: "切换订阅源失败"
-                }
+            }.onFailure { error ->
+                _errorMessage.value = error.message ?: "切换订阅源失败"
+            }
             _pendingToggles.value = _pendingToggles.value - sourceUrl
         }
     }

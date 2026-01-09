@@ -9,8 +9,10 @@ struct RssSourcesView: View {
     @State private var importURL = ""
     @State private var importResultMessage: String?
     @State private var showingImportResult = false
-    @State private var showingNewSourceEditor = false
+    @State private var showingCustomSourceEditor = false
     @State private var editingCustomSource: RssSource?
+    @State private var showingRemoteSourceEditor = false
+    @State private var editingRemoteSource: RssSource?
     @State private var detailSource: RssSource?
 
     var body: some View {
@@ -93,11 +95,6 @@ struct RssSourcesView: View {
         .navigationTitle("订阅源")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "chevron.left")
-                }
-            }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button(action: {
                     Task {
@@ -107,8 +104,14 @@ struct RssSourcesView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 Menu {
-                    Button(action: { showingNewSourceEditor = true }) {
-                        Label("新建订阅源", systemImage: "pencil.and.outline")
+                    Button(action: { showingCustomSourceEditor = true }) {
+                        Label("新建本地订阅源", systemImage: "pencil.and.outline")
+                    }
+                    if viewModel.canModifyRemoteSources {
+                        Button(action: { showingRemoteSourceEditor = true }) {
+                            Label("新建官方订阅源", systemImage: "globe")
+                        }
+                        .disabled(viewModel.isRemoteOperationInProgress)
                     }
                     Button(action: { showingFilePicker = true }) {
                         Label("本地导入", systemImage: "folder")
@@ -150,17 +153,59 @@ struct RssSourcesView: View {
                 )
             }
         }
-        .sheet(isPresented: $showingNewSourceEditor) {
+        .sheet(isPresented: $showingCustomSourceEditor) {
             NavigationView {
                 RssSourceEditView(initialSource: nil) { newSource in
                     viewModel.addOrUpdateCustomSource(newSource)
-                    showingNewSourceEditor = false
+                    showingCustomSourceEditor = false
                 }
+            }
+        }
+        .sheet(isPresented: $showingRemoteSourceEditor) {
+            NavigationView {
+                RssSourceEditView(initialSource: nil) { newSource in
+                    Task {
+                        await viewModel.saveRemoteSource(newSource)
+                        await MainActor.run { showingRemoteSourceEditor = false }
+                    }
+                }
+            }
+        }
+        .sheet(item: $editingRemoteSource) { source in
+            NavigationView {
+                RssSourceEditView(
+                    initialSource: source,
+                    onSave: { updated in
+                        Task {
+                            await viewModel.saveRemoteSource(updated, remoteId: source.id)
+                            await MainActor.run { editingRemoteSource = nil }
+                        }
+                    },
+                    onDelete: {
+                        Task {
+                            await viewModel.deleteRemoteSource(source)
+                            await MainActor.run { editingRemoteSource = nil }
+                        }
+                    }
+                )
             }
         }
         .sheet(item: $detailSource) { source in
             NavigationView {
-                RssSourceDetailView(source: source)
+                RssSourceDetailView(
+                    source: source,
+                    canEdit: viewModel.canModifyRemoteSources,
+                    isEditingBusy: viewModel.isRemoteOperationInProgress,
+                    onEdit: {
+                        editingRemoteSource = source
+                    },
+                    onDelete: {
+                        Task {
+                            await viewModel.deleteRemoteSource(source)
+                        }
+                        detailSource = nil
+                    }
+                )
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("关闭") { detailSource = nil }
@@ -210,38 +255,69 @@ private struct RssSourceRow: View {
     let onToggle: (Bool) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        HStack(alignment: .center, spacing: 12) {
+            if let iconUrl = source.sourceIcon, let url = URL(string: iconUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView()
+                            .frame(width: 40, height: 40)
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 40, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    default:
+                        placeholderIcon
+                    }
+                }
+            } else {
+                placeholderIcon
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(source.sourceName ?? source.sourceUrl)
                     .font(.body)
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { isEnabled },
-                    set: {
-                        guard canToggle && !isBusy else { return }
-                        onToggle($0)
-                    }
-                ))
-                .labelsHidden()
-                .disabled(!canToggle || isBusy)
+                    .foregroundColor(.primary)
+                if let group = source.sourceGroup, !group.isEmpty {
+                    Text(group.split(separator: ",").first.map(String.init) ?? group)
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                }
+                if let comment = source.variableComment, !comment.isEmpty {
+                    Text(comment)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
             }
 
-            if let group = source.sourceGroup, !group.isEmpty {
-                Text(group.split(separator: ",").first.map(String.init) ?? group)
-                    .font(.caption)
-                    .foregroundColor(.accentColor)
-            }
+            Spacer()
 
-            if let comment = source.variableComment, !comment.isEmpty {
-                Text(comment)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+            Toggle("", isOn: Binding(
+                get: { isEnabled },
+                set: {
+                    guard canToggle && !isBusy else { return }
+                    onToggle($0)
+                }
+            ))
+            .labelsHidden()
+            .disabled(!canToggle || isBusy)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
         .onTapGesture {
             onTap?()
         }
+    }
+
+    private var placeholderIcon: some View {
+        Image(systemName: "rss")
+            .font(.title3)
+            .frame(width: 40, height: 40)
+            .foregroundColor(.accentColor)
+            .background(Color.accentColor.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
