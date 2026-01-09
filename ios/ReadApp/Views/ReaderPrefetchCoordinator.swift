@@ -71,7 +71,14 @@ final class ReaderPrefetchCoordinator {
         let nextIdx = index + 1
         if nextIdx < chapters.count {
             let alreadyHasNext = isMangaMode ? !nextCache.contentSentences.isEmpty : nextCache.renderStore != nil
-            if alreadyHasNext || fetchingNextIndex == nextIdx { return }
+            if alreadyHasNext {
+                LogManager.shared.log("预取下一章跳过: 已有缓存 index=\(nextIdx)", category: "阅读器")
+                return
+            }
+            if fetchingNextIndex == nextIdx {
+                LogManager.shared.log("预取下一章跳过: 已在预取 index=\(nextIdx)", category: "阅读器")
+                return
+            }
             nextTask?.cancel()
             fetchingNextIndex = nextIdx
             nextTask = Task { [weak self] in
@@ -85,6 +92,10 @@ final class ReaderPrefetchCoordinator {
                 ) {
                     await MainActor.run {
                         guard !Task.isCancelled else { return }
+                        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed.isEmpty {
+                            LogManager.shared.log("预取下一章为空: index=\(nextIdx)", category: "阅读器")
+                        }
                         let chapterUrl = chapters[nextIdx].url
                         let cache: ChapterCache
                         if isMangaMode {
@@ -99,6 +110,7 @@ final class ReaderPrefetchCoordinator {
                                 chapterUrl: chapterUrl
                             )
                         }
+                        LogManager.shared.log("预取下一章完成: index=\(nextIdx), pages=\(cache.pages.count), sentences=\(cache.contentSentences.count), len=\(cache.rawContent.count)", category: "阅读器")
                         onNextCache(cache)
                     }
                 }
@@ -124,7 +136,14 @@ final class ReaderPrefetchCoordinator {
         let prevIdx = index - 1
         if prevIdx >= 0 {
             let alreadyHasPrev = isMangaMode ? !prevCache.contentSentences.isEmpty : prevCache.renderStore != nil
-            if alreadyHasPrev || fetchingPrevIndex == prevIdx { return }
+            if alreadyHasPrev {
+                LogManager.shared.log("预取上一章跳过: 已有缓存 index=\(prevIdx)", category: "阅读器")
+                return
+            }
+            if fetchingPrevIndex == prevIdx {
+                LogManager.shared.log("预取上一章跳过: 已在预取 index=\(prevIdx)", category: "阅读器")
+                return
+            }
             prevTask?.cancel()
             fetchingPrevIndex = prevIdx
             prevTask = Task { [weak self] in
@@ -138,6 +157,10 @@ final class ReaderPrefetchCoordinator {
                 ) {
                     await MainActor.run {
                         guard !Task.isCancelled else { return }
+                        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed.isEmpty {
+                            LogManager.shared.log("预取上一章为空: index=\(prevIdx)", category: "阅读器")
+                        }
                         let chapterUrl = chapters[prevIdx].url
                         let cache: ChapterCache
                         if isMangaMode {
@@ -152,6 +175,7 @@ final class ReaderPrefetchCoordinator {
                                 chapterUrl: chapterUrl
                             )
                         }
+                        LogManager.shared.log("预取上一章完成: index=\(prevIdx), pages=\(cache.pages.count), sentences=\(cache.contentSentences.count), len=\(cache.rawContent.count)", category: "阅读器")
                         onPrevCache(cache)
                     }
                 }

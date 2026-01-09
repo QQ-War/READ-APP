@@ -185,6 +185,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let trimmedSentences = sentences.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedNextSentences = (nextSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedPrevSentences = (prevSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if let ns = nextSentences, !ns.isEmpty, trimmedNextSentences.isEmpty {
+            LogManager.shared.log("下一章预取内容被过滤为空: 原始句数=\(ns.count)", category: "阅读器")
+        }
+        if let ps = prevSentences, !ps.isEmpty, trimmedPrevSentences.isEmpty {
+            LogManager.shared.log("上一章预取内容被过滤为空: 原始句数=\(ps.count)", category: "阅读器")
+        }
         
         let contentChanged = self.currentSentences != trimmedSentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing || marginChanged
         let nextChanged = self.nextSentences != trimmedNextSentences || marginChanged
@@ -412,8 +418,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let m = (view.bounds.width - s.layoutWidth) / 2
         let topPadding = safeAreaTop + 10
         
-        LogManager.shared.log("执行布局: 模式=\(isInfiniteScrollEnabled ? "无限" : "非无限"), 内容H=\(Int(h1))", category: "阅读器")
-
         if isInfiniteScrollEnabled {
             var currentY = topPadding
             var totalH = topPadding
@@ -462,7 +466,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             } else { nextContentView.isHidden = true }
             lastPrevHasContent = false
         }
-        LogManager.shared.log("布局结果: contentSize=\(scrollView.contentSize)", category: "阅读器")
     }
 
     func scrollViewDidScroll(_ s: UIScrollView) {
@@ -470,11 +473,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let rawOffset = s.contentOffset.y
         let y = s.contentOffset.y - (safeAreaTop + 10)
         
-        let actualMaxScrollY = max(0, s.contentSize.height - s.bounds.height)
-        if rawOffset < -10 || rawOffset > actualMaxScrollY + 10 {
-            LogManager.shared.log("边缘检查: offset=\(Int(rawOffset)), max=\(Int(actualMaxScrollY)), size=\(Int(s.contentSize.height))", category: "阅读器")
-        }
-
         if isInfiniteScrollEnabled { handleAutoSwitchIfNeeded(rawOffset: rawOffset) }
         handleHoldSwitchIfNeeded(rawOffset: rawOffset)
         
