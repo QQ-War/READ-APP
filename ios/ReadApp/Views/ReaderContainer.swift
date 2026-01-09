@@ -104,7 +104,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     var isInternalTransitioning = false
     private var isFirstLoad = true
     private var isUserInteracting = false
-    private var ttsCoordinator: ReaderTtsCoordinator?
+    private var ttsSyncCoordinator: TTSReadingSyncCoordinator?
     
     private var chapterBuilder: ReaderChapterBuilder?
     private var currentCache: ChapterCache = .empty
@@ -138,8 +138,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         currentReadingMode = readerSettings.readingMode
         chapterBuilder = ReaderChapterBuilder(readerSettings: readerSettings, replaceRules: replaceRuleViewModel?.rules)
         loadChapters()
-        ttsCoordinator = ReaderTtsCoordinator(reader: self, ttsManager: ttsManager)
-        ttsCoordinator?.start()
+        ttsSyncCoordinator = TTSReadingSyncCoordinator(reader: self, ttsManager: ttsManager)
+        ttsSyncCoordinator?.start()
     }
     
     private func setupProgressLabel() {
@@ -426,35 +426,21 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        isUserInteracting = true
-        pendingTTSPositionSync = true
-        // 进入 Detach 模式：不再跟随 TTS
+        notifyUserInteractionStarted()
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
-            // 停止操作后，延迟恢复跟随 (Catch-up)
-            scheduleCatchUp()
+            notifyUserInteractionEnded()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        scheduleCatchUp()
+        notifyUserInteractionEnded()
     }
 
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-        scheduleCatchUp()
-    }
-
-    private func scheduleCatchUp() {
-        // 延迟 1.5 秒如果没有新交互，则认为用户阅读位置已定，同步 TTS 并恢复 Follow
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            guard let self = self, self.isUserInteracting else { return }
-            self.isUserInteracting = false
-            self.syncTTSReadingPositionIfNeeded()
-            // 触发一次即时同步
-            self.syncTTSState()
-        }
+        notifyUserInteractionEnded()
     }
 
     private func setupHorizontalMode() {
@@ -566,8 +552,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func handlePageTap(isNext: Bool) {
-        isUserInteracting = true
-        pendingTTSPositionSync = true
+        notifyUserInteractionStarted()
         let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
         var didChangeWithinChapter = false
         if t >= 0 && t < currentCache.pages.count {
@@ -576,7 +561,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         } else {
             let targetChapter = isNext ? currentChapterIndex + 1 : currentChapterIndex - 1
             guard targetChapter >= 0 && targetChapter < chapters.count else {
-                isUserInteracting = false
+                finalizeUserInteraction()
                 return
             }
             
@@ -591,7 +576,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             }
         }
         if didChangeWithinChapter {
-            scheduleTTSPositionSyncAfterInteraction()
+            notifyUserInteractionEnded()
         }
     }
 
@@ -724,8 +709,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         v.onInteractionChanged = { [weak self] interacting in
             guard let self = self else { return }
-            self.isUserInteracting = interacting
-            if interacting { self.pendingTTSPositionSync = true }
+            if interacting {
+                self.notifyUserInteractionStarted()
+            } else {
+                self.notifyUserInteractionEnded()
+            }
         }
         v.threshold = verticalThreshold
         self.verticalVC = v
@@ -769,8 +757,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             vc.onToggleMenu = { [weak self] in self?.onToggleMenu?() }
             vc.onInteractionChanged = { [weak self] interacting in
                 guard let self = self else { return }
-                self.isUserInteracting = interacting
-                if interacting { self.pendingTTSPositionSync = true }
+                if interacting {
+                    self.notifyUserInteractionStarted()
+                } else {
+                    self.notifyUserInteractionEnded()
+                }
             }
             vc.onChapterSwitched = { [weak self] offset in
                 guard let self = self else { return }
@@ -822,22 +813,33 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             }
         }
     }
+
+    func completePendingTTSPositionSync() {
+        guard pendingTTSPositionSync else { return }
+        pendingTTSPositionSync = false
+        syncTTSReadingPositionIfNeeded()
+    }
+
+    func finalizeUserInteraction() {
+        isUserInteracting = false
+    }
+
+    private func notifyUserInteractionStarted() {
+        isUserInteracting = true
+        pendingTTSPositionSync = true
+        ttsSyncCoordinator?.userInteractionStarted()
+    }
+
+    private func notifyUserInteractionEnded() {
+        ttsSyncCoordinator?.scheduleCatchUp()
+    }
     
-    private func syncTTSReadingPositionIfNeeded() {
+    func syncTTSReadingPositionIfNeeded() {
         guard pendingTTSPositionSync else { return }
         pendingTTSPositionSync = false
         guard let bookUrl = book.bookUrl, ttsManager.bookUrl == bookUrl else { return }
         let position = currentStartPosition()
         ttsManager.updateReadingPosition(to: position)
-    }
-
-    private func scheduleTTSPositionSyncAfterInteraction(delay: TimeInterval = 0.1) {
-        pendingTTSPositionSync = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self = self else { return }
-            self.isUserInteracting = false
-            self.syncTTSReadingPositionIfNeeded()
-        }
     }
 
     private func resetMangaPrefetchedContent() {
@@ -856,7 +858,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     deinit {
         prefetchCoordinator.cancel()
-        ttsCoordinator?.stop()
+        ttsSyncCoordinator?.stop()
     }
     private func currentStartPosition() -> ReadingPosition {
         guard !currentCache.contentSentences.isEmpty else {

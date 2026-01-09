@@ -1,10 +1,12 @@
 import Combine
 import Foundation
 
-final class ReaderTtsCoordinator {
+final class TTSReadingSyncCoordinator {
     private weak var reader: ReaderContainerViewController?
     private let ttsManager: TTSManager
     private var cancellables: Set<AnyCancellable> = []
+    private var interactionWorkItem: DispatchWorkItem?
+    private let catchUpDelay: TimeInterval = 1.5
 
     init(reader: ReaderContainerViewController, ttsManager: TTSManager) {
         self.reader = reader
@@ -29,5 +31,24 @@ final class ReaderTtsCoordinator {
 
     func stop() {
         cancellables.removeAll()
+        interactionWorkItem?.cancel()
+        interactionWorkItem = nil
+    }
+
+    func userInteractionStarted() {
+        interactionWorkItem?.cancel()
+        interactionWorkItem = nil
+    }
+
+    func scheduleCatchUp() {
+        interactionWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, let reader = self.reader else { return }
+            reader.completePendingTTSPositionSync()
+            reader.finalizeUserInteraction()
+            reader.syncTTSState()
+        }
+        interactionWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + catchUpDelay, execute: workItem)
     }
 }
