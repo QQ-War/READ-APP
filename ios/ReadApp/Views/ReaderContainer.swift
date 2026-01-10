@@ -822,6 +822,58 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         syncTTSReadingPositionIfNeeded()
     }
 
+    func handleUserScrollCatchUp() {
+        guard pendingTTSPositionSync else { return }
+        pendingTTSPositionSync = false
+        guard let bookUrl = book.bookUrl, ttsManager.bookUrl == bookUrl else { return }
+        guard ttsManager.isPlaying && !ttsManager.isPaused else { return }
+
+        if !isTTSPositionInCurrentPage() {
+            restartTTSFromCurrentPageStart()
+        } else {
+            syncTTSState()
+        }
+    }
+
+    private func restartTTSFromCurrentPageStart() {
+        guard currentChapterIndex < chapters.count else { return }
+        let startPos = currentStartPosition()
+        let ttsSentences = currentCache.contentSentences
+        ttsManager.startReading(
+            text: currentCache.rawContent,
+            chapters: chapters,
+            currentIndex: currentChapterIndex,
+            bookUrl: book.bookUrl ?? "",
+            bookSourceUrl: book.origin,
+            bookTitle: book.name ?? "未知书名",
+            coverUrl: book.coverUrl,
+            onChapterChange: { [weak self] newIndex in
+                DispatchQueue.main.async { self?.jumpToChapter(newIndex) }
+            },
+            processedSentences: ttsSentences,
+            textProcessor: { [rules = replaceRuleViewModel?.rules] text in
+                ReadingTextProcessor.prepareText(text, rules: rules)
+            },
+            startAtSentenceIndex: startPos.sentenceIndex,
+            startAtSentenceOffset: startPos.sentenceOffset,
+            shouldSpeakChapterTitle: startPos.isAtChapterStart
+        )
+    }
+
+    private func isTTSPositionInCurrentPage() -> Bool {
+        guard ttsManager.currentChapterIndex == currentChapterIndex else { return false }
+        if currentReadingMode == .vertical {
+            return verticalVC?.isSentenceVisible(index: ttsManager.currentSentenceIndex) ?? true
+        }
+        let pageInfos = currentCache.pageInfos ?? []
+        guard currentPageIndex < pageInfos.count else { return true }
+        let starts = currentCache.paragraphStarts
+        let sentenceIdx = ttsManager.currentSentenceIndex
+        guard sentenceIdx >= 0 && sentenceIdx < starts.count else { return false }
+        let totalOffset = starts[sentenceIdx] + ttsManager.currentSentenceOffset
+        return NSLocationInRange(totalOffset, pageInfos[currentPageIndex].range)
+    }
+
     func finalizeUserInteraction() {
         isUserInteracting = false
     }
@@ -873,23 +925,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
 
         var charOffset: Int = 0
-        var preferredSentenceIndex: Int?
 
         if currentReadingMode == .horizontal, currentPageIndex < pageInfos.count {
             let pageInfo = pageInfos[currentPageIndex]
-            let clampedIndex = max(0, min(pageInfo.startSentenceIndex, starts.count - 1))
-            preferredSentenceIndex = clampedIndex
-            charOffset = starts[clampedIndex]
+            charOffset = pageInfo.range.location
         } else if currentReadingMode == .vertical {
             charOffset = verticalVC?.getCurrentCharOffset() ?? 0
         }
 
-        let sentenceIndex: Int
-        if let preferred = preferredSentenceIndex {
-            sentenceIndex = preferred
-        } else {
-            sentenceIndex = max(0, min((starts.lastIndex(where: { $0 <= charOffset }) ?? 0), currentCache.contentSentences.count - 1))
-        }
+        let sentenceIndex = max(0, min((starts.lastIndex(where: { $0 <= charOffset }) ?? 0), currentCache.contentSentences.count - 1))
 
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)

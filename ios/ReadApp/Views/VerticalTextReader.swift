@@ -486,6 +486,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let y = sentenceYOffsets[index] + safeAreaTop + 10; let cur = scrollView.contentOffset.y; let vH = scrollView.bounds.height
         if y < cur + 50 || y > cur + vH - 150 { lastTTSSyncIndex = index; scrollView.setContentOffset(CGPoint(x: 0, y: max(0, y - vH / 3)), animated: true) }
     }
+    func isSentenceVisible(index: Int) -> Bool {
+        guard index >= 0 && index < sentenceYOffsets.count else { return true }
+        let y = sentenceYOffsets[index] + safeAreaTop + 10
+        let cur = scrollView.contentOffset.y
+        let vH = scrollView.bounds.height
+        return y >= cur - 20 && y <= cur + vH + 20
+    }
     func scrollToTop(animated: Bool) { scrollView.setContentOffset(.zero, animated: animated) }
     func scrollToBottom(animated: Bool) {
         let y = max(0, scrollView.contentSize.height - scrollView.bounds.height)
