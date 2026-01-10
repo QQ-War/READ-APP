@@ -941,8 +941,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
-        let indentLen = min(2, currentCache.contentSentences[sentenceIndex].utf16.count)
-        let offsetInSentence = max(0, intra - indentLen)
+        let offsetInSentence: Int
+        if currentReadingMode == .horizontal {
+            // Use exact page start offset; do not trim indent to avoid jumping back a page.
+            offsetInSentence = intra
+        } else {
+            let indentLen = min(2, currentCache.contentSentences[sentenceIndex].utf16.count)
+            offsetInSentence = max(0, intra - indentLen)
+        }
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
         return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: clampedOffset, charOffset: charOffset)
