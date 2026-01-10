@@ -1084,12 +1084,31 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let previewDesc = previewLines.isEmpty ? "[]" : previewLines.joined(separator: " | ")
         let snippetDesc = pageSnippet.isEmpty ? "[]" : pageSnippet
         let fragmentDesc = visibleFragmentLines.isEmpty ? "[]" : visibleFragmentLines.joined(separator: " | ")
+        let pageMatch = matchSentenceIndex(for: pageSnippet)
+        let fragmentMatch = matchSentenceIndex(for: visibleFragmentLines.first ?? "")
+        let previewMatch = matchSentenceIndex(for: previewLines.first ?? "")
         let message = """
         TTS start snapshot - mode=\(currentReadingMode) chapter=\(currentChapterIndex) currentPageIdx=\(currentPageIndex) visiblePageIdx=\(pageIdx) \
         visibleTopIdx=\(visibleTopIndex) topLines=\(topLinesDesc) startSentenceIdx=\(sentenceIndex) sentenceOffset=\(sentenceOffset) \
-        charOffset=\(charOffset) previewLines=\(previewDesc) pageSnippet=\(snippetDesc) visibleFragments=\(fragmentDesc)
+        charOffset=\(charOffset) previewLines=\(previewDesc) pageSnippet=\(snippetDesc) visibleFragments=\(fragmentDesc) \
+        pageSnippetMatch=\(pageMatch?.description ?? "nil") fragmentMatch=\(fragmentMatch?.description ?? "nil") previewMatch=\(previewMatch?.description ?? "nil")
         """
         logger.log(message, category: "TTS")
+    }
+
+    private func matchSentenceIndex(for snippet: String) -> (index: Int, offset: Int)? {
+        let trimmed = snippet.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        for (idx, sentence) in currentCache.contentSentences.enumerated() {
+            if let range = sentence.range(of: trimmed, options: [.anchored, .literal]) {
+                let offset = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
+                return (idx, offset)
+            } else if let range = sentence.range(of: trimmed, options: [.literal]) {
+                let offset = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
+                return (idx, offset)
+            }
+        }
+        return nil
     }
 }
 class PageContentViewController: UIViewController { var pageIndex: Int; var chapterOffset: Int; init(pageIndex: Int, chapterOffset: Int) { self.pageIndex = pageIndex; self.chapterOffset = chapterOffset; super.init(nibName: nil, bundle: nil) }; required init?(coder: NSCoder) { fatalError() } }
