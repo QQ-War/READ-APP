@@ -609,7 +609,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let aI = cache.pageInfos ?? []
         let aPS = offset == 0 ? currentCache.paragraphStarts : []
         
-        pV.renderStore = aS; if i < aI.count { 
+        pV.renderStore = aS; 
+        pV.pageIndex = i
+        if i < aI.count { 
             let info = aI[i]; pV.pageInfo = TK2PageInfo(range: info.range, yOffset: info.yOffset, pageHeight: info.pageHeight, actualContentHeight: info.actualContentHeight, startSentenceIndex: info.startSentenceIndex, contentInset: currentLayoutSpec.topInset)
         }
         pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.safeToggleMenu() } else { self?.handlePageTap(isNext: loc == .right) } }

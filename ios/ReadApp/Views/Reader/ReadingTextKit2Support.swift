@@ -171,6 +171,9 @@ struct TextKit2Paginator {
 
 // MARK: - 渲染视图 (视口对齐版)
 class ReadContent2View: UIView, UIGestureRecognizerDelegate {
+    static let debugLogTopFragments = false
+    private var lastLoggedPageIndex: Int?
+    var pageIndex: Int?
     var renderStore: TextKit2RenderStore?
     var pageInfo: TK2PageInfo? {
         didSet {
@@ -271,6 +274,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         ctx.clip(to: clipRect)
         
         ctx.translateBy(x: horizontalInset, y: 0)
+        logVisibleFragmentsIfNeeded(info: info, store: s)
         
         // 2. 绘制 TTS 高亮
         if isPlayingHighlight {
@@ -320,6 +324,35 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         }
         
         ctx.restoreGState()
+    }
+
+    private func logVisibleFragmentsIfNeeded(info: TK2PageInfo, store: TextKit2RenderStore) {
+        guard Self.debugLogTopFragments, let pageIdx = pageIndex else { return }
+        if lastLoggedPageIndex == pageIdx { return }
+        lastLoggedPageIndex = pageIdx
+        guard let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location) else { return }
+        var lines: [String] = []
+        store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
+            let fragmentStart = store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
+            let length = fragment.rangeInElement.length
+            guard fragmentStart + length <= store.attributedString.length else { return false }
+            let raw = (store.attributedString.string as NSString).substring(with: NSRange(location: fragmentStart, length: length))
+            let cleaned = sanitizedPreviewText(raw, limit: 120)
+            if !cleaned.isEmpty {
+                lines.append(cleaned)
+            }
+            return lines.count < 2
+        }
+        if !lines.isEmpty {
+            LogManager.shared.log("ReadContent2View top fragments page=\(pageIdx): \(lines.joined(separator: " | "))", category: "TTS")
+        }
+    }
+
+    private func sanitizedPreviewText(_ text: String, limit: Int) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
+        guard trimmed.count > limit else { return trimmed }
+        let endIndex = trimmed.index(trimmed.startIndex, offsetBy: limit)
+        return String(trimmed[..<endIndex]) + "…"
     }
 }
 
