@@ -589,7 +589,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let targetIndex = max(0, min(i, currentCache.pages.count - 1))
         let direction: UIPageViewController.NavigationDirection = targetIndex >= currentPageIndex ? .forward : .reverse
         currentPageIndex = targetIndex
-        h.setViewControllers([createPageVC(at: targetIndex, offset: 0)], direction: direction, animated: animated)
+        h.setViewControllers([createPageVC(at: targetIndex, offset: 0)], direction: direction, animated: animated) { [weak self] finished in
+            guard let self = self else { return }
+            if animated {
+                self.isInternalTransitioning = false
+            }
+        }
+        if !animated {
+            self.isInternalTransitioning = false
+        }
         updateProgressUI()
         self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
     }
