@@ -310,6 +310,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val preloadCount by bookViewModel.preloadCount.collectAsState()
                 val lockPageOnTTS by bookViewModel.lockPageOnTTS.collectAsState()
                 val ttsFollowCooldownSeconds by bookViewModel.ttsFollowCooldownSeconds.collectAsState()
+                val ttsSentenceChunkLimit by bookViewModel.ttsSentenceChunkLimit.collectAsState()
 
                 TtsSettingsScreen(
                     selectedTtsEngine = selectedTtsEngine,
@@ -323,6 +324,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                     preloadCount = preloadCount,
                     lockPageOnTTS = lockPageOnTTS,
                     ttsFollowCooldownSeconds = ttsFollowCooldownSeconds,
+                    ttsSentenceChunkLimit = ttsSentenceChunkLimit,
                     onSelectTtsEngine = bookViewModel::selectTtsEngine,
                     onUseSystemTtsChange = bookViewModel::updateUseSystemTts,
                     onSystemVoiceIdChange = bookViewModel::updateSystemVoiceId,
@@ -335,6 +337,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                     onPreloadCountChange = bookViewModel::updatePreloadCount,
                     onLockPageOnTTSChange = bookViewModel::updateLockPageOnTTS,
                     onTtsFollowCooldownChange = bookViewModel::updateTtsFollowCooldownSeconds,
+                    onTtsSentenceChunkLimitChange = bookViewModel::updateTtsSentenceChunkLimit,
                     onNavigateToManage = { navController.navigate(Screen.SettingsTtsManage.route) },
                     onNavigateBack = { navController.popBackStack() }
                 )

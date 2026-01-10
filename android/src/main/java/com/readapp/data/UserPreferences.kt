@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -60,6 +61,7 @@ class UserPreferences(private val context: Context) {
         val ForceMangaProxy = booleanPreferencesKey("forceMangaProxy")
         val InfiniteScrollEnabled = booleanPreferencesKey("infiniteScrollEnabled")
         val TtsFollowCooldownSeconds = floatPreferencesKey("ttsFollowCooldownSeconds")
+        val TtsSentenceChunkLimit = intPreferencesKey("ttsSentenceChunkLimit")
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080" }
@@ -80,6 +82,7 @@ class UserPreferences(private val context: Context) {
     val forceMangaProxy: Flow<Boolean> = context.dataStore.data.map { it[Keys.ForceMangaProxy] ?: false }
     val infiniteScrollEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.InfiniteScrollEnabled] ?: true }
     val ttsFollowCooldownSeconds: Flow<Float> = context.dataStore.data.map { it[Keys.TtsFollowCooldownSeconds] ?: 3f }
+    val ttsSentenceChunkLimit: Flow<Int> = context.dataStore.data.map { it[Keys.TtsSentenceChunkLimit] ?: 600 }
     val narrationTtsId: Flow<String> = context.dataStore.data.map { it[Keys.NarrationTtsId] ?: "" }
     val dialogueTtsId: Flow<String> = context.dataStore.data.map { it[Keys.DialogueTtsId] ?: "" }
     val speakerTtsMapping: Flow<String> = context.dataStore.data.map { it[Keys.SpeakerTtsMapping] ?: "" }
@@ -127,6 +130,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveLockPageOnTTS(value: Boolean) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.LockPageOnTTS] = value
+        }
+    }
+
+    suspend fun saveTtsSentenceChunkLimit(value: Int) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.TtsSentenceChunkLimit] = value
         }
     }
 

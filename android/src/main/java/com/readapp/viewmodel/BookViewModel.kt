@@ -177,6 +177,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = readerSettings.readingMode
     val lockPageOnTTS: StateFlow<Boolean> = readerSettings.lockPageOnTTS
     val ttsFollowCooldownSeconds: StateFlow<Float> = readerSettings.ttsFollowCooldownSeconds
+    val ttsSentenceChunkLimit: StateFlow<Int> = readerSettings.ttsSentenceChunkLimit
     val pageTurningMode: StateFlow<com.readapp.data.PageTurningMode> = readerSettings.pageTurningMode
     val darkMode: StateFlow<com.readapp.data.DarkModeConfig> = readerSettings.darkMode
     private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080")
@@ -906,7 +907,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun prefetchAdjacentChapters() = readerInteractor.prefetchAdjacentChapters()
     private suspend fun fetchChapterContentForIndex(index: Int, effectiveType: Int): String? =
         readerInteractor.fetchChapterContentForIndex(index, effectiveType)
-    internal fun parseParagraphs(content: String): List<String> {
+    internal fun parseParagraphs(content: String, chunkLimit: Int = ttsSentenceChunkLimit.value): List<String> {
         val lines = content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
         val finalParagraphs = mutableListOf<String>()
         
@@ -945,7 +946,33 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 finalParagraphs.add(line)
             }
         }
-        return finalParagraphs
+        val limit = chunkLimit.coerceIn(300, 1000)
+        return finalParagraphs.flatMap { splitIntoChunks(it, limit) }
+    }
+
+    private fun splitIntoChunks(text: String, limit: Int): List<String> {
+        if (text.isEmpty()) return emptyList()
+        if (text.length <= limit) return listOf(text)
+
+        val breakChars = setOf(' ', '，', '。', '！', '？', '、', ',', '.', '!', '?')
+        val chunks = mutableListOf<String>()
+        var remaining = text.trim()
+
+        while (remaining.length > limit) {
+            var splitIndex = limit
+            while (splitIndex > 0 && !breakChars.contains(remaining[splitIndex - 1])) {
+                splitIndex--
+            }
+            if (splitIndex == 0) splitIndex = limit
+            val chunk = remaining.substring(0, splitIndex).trim()
+            if (chunk.isNotEmpty()) chunks.add(chunk)
+            remaining = remaining.substring(splitIndex).trim()
+        }
+
+        if (remaining.isNotEmpty()) {
+            chunks.add(remaining)
+        }
+        return chunks
     }
     internal fun cleanChapterContent(raw: String): String {
         if (raw.isBlank()) return ""
@@ -1119,6 +1146,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun updateLockPageOnTTS(enabled: Boolean) { readerSettings.updateLockPageOnTTS(enabled) }
     fun updateTtsFollowCooldownSeconds(seconds: Float) { readerSettings.updateTtsFollowCooldownSeconds(seconds) }
+    fun updateTtsSentenceChunkLimit(limit: Int) { readerSettings.updateTtsSentenceChunkLimit(limit) }
     fun updatePageTurningMode(mode: com.readapp.data.PageTurningMode) { readerSettings.updatePageTurningMode(mode) }
     fun updateDarkModeConfig(config: com.readapp.data.DarkModeConfig) { readerSettings.updateDarkModeConfig(config) }
     fun updateSearchSourcesFromBookshelf(enabled: Boolean) { 

@@ -270,6 +270,7 @@ fun TtsSettingsScreen(
     preloadCount: Int,
     lockPageOnTTS: Boolean,
     ttsFollowCooldownSeconds: Float,
+    ttsSentenceChunkLimit: Int,
     onSelectTtsEngine: (String) -> Unit,
     onUseSystemTtsChange: (Boolean) -> Unit,
     onSystemVoiceIdChange: (String) -> Unit,
@@ -282,6 +283,7 @@ fun TtsSettingsScreen(
     onPreloadCountChange: (Int) -> Unit,
     onLockPageOnTTSChange: (Boolean) -> Unit,
     onTtsFollowCooldownChange: (Float) -> Unit,
+    onTtsSentenceChunkLimitChange: (Int) -> Unit,
     onNavigateToManage: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
@@ -343,6 +345,16 @@ fun TtsSettingsScreen(
                     valueRange = 0f..10f,
                     steps = 19
                 )
+            }
+            Column {
+                Text("TTS 句段最大字符: $ttsSentenceChunkLimit 字", style = MaterialTheme.typography.labelMedium)
+                Slider(
+                    value = ttsSentenceChunkLimit.toFloat(),
+                    onValueChange = { onTtsSentenceChunkLimitChange(it.toInt()) },
+                    valueRange = 300f..1000f,
+                    steps = 14
+                )
+                Text("超过此长度的段落会在发给服务端前拆分 (推荐 300-800)", style = MaterialTheme.typography.bodySmall)
             }
 
             SectionHeader("引擎设置")
