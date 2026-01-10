@@ -185,6 +185,12 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    @Published var infiniteScrollSwitchThreshold: CGFloat {
+        didSet {
+            UserDefaults.standard.set(infiniteScrollSwitchThreshold, forKey: "infiniteScrollSwitchThreshold")
+        }
+    }
+
     /// 是否强制使用服务器代理加载漫画图片
     @Published var forceMangaProxy: Bool {
         didSet {
@@ -281,6 +287,8 @@ class UserPreferences: ObservableObject {
         self.isInfiniteScrollEnabled = UserDefaults.standard.object(forKey: "isInfiniteScrollEnabled") as? Bool ?? true
         let savedVerticalThreshold = CGFloat(UserDefaults.standard.float(forKey: "verticalThreshold"))
         self.verticalThreshold = savedVerticalThreshold == 0 ? 80 : savedVerticalThreshold
+        let savedInfiniteSwitchThreshold = CGFloat(UserDefaults.standard.float(forKey: "infiniteScrollSwitchThreshold"))
+        self.infiniteScrollSwitchThreshold = savedInfiniteSwitchThreshold == 0 ? 120 : savedInfiniteSwitchThreshold
         self.forceMangaProxy = UserDefaults.standard.bool(forKey: "forceMangaProxy")
 
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")

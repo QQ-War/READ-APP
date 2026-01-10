@@ -68,6 +68,11 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.verticalThreshold = newValue }
     }
 
+    var infiniteScrollSwitchThreshold: CGFloat {
+        get { preferences.infiniteScrollSwitchThreshold }
+        set { preferences.infiniteScrollSwitchThreshold = newValue }
+    }
+
     var forceMangaProxy: Bool {
         get { preferences.forceMangaProxy }
         set { preferences.forceMangaProxy = newValue }

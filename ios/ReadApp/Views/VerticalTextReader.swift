@@ -75,6 +75,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
     var threshold: CGFloat = 80
+    var seamlessSwitchThreshold: CGFloat = 120
     
     private var renderStore: TextKit2RenderStore?; private var nextRenderStore: TextKit2RenderStore?; private var prevRenderStore: TextKit2RenderStore?
     private var currentSentences: [String] = []; private var nextSentences: [String] = []; private var prevSentences: [String] = []
@@ -589,17 +590,19 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         if let _ = nextRenderStore {
             let maxOffsetY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+            let triggerThreshold = max(40, seamlessSwitchThreshold)
+            let logThreshold = triggerThreshold + 220
             // 以实际可滚动到底的位置作为触发依据，避免永远到不了阈值
-            if rawOffset > maxOffsetY - 300 {
+            if rawOffset > maxOffsetY - logThreshold {
                 let now = Date().timeIntervalSince1970
                 if now - lastEdgeLogTime > 0.5 {
                     lastEdgeLogTime = now
                     LogManager.shared.log("接近下边缘: offset=\(Int(rawOffset)), max=\(Int(maxOffsetY)), size=\(Int(scrollView.contentSize.height))", category: "阅读器")
                 }
             }
-            if rawOffset > maxOffsetY - 80 {
+            if rawOffset > maxOffsetY - triggerThreshold {
                 pendingSeamlessSwitch = 1
-                LogManager.shared.log("触发下切章: offset=\(Int(rawOffset)), max=\(Int(maxOffsetY))", category: "阅读器")
+                LogManager.shared.log("触发下切章: offset=\(Int(rawOffset)), max=\(Int(maxOffsetY)), threshold=\(Int(triggerThreshold))", category: "阅读器")
                 return
             }
         }

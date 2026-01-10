@@ -329,6 +329,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func updateVerticalAdjacent(secondaryIndices: Set<Int> = []) {
         guard let v = verticalVC, readerSettings != nil, ttsManager != nil else { return }
         v.isInfiniteScrollEnabled = readerSettings.isInfiniteScrollEnabled
+        v.seamlessSwitchThreshold = readerSettings.infiniteScrollSwitchThreshold
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let nextTitle = (currentChapterIndex + 1 < chapters.count) ? chapters[currentChapterIndex + 1].title : nil
         let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
@@ -716,6 +717,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             }
         }
         v.threshold = verticalThreshold
+        v.seamlessSwitchThreshold = readerSettings.infiniteScrollSwitchThreshold
         self.verticalVC = v
         addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
         
