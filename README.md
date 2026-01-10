@@ -17,6 +17,13 @@ Chinese README: `README_CN.md`
 - Chapter list and quick navigation
 - iOS/Android reading modes
 
+## TTS-View Sync Rules (iOS)
+- TTS starts from the first visible text on the current page; it does not jump back to previous pages for split paragraphs.
+- While TTS is playing, the view follows TTS in both horizontal and vertical modes (foreground/background resume supported).
+- During manual page/scroll interactions and the cooldown window afterward, TTS auto-follow is suppressed to avoid jitter.
+- After the cooldown, if TTS is not within the current page, TTS restarts from the current page start; if it is within the page, playback continues without restart.
+- The cooldown duration is configurable in TTS Settings (“TTS follow cooldown”).
+
 ## Build
 - iOS: open `ios/ReadApp.xcodeproj` in Xcode
 - Android: open `android/` in Android Studio
