@@ -153,6 +153,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let sentences = previewSentences(from: startIndex, limit: 2)
         return (startIndex, sentences)
     }
+    private func horizontalPageStartSnippet(for pageIndex: Int, limit: Int) -> String {
+        guard let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count else { return "" }
+        let range = pageInfos[pageIndex].range
+        let attributed = currentCache.attributedText.string as NSString
+        let validLen = max(0, min(limit, attributed.length - range.location))
+        guard validLen > 0 else { return "" }
+        let fragment = attributed.substring(with: NSRange(location: range.location, length: validLen))
+        return sanitizedPreviewText(fragment)
+    }
     private var isMangaMode = false
 
     private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
@@ -1021,6 +1030,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let clampedOffset = min(maxLen, offsetInSentence)
         let visibleInfo = visibleTopSentenceInfo()
         let previewLines = previewSentences(from: sentenceIndex, limit: 2)
+        let pageIdx = horizontalPageIndexForDisplay()
+        let pageSnippet = horizontalPageStartSnippet(for: pageIdx, limit: 120)
         logTTSStartSnapshot(
             sentenceIndex: sentenceIndex,
             sentenceOffset: clampedOffset,
@@ -1028,6 +1039,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             visibleTopIndex: visibleInfo.index,
             visibleTopLines: visibleInfo.sentences,
             previewLines: previewLines
+            ,
+            pageSnippet: pageSnippet
         )
         return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: clampedOffset, charOffset: charOffset)
     }
@@ -1041,14 +1054,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             updateHorizontalPage(to: max(0, currentCache.pages.count - 1), animated: animated) 
         } 
     }
-    private func logTTSStartSnapshot(sentenceIndex: Int, sentenceOffset: Int, charOffset: Int, visibleTopIndex: Int, visibleTopLines: [String], previewLines: [String]) {
+    private func logTTSStartSnapshot(sentenceIndex: Int, sentenceOffset: Int, charOffset: Int, visibleTopIndex: Int, visibleTopLines: [String], previewLines: [String], pageSnippet: String) {
         let pageIdx = horizontalPageIndexForDisplay()
         let topLinesDesc = visibleTopLines.isEmpty ? "[]" : visibleTopLines.joined(separator: " | ")
         let previewDesc = previewLines.isEmpty ? "[]" : previewLines.joined(separator: " | ")
+        let snippetDesc = pageSnippet.isEmpty ? "[]" : pageSnippet
         let message = """
         TTS start snapshot - mode=\(currentReadingMode) chapter=\(currentChapterIndex) currentPageIdx=\(currentPageIndex) visiblePageIdx=\(pageIdx) \
         visibleTopIdx=\(visibleTopIndex) topLines=\(topLinesDesc) startSentenceIdx=\(sentenceIndex) sentenceOffset=\(sentenceOffset) \
-        charOffset=\(charOffset) previewLines=\(previewDesc)
+        charOffset=\(charOffset) previewLines=\(previewDesc) pageSnippet=\(snippetDesc)
         """
         logger.log(message, category: "TTS")
     }
