@@ -410,6 +410,13 @@ class TTSManager: NSObject, ObservableObject {
         return result
     }
     
+    private func sanitizedPreviewText(_ text: String, limit: Int) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
+        guard trimmed.count > limit else { return trimmed }
+        let endIndex = trimmed.index(trimmed.startIndex, offsetBy: limit)
+        return String(trimmed[..<endIndex]) + "…"
+    }
+
     private func splitTextIntoSentences(_ text: String) -> [String] {
         let processed = textProcessor?(text) ?? removeSVGTags(text)
         return processed
@@ -482,6 +489,7 @@ class TTSManager: NSObject, ObservableObject {
         } else {
             sentenceToSpeak = sentence
         }
+        logger.log("TTS play snapshot - chapter=\(currentChapterIndex) sentenceIdx=\(currentSentenceIndex) sentenceOffset=\(currentSentenceOffset) text=\(sanitizedPreviewText(sentenceToSpeak, limit: 120))", category: "TTS")
         // 注意：不在这里重置 currentSentenceOffset，由播放器开始后通过 Timer 或 Delegate 更新
         
         if sentenceToSpeak.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
