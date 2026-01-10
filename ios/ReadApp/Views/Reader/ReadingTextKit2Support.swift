@@ -55,8 +55,19 @@ struct TextKit2Paginator {
         lm.ensureLayout(for: storage.documentRange)
         
         while true {
-            let rangeStartLocation = lm.textLayoutFragment(for: CGPoint(x: 0, y: currentY))?.rangeInElement.location ?? storage.documentRange.endLocation
-            let startOffset = storage.offset(from: storage.documentRange.location, to: rangeStartLocation)
+            // 修正：精确获取当前页面的起始字符偏移量，而不仅仅是 LayoutFragment 的起始位置
+            var startOffset = attributedStringLength(storage)
+            if let f = lm.textLayoutFragment(for: CGPoint(x: 0, y: currentY)) {
+                let localPoint = CGPoint(x: 0, y: currentY - f.layoutFragmentFrame.origin.y)
+                if let line = f.textLineFragment(for: localPoint) {
+                    let fragmentStart = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
+                    // 使用 Line 的起始位置作为页面的起始位置
+                    startOffset = fragmentStart + line.characterRange.location
+                } else {
+                    // 回退方案
+                    startOffset = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
+                }
+            }
             
             if startOffset >= attributedStringLength(storage) { break }
             
