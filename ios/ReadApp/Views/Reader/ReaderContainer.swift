@@ -544,7 +544,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         pV.renderStore = aS; if i < aI.count { 
             let info = aI[i]; pV.pageInfo = TK2PageInfo(range: info.range, yOffset: info.yOffset, pageHeight: info.pageHeight, actualContentHeight: info.actualContentHeight, startSentenceIndex: info.startSentenceIndex, contentInset: currentLayoutSpec.topInset)
         }
-        pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.onToggleMenu?() } else { self?.handlePageTap(isNext: loc == .right) } }
+        pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.safeToggleMenu() } else { self?.handlePageTap(isNext: loc == .right) } }
         pV.horizontalInset = currentLayoutSpec.sideMargin
         pV.paragraphStarts = aPS
         pV.chapterPrefixLen = offset == 0 ? currentCache.chapterPrefixLen : 0
@@ -681,7 +681,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             let count = max(1, self.currentCache.contentSentences.count)
             self.onProgressChanged?(self.currentChapterIndex, Double(idx) / Double(count)) 
         }
-        v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.onToggleMenu?() }
+        v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.safeToggleMenu() }
         v.isInfiniteScrollEnabled = readerSettings.isInfiniteScrollEnabled
         v.onReachedBottom = { [weak self] in 
             guard let self = self else { return }
@@ -754,7 +754,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if mangaVC == nil {
             let vc = MangaReaderViewController()
             vc.safeAreaTop = safeAreaTop
-            vc.onToggleMenu = { [weak self] in self?.onToggleMenu?() }
+            vc.onToggleMenu = { [weak self] in self?.safeToggleMenu() }
             vc.onInteractionChanged = { [weak self] interacting in
                 guard let self = self else { return }
                 if interacting {
@@ -894,6 +894,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         pendingTTSPositionSync = true
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
         ttsSyncCoordinator?.userInteractionStarted()
+    }
+
+    private func safeToggleMenu() {
+        guard !isInternalTransitioning else { return }
+        onToggleMenu?()
     }
 
     private func notifyUserInteractionEnded() {
