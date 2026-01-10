@@ -933,17 +933,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             charOffset = verticalVC?.getCurrentCharOffset() ?? 0
         }
 
-        let baseIndex: Int
-        if currentReadingMode == .horizontal, currentPageIndex < pageInfos.count {
-            let pageInfo = pageInfos[currentPageIndex]
-            baseIndex = pageInfo.startSentenceIndex
-        } else if currentReadingMode == .vertical {
-            baseIndex = verticalVC?.getCurrentSentenceIndex() ?? 0
-        } else {
-            baseIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? 0
-        }
-
-        let sentenceIndex = max(0, min(baseIndex, currentCache.contentSentences.count - 1))
+        let sentenceIndex = max(0, min((starts.lastIndex(where: { $0 <= charOffset }) ?? 0), currentCache.contentSentences.count - 1))
 
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
