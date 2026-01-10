@@ -15,3 +15,11 @@ struct HttpTTS: Codable, Identifiable {
     let loginCheckJs: String?
     let lastUpdateTime: Int64?
 }
+
+struct ReaderTtsRequest: Encodable {
+    let text: String
+    let voice: String
+    let pitch: String
+    let rate: String
+    let accessToken: String
+}

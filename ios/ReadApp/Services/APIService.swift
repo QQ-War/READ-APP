@@ -176,7 +176,7 @@ class APIService: ObservableObject {
             URLQueryItem(name: "accessToken", value: accessToken),
             URLQueryItem(name: "v", value: "\(timestamp)")
         ]
-        let url = try client.buildURL(endpoint: ReaderApiEndpoints.bookTts, queryItems: queryItems)
+        let url = try client.buildURL(endpoint: ApiEndpointsReader.bookTts, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")

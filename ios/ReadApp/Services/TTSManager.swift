@@ -695,9 +695,8 @@ class TTSManager: NSObject, ObservableObject {
     private func preloadNextChapterTitle(chapterIndex: Int) {
         if UserPreferences.shared.useSystemTTS || chapterIndex >= chapters.count || nextChapterCache[-1] != nil { return }
         let title = chapters[chapterIndex].title
-        guard let url = buildAudioURL(for: title, isChapterTitle: true) else { return }
         Task {
-            if let (data, response) = try? await URLSession.shared.data(from: url), validateAudioData(data, response: response) {
+            if let data = await fetchAudioData(for: title, isChapterTitle: true) {
                 await MainActor.run { cacheNextChapterAudio(data, for: -1) }
             }
         }
@@ -706,9 +705,8 @@ class TTSManager: NSObject, ObservableObject {
     private func preloadNextChapterAudio(at index: Int) {
         if UserPreferences.shared.useSystemTTS || index >= nextChapterSentences.count || cachedNextChapterAudio(for: index) != nil { return }
         let sentence = nextChapterSentences[index]
-        guard let url = buildAudioURL(for: sentence) else { return }
         Task {
-            if let (data, response) = try? await URLSession.shared.data(from: url), validateAudioData(data, response: response) {
+            if let data = await fetchAudioData(for: sentence, isChapterTitle: false) {
                 await MainActor.run { cacheNextChapterAudio(data, for: index) }
             }
         }

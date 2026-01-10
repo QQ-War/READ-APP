@@ -14,7 +14,7 @@ final class TTSService {
                 URLQueryItem(name: "accessToken", value: client.accessToken),
                 URLQueryItem(name: "v", value: "\(timestamp)")
             ]
-            let (data, httpResponse) = try await client.requestWithFailback(endpoint: ReaderApiEndpoints.httpTtsList, queryItems: queryItems)
+            let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpointsReader.httpTtsList, queryItems: queryItems)
             guard httpResponse.statusCode == 200 else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
             }
