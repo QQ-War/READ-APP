@@ -950,9 +950,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
-        
-        let indentLen = 2
-        let offsetInSentence = max(0, intra - indentLen)
+        let offsetInSentence = intra
         
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
