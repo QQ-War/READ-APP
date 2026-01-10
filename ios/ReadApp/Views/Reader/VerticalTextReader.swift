@@ -513,11 +513,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if #available(iOS 17, *) {
                 // 修正：不仅获取 Fragment，还要获取具体的 Line，并计算精确的字符位置
                 let localPoint = CGPoint(x: point.x - f.layoutFragmentFrame.origin.x, y: point.y - f.layoutFragmentFrame.origin.y)
-                if let line = f.textLineFragment(for: localPoint) {
+                if let line = f.textLineFragments.first(where: { $0.layoutFragmentFrame.contains(localPoint) }) {
                     let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
                     let lineStart = line.characterRange.location // 相对于 Fragment
-                    let indexInLine = line.characterIndex(for: localPoint) // 相对于 Line
-                    return fragmentStart + lineStart + indexInLine
+                    return fragmentStart + lineStart
                 }
             }
             return s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
