@@ -90,6 +90,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var lastPrevHasContent = false
     private var pendingSelectedText: String?
     private var lastEdgeLogTime: TimeInterval = 0
+    private var suppressAutoAlignUntil: TimeInterval = 0
     
     // 无限流无缝切换标记 (0: 无, 1: 下一章, -1: 上一章)
     private var pendingSeamlessSwitch: Int = 0
@@ -280,6 +281,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             isUpdatingLayout = false
 
             if isInfiniteScrollEnabled && !scrollView.isDragging && !scrollView.isDecelerating {
+                if Date().timeIntervalSince1970 < suppressAutoAlignUntil { return }
                 let currentMinY = currentContentView.frame.minY
                 let currentMaxY = currentContentView.frame.maxY
                 let currentOffsetY = scrollView.contentOffset.y
@@ -486,6 +488,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if safeToSwitch {
                 pendingSeamlessSwitch = 0
                 showSwitchResultHint(direction: dir)
+                suppressAutoAlignUntil = Date().timeIntervalSince1970 + 0.6
                 onChapterSwitched?(dir)
             }
         }
