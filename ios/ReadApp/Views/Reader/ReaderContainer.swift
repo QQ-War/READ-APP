@@ -614,8 +614,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         pV.pageIndex = i
         pV.onVisibleFragments = { [weak self] pageIdx, lines in
             guard let self = self else { return }
-            if pageIdx == self.horizontalPageIndexForDisplay() {
+            let displayPage = self.horizontalPageIndexForDisplay()
+            if pageIdx == displayPage {
                 self.latestVisibleFragmentLines = lines
+                let snippet = lines.isEmpty ? "[]" : lines.joined(separator: " | ")
+                self.logger.log("ReadContent2View visible fragments - mode=\(self.currentReadingMode) page=\(pageIdx) currentDisplay=\(displayPage) snippet=\(snippet)", category: "TTS")
             }
         }
         if i < aI.count { 
@@ -1034,9 +1037,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             let pageIndex = horizontalPageIndexForDisplay()
             if pageIndex < pageInfos.count {
                 let pageInfo = pageInfos[pageIndex]
-                sentenceIndex = pageInfo.startSentenceIndex
-                sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
                 charOffset = pageInfo.range.location
+                sentenceIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? pageInfo.startSentenceIndex
+                sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
             }
         } else if currentReadingMode == .vertical {
             charOffset = verticalVC?.getCurrentCharOffset() ?? 0

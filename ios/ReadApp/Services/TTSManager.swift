@@ -538,7 +538,7 @@ class TTSManager: NSObject, ObservableObject {
         currentSentenceOffset = max(0, min(position.sentenceOffset, sentenceLength))
         
         // 调试日志
-        print("🔍 TTS Update Position: requested=\(position.sentenceIndex), adjusted=\(targetIndex), offset=\(currentSentenceOffset)")
+        logger.log("TTSManager update position - requested=\(position.sentenceIndex), adjusted=\(targetIndex), offset=\(currentSentenceOffset)", category: "TTS")
         
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
         guard restartIfPlaying && isPlaying else { return }

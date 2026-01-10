@@ -72,10 +72,20 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var onReachedBottom: (() -> Void)?; var onReachedTop: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
-    private let horizontalTextMargin: CGFloat = 10
+    private struct CharDetectionConfig {
+        static let minHorizontalInset: CGFloat = 10
+        static let minVerticalOffset: CGFloat = 5
+        static let maxVerticalOffset: CGFloat = 18
+    }
     private let viewportTopMargin: CGFloat = 10
-    private let charDetectionYOffset: CGFloat = 5
     private var contentTopPadding: CGFloat { safeAreaTop + viewportTopMargin }
+    private var horizontalMarginForDetection: CGFloat {
+        max(CharDetectionConfig.minHorizontalInset, lastMargin)
+    }
+    private var verticalDetectionOffset: CGFloat {
+        let spacingDriven = lastLineSpacing > 0 ? lastLineSpacing * 0.35 : CharDetectionConfig.minVerticalOffset
+        return min(CharDetectionConfig.maxVerticalOffset, max(CharDetectionConfig.minVerticalOffset, spacingDriven))
+    }
     var threshold: CGFloat = 80
     var seamlessSwitchThreshold: CGFloat = 120
     
@@ -394,7 +404,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if s.contentOffset.y < s.bounds.height * 0.6 { onReachedTop?() }
         }
         
-        let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + charDetectionYOffset }) ?? 0
+        let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + verticalDetectionOffset }) ?? 0
         if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
     }
 
@@ -503,12 +513,15 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func getCurrentSentenceIndex() -> Int {
         guard !sentenceYOffsets.isEmpty else { return 0 }
         let y = scrollView.contentOffset.y - contentTopPadding
-        let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + charDetectionYOffset }) ?? 0
+        let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + verticalDetectionOffset }) ?? 0
         return max(0, idx)
     }
     func getCurrentCharOffset() -> Int {
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
-        let point = CGPoint(x: horizontalTextMargin, y: scrollView.contentOffset.y - contentTopPadding + charDetectionYOffset)
+        let point = CGPoint(
+            x: horizontalMarginForDetection,
+            y: scrollView.contentOffset.y - contentTopPadding + verticalDetectionOffset
+        )
         if let f = s.layoutManager.textLayoutFragment(for: point) {
             if #available(iOS 17, *) {
                 if let line = f.textLineFragments.first {
