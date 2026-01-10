@@ -803,11 +803,18 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let starts = currentCache.paragraphStarts
         guard sentenceIndex < starts.count else { return }
         
-        // 计算全局字符偏移量
         let totalOffset = starts[sentenceIndex] + sentenceOffset
         
-        // 查找包含该偏移量的精确页码
+        // 优化：如果当前页已经包含这个位置，不做任何处理，防止微小计算偏差导致回跳
+        if currentPageIndex < currentCache.pages.count {
+            let currentRange = currentCache.pages[currentPageIndex].globalRange
+            if NSLocationInRange(totalOffset, currentRange) {
+                return
+            }
+        }
+
         if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(totalOffset, $0.globalRange) }) {
+            // 只有当目标页在当前页之后，或者偏差较大时才跳转，严禁非预期的回翻
             if targetPage != currentPageIndex {
                 updateHorizontalPage(to: targetPage, animated: true) 
             }
@@ -937,8 +944,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
-        let indentLen = min(2, currentCache.contentSentences[sentenceIndex].utf16.count)
-        let offsetInSentence = max(0, intra - indentLen)
+        
+        // 关键修复：左右翻页模式下，不要减去缩进，否则 totalOffset 会落在上一页的末尾字符
+        let offsetInSentence: Int
+        if currentReadingMode == .horizontal {
+            offsetInSentence = intra
+        } else {
+            let indentLen = min(2, currentCache.contentSentences[sentenceIndex].utf16.count)
+            offsetInSentence = max(0, intra - indentLen)
+        }
+        
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
         return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: clampedOffset, charOffset: charOffset)
