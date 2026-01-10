@@ -52,6 +52,7 @@ import com.readapp.data.model.TtsAudioRequest
 import com.readapp.ui.state.ReaderUiState
 import android.speech.tts.Voice
 import android.widget.Toast
+import android.os.SystemClock
 
 class BookViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -175,6 +176,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = readerSettings.readingMode
     val lockPageOnTTS: StateFlow<Boolean> = readerSettings.lockPageOnTTS
+    val ttsFollowCooldownSeconds: StateFlow<Float> = readerSettings.ttsFollowCooldownSeconds
     val pageTurningMode: StateFlow<com.readapp.data.PageTurningMode> = readerSettings.pageTurningMode
     val darkMode: StateFlow<com.readapp.data.DarkModeConfig> = readerSettings.darkMode
     private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080")
@@ -242,6 +244,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val currentParagraphIndex: StateFlow<Int> = readerState.currentParagraphIndexFlow
     private val _firstVisibleParagraphIndex = readerState.firstVisibleParagraphIndex
     val firstVisibleParagraphIndex: StateFlow<Int> = readerState.firstVisibleParagraphIndexFlow
+    private val _lastVisibleParagraphIndex = readerState.lastVisibleParagraphIndex
+    val lastVisibleParagraphIndex: StateFlow<Int> = readerState.lastVisibleParagraphIndexFlow
     private val _pendingScrollIndex = readerState.pendingScrollIndex
     val pendingScrollIndex: StateFlow<Int?> = readerState.pendingScrollIndexFlow
 
@@ -255,6 +259,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val preloadedParagraphs: StateFlow<Set<Int>> = readerState.preloadedParagraphsFlow
     internal val _preloadedChapters = readerState.preloadedChapters
     val preloadedChapters: StateFlow<Set<Int>> = readerState.preloadedChaptersFlow
+
+    private var firstVisibleParagraphOffset: Int = 0
+    private var currentPageStartParagraphIndex: Int = 0
+    private var currentPageStartOffset: Int = 0
+    private var currentPageEndParagraphIndex: Int = 0
+    private var currentPageEndOffset: Int = 0
+    private var isUserScrolling: Boolean = false
+    private var ttsFollowSuppressedUntil: Long = 0L
+    private var ttsFollowJob: Job? = null
 
     internal val _prevChapterIndex = readerState.prevChapterIndex
     val prevChapterIndex: StateFlow<Int?> = readerState.prevChapterIndexFlow
@@ -429,7 +442,17 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         ttsController.startTts(startParagraphIndex, startOffsetInParagraph)
     }
     fun stopTts() { ttsController.stopTts() }
-    fun togglePlayPause() { ttsController.togglePlayPause() }
+    fun togglePlayPause() {
+        if (_isPlaying.value || _isPaused.value) {
+            ttsController.togglePlayPause()
+            return
+        }
+        if (_firstVisibleParagraphIndex.value >= 0) {
+            startTts(_firstVisibleParagraphIndex.value, firstVisibleParagraphOffset)
+            return
+        }
+        ttsController.togglePlayPause()
+    }
 
     internal fun jumpToParagraphForTts(index: Int) {
         ttsController.jumpToParagraph(index)
@@ -1016,9 +1039,69 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun updateLoggingEnabled(enabled: Boolean) { _loggingEnabled.value = enabled; viewModelScope.launch { preferences.saveLoggingEnabled(enabled) } }
     fun updateBookshelfSortByRecent(enabled: Boolean) { _bookshelfSortByRecent.value = enabled; viewModelScope.launch { preferences.saveBookshelfSortByRecent(enabled); applyBooksFilterAndSort() } }
-    fun updateFirstVisibleParagraphIndex(index: Int) {
-        _firstVisibleParagraphIndex.value = index
-        ttsSyncCoordinator.onUiParagraphVisible(index)
+    fun updateVisibleParagraphInfo(startIndex: Int, startOffset: Int, endIndex: Int, endOffset: Int) {
+        if (startIndex < 0) return
+        _firstVisibleParagraphIndex.value = startIndex
+        _lastVisibleParagraphIndex.value = endIndex
+        firstVisibleParagraphOffset = startOffset.coerceAtLeast(0)
+        currentPageStartParagraphIndex = startIndex
+        currentPageStartOffset = startOffset.coerceAtLeast(0)
+        currentPageEndParagraphIndex = endIndex
+        currentPageEndOffset = endOffset.coerceAtLeast(0)
+        if (!_isPlaying.value && !_keepPlaying.value) {
+            _currentParagraphIndex.value = startIndex
+            _currentParagraphStartOffset.value = firstVisibleParagraphOffset
+        }
+        ttsSyncCoordinator.onUiParagraphVisible(startIndex)
+    }
+
+    fun onUserScrollState(isScrolling: Boolean) {
+        if (isScrolling) {
+            isUserScrolling = true
+            ttsFollowJob?.cancel()
+            return
+        }
+        if (!isUserScrolling) return
+        isUserScrolling = false
+        val delayMs = (ttsFollowCooldownSeconds.value * 1000f).toLong().coerceAtLeast(0L)
+        ttsFollowSuppressedUntil = SystemClock.elapsedRealtime() + delayMs
+        ttsFollowJob?.cancel()
+        ttsFollowJob = viewModelScope.launch {
+            delay(delayMs)
+            if (!isUserScrolling) {
+                handleUserScrollCatchUp()
+            }
+        }
+    }
+
+    internal fun shouldAllowTtsFollow(): Boolean {
+        if (isUserScrolling) return false
+        if (_isPaused.value) return false
+        return SystemClock.elapsedRealtime() >= ttsFollowSuppressedUntil
+    }
+
+    private fun handleUserScrollCatchUp() {
+        if (!_keepPlaying.value || _isPaused.value) return
+        if (!isTtsInCurrentPage()) {
+            startTts(currentPageStartParagraphIndex, currentPageStartOffset)
+        }
+    }
+
+    private fun isTtsInCurrentPage(): Boolean {
+        val ttsIndex = _currentParagraphIndex.value
+        if (ttsIndex < 0) return false
+        if (ttsIndex < currentPageStartParagraphIndex || ttsIndex > currentPageEndParagraphIndex) {
+            return false
+        }
+        if (ttsIndex == currentPageStartParagraphIndex && currentPageStartOffset > 0) {
+            val ttsOffset = _currentParagraphStartOffset.value
+            if (ttsOffset < currentPageStartOffset) return false
+        }
+        if (ttsIndex == currentPageEndParagraphIndex && currentPageEndOffset > 0) {
+            val ttsOffset = _currentParagraphStartOffset.value
+            if (ttsOffset > currentPageEndOffset) return false
+        }
+        return true
     }
 
     fun clearPendingScrollIndex() {
@@ -1035,6 +1118,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun updateLockPageOnTTS(enabled: Boolean) { readerSettings.updateLockPageOnTTS(enabled) }
+    fun updateTtsFollowCooldownSeconds(seconds: Float) { readerSettings.updateTtsFollowCooldownSeconds(seconds) }
     fun updatePageTurningMode(mode: com.readapp.data.PageTurningMode) { readerSettings.updatePageTurningMode(mode) }
     fun updateDarkModeConfig(config: com.readapp.data.DarkModeConfig) { readerSettings.updateDarkModeConfig(config) }
     fun updateSearchSourcesFromBookshelf(enabled: Boolean) { 

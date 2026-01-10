@@ -188,8 +188,12 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                         onLockPageOnTTSChange = { bookViewModel.updateLockPageOnTTS(it) },
                         onPageTurningModeChange = { bookViewModel.updatePageTurningMode(it) },
                         onDarkModeChange = { bookViewModel.updateDarkModeConfig(it) },
-                        onScrollUpdate = { bookViewModel.updateFirstVisibleParagraphIndex(it) },
+                        onScrollUpdate = { },
+                        onVisibleParagraphInfo = { start, startOffset, end, endOffset ->
+                            bookViewModel.updateVisibleParagraphInfo(start, startOffset, end, endOffset)
+                        },
                         onScrollConsumed = { bookViewModel.clearPendingScrollIndex() },
+                        onUserScrollState = { scrolling -> bookViewModel.onUserScrollState(scrolling) },
                         onForceMangaProxyChange = { bookViewModel.updateForceMangaProxy(it) },
                         onClearError = { bookViewModel.clearError() },
                         onChapterClick = { index ->
@@ -305,6 +309,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val speechSpeed by bookViewModel.speechSpeed.collectAsState()
                 val preloadCount by bookViewModel.preloadCount.collectAsState()
                 val lockPageOnTTS by bookViewModel.lockPageOnTTS.collectAsState()
+                val ttsFollowCooldownSeconds by bookViewModel.ttsFollowCooldownSeconds.collectAsState()
 
                 TtsSettingsScreen(
                     selectedTtsEngine = selectedTtsEngine,
@@ -317,6 +322,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                     speechSpeed = speechSpeed,
                     preloadCount = preloadCount,
                     lockPageOnTTS = lockPageOnTTS,
+                    ttsFollowCooldownSeconds = ttsFollowCooldownSeconds,
                     onSelectTtsEngine = bookViewModel::selectTtsEngine,
                     onUseSystemTtsChange = bookViewModel::updateUseSystemTts,
                     onSystemVoiceIdChange = bookViewModel::updateSystemVoiceId,
@@ -328,6 +334,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                     onSpeechSpeedChange = bookViewModel::updateSpeechSpeed,
                     onPreloadCountChange = bookViewModel::updatePreloadCount,
                     onLockPageOnTTSChange = bookViewModel::updateLockPageOnTTS,
+                    onTtsFollowCooldownChange = bookViewModel::updateTtsFollowCooldownSeconds,
                     onNavigateToManage = { navController.navigate(Screen.SettingsTtsManage.route) },
                     onNavigateBack = { navController.popBackStack() }
                 )

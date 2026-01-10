@@ -51,6 +51,9 @@ class ReaderStateReducer(
     internal val firstVisibleParagraphIndex = MutableStateFlow(0)
     val firstVisibleParagraphIndexFlow: StateFlow<Int> = firstVisibleParagraphIndex.asStateFlow()
 
+    internal val lastVisibleParagraphIndex = MutableStateFlow(0)
+    val lastVisibleParagraphIndexFlow: StateFlow<Int> = lastVisibleParagraphIndex.asStateFlow()
+
     internal val pendingScrollIndex = MutableStateFlow<Int?>(null)
     val pendingScrollIndexFlow: StateFlow<Int?> = pendingScrollIndex.asStateFlow()
 
@@ -97,6 +100,7 @@ class ReaderStateReducer(
         preloadedParagraphsFlow,
         preloadedChaptersFlow,
         firstVisibleParagraphIndexFlow,
+        lastVisibleParagraphIndexFlow,
         pendingScrollIndexFlow,
         forceMangaProxy,
         manualMangaUrls,
@@ -122,11 +126,12 @@ class ReaderStateReducer(
             preloadedParagraphs = values[15] as Set<Int>,
             preloadedChapters = values[16] as Set<Int>,
             firstVisibleParagraphIndex = values[17] as Int,
-            pendingScrollIndex = values[18] as Int?,
-            forceMangaProxy = values[19] as Boolean,
-            manualMangaUrls = values[20] as Set<String>,
-            serverUrl = values[21] as String,
-            apiBackend = values[22] as com.readapp.data.ApiBackend
+            lastVisibleParagraphIndex = values[18] as Int,
+            pendingScrollIndex = values[19] as Int?,
+            forceMangaProxy = values[20] as Boolean,
+            manualMangaUrls = values[21] as Set<String>,
+            serverUrl = values[22] as String,
+            apiBackend = values[23] as com.readapp.data.ApiBackend
         )
     }.stateIn(scope, SharingStarted.Eagerly, ReaderUiState(
         book = null,
@@ -147,6 +152,7 @@ class ReaderStateReducer(
         preloadedParagraphs = emptySet(),
         preloadedChapters = emptySet(),
         firstVisibleParagraphIndex = 0,
+        lastVisibleParagraphIndex = 0,
         pendingScrollIndex = null,
         forceMangaProxy = false,
         manualMangaUrls = emptySet(),

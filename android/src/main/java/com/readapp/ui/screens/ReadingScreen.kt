@@ -110,7 +110,9 @@ fun ReadingScreen(
     onPageTurningModeChange: (com.readapp.data.PageTurningMode) -> Unit = {},
     onDarkModeChange: (DarkModeConfig) -> Unit = {},
     onScrollUpdate: (Int) -> Unit = {},
+    onVisibleParagraphInfo: (Int, Int, Int, Int) -> Unit = { _, _, _, _ -> },
     onScrollConsumed: () -> Unit = {},
+    onUserScrollState: (Boolean) -> Unit = {},
     onForceMangaProxyChange: (Boolean) -> Unit = {},
     onInfiniteScrollSwitch: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
@@ -358,6 +360,34 @@ fun ReadingScreen(
             }
     }
 
+    val latestPendingScrollIndex by rememberUpdatedState(pendingScrollIndex)
+    LaunchedEffect(scrollState, readingMode, isMangaMode) {
+        snapshotFlow { scrollState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { scrolling ->
+                if (readingMode != ReadingMode.Vertical || isMangaMode) return@collect
+                if (latestPendingScrollIndex == null) {
+                    onUserScrollState(scrolling)
+                }
+            }
+    }
+
+    LaunchedEffect(scrollState, readingMode, isMangaMode, listItems) {
+        snapshotFlow { scrollState.layoutInfo.visibleItemsInfo.map { it.index } }
+            .distinctUntilChanged()
+            .collect { indices ->
+                if (readingMode != ReadingMode.Vertical || isMangaMode) return@collect
+                if (indices.isEmpty()) return@collect
+                val visibleParagraphs = indices.mapNotNull { idx ->
+                    (listItems.getOrNull(idx) as? ReadingListItem.ParagraphItem)?.takeIf { it.isCurrent }
+                }
+                if (visibleParagraphs.isEmpty()) return@collect
+                val first = visibleParagraphs.minOf { it.paragraphIndex }
+                val last = visibleParagraphs.maxOf { it.paragraphIndex }
+                onVisibleParagraphInfo(first, 0, last, 0)
+            }
+    }
+
     // 处理挂起的滚动 (垂直模式)
     LaunchedEffect(pendingScrollIndex, isMangaMode, readingMode, isInfiniteScrollEnabled, sectionOffsets) {
         if (readingMode == ReadingMode.Vertical && !isMangaMode && pendingScrollIndex != null) {
@@ -406,7 +436,10 @@ fun ReadingScreen(
                 forceProxy = forceMangaProxy,
                 pendingScrollIndex = mangaPendingScrollIndex,
                 onToggleControls = { showControls = !showControls },
-                onScroll = { onScrollUpdate(it) },
+                onScroll = {
+                    onScrollUpdate(it)
+                    onVisibleParagraphInfo(it, 0, it, 0)
+                },
                 onEdgeHint = { hint -> mangaEdgeHint = hint },
                 onEdgeSwitch = { direction ->
                     if (direction < 0 && currentChapterIndex > 0) {
@@ -480,13 +513,9 @@ fun ReadingScreen(
                 key(currentChapterIndex) { // 强行重置 Pager 状态
                     val pagerState = rememberPagerState(initialPage = 0, pageCount = { paginatedPages.pages.size.coerceAtLeast(1) })
                     
-                    LaunchedEffect(paginatedPages, isPlaying, currentPlayingParagraph, pendingScrollIndex, navIntent) {
+                    LaunchedEffect(paginatedPages, pendingScrollIndex, navIntent) {
                         if (paginatedPages.pages.isEmpty()) return@LaunchedEffect
-                        if (isPlaying && currentPlayingParagraph >= 0) {
-                            val target = paginatedPages.pages.indexOfFirst { it.startParagraphIndex >= currentPlayingParagraph }.coerceAtLeast(0)
-                            pagerState.scrollToPage(target)
-                            navIntent = ChapterNavIntent.NONE
-                        } else if (pendingScrollIndex != null) {
+                        if (pendingScrollIndex != null) {
                             val target = paginatedPages.pages.indexOfFirst { it.startParagraphIndex >= pendingScrollIndex }.coerceAtLeast(0)
                             pagerState.scrollToPage(target)
                             onScrollConsumed()
@@ -530,7 +559,22 @@ fun ReadingScreen(
                             SelectionContainer { Text(text = text, style = style, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxSize()) } 
                         }
                     }
-                    LaunchedEffect(pagerState.currentPage) { paginatedPages.getOrNull(pagerState.currentPage)?.let { onScrollUpdate(it.startParagraphIndex) } }
+                    LaunchedEffect(pagerState.currentPage) {
+                        paginatedPages.getOrNull(pagerState.currentPage)?.let {
+                            onScrollUpdate(it.startParagraphIndex)
+                            onVisibleParagraphInfo(it.startParagraphIndex, it.startParagraphOffset, it.endParagraphIndex, it.endParagraphOffset)
+                        }
+                    }
+
+                    LaunchedEffect(pagerState, pendingScrollIndex) {
+                        snapshotFlow { pagerState.isScrollInProgress }
+                            .distinctUntilChanged()
+                            .collect { scrolling ->
+                                if (latestPendingScrollIndex == null) {
+                                    onUserScrollState(scrolling)
+                                }
+                            }
+                    }
                 }
             }
         }
@@ -592,15 +636,36 @@ private fun rememberPaginatedText(paragraphs: List<String>, style: TextStyle, co
             val pageTop = layout.getLineTop(startLine)
             var endLine = startLine
             while (endLine + 1 < layout.lineCount && layout.getLineBottom(endLine + 1) - pageTop <= constraints.maxHeight.toFloat()) endLine++
-            val startParagraphIndex = paragraphIndexForOffset(normalizePageOffset(fullText.text, (layout.getLineStart(startLine) - headerText.length).coerceAtLeast(0), headerText.length), paragraphStartIndices)
-            pages.add(PaginatedPage(layout.getLineStart(startLine), layout.getLineEnd(endLine, true), startParagraphIndex))
+            val startOffset = normalizePageOffset(fullText.text, (layout.getLineStart(startLine) - headerText.length).coerceAtLeast(0), headerText.length)
+            val endOffset = normalizePageOffset(fullText.text, (layout.getLineEnd(endLine, true) - headerText.length).coerceAtLeast(0), headerText.length)
+            val startParagraphIndex = paragraphIndexForOffset(startOffset, paragraphStartIndices)
+            val endParagraphIndex = paragraphIndexForOffset(endOffset, paragraphStartIndices)
+            val startParagraphOffset = (startOffset - paragraphStartIndices[startParagraphIndex]).coerceAtLeast(0)
+            val endParagraphOffset = (endOffset - paragraphStartIndices[endParagraphIndex]).coerceAtLeast(0)
+            pages.add(
+                PaginatedPage(
+                    start = layout.getLineStart(startLine),
+                    end = layout.getLineEnd(endLine, true),
+                    startParagraphIndex = startParagraphIndex,
+                    startParagraphOffset = startParagraphOffset,
+                    endParagraphIndex = endParagraphIndex,
+                    endParagraphOffset = endParagraphOffset
+                )
+            )
             startLine = endLine + 1
         }
         PaginationResult(pages, fullText)
     }
 }
 
-private data class PaginatedPage(val start: Int, val end: Int, val startParagraphIndex: Int)
+private data class PaginatedPage(
+    val start: Int,
+    val end: Int,
+    val startParagraphIndex: Int,
+    val startParagraphOffset: Int,
+    val endParagraphIndex: Int,
+    val endParagraphOffset: Int
+)
 private data class PaginationResult(val pages: List<PaginatedPage>, val fullText: AnnotatedString) {
     val indices: IntRange get() = pages.indices
     val lastIndex: Int get() = pages.size - 1

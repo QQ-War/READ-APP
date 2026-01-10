@@ -36,6 +36,9 @@ class ReaderSettingsStore(
     private val _infiniteScrollEnabled = MutableStateFlow(true)
     val infiniteScrollEnabled: StateFlow<Boolean> = _infiniteScrollEnabled.asStateFlow()
 
+    private val _ttsFollowCooldownSeconds = MutableStateFlow(3f)
+    val ttsFollowCooldownSeconds: StateFlow<Float> = _ttsFollowCooldownSeconds.asStateFlow()
+
     private val _manualMangaUrls = MutableStateFlow<Set<String>>(emptySet())
     val manualMangaUrls: StateFlow<Set<String>> = _manualMangaUrls.asStateFlow()
 
@@ -50,6 +53,7 @@ class ReaderSettingsStore(
         _readingFontSize.value = preferences.readingFontSize.first()
         _readingHorizontalPadding.value = preferences.readingHorizontalPadding.first()
         _infiniteScrollEnabled.value = preferences.infiniteScrollEnabled.first()
+        _ttsFollowCooldownSeconds.value = preferences.ttsFollowCooldownSeconds.first()
         val manualRaw = preferences.manualMangaUrls.first()
         _manualMangaUrls.value = if (manualRaw.isBlank()) emptySet() else manualRaw.split(";").toSet()
         _forceMangaProxy.value = preferences.forceMangaProxy.first()
@@ -89,6 +93,11 @@ class ReaderSettingsStore(
     fun updateLockPageOnTTS(enabled: Boolean) {
         _lockPageOnTTS.value = enabled
         scope.launch { preferences.saveLockPageOnTTS(enabled) }
+    }
+
+    fun updateTtsFollowCooldownSeconds(seconds: Float) {
+        _ttsFollowCooldownSeconds.value = seconds.coerceIn(0f, 10f)
+        scope.launch { preferences.saveTtsFollowCooldownSeconds(_ttsFollowCooldownSeconds.value) }
     }
 
     fun updatePageTurningMode(mode: PageTurningMode) {

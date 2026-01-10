@@ -19,14 +19,12 @@ internal class TtsSyncCoordinator(private val viewModel: BookViewModel) {
 
     fun onUiParagraphVisible(index: Int) {
         if (index < 0) return
-        if (viewModel.lockPageOnTTS.value && viewModel.pendingScrollIndex.value == index) {
+        if (viewModel.pendingScrollIndex.value == index) {
             return
         }
         if (lastUiParagraphIndex == index) return
         lastUiParagraphIndex = index
-        if (viewModel._keepPlaying.value) {
-            viewModel.jumpToParagraphForTts(index)
-        } else {
+        if (!viewModel._isPlaying.value && !viewModel._keepPlaying.value) {
             viewModel._currentParagraphIndex.value = index
         }
     }
@@ -39,7 +37,7 @@ internal class TtsSyncCoordinator(private val viewModel: BookViewModel) {
         }
         if (lastTtsParagraphIndex == index) return
         lastTtsParagraphIndex = index
-        if (viewModel._isPlaying.value && viewModel.lockPageOnTTS.value) {
+        if (viewModel._isPlaying.value && viewModel.shouldAllowTtsFollow()) {
             viewModel.requestScrollIndexFromTts(index)
         }
     }

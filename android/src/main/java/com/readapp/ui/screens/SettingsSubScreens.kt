@@ -269,6 +269,7 @@ fun TtsSettingsScreen(
     speechSpeed: Int,
     preloadCount: Int,
     lockPageOnTTS: Boolean,
+    ttsFollowCooldownSeconds: Float,
     onSelectTtsEngine: (String) -> Unit,
     onUseSystemTtsChange: (Boolean) -> Unit,
     onSystemVoiceIdChange: (String) -> Unit,
@@ -280,6 +281,7 @@ fun TtsSettingsScreen(
     onSpeechSpeedChange: (Int) -> Unit,
     onPreloadCountChange: (Int) -> Unit,
     onLockPageOnTTSChange: (Boolean) -> Unit,
+    onTtsFollowCooldownChange: (Float) -> Unit,
     onNavigateToManage: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
@@ -332,6 +334,16 @@ fun TtsSettingsScreen(
                 checked = lockPageOnTTS,
                 onCheckedChange = onLockPageOnTTSChange
             )
+
+            Column {
+                Text("手动翻页后自动跟随延迟: ${"%.1f".format(ttsFollowCooldownSeconds)}s", style = MaterialTheme.typography.labelMedium)
+                Slider(
+                    value = ttsFollowCooldownSeconds,
+                    onValueChange = onTtsFollowCooldownChange,
+                    valueRange = 0f..10f,
+                    steps = 19
+                )
+            }
 
             SectionHeader("引擎设置")
             if (!useSystemTts) {

@@ -26,6 +26,7 @@ data class ReaderUiState(
     val preloadedParagraphs: Set<Int>,
     val preloadedChapters: Set<Int>,
     val firstVisibleParagraphIndex: Int,
+    val lastVisibleParagraphIndex: Int,
     val pendingScrollIndex: Int?,
     val forceMangaProxy: Boolean,
     val manualMangaUrls: Set<String>,
