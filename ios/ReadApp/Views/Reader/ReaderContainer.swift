@@ -515,6 +515,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.currentPageIndex = v.pageIndex
             self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
             updateProgressUI()
+            self.isInternalTransitioning = false
         }
     }
 
@@ -598,10 +599,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     private func handlePageTap(isNext: Bool) {
+        guard !isInternalTransitioning else {
+            finalizeUserInteraction()
+            return
+        }
         notifyUserInteractionStarted()
         let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
         var didChangeWithinChapter = false
         if t >= 0 && t < currentCache.pages.count {
+            isInternalTransitioning = true
             updateHorizontalPage(to: t, animated: true)
             didChangeWithinChapter = true
         } else {
@@ -628,6 +634,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func animateToAdjacentChapter(offset: Int, targetPage: Int) {
         guard let h = horizontalVC, !isInternalTransitioning else { return }
+        isInternalTransitioning = true
         let vc = createPageVC(at: targetPage, offset: offset)
         let direction: UIPageViewController.NavigationDirection = offset > 0 ? .forward : .reverse
         
