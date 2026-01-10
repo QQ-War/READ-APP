@@ -516,7 +516,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     func pageViewController(_ pvc: UIPageViewController, didFinishAnimating f: Bool, previousViewControllers p: [UIViewController], transitionCompleted completed: Bool) {
-        guard completed, let v = pvc.viewControllers?.first as? PageContentViewController else { return }
+        guard let v = pvc.viewControllers?.first as? PageContentViewController else {
+            isInternalTransitioning = false
+            return
+        }
+        guard completed else {
+            isInternalTransitioning = false
+            return
+        }
         
         if v.chapterOffset != 0 {
             completeDataDrift(offset: v.chapterOffset, targetPage: v.pageIndex, currentVC: v)
