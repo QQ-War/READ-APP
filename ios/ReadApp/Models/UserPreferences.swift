@@ -191,6 +191,12 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    @Published var ttsFollowCooldown: TimeInterval {
+        didSet {
+            UserDefaults.standard.set(ttsFollowCooldown, forKey: "ttsFollowCooldown")
+        }
+    }
+
     /// 是否强制使用服务器代理加载漫画图片
     @Published var forceMangaProxy: Bool {
         didSet {
@@ -289,6 +295,8 @@ class UserPreferences: ObservableObject {
         self.verticalThreshold = savedVerticalThreshold == 0 ? 80 : savedVerticalThreshold
         let savedInfiniteSwitchThreshold = CGFloat(UserDefaults.standard.float(forKey: "infiniteScrollSwitchThreshold"))
         self.infiniteScrollSwitchThreshold = savedInfiniteSwitchThreshold == 0 ? 120 : savedInfiniteSwitchThreshold
+        let savedTtsFollowCooldown = UserDefaults.standard.double(forKey: "ttsFollowCooldown")
+        self.ttsFollowCooldown = savedTtsFollowCooldown == 0 ? 3.0 : savedTtsFollowCooldown
         self.forceMangaProxy = UserDefaults.standard.bool(forKey: "forceMangaProxy")
 
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")

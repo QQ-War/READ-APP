@@ -73,6 +73,11 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.infiniteScrollSwitchThreshold = newValue }
     }
 
+    var ttsFollowCooldown: TimeInterval {
+        get { preferences.ttsFollowCooldown }
+        set { preferences.ttsFollowCooldown = newValue }
+    }
+
     var forceMangaProxy: Bool {
         get { preferences.forceMangaProxy }
         set { preferences.forceMangaProxy = newValue }

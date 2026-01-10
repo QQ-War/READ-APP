@@ -7,7 +7,6 @@ final class TTSReadingSyncCoordinator {
     private let ttsManager: TTSManager
     private var cancellables: Set<AnyCancellable> = []
     private var interactionWorkItem: DispatchWorkItem?
-    private let catchUpDelay: TimeInterval = 3.0
 
     init(reader: ReaderContainerViewController, ttsManager: TTSManager) {
         self.reader = reader
@@ -48,7 +47,7 @@ final class TTSReadingSyncCoordinator {
         interactionWorkItem = nil
     }
 
-    func scheduleCatchUp() {
+    func scheduleCatchUp(delay: TimeInterval) {
         interactionWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self, let reader = self.reader else { return }
@@ -56,6 +55,6 @@ final class TTSReadingSyncCoordinator {
             reader.finalizeUserInteraction()
         }
         interactionWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + catchUpDelay, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 }

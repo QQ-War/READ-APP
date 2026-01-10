@@ -305,6 +305,19 @@ struct TTSSettingsView: View {
                     .foregroundColor(.secondary)
                 
                 Toggle("TTS 时锁定翻页", isOn: $preferences.lockPageOnTTS)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("TTS 跟随缓冲时间")
+                        Spacer()
+                        Text(String(format: "%.1f s", preferences.ttsFollowCooldown))
+                            .foregroundColor(.secondary)
+                    }
+                    Slider(value: $preferences.ttsFollowCooldown, in: 0...6, step: 0.5)
+                    Text("用户手动滚动后等待的稳定时间，时间越长越不容易被 TTS 抢回")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 4)
             }
         }
         .navigationTitle("听书设置")

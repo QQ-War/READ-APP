@@ -883,13 +883,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func notifyUserInteractionStarted() {
         isUserInteracting = true
         pendingTTSPositionSync = true
-        suppressTTSFollowUntil = Date().timeIntervalSince1970 + 3.0
+        suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
         ttsSyncCoordinator?.userInteractionStarted()
     }
 
     private func notifyUserInteractionEnded() {
-        suppressTTSFollowUntil = Date().timeIntervalSince1970 + 3.0
-        ttsSyncCoordinator?.scheduleCatchUp()
+        suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
+        ttsSyncCoordinator?.scheduleCatchUp(delay: readerSettings.ttsFollowCooldown)
     }
     
     func syncTTSReadingPositionIfNeeded() {
