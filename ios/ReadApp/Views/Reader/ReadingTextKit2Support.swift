@@ -338,7 +338,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     }
 
     private func logVisibleFragmentsIfNeeded(info: TK2PageInfo, store: TextKit2RenderStore) {
-        guard Self.debugLogTopFragments, let pageIdx = pageIndex else { return }
+        guard let pageIdx = pageIndex else { return }
         if lastLoggedPageIndex == pageIdx { return }
         lastLoggedPageIndex = pageIdx
         guard let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location) else { return }
@@ -355,7 +355,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
             }
             return lines.count < 2
         }
-        if !lines.isEmpty {
+        if !lines.isEmpty && Self.debugLogTopFragments {
             LogManager.shared.log("ReadContent2View top fragments page=\(pageIdx): \(lines.joined(separator: " | "))", category: "TTS")
         }
         onVisibleFragments?(pageIdx, lines)
