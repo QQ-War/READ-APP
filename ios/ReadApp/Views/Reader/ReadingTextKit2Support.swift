@@ -58,12 +58,17 @@ struct TextKit2Paginator {
             // 修正：精确获取当前页面的起始字符偏移量，而不仅仅是 LayoutFragment 的起始位置
             var startOffset = attributedStringLength(storage)
             if let f = lm.textLayoutFragment(for: CGPoint(x: 0, y: currentY)) {
-                if #available(iOS 17, *) {
-                    if let line = f.textLineFragments.first {
+                if #available(iOS 15.0, *) {
+                    // 修正逻辑：查找视觉上位于 currentY 处的具体行 (Line Fragment)
+                    // 而不是简单地取 Fragment 的第一行 (它可能在上一页)
+                    let relativeY = currentY - f.layoutFragmentFrame.minY
+                    // 使用 0.01 的容差处理浮点数边界
+                    if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.01 }) {
                         let fragmentStart = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
-                        let lineStart = line.characterRange.location // 相对于 Fragment
+                        let lineStart = line.characterRange.location // relative to element
                         startOffset = fragmentStart + lineStart
                     } else {
+                        // Fallback
                         startOffset = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
                     }
                 } else {
