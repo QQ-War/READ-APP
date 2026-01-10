@@ -892,8 +892,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func syncHorizontalPageToTTS(sentenceIndex: Int, sentenceOffset: Int) { 
         let starts = currentCache.paragraphStarts
         guard sentenceIndex < starts.count else { return }
-        let indentLen = 2
-        let totalOffset = starts[sentenceIndex] + sentenceOffset + indentLen
+        let totalOffset = starts[sentenceIndex] + sentenceOffset
         
         // 优化：如果当前页已经包含这个位置，不做任何处理，防止微小计算偏差导致回跳
         let currentIndex = horizontalPageIndexForDisplay()
