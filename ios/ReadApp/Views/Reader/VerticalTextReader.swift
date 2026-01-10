@@ -510,14 +510,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
         let point = CGPoint(x: horizontalTextMargin, y: scrollView.contentOffset.y - contentTopPadding + charDetectionYOffset)
         if let f = s.layoutManager.textLayoutFragment(for: point) {
-            // 修正：不仅获取 Fragment，还要获取具体的 Line，并计算精确的字符位置
-            let localPoint = CGPoint(x: point.x - f.layoutFragmentFrame.origin.x, y: point.y - f.layoutFragmentFrame.origin.y)
-            if let line = f.textLineFragment(for: localPoint) {
-                let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
-                let lineStart = line.characterRange.location // 相对于 Fragment
-                let indexInLine = line.characterIndex(for: localPoint) // 相对于 Line
-                return fragmentStart + lineStart + indexInLine
-            }
             return s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
         }
         return 0
