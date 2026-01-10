@@ -59,8 +59,7 @@ struct TextKit2Paginator {
             var startOffset = attributedStringLength(storage)
             if let f = lm.textLayoutFragment(for: CGPoint(x: 0, y: currentY)) {
                 if #available(iOS 17, *) {
-                    let localPoint = CGPoint(x: 0, y: currentY - f.layoutFragmentFrame.origin.y)
-                    if let line = f.textLineFragments.first(where: { $0.layoutFragmentFrame.contains(localPoint) }) {
+                    if let line = f.textLineFragments.first {
                         let fragmentStart = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
                         let lineStart = line.characterRange.location // 相对于 Fragment
                         startOffset = fragmentStart + lineStart
