@@ -91,7 +91,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val replaceRuleRepository = ReplaceRuleRepository(remoteDataSourceFactory, repository)
     internal val chapterContentRepository = ChapterContentRepository(repository, localCache)
     private val ttsController = TtsController(this)
-    private val ttsSyncCoordinator = TtsSyncCoordinator(this)
+    private val ttsSyncCoordinator by lazy { TtsSyncCoordinator(this) }
     private val readerInteractor = ReaderInteractor(this)
 
 
