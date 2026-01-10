@@ -1090,11 +1090,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let pageMatch = matchSentenceIndex(for: pageSnippet)
         let fragmentMatch = matchSentenceIndex(for: visibleFragmentLines.first ?? "")
         let previewMatch = matchSentenceIndex(for: previewLines.first ?? "")
+        let detail = { (tuple: (index: Int, offset: Int)?) -> String in
+            guard let tuple = tuple else { return "nil" }
+            return "\(tuple.index)@\(tuple.offset)"
+        }
         let message = """
         TTS start snapshot - mode=\(currentReadingMode) chapter=\(currentChapterIndex) currentPageIdx=\(currentPageIndex) visiblePageIdx=\(pageIdx) \
         visibleTopIdx=\(visibleTopIndex) topLines=\(topLinesDesc) startSentenceIdx=\(sentenceIndex) sentenceOffset=\(sentenceOffset) \
         charOffset=\(charOffset) previewLines=\(previewDesc) pageSnippet=\(snippetDesc) visibleFragments=\(fragmentDesc) \
-        pageSnippetMatch=\(pageMatch?.description ?? "nil") fragmentMatch=\(fragmentMatch?.description ?? "nil") previewMatch=\(previewMatch?.description ?? "nil")
+        pageSnippetMatch=\(detail(pageMatch)) fragmentMatch=\(detail(fragmentMatch)) previewMatch=\(detail(previewMatch))
         """
         logger.log(message, category: "TTS")
     }
