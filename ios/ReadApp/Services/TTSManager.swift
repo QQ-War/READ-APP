@@ -516,10 +516,22 @@ class TTSManager: NSObject, ObservableObject {
 
     func updateReadingPosition(to position: ReadingPosition, restartIfPlaying: Bool = true) {
         guard position.chapterIndex == currentChapterIndex, !sentences.isEmpty else { return }
-        let targetIndex = max(0, min(position.sentenceIndex, sentences.count - 1))
+        
+        // 处理章节标题插入导致的索引偏移
+        var targetIndex = position.sentenceIndex
+        if isReadingChapterTitle || (allowChapterTitlePlayback && !sentences.isEmpty && sentences[0] == chapters[currentChapterIndex].title) {
+            // 如果插入了章节标题，需要调整索引
+            targetIndex += 1
+        }
+        
+        targetIndex = max(0, min(targetIndex, sentences.count - 1))
         currentSentenceIndex = targetIndex
         let sentenceLength = sentences[targetIndex].utf16.count
         currentSentenceOffset = max(0, min(position.sentenceOffset, sentenceLength))
+        
+        // 调试日志
+        print("🔍 TTS Update Position: requested=\(position.sentenceIndex), adjusted=\(targetIndex), offset=\(currentSentenceOffset)")
+        
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
         guard restartIfPlaying && isPlaying else { return }
         audioPlayer?.stop()

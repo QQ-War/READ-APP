@@ -938,15 +938,32 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
 
         var charOffset: Int = 0
+        var sentenceIndex: Int = 0
 
         if currentReadingMode == .horizontal, currentPageIndex < pageInfos.count {
             let pageInfo = pageInfos[currentPageIndex]
-            charOffset = pageInfo.range.location
+            // 优先使用页面的起始句子索引，这更准确
+            sentenceIndex = pageInfo.startSentenceIndex
+            // 确保句子索引在有效范围内
+            sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
+            // 使用段落起始位置作为字符偏移，这样更准确
+            if sentenceIndex < starts.count {
+                charOffset = starts[sentenceIndex]
+            } else {
+                charOffset = pageInfo.range.location
+            }
+            // 调试日志
+            print("🔍 TTS Position - Horizontal: page=\(currentPageIndex), sentenceIndex=\(sentenceIndex), charOffset=\(charOffset), pageInfo.startSentenceIndex=\(pageInfo.startSentenceIndex)")
         } else if currentReadingMode == .vertical {
             charOffset = verticalVC?.getCurrentCharOffset() ?? 0
+            // 确保找到正确的句子索引
+            sentenceIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? 0
+            // 调试日志
+            print("🔍 TTS Position - Vertical: charOffset=\(charOffset), sentenceIndex=\(sentenceIndex)")
         }
 
-        let sentenceIndex = max(0, min((starts.lastIndex(where: { $0 <= charOffset }) ?? 0), currentCache.contentSentences.count - 1))
+        // 边界检查
+        sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
 
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
@@ -954,6 +971,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
+        
+        // 最终调试日志
+        print("🔍 TTS Position Final: chapter=\(currentChapterIndex), sentenceIndex=\(sentenceIndex), offset=\(clampedOffset), sentenceStart=\(sentenceStart), charOffset=\(charOffset)")
+        
         return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: clampedOffset, charOffset: charOffset)
     }
     private func scrollToChapterEnd(animated: Bool) { 
