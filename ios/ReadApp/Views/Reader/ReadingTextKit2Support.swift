@@ -58,13 +58,17 @@ struct TextKit2Paginator {
             // 修正：精确获取当前页面的起始字符偏移量，而不仅仅是 LayoutFragment 的起始位置
             var startOffset = attributedStringLength(storage)
             if let f = lm.textLayoutFragment(for: CGPoint(x: 0, y: currentY)) {
-                let localPoint = CGPoint(x: 0, y: currentY - f.layoutFragmentFrame.origin.y)
-                if let line = f.textLineFragment(for: localPoint) {
-                    let fragmentStart = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
-                    // 使用 Line 的起始位置作为页面的起始位置
-                    startOffset = fragmentStart + line.characterRange.location
+                if #available(iOS 17, *) {
+                    let localPoint = CGPoint(x: 0, y: currentY - f.layoutFragmentFrame.origin.y)
+                    if let line = f.textLineFragment(for: localPoint) {
+                        let fragmentStart = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
+                        let lineStart = line.characterRange.location // 相对于 Fragment
+                        let indexInLine = line.characterIndex(for: localPoint) // 相对于 Line
+                        startOffset = fragmentStart + lineStart + indexInLine
+                    } else {
+                        startOffset = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
+                    }
                 } else {
-                    // 回退方案
                     startOffset = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
                 }
             }
