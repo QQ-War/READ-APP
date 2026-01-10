@@ -301,7 +301,7 @@ class TTSManager: NSObject, ObservableObject {
             currentSentenceOffset = 0
         }
         
-        logger.log("开始朗读: \(bookTitle), 章节索引: \(currentIndex), 起始段落: \(currentSentenceIndex)", category: "TTS")
+        logger.log("开始朗读: \(bookTitle), 章节索引: \(currentIndex), 起始段落: \(currentSentenceIndex), 句内偏移: \(currentSentenceOffset)", category: "TTS")
         
         if currentIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentIndex].title) }
         isPlaying = true
