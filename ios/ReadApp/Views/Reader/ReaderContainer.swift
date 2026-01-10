@@ -942,16 +942,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
         if currentReadingMode == .horizontal, currentPageIndex < pageInfos.count {
             let pageInfo = pageInfos[currentPageIndex]
-            // 优先使用页面的起始句子索引，这更准确
+            // 优先使用页面的起始句子索引
             sentenceIndex = pageInfo.startSentenceIndex
             // 确保句子索引在有效范围内
             sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
-            // 使用段落起始位置作为字符偏移，这样更准确
-            if sentenceIndex < starts.count {
-                charOffset = starts[sentenceIndex]
-            } else {
-                charOffset = pageInfo.range.location
-            }
+            
+            // 修正：直接使用页面的起始位置，确保 TTS 从当前页可见文字开始，而不是回跳到段落开头
+            charOffset = pageInfo.range.location
+            
             // 调试日志
             print("🔍 TTS Position - Horizontal: page=\(currentPageIndex), sentenceIndex=\(sentenceIndex), charOffset=\(charOffset), pageInfo.startSentenceIndex=\(pageInfo.startSentenceIndex)")
         } else if currentReadingMode == .vertical {
