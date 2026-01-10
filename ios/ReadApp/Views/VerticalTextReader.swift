@@ -588,19 +588,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         // 这样可以确保切换时，用户眼中只有新章节的内容，增加稳定性
         
         if let _ = nextRenderStore {
-            // 当前章节底部坐标
-            let currentBottomY = currentContentView.frame.maxY
-            if rawOffset > currentBottomY - 600 {
+            let maxOffsetY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+            // 以实际可滚动到底的位置作为触发依据，避免永远到不了阈值
+            if rawOffset > maxOffsetY - 300 {
                 let now = Date().timeIntervalSince1970
                 if now - lastEdgeLogTime > 0.5 {
                     lastEdgeLogTime = now
-                    LogManager.shared.log("接近下边缘: offset=\(Int(rawOffset)), bottom=\(Int(currentBottomY)), size=\(Int(scrollView.contentSize.height))", category: "阅读器")
+                    LogManager.shared.log("接近下边缘: offset=\(Int(rawOffset)), max=\(Int(maxOffsetY)), size=\(Int(scrollView.contentSize.height))", category: "阅读器")
                 }
             }
-            // 如果滚动位置接近当前章节底部，提前触发无缝切换
-            if rawOffset > currentBottomY - 200 {
+            if rawOffset > maxOffsetY - 80 {
                 pendingSeamlessSwitch = 1
-                LogManager.shared.log("触发下切章: offset=\(Int(rawOffset)), bottom=\(Int(currentBottomY))", category: "阅读器")
+                LogManager.shared.log("触发下切章: offset=\(Int(rawOffset)), max=\(Int(maxOffsetY))", category: "阅读器")
                 return
             }
         }
