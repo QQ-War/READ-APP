@@ -409,29 +409,35 @@ class TTSManager: NSObject, ObservableObject {
         return targetId.isEmpty ? nil : targetId
     }
 
-    private func buildAudioURL(for sentence: String, isChapterTitle: Bool = false) -> URL? {
-        guard let id = ttsId(for: sentence, isChapterTitle: isChapterTitle) else { return nil }
-        return APIService.shared.buildTTSAudioURL(ttsId: id, text: sentence, speechRate: UserPreferences.shared.speechRate)
-    }
-    
     private func speakChapterTitle() {
         guard currentChapterIndex < chapters.count else { speakNextSentence(); return }
         let title = chapters[currentChapterIndex].title
         isReadingChapterTitle = true
-        if UserPreferences.shared.useSystemTTS { speakWithSystemTTS(text: title); return }
+        if UserPreferences.shared.useSystemTTS {
+            speakWithSystemTTS(text: title)
+            return
+        }
         if let cachedData = cachedAudio(for: -1) {
             playAudioWithData(data: cachedData)
             startPreloading()
             return
         }
-        guard let url = buildAudioURL(for: title, isChapterTitle: true) else {
-            isReadingChapterTitle = false; speakNextSentence(); return
-        }
+        startPreloading()
         Task {
-            if let (data, response) = try? await URLSession.shared.data(from: url), validateAudioData(data, response: response) {
-                await MainActor.run { playAudioWithData(data: data); startPreloading() }
-            } else {
-                await MainActor.run { isReadingChapterTitle = false; speakNextSentence() }
+                if let data = await fetchAudioData(for: title, isChapterTitle: true) {
+                    await MainActor.run {
+                        cacheAudio(data, for: -1)
+                        playAudioWithData(data: data)
+                        startPreloading()
+                        if currentChapterIndex < chapters.count {
+                            updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
+                        }
+                    }
+                } else {
+                await MainActor.run {
+                    isReadingChapterTitle = false
+                    speakNextSentence()
+                }
             }
         }
     }
@@ -473,10 +479,21 @@ class TTSManager: NSObject, ObservableObject {
         if let cachedData = cachedAudio(for: targetIdx) {
             playAudioWithData(data: cachedData); return
         }
-        
-        guard let url = buildAudioURL(for: sentenceToSpeak, isChapterTitle: isReadingChapterTitle) else { stop(); return }
-        playAudio(url: url)
-        if currentChapterIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title) }
+
+        Task {
+                if let data = await fetchAudioData(for: sentenceToSpeak, isChapterTitle: isReadingChapterTitle) {
+                    await MainActor.run {
+                        cacheAudio(data, for: targetIdx)
+                        playAudioWithData(data: data)
+                        startPreloading()
+                        if currentChapterIndex < chapters.count {
+                            updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
+                        }
+                    }
+            } else {
+                await MainActor.run { stop() }
+            }
+        }
     }
 
     func updateReadingPosition(to position: ReadingPosition, restartIfPlaying: Bool = true) {
@@ -505,25 +522,6 @@ class TTSManager: NSObject, ObservableObject {
         let rate = Float(UserPreferences.shared.speechRate / 200.0)
         utterance.rate = max(AVSpeechUtteranceMinimumSpeechRate, min(AVSpeechUtteranceMaximumSpeechRate, rate))
         speechSynthesizer.speak(utterance)
-    }
-    
-    private func playAudio(url: URL) {
-        isLoading = true
-        if let cachedData = cachedAudio(for: currentSentenceIndex) {
-            playAudioWithData(data: cachedData); startPreloading(); return
-        }
-        Task {
-            do {
-                let (data, response) = try await URLSession.shared.data(from: url)
-                if validateAudioData(data, response: response) {
-                    await MainActor.run { playAudioWithData(data: data); startPreloading() }
-                } else {
-                    await MainActor.run { isLoading = false; currentSentenceIndex += 1; speakNextSentence() }
-                }
-            } catch {
-                await MainActor.run { isLoading = false; currentSentenceIndex += 1; speakNextSentence() }
-            }
-        }
     }
     
     private func startPreloading() {
@@ -570,17 +568,38 @@ class TTSManager: NSObject, ObservableObject {
     private func downloadAudio(at index: Int) async -> Bool {
         guard index < sentences.count else { return false }
         let sentence = sentences[index]
-        if isPunctuationOnly(sentence) { await MainActor.run { preloadedIndices.insert(index) }; return true }
-        guard let url = buildAudioURL(for: sentence) else { return false }
+        if isPunctuationOnly(sentence) {
+            await MainActor.run { preloadedIndices.insert(index) }
+            return true
+        }
+        guard let data = await fetchAudioData(for: sentence, isChapterTitle: false) else { return false }
+        await MainActor.run {
+            cacheAudio(data, for: index)
+            preloadedIndices.insert(index)
+        }
+        return true
+    }
+
+    private func fetchAudioData(for sentence: String, isChapterTitle: Bool) async -> Data? {
+        guard let id = ttsId(for: sentence, isChapterTitle: isChapterTitle) else { return nil }
+        let speechRate = UserPreferences.shared.speechRate
+        if APIClient.shared.backend == .reader {
+            do {
+                return try await APIService.shared.fetchReaderTtsAudio(ttsId: id, text: sentence, speechRate: speechRate)
+            } catch {
+                logger.log("Reader TTS 请求失败: \(error.localizedDescription)", category: "TTS")
+                return nil
+            }
+        }
+        guard let url = APIService.shared.buildTTSAudioURL(ttsId: id, text: sentence, speechRate: speechRate) else { return nil }
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            return await MainActor.run {
-                if validateAudioData(data, response: response) {
-                    cacheAudio(data, for: index); preloadedIndices.insert(index); return true
-                }
-                return false
-            }
-        } catch { return false }
+            guard validateAudioData(data, response: response) else { return nil }
+            return data
+        } catch {
+            logger.log("TTS音频下载失败: \(error.localizedDescription)", category: "TTS")
+            return nil
+        }
     }
     
     private func playAudioWithData(data: Data) {

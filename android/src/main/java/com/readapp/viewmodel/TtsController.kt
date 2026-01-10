@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import com.readapp.data.model.TtsAudioRequest
 import com.readapp.media.AudioCache
 import com.readapp.media.ReadAudioService
 import androidx.lifecycle.viewModelScope
@@ -270,15 +271,15 @@ internal class TtsController(private val viewModel: BookViewModel) {
             val audioCacheKey = generateAudioCacheKey(index, overrideOffset)
 
             val audioData = AudioCache.get(audioCacheKey) ?: run {
-                val audioUrl = viewModel.buildTtsAudioUrl(trimmedSentence, false)
+                val audioRequest = viewModel.buildTtsAudioRequest(trimmedSentence, false)
 
-                if (audioUrl == null) {
+                if (audioRequest == null) {
                     viewModel._errorMessage.value = "无法生成TTS链接，请检查TTS设置"
                     stopPlayback("error")
                     return@launch
                 }
 
-                val data = fetchAudioBytes(audioUrl)
+                val data = fetchAudioBytes(audioRequest)
                 if (data == null) {
                     viewModel._errorMessage.value = "TTS音频下载失败"
                     stopPlayback("error")
@@ -339,13 +340,13 @@ internal class TtsController(private val viewModel: BookViewModel) {
                     continue
                 }
 
-                val audioUrlToPreload = viewModel.buildTtsAudioUrl(sentenceToPreload, isChapterTitle = false)
-                if (audioUrlToPreload.isNullOrBlank()) {
+                val audioRequestToPreload = viewModel.buildTtsAudioRequest(sentenceToPreload, isChapterTitle = false)
+                if (audioRequestToPreload == null) {
                     unmarkPreloading(i)
                     continue
                 }
 
-                val data = fetchAudioBytes(audioUrlToPreload)
+                val data = fetchAudioBytes(audioRequestToPreload)
                 if (data != null) {
                     AudioCache.put(audioCacheKey, data)
                     viewModel._preloadedParagraphs.update { it + i }
@@ -385,7 +386,14 @@ internal class TtsController(private val viewModel: BookViewModel) {
         }
     }
 
-    private suspend fun fetchAudioBytes(url: String): ByteArray? {
+    private suspend fun fetchAudioBytes(source: TtsAudioRequest): ByteArray? {
+        return when (source) {
+            is TtsAudioRequest.Url -> fetchAudioFromUrl(source.url)
+            is TtsAudioRequest.Reader -> viewModel.fetchReaderTtsAudio(source)
+        }
+    }
+
+    private suspend fun fetchAudioFromUrl(url: String): ByteArray? {
         return withContext(Dispatchers.IO) {
             runCatching {
                 val request = Request.Builder().url(url).build()
@@ -468,12 +476,12 @@ internal class TtsController(private val viewModel: BookViewModel) {
             if (viewModel._useSystemTts.value) {
                 speakWithSystemTts(title)
             } else {
-                val audioUrl = viewModel.buildTtsAudioUrl(title, isChapterTitle = true)
-                if (audioUrl == null) {
+                val audioRequest = viewModel.buildTtsAudioRequest(title, isChapterTitle = true)
+                if (audioRequest == null) {
                     playNextSeamlessly()
                     return@launch
                 }
-                val data = fetchAudioBytes(audioUrl)
+                val data = fetchAudioBytes(audioRequest)
                 if (data == null) {
                     playNextSeamlessly()
                     return@launch

@@ -21,6 +21,13 @@ Content-Type: application/json
 
 成功响应会返回 `{"isSuccess":true,"errorMsg":"","data":"//Nkx..."}`，`data` 是 base64 字符串，可转成 PCM/MP3 在客户端播放。
 
+| 接口 | 描述 | 请求方式/参数 | 返回 |
+| --- | --- | --- | --- |
+| `GET /reader3/httpTTS/list` | 列出 Reader 端可用的 `HttpTTS` 引擎（含 `id`/`name`/`url`） | Query：`accessToken`（必填）、`v`（毫秒时间戳） | `{"isSuccess":true,"data":[{id,name,url,...},...],...}` |
+| `POST /reader3/book/tts` | 按照引擎配置将文字合成语音（base64） | Query：`accessToken`、`v`；Body：`{"text","type":"httpTTS","voice","pitch","rate","accessToken","base64":"1"}` | `{"isSuccess":true,"data":"//Nkx..."}` |
+
+此外也有爬取好的 TTS 列表可以使用：`GET /reader3/httpTTS/list?accessToken=XXX&v=TIMESTAMP`，响应就是 `HttpTTS` 数组（包含 `id、name` 等字段），客户端可以把列表中的 `id`、`name` 分别映射成默认/旁白/对话引擎，并把 `name` 传给 `/book/tts` 的 `voice` 字段。每次调用 `/book/tts` 时同时带上查询参数 `accessToken` 和 `v`（毫秒级时间戳）可以避免缓存冲突。
+
 ## 当前未覆盖的 Read/Reader 接口（待新增 UI/逻辑）
 以下内容在现有代码中还没有绑定到任何仓库或视图：
 

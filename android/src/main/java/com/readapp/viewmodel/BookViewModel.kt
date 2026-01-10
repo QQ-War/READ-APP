@@ -48,6 +48,7 @@ import java.util.Date
 import java.util.Locale
 
 import com.readapp.data.model.ReplaceRule
+import com.readapp.data.model.TtsAudioRequest
 import com.readapp.ui.state.ReaderUiState
 import android.speech.tts.Voice
 import android.widget.Toast
@@ -1062,9 +1063,38 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             chapterContentRepository.clearMemoryCache()
         }
     }
-    internal fun buildTtsAudioUrl(sentence: String, isChapterTitle: Boolean): String? {
+    private fun resolveTtsEngine(ttsId: String): HttpTTS? =
+        _availableTtsEngines.value.firstOrNull { it.id == ttsId }
+
+    internal fun buildTtsAudioRequest(sentence: String, isChapterTitle: Boolean): TtsAudioRequest? {
         val ttsId = resolveTtsIdForSentence(sentence, isChapterTitle) ?: return null
-        return ttsRepository.buildTtsAudioUrl(currentServerEndpoint(), _accessToken.value, ttsId, sentence, _speechSpeed.value / 20.0)
+        val engine = resolveTtsEngine(ttsId) ?: return null
+        val speechRate = (_speechSpeed.value / 20.0).coerceIn(0.1, 4.0)
+        return ttsRepository.buildTtsAudioRequest(
+            currentServerEndpoint(),
+            _accessToken.value,
+            engine,
+            sentence,
+            speechRate,
+            isChapterTitle
+        )
+    }
+
+    internal suspend fun fetchReaderTtsAudio(request: TtsAudioRequest.Reader): ByteArray? {
+        if (_accessToken.value.isBlank()) {
+            _errorMessage.value = "请先登录"
+            return null
+        }
+        val result = withContext(Dispatchers.IO) {
+            ttsRepository.requestReaderTtsAudio(currentServerEndpoint(), _accessToken.value, request)
+        }
+        return result.fold(
+            onSuccess = { it },
+            onFailure = {
+                _errorMessage.value = it.message ?: "播放 TTS 音频失败"
+                null
+            }
+        )
     }
     private fun applyBooksFilterAndSort() {
         val filtered = if (currentSearchQuery.isBlank()) allBooks else allBooks.filter { it.name.orEmpty().lowercase().contains(currentSearchQuery.lowercase()) || it.author.orEmpty().lowercase().contains(currentSearchQuery.lowercase()) }

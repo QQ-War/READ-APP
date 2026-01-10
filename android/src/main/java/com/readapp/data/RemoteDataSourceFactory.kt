@@ -82,7 +82,7 @@ class RemoteDataSourceFactory(
         val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         return when (backend) {
             ApiBackend.Read -> ReadTtsRemoteDataSource(failoverClient, endpoints)
-            ApiBackend.Reader -> ReaderTtsRemoteDataSource()
+            ApiBackend.Reader -> ReaderTtsRemoteDataSource(failoverClient, endpoints)
         }
     }
 
@@ -316,9 +316,12 @@ private class ReadTtsRemoteDataSource(
     }
 }
 
-private class ReaderTtsRemoteDataSource : TtsRemoteDataSource {
+private class ReaderTtsRemoteDataSource(
+    private val client: FailoverClient,
+    private val endpoints: List<String>
+) : TtsRemoteDataSource {
     override suspend fun fetchTtsEngines(accessToken: String): Result<List<HttpTTS>> =
-        Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
+        client.runReader(endpoints) { it.getHttpTtsList(accessToken, System.currentTimeMillis()) }
 
     override suspend fun fetchDefaultTts(accessToken: String): Result<String> =
         Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))

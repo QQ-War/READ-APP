@@ -6,13 +6,17 @@ import com.readapp.data.model.ApiResponse
 import com.readapp.data.model.Book
 import com.readapp.data.model.BookSource
 import com.readapp.data.model.Chapter
+import com.readapp.data.model.HttpTTS
 import com.readapp.data.model.LoginResponse
 import com.readapp.data.model.ReplaceRule
 import com.readapp.data.model.RssEditPayload
 import com.readapp.data.model.RssSourceItem
 import com.readapp.data.model.RssSourcePayload
+import com.readapp.data.model.ReaderBookTtsRequest
+import com.readapp.data.model.TtsAudioRequest
 import com.readapp.data.model.toPayload
 import com.readapp.data.model.RssSourcesResponse
+import android.util.Base64
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -22,6 +26,7 @@ import kotlinx.coroutines.flow.flow
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import java.io.File
+import java.util.Locale
 
 class ReadRepository(
     private val apiFactory: (String) -> ReadApiService,
@@ -605,18 +610,64 @@ class ReadRepository(
     }
     // endregion
 
-    fun buildTtsAudioUrl(baseUrl: String, accessToken: String, ttsId: String, text: String, speechRate: Double): String? {
-        if (detectApiBackend(baseUrl) == ApiBackend.Reader) {
-            return null
+    fun buildTtsAudioRequest(
+        baseUrl: String,
+        accessToken: String,
+        tts: HttpTTS,
+        text: String,
+        speechRate: Double,
+        isChapterTitle: Boolean
+    ): TtsAudioRequest? {
+        val backend = detectApiBackend(baseUrl)
+        return when (backend) {
+            ApiBackend.Read -> {
+                val normalized = BackendResolver.ensureTrailingSlash(baseUrl)
+                val url = "${normalized}tts".toHttpUrlOrNull()?.newBuilder()
+                    ?.addQueryParameter("accessToken", accessToken)
+                    ?.addQueryParameter("id", tts.id)
+                    ?.addQueryParameter("speakText", text)
+                    ?.addQueryParameter("speechRate", speechRate.toString())
+                    ?.build()
+                    ?.toString()
+                url?.let { TtsAudioRequest.Url(it) }
+            }
+            ApiBackend.Reader -> {
+                val voiceName = tts.name.takeIf { it.isNotBlank() } ?: return null
+                val normalizedRate = speechRate.coerceIn(0.2, 4.0)
+                val pitch = if (isChapterTitle) 1.05 else 1.0
+                TtsAudioRequest.Reader(
+                    voiceName = voiceName,
+                    text = text,
+                    speechRate = normalizedRate,
+                    pitch = pitch
+                )
+            }
         }
-        val normalized = BackendResolver.ensureTrailingSlash(baseUrl)
-        return "${normalized}tts".toHttpUrlOrNull()?.newBuilder()
-            ?.addQueryParameter("accessToken", accessToken)
-            ?.addQueryParameter("id", ttsId)
-            ?.addQueryParameter("speakText", text)
-            ?.addQueryParameter("speechRate", speechRate.toString())
-            ?.build()
-            ?.toString()
+    }
+
+    suspend fun fetchReaderTtsAudio(
+        baseUrl: String,
+        accessToken: String,
+        request: TtsAudioRequest.Reader
+    ): Result<ByteArray> {
+        if (detectApiBackend(baseUrl) != ApiBackend.Reader) {
+            return Result.failure(IllegalStateException("当前服务端不支持TTS"))
+        }
+        val (_, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, null)
+        val payload = ReaderBookTtsRequest(
+            text = request.text,
+            voice = request.voiceName,
+            pitch = formatDecimal(request.pitch),
+            rate = formatDecimal(request.speechRate),
+            accessToken = accessToken
+        )
+        val timestamp = System.currentTimeMillis()
+        return executeWithFailoverReader {
+            it.requestBookTts(accessToken, timestamp, payload)
+        }(endpoints).mapCatching { base64 ->
+            if (base64.isBlank()) throw IllegalStateException("TTS返回空音频数据")
+            Base64.decode(base64, Base64.DEFAULT)
+        }
     }
 
     private fun <T> executeWithFailover(block: suspend (ReadApiService) -> Response<ApiResponse<T>>):
@@ -637,6 +688,9 @@ class ReadRepository(
         }
         Result.failure(lastError ?: IllegalStateException("未知错误"))
     }
+
+    private fun formatDecimal(value: Double): String =
+        String.format(Locale.US, "%.2f", value)
 
     private fun <T> executeWithFailoverReader(block: suspend (ReaderApiService) -> Response<ApiResponse<T>>):
             suspend (List<String>) -> Result<T> = lambda@ { endpoints: List<String> ->

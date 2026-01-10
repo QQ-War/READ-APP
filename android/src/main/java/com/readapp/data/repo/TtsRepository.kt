@@ -3,6 +3,7 @@ package com.readapp.data.repo
 import com.readapp.data.ReadRepository
 import com.readapp.data.RemoteDataSourceFactory
 import com.readapp.data.model.HttpTTS
+import com.readapp.data.model.TtsAudioRequest
 
 class TtsRepository(
     private val remoteDataSourceFactory: RemoteDataSourceFactory,
@@ -26,6 +27,19 @@ class TtsRepository(
     suspend fun saveTtsBatch(baseUrl: String, publicUrl: String?, accessToken: String, jsonContent: String) =
         createSource(baseUrl, publicUrl).saveTtsBatch(accessToken, jsonContent)
 
-    fun buildTtsAudioUrl(baseUrl: String, accessToken: String, ttsId: String, text: String, speed: Double) =
-        readRepository.buildTtsAudioUrl(baseUrl, accessToken, ttsId, text, speed)
+    fun buildTtsAudioRequest(
+        baseUrl: String,
+        accessToken: String,
+        tts: HttpTTS,
+        text: String,
+        speechRate: Double,
+        isChapterTitle: Boolean
+    ): TtsAudioRequest? =
+        readRepository.buildTtsAudioRequest(baseUrl, accessToken, tts, text, speechRate, isChapterTitle)
+
+    suspend fun requestReaderTtsAudio(
+        baseUrl: String,
+        accessToken: String,
+        request: TtsAudioRequest.Reader
+    ) = readRepository.fetchReaderTtsAudio(baseUrl, accessToken, request)
 }

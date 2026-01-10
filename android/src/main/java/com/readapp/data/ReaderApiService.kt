@@ -6,7 +6,9 @@ import com.readapp.data.model.ApiResponse
 import com.readapp.data.model.Book
 import com.readapp.data.model.BookSource
 import com.readapp.data.model.Chapter
+import com.readapp.data.model.HttpTTS
 import com.readapp.data.model.LoginResponse
+import com.readapp.data.model.ReaderBookTtsRequest
 import com.readapp.data.model.ReplaceRule
 import com.readapp.data.model.RssSourcesResponse
 import com.readapp.data.model.UserInfo
@@ -154,6 +156,19 @@ interface ReaderApiService {
     suspend fun getRssSources(
         @Query("accessToken") accessToken: String,
     ): Response<ApiResponse<RssSourcesResponse>>
+
+    @GET(ReaderApiEndpoints.HttpTtsList)
+    suspend fun getHttpTtsList(
+        @Query("accessToken") accessToken: String,
+        @Query("v") version: Long,
+    ): Response<ApiResponse<List<HttpTTS>>>
+
+    @POST(ReaderApiEndpoints.BookTts)
+    suspend fun requestBookTts(
+        @Query("accessToken") accessToken: String,
+        @Query("v") version: Long,
+        @Body request: ReaderBookTtsRequest,
+    ): Response<ApiResponse<String>>
 
     @GET(ReaderApiEndpoints.StopRssSource)
     suspend fun stopRssSource(

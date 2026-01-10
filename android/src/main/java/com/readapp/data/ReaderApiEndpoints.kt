@@ -24,4 +24,6 @@ object ReaderApiEndpoints {
     const val ImportBookPreview = "importBookPreview"
     const val GetRssSources = "getRssSourcess"
     const val StopRssSource = "stopRssSource"
+    const val HttpTtsList = "httpTTS/list"
+    const val BookTts = "book/tts"
 }

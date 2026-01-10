@@ -21,6 +21,8 @@ class APIService: ObservableObject {
     @Published var errorMessage: String?
     
     private let client: APIClient
+    private var ttsEngineCache: [String: HttpTTS] = [:]
+    private let ttsCacheQueue = DispatchQueue(label: "com.readapp.tts.cache")
     private let authService: AuthService
     private let booksService: BooksService
     private let ttsService: TTSService
@@ -127,7 +129,67 @@ class APIService: ObservableObject {
     
     // MARK: - TTS 相关
     func fetchTTSList() async throws -> [HttpTTS] {
-        try await ttsService.fetchTTSList()
+        let list = try await ttsService.fetchTTSList()
+        updateTtsCache(with: list)
+        return list
+    }
+
+    private func updateTtsCache(with list: [HttpTTS]) {
+        ttsCacheQueue.sync {
+            ttsEngineCache = Dictionary(uniqueKeysWithValues: list.map { ($0.id, $0) })
+        }
+    }
+
+    private func cachedTtsEngine(id: String) -> HttpTTS? {
+        ttsCacheQueue.sync {
+            ttsEngineCache[id]
+        }
+    }
+
+    private func ensureTtsEngine(id: String) async throws -> HttpTTS? {
+        if let cached = cachedTtsEngine(id: id) {
+            return cached
+        }
+        let list = try await ttsService.fetchTTSList()
+        updateTtsCache(with: list)
+        return list.first { $0.id == id }
+    }
+
+    private func formatReaderSpeechRate(_ rate: Double) -> String {
+        let normalized = max(0.2, min(rate / 100.0, 3.0))
+        return String(format: "%.2f", normalized)
+    }
+
+    func fetchReaderTtsAudio(ttsId: String, text: String, speechRate: Double) async throws -> Data {
+        guard let engine = try await ensureTtsEngine(id: ttsId), !engine.name.isEmpty else {
+            throw NSError(domain: "APIService", code: 404, userInfo: [NSLocalizedDescriptionKey: "找不到指定的TTS引擎"])
+        }
+        let requestBody = ReaderTtsRequest(
+            text: text,
+            voice: engine.name,
+            pitch: "1",
+            rate: formatReaderSpeechRate(speechRate),
+            accessToken: accessToken
+        )
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+        let queryItems = [
+            URLQueryItem(name: "accessToken", value: accessToken),
+            URLQueryItem(name: "v", value: "\(timestamp)")
+        ]
+        let url = try client.buildURL(endpoint: ReaderApiEndpoints.bookTts, queryItems: queryItems)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw NSError(domain: "APIService", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: "TTS请求失败"])
+        }
+        let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+        guard apiResponse.isSuccess, let base64 = apiResponse.data, let decoded = Data(base64Encoded: base64) else {
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "TTS音频响应异常"])
+        }
+        return decoded
     }
     
     func buildTTSAudioURL(ttsId: String, text: String, speechRate: Double) -> URL? {

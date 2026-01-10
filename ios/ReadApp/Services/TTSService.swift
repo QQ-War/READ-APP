@@ -9,7 +9,20 @@ final class TTSService {
 
     func fetchTTSList() async throws -> [HttpTTS] {
         if client.backend == .reader {
-            throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "当前服务端不支持TTS"])
+            let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+            let queryItems = [
+                URLQueryItem(name: "accessToken", value: client.accessToken),
+                URLQueryItem(name: "v", value: "\(timestamp)")
+            ]
+            let (data, httpResponse) = try await client.requestWithFailback(endpoint: ReaderApiEndpoints.httpTtsList, queryItems: queryItems)
+            guard httpResponse.statusCode == 200 else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
+            }
+            let apiResponse = try JSONDecoder().decode(APIResponse<[HttpTTS]>.self, from: data)
+            if apiResponse.isSuccess, let ttsList = apiResponse.data {
+                return ttsList
+            }
+            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取TTS引擎列表失败"])
         }
         let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getAllTts, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
         guard httpResponse.statusCode == 200 else {
