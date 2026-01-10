@@ -79,20 +79,30 @@ struct TextKit2Paginator {
             let targetY = currentY + usableHeight
             // 往回一点点探测，获取位于底部的那个 Fragment
             guard let endFragment = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY - 5.0)) else {
-                // 如果探测不到，说明可能已经到底或者空白，尝试直接用 targetY
-                 if let fallback = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY)) {
-                     // 找到了（虽然不太可能，因为 -5 都没找到）
-                     let endOffset = storage.offset(from: storage.documentRange.location, to: fallback.rangeInElement.endLocation)
-                     let pageRange = NSRange(location: startOffset, length: max(1, endOffset - startOffset))
-                     pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx))
-                     pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageSize.height, actualContentHeight: fallback.layoutFragmentFrame.maxY - currentY, startSentenceIndex: startSentenceIdx, contentInset: topInset))
-                     currentY = fallback.layoutFragmentFrame.maxY
-                     if currentY >= lm.usageBoundsForTextContainer.height { break }
-                     continue
-                 } else {
-                     // 真的没内容了
-                     break
-                 }
+                // 如果探测不到，说明可能已经到底或者传入的 targetY 已经越界
+                if let fallback = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY)) {
+                    let endOffset = storage.offset(from: storage.documentRange.location, to: fallback.rangeInElement.endLocation)
+                    let pageRange = NSRange(location: startOffset, length: max(1, endOffset - startOffset))
+                    pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx))
+                    pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageSize.height, actualContentHeight: fallback.layoutFragmentFrame.maxY - currentY, startSentenceIndex: startSentenceIdx, contentInset: topInset))
+                    currentY = fallback.layoutFragmentFrame.maxY
+                    if currentY >= lm.usageBoundsForTextContainer.height { break }
+                    continue
+                } else if currentY < lm.usageBoundsForTextContainer.height {
+                    let endOffset = attributedStringLength(storage)
+                    let pageRange = NSRange(location: startOffset, length: max(1, endOffset - startOffset))
+                    let actualContentHeight = max(0, lm.usageBoundsForTextContainer.height - currentY)
+                    pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx))
+                    pageInfos.append(TK2PageInfo(
+                        range: pageRange,
+                        yOffset: currentY,
+                        pageHeight: pageSize.height,
+                        actualContentHeight: actualContentHeight,
+                        startSentenceIndex: startSentenceIdx,
+                        contentInset: topInset
+                    ))
+                }
+                break
             }
             
             var pageEndOffset: Int = 0
