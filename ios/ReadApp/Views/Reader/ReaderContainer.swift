@@ -112,6 +112,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var nextCache: ChapterCache = .empty
     private var prevCache: ChapterCache = .empty
     private var currentPageIndex: Int = 0
+    private var visibleHorizontalPageIndex: Int? {
+        guard let pageVC = horizontalVC?.viewControllers?.first as? PageContentViewController else { return nil }
+        guard pageVC.chapterOffset == 0 else { return nil }
+        return pageVC.pageIndex
+    }
+    private func horizontalPageIndexForDisplay() -> Int {
+        if let visible = visibleHorizontalPageIndex, visible >= 0, visible < currentCache.pages.count {
+            return visible
+        }
+        return currentPageIndex
+    }
     private var isMangaMode = false
 
     private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
@@ -211,8 +222,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func getCurrentReadingCharOffset() -> Int {
         if currentReadingMode == .vertical {
             return verticalVC?.getCurrentCharOffset() ?? 0
-        } else if !currentCache.pages.isEmpty && currentPageIndex < currentCache.pages.count {
-            return currentCache.pages[currentPageIndex].globalRange.location
+        } else if !currentCache.pages.isEmpty {
+            let idx = horizontalPageIndexForDisplay()
+            guard idx < currentCache.pages.count else { return 0 }
+            return currentCache.pages[idx].globalRange.location
         }
         return 0
     }
@@ -810,8 +823,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let totalOffset = starts[sentenceIndex] + sentenceOffset + indentLen
         
         // 优化：如果当前页已经包含这个位置，不做任何处理，防止微小计算偏差导致回跳
-        if currentPageIndex < currentCache.pages.count {
-            let currentRange = currentCache.pages[currentPageIndex].globalRange
+        let currentIndex = horizontalPageIndexForDisplay()
+        if currentIndex < currentCache.pages.count {
+            let currentRange = currentCache.pages[currentIndex].globalRange
             if NSLocationInRange(totalOffset, currentRange) {
                 return
             }
@@ -876,13 +890,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             return verticalVC?.isSentenceVisible(index: ttsManager.currentSentenceIndex) ?? true
         }
         let pageInfos = currentCache.pageInfos ?? []
-        guard currentPageIndex < pageInfos.count else { return true }
+        let pageIndex = horizontalPageIndexForDisplay()
+        guard pageIndex < pageInfos.count else { return true }
         let starts = currentCache.paragraphStarts
         let sentenceIdx = ttsManager.currentSentenceIndex
         guard sentenceIdx >= 0 && sentenceIdx < starts.count else { return false }
         let indentLen = 2
         let totalOffset = starts[sentenceIdx] + ttsManager.currentSentenceOffset + indentLen
-        return NSLocationInRange(totalOffset, pageInfos[currentPageIndex].range)
+        return NSLocationInRange(totalOffset, pageInfos[pageIndex].range)
     }
 
     func finalizeUserInteraction() {
@@ -945,24 +960,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var charOffset: Int = 0
         var sentenceIndex: Int = 0
 
-        if currentReadingMode == .horizontal, currentPageIndex < pageInfos.count {
-            let pageInfo = pageInfos[currentPageIndex]
-            // 优先使用页面的起始句子索引
-            sentenceIndex = pageInfo.startSentenceIndex
-            // 确保句子索引在有效范围内
-            sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
-            
-            // 修正：直接使用页面的起始位置，确保 TTS 从当前页可见文字开始，而不是回跳到段落开头
-            charOffset = pageInfo.range.location
-            
-            // 调试日志
-            print("🔍 TTS Position - Horizontal: page=\(currentPageIndex), sentenceIndex=\(sentenceIndex), charOffset=\(charOffset), pageInfo.startSentenceIndex=\(pageInfo.startSentenceIndex)")
+        if currentReadingMode == .horizontal {
+            let pageIndex = horizontalPageIndexForDisplay()
+            if pageIndex < pageInfos.count {
+                let pageInfo = pageInfos[pageIndex]
+                sentenceIndex = pageInfo.startSentenceIndex
+                sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
+                charOffset = pageInfo.range.location
+            }
         } else if currentReadingMode == .vertical {
             charOffset = verticalVC?.getCurrentCharOffset() ?? 0
-            // 确保找到正确的句子索引
             sentenceIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? 0
-            // 调试日志
-            print("🔍 TTS Position - Vertical: charOffset=\(charOffset), sentenceIndex=\(sentenceIndex)")
         }
 
         // 边界检查
@@ -974,9 +982,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
-        
-        // 最终调试日志
-        print("🔍 TTS Position Final: chapter=\(currentChapterIndex), sentenceIndex=\(sentenceIndex), offset=\(clampedOffset), sentenceStart=\(sentenceStart), charOffset=\(charOffset)")
         
         return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: clampedOffset, charOffset: charOffset)
     }
