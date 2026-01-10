@@ -345,7 +345,8 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         var lines: [String] = []
         store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             let fragmentStart = store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
-            let length = fragment.rangeInElement.length
+            let fragmentEnd = store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: fragment.rangeInElement.endLocation)
+            let length = fragmentEnd - fragmentStart
             guard fragmentStart + length <= store.attributedString.length else { return false }
             let raw = (store.attributedString.string as NSString).substring(with: NSRange(location: fragmentStart, length: length))
             let cleaned = sanitizedPreviewText(raw, limit: 120)
