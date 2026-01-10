@@ -58,9 +58,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var lastViewSize: CGSize = .zero
     var isInfiniteScrollEnabled: Bool = true {
         didSet {
-            if oldValue != isInfiniteScrollEnabled {
-                LogManager.shared.log("模式变更: \(oldValue ? "无限" : "非无限") -> \(isInfiniteScrollEnabled ? "无限" : "非无限")", category: "阅读器")
-            }
+            _ = oldValue
         }
     }
     private var isTransitioning = false
@@ -89,7 +87,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var lastPrevContentHeight: CGFloat = 0
     private var lastPrevHasContent = false
     private var pendingSelectedText: String?
-    private var lastEdgeLogTime: TimeInterval = 0
     
     // 无限流无缝切换标记 (0: 无, 1: 下一章, -1: 上一章)
     private var pendingSeamlessSwitch: Int = 0
@@ -188,12 +185,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let trimmedSentences = sentences.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedNextSentences = (nextSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let trimmedPrevSentences = (prevSentences ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        if let ns = nextSentences, !ns.isEmpty, trimmedNextSentences.isEmpty {
-            LogManager.shared.log("下一章预取内容被过滤为空: 原始句数=\(ns.count)", category: "阅读器")
-        }
-        if let ps = prevSentences, !ps.isEmpty, trimmedPrevSentences.isEmpty {
-            LogManager.shared.log("上一章预取内容被过滤为空: 原始句数=\(ps.count)", category: "阅读器")
-        }
+        _ = nextSentences
+        _ = prevSentences
         
         let contentChanged = self.currentSentences != trimmedSentences || lastFontSize != fontSize || lastLineSpacing != lineSpacing || marginChanged
         let nextChanged = self.nextSentences != trimmedNextSentences || marginChanged
@@ -406,17 +399,14 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         cancelSwitchHold()
         pendingSeamlessSwitch = 0 
         onInteractionChanged?(true)
-        LogManager.shared.log("拖拽开始: offset=\(Int(scrollView.contentOffset.y)), infinite=\(isInfiniteScrollEnabled)", category: "阅读器")
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         onInteractionChanged?(false)
-        LogManager.shared.log("拖拽结束: ready=\(switchReady), dir=\(pendingSwitchDirection), infinite=\(isInfiniteScrollEnabled)", category: "阅读器")
         
         if !isInfiniteScrollEnabled {
             if switchReady && pendingSwitchDirection != 0 && !isTransitioning {
                 let direction = pendingSwitchDirection
-                LogManager.shared.log("执行转场淡出, 方向=\(direction)", category: "阅读器")
                 isTransitioning = true
                 scrollView.isUserInteractionEnabled = false
                 
@@ -426,7 +416,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 UIView.animate(withDuration: 0.2, animations: { 
                     self.view.alpha = 0 
                 }) { _ in
-                    LogManager.shared.log("转场淡出完成, 通知切章", category: "阅读器")
                     self.onChapterSwitched?(direction)
                     // 注意：这里的 alpha 恢复逻辑在 update 方法中处理
                 }
@@ -583,18 +572,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if let _ = nextRenderStore {
             let maxOffsetY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
             let triggerThreshold = max(40, seamlessSwitchThreshold)
-            let logThreshold = triggerThreshold + 220
-            // 以实际可滚动到底的位置作为触发依据，避免永远到不了阈值
-            if rawOffset > maxOffsetY - logThreshold {
-                let now = Date().timeIntervalSince1970
-                if now - lastEdgeLogTime > 0.5 {
-                    lastEdgeLogTime = now
-                    LogManager.shared.log("接近下边缘: offset=\(Int(rawOffset)), max=\(Int(maxOffsetY)), size=\(Int(scrollView.contentSize.height))", category: "阅读器")
-                }
-            }
             if rawOffset > maxOffsetY - triggerThreshold {
                 pendingSeamlessSwitch = 1
-                LogManager.shared.log("触发下切章: offset=\(Int(rawOffset)), max=\(Int(maxOffsetY)), threshold=\(Int(triggerThreshold))", category: "阅读器")
                 return
             }
         }
@@ -602,13 +581,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if let _ = prevRenderStore {
             // 当前章节顶部坐标
             let currentTopY = currentContentView.frame.minY
-            if rawOffset + scrollView.bounds.height < currentTopY + 200 {
-                let now = Date().timeIntervalSince1970
-                if now - lastEdgeLogTime > 0.5 {
-                    lastEdgeLogTime = now
-                    LogManager.shared.log("接近上边缘: offset=\(Int(rawOffset)), top=\(Int(currentTopY)), size=\(Int(scrollView.contentSize.height))", category: "阅读器")
-                }
-            }
             // 如果当前章节顶部已经滚出屏幕下方 100 像素
             if rawOffset + scrollView.bounds.height < currentTopY - 100 {
                 pendingSeamlessSwitch = -1
@@ -652,7 +624,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if pullDistance > threshold {
                 if !switchReady { 
                     switchReady = true; pendingSwitchDirection = -1; hapticFeedback() 
-                    LogManager.shared.log("满足切章(上): 距离=\(Int(pullDistance))", category: "阅读器")
                 }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
@@ -669,7 +640,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if pullDistance > threshold {
                 if !switchReady { 
                     switchReady = true; pendingSwitchDirection = 1; hapticFeedback() 
-                    LogManager.shared.log("满足切章(下): 距离=\(Int(pullDistance))", category: "阅读器")
                 }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {

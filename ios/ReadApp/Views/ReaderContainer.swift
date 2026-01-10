@@ -355,10 +355,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 lastLoggedPrevUrl = prevUrl
                 lastLoggedNextCount = nextCount
                 lastLoggedPrevCount = prevCount
-                LogManager.shared.log(
-                    "无限流缓存状态: cur=\(currentChapterIndex), nextUrl=\(nextUrl ?? "nil"), nextCount=\(nextCount), prevUrl=\(prevUrl ?? "nil"), prevCount=\(prevCount)",
-                    category: "阅读器"
-                )
+                _ = nextUrl
+                _ = prevUrl
+                _ = nextCount
+                _ = prevCount
             }
         }
         
@@ -611,7 +611,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             onNextCache: { [weak self] cache in
                 guard let self = self, self.currentChapterIndex == index else { return }
                 self.nextCache = cache
-                LogManager.shared.log("应用下一章缓存: baseIndex=\(index), nextUrl=\(cache.chapterUrl ?? "nil"), nextCount=\(cache.contentSentences.count)", category: "阅读器")
                 self.updateVerticalAdjacent()
                 if self.isMangaMode {
                     self.prefetchedMangaNextIndex = index + 1
@@ -621,7 +620,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             onPrevCache: { [weak self] cache in
                 guard let self = self, self.currentChapterIndex == index else { return }
                 self.prevCache = cache
-                LogManager.shared.log("应用上一章缓存: baseIndex=\(index), prevUrl=\(cache.chapterUrl ?? "nil"), prevCount=\(cache.contentSentences.count)", category: "阅读器")
                 self.updateVerticalAdjacent()
             },
             onResetNext: { [weak self] in self?.resetMangaPrefetchedContent() },
@@ -643,7 +641,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             onNextCache: { [weak self] cache in
                 guard let self = self, self.currentChapterIndex == index else { return }
                 self.nextCache = cache
-                LogManager.shared.log("应用下一章缓存: baseIndex=\(index), nextUrl=\(cache.chapterUrl ?? "nil"), nextCount=\(cache.contentSentences.count)", category: "阅读器")
                 self.updateVerticalAdjacent()
             },
             onResetNext: { [weak self] in self?.nextCache = .empty }
@@ -664,7 +661,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             onPrevCache: { [weak self] cache in
                 guard let self = self, self.currentChapterIndex == index else { return }
                 self.prevCache = cache
-                LogManager.shared.log("应用上一章缓存: baseIndex=\(index), prevUrl=\(cache.chapterUrl ?? "nil"), prevCount=\(cache.contentSentences.count)", category: "阅读器")
                 self.updateVerticalAdjacent()
             },
             onResetPrev: { [weak self] in self?.prevCache = .empty }

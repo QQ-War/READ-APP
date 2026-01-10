@@ -137,10 +137,27 @@ class TTSManager: NSObject, ObservableObject {
             let audioSession = AVAudioSession.sharedInstance()
             logger.log("配置音频会话 - Category: playback, Mode: default", category: "TTS")
             try audioSession.setCategory(.playback, options: [])
-            try audioSession.setActive(true)
-            logger.log("音频会话配置成功", category: "TTS")
+            logger.log("音频会话配置完成", category: "TTS")
         } catch {
             logger.log("音频会话设置失败: \(error.localizedDescription)", category: "TTS错误")
+        }
+    }
+
+    private func activateAudioSession() {
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, options: [])
+            try audioSession.setActive(true)
+        } catch {
+            logger.log("音频会话激活失败: \(error.localizedDescription)", category: "TTS错误")
+        }
+    }
+
+    private func deactivateAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        } catch {
+            logger.log("音频会话关闭失败: \(error.localizedDescription)", category: "TTS错误")
         }
     }
     
@@ -289,6 +306,7 @@ class TTSManager: NSObject, ObservableObject {
         if currentIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentIndex].title) }
         isPlaying = true
         isPaused = false
+        activateAudioSession()
         
         speakNextSentence()
     }
@@ -646,7 +664,8 @@ class TTSManager: NSObject, ObservableObject {
             stopOffsetTimer()
             if UserPreferences.shared.useSystemTTS { speechSynthesizer.pauseSpeaking(at: .immediate) }
             else { audioPlayer?.pause() }
-            startKeepAlive()
+            stopKeepAlive()
+            deactivateAudioSession()
             updatePlaybackRate()
         }
     }
@@ -654,6 +673,7 @@ class TTSManager: NSObject, ObservableObject {
     func resume() {
         if isPlaying && isPaused {
             isPaused = false
+            activateAudioSession()
             if UserPreferences.shared.useSystemTTS {
                 if speechSynthesizer.isPaused { speechSynthesizer.continueSpeaking() }
                 else { speakNextSentence() }
@@ -666,7 +686,9 @@ class TTSManager: NSObject, ObservableObject {
             }
             updatePlaybackRate()
         } else if !isPlaying {
-            isPlaying = true; isPaused = false; speakNextSentence()
+            isPlaying = true; isPaused = false
+            activateAudioSession()
+            speakNextSentence()
         }
     }
     
@@ -722,6 +744,7 @@ class TTSManager: NSObject, ObservableObject {
         currentSentenceOffset = 0
         isLoading = false; clearAudioCache(); updatePreloadQueue([]); setIsPreloading(false); clearNextChapterCache(); nextChapterSentences.removeAll()
         coverArtwork = nil; endBackgroundTask()
+        deactivateAudioSession()
         logger.log("TTS 停止", category: "TTS")
     }
     
