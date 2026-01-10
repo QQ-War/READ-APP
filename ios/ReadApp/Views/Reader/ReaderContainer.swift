@@ -806,8 +806,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func syncHorizontalPageToTTS(sentenceIndex: Int, sentenceOffset: Int) { 
         let starts = currentCache.paragraphStarts
         guard sentenceIndex < starts.count else { return }
-        
-        let totalOffset = starts[sentenceIndex] + sentenceOffset
+        let indentLen = 2
+        let totalOffset = starts[sentenceIndex] + sentenceOffset + indentLen
         
         // 优化：如果当前页已经包含这个位置，不做任何处理，防止微小计算偏差导致回跳
         if currentPageIndex < currentCache.pages.count {
@@ -880,7 +880,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let starts = currentCache.paragraphStarts
         let sentenceIdx = ttsManager.currentSentenceIndex
         guard sentenceIdx >= 0 && sentenceIdx < starts.count else { return false }
-        let totalOffset = starts[sentenceIdx] + ttsManager.currentSentenceOffset
+        let indentLen = 2
+        let totalOffset = starts[sentenceIdx] + ttsManager.currentSentenceOffset + indentLen
         return NSLocationInRange(totalOffset, pageInfos[currentPageIndex].range)
     }
 
@@ -950,14 +951,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
         
-        // 关键修复：左右翻页模式下，不要减去缩进，否则 totalOffset 会落在上一页的末尾字符
-        let offsetInSentence: Int
-        if currentReadingMode == .horizontal {
-            offsetInSentence = intra
-        } else {
-            let indentLen = min(2, currentCache.contentSentences[sentenceIndex].utf16.count)
-            offsetInSentence = max(0, intra - indentLen)
-        }
+        let indentLen = 2
+        let offsetInSentence = max(0, intra - indentLen)
         
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
