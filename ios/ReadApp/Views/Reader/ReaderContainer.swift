@@ -78,6 +78,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
 
 // MARK: - UIKit 核心容器
 class ReaderContainerViewController: UIViewController, UIPageViewControllerDataSource, UIPageViewControllerDelegate, UIScrollViewDelegate {
+    private let logger = LogManager.shared
     var book: Book!; var chapters: [BookChapter] = []; var readerSettings: ReaderSettingsStore!; var ttsManager: TTSManager!; var replaceRuleViewModel: ReplaceRuleViewModel?
     var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?
     var onChapterIndexChanged: ((Int) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?
@@ -817,9 +818,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
 
         if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(totalOffset, $0.globalRange) }) {
-            // 只有当目标页在当前页之后，或者偏差较大时才跳转，严禁非预期的回翻
             if targetPage != currentPageIndex {
-                updateHorizontalPage(to: targetPage, animated: true) 
+                logger.log("TTS 横翻跳页 -> fromPage=\(currentPageIndex) toPage=\(targetPage) totalOffset=\(totalOffset), sentence=\(sentenceIndex)", category: "TTS")
+                updateHorizontalPage(to: targetPage, animated: true)
             }
         }
     }
@@ -846,6 +847,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func restartTTSFromCurrentPageStart() {
         guard currentChapterIndex < chapters.count else { return }
         let startPos = currentStartPosition()
+        logger.log("TTS重新定位 -> page=\(currentPageIndex), mode=\(currentReadingMode), charOffset=\(startPos.charOffset), sentence=\(startPos.sentenceIndex), sentenceOffset=\(startPos.sentenceOffset)", category: "TTS")
         let ttsSentences = currentCache.contentSentences
         ttsManager.startReading(
             text: currentCache.rawContent,
