@@ -123,6 +123,36 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         return currentPageIndex
     }
+    private func previewSentences(from startIndex: Int, limit: Int) -> [String] {
+        guard !currentCache.contentSentences.isEmpty else { return [] }
+        var lines: [String] = []
+        for idx in startIndex..<min(startIndex + limit, currentCache.contentSentences.count) {
+            lines.append(sanitizedPreviewText(currentCache.contentSentences[idx]))
+        }
+        return lines
+    }
+    private func sanitizedPreviewText(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
+        guard trimmed.count > 120 else { return trimmed }
+        let endIndex = trimmed.index(trimmed.startIndex, offsetBy: 120)
+        return String(trimmed[..<endIndex]) + "…"
+    }
+    private func visibleTopSentenceInfo() -> (index: Int, sentences: [String]) {
+        guard !currentCache.contentSentences.isEmpty else { return (0, []) }
+        let startIndex: Int
+        if currentReadingMode == .vertical {
+            startIndex = verticalVC?.getCurrentSentenceIndex() ?? 0
+        } else {
+            let pageIndex = horizontalPageIndexForDisplay()
+            if let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count {
+                startIndex = pageInfos[pageIndex].startSentenceIndex
+            } else {
+                startIndex = 0
+            }
+        }
+        let sentences = previewSentences(from: startIndex, limit: 2)
+        return (startIndex, sentences)
+    }
     private var isMangaMode = false
 
     private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
@@ -982,7 +1012,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
-        
+        let visibleInfo = visibleTopSentenceInfo()
+        let previewLines = previewSentences(from: sentenceIndex, limit: 2)
+        logTTSStartSnapshot(
+            sentenceIndex: sentenceIndex,
+            sentenceOffset: clampedOffset,
+            charOffset: charOffset,
+            visibleTopIndex: visibleInfo.index,
+            visibleTopLines: visibleInfo.sentences,
+            previewLines: previewLines
+        )
         return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: clampedOffset, charOffset: charOffset)
     }
     private func scrollToChapterEnd(animated: Bool) { 
@@ -994,6 +1033,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         } else if !currentCache.pages.isEmpty { 
             updateHorizontalPage(to: max(0, currentCache.pages.count - 1), animated: animated) 
         } 
+    }
+    private func logTTSStartSnapshot(sentenceIndex: Int, sentenceOffset: Int, charOffset: Int, visibleTopIndex: Int, visibleTopLines: [String], previewLines: [String]) {
+        let pageIdx = horizontalPageIndexForDisplay()
+        let topLinesDesc = visibleTopLines.isEmpty ? "[]" : visibleTopLines.joined(separator: " | ")
+        let previewDesc = previewLines.isEmpty ? "[]" : previewLines.joined(separator: " | ")
+        let message = """
+        TTS start snapshot - mode=\(currentReadingMode) chapter=\(currentChapterIndex) currentPageIdx=\(currentPageIndex) visiblePageIdx=\(pageIdx) \
+        visibleTopIdx=\(visibleTopIndex) topLines=\(topLinesDesc) startSentenceIdx=\(sentenceIndex) sentenceOffset=\(sentenceOffset) \
+        charOffset=\(charOffset) previewLines=\(previewDesc)
+        """
+        logger.log(message, category: "TTS")
     }
 }
 class PageContentViewController: UIViewController { var pageIndex: Int; var chapterOffset: Int; init(pageIndex: Int, chapterOffset: Int) { self.pageIndex = pageIndex; self.chapterOffset = chapterOffset; super.init(nibName: nil, bundle: nil) }; required init?(coder: NSCoder) { fatalError() } }
