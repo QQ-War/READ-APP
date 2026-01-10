@@ -24,7 +24,8 @@ final class ReaderChapterBuilder {
         reuseStore: TextKit2RenderStore?,
         chapterUrl: String? = nil
     ) -> ChapterCache {
-        let sentences = ReadingTextProcessor.splitSentences(rawContent, rules: replaceRules)
+        let chunkLimit = UserPreferences.shared.ttsSentenceChunkLimit
+        let sentences = ReadingTextProcessor.splitSentences(rawContent, rules: replaceRules, chunkLimit: chunkLimit)
         let attr = buildAttributedText(sentences: sentences, title: title)
         let width = max(100, layoutSpec.pageSize.width - layoutSpec.sideMargin * 2)
         let store: TextKit2RenderStore

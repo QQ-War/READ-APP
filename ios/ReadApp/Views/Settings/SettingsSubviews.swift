@@ -318,6 +318,24 @@ struct TTSSettingsView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("TTS 句段最大字符")
+                        Spacer()
+                        Text("\(preferences.ttsSentenceChunkLimit) 字符")
+                            .foregroundColor(.secondary)
+                    }
+                    let chunkLimitBinding = Binding(
+                        get: { Double(preferences.ttsSentenceChunkLimit) },
+                        set: { preferences.ttsSentenceChunkLimit = Int($0) }
+                    )
+                    Slider(value: chunkLimitBinding, in: 300...1000, step: 50)
+                    Text("超过该长度的段落会在发送给服务端前拆分（推荐 300-800）")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 4)
             }
         }
         .navigationTitle("听书设置")

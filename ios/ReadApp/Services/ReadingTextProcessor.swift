@@ -6,12 +6,12 @@ struct ReadingTextProcessor {
         return applyReplaceRules(to: stripped, rules: rules)
     }
 
-    static func splitSentences(_ text: String, rules: [ReplaceRule]?) -> [String] {
+    static func splitSentences(_ text: String, rules: [ReplaceRule]?, chunkLimit: Int) -> [String] {
         let processed = prepareText(text, rules: rules)
         let lines = processed.components(separatedBy: "\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        return lines.flatMap { splitIntoChunks($0, limit: 1800) }
+        return lines.flatMap { splitIntoChunks($0, limit: chunkLimit) }
     }
 
     private static func splitIntoChunks(_ text: String, limit: Int) -> [String] {

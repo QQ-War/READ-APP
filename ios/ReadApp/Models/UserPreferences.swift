@@ -158,6 +158,12 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    @Published var ttsSentenceChunkLimit: Int {
+        didSet {
+            UserDefaults.standard.set(ttsSentenceChunkLimit, forKey: "ttsSentenceChunkLimit")
+        }
+    }
+
     /// 手动标记为漫画的书籍 URL 集合
     @Published var manualMangaUrls: Set<String> {
         didSet {
@@ -298,6 +304,8 @@ class UserPreferences: ObservableObject {
         let savedTtsFollowCooldown = UserDefaults.standard.double(forKey: "ttsFollowCooldown")
         self.ttsFollowCooldown = savedTtsFollowCooldown == 0 ? 3.0 : savedTtsFollowCooldown
         self.forceMangaProxy = UserDefaults.standard.bool(forKey: "forceMangaProxy")
+        let savedChunk = UserDefaults.standard.integer(forKey: "ttsSentenceChunkLimit")
+        self.ttsSentenceChunkLimit = savedChunk == 0 ? 600 : savedChunk
 
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 100.0 : savedSpeechRate
