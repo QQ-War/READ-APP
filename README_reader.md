@@ -28,12 +28,10 @@ Content-Type: application/json
 
 此外也有爬取好的 TTS 列表可以使用：`GET /reader3/httpTTS/list?accessToken=XXX&v=TIMESTAMP`，响应就是 `HttpTTS` 数组（包含 `id、name` 等字段），客户端可以把列表中的 `id`、`name` 分别映射成默认/旁白/对话引擎，并把 `name` 传给 `/book/tts` 的 `voice` 字段。每次调用 `/book/tts` 时同时带上查询参数 `accessToken` 和 `v`（毫秒级时间戳）可以避免缓存冲突。
 
-## 当前未覆盖的 Read/Reader 接口（待新增 UI/逻辑）
-以下内容在现有代码中还没有绑定到任何仓库或视图：
+## 已覆盖的 Read/Reader 接口（可参考代码）
+以下内容在现有代码中已由 `RssSourcesScreen`/`RemoteRssSourceManager` 等模块完成：
 
-1. **RSS/订阅源管理**（`RssController`）。
-   - `read` 提供 `/rss` 系列接口（`/getRssSourcess`, `/editRssSources`, `/topRssSource` 等），`reader` 也包含 RSS 配置。
-   - 目前 App 只在 `SourceScreen` 里展示书源列表，没有 RSS 订阅入口。建议新增“订阅源”视图/Tab，支持列出、启用/禁用、排序 RSS 源，并通过 `reader3/rss` 或 `/api/5/rss` 接口完成 CRUD。
+1. **RSS/订阅源管理**（接口 `getRssSourcess`/`editRssSources`/`stopRssSource`/`delRssSource`）在 `RssSourcesScreen` 中提供了增删改查视图，`RssViewModel` + `RemoteRssSourceManager` 负责与 `RssRemoteDataSource` 通信，支持 Read/Reader 两种后端。
 
 2. **书源分组与排序**（`BookGroupController`、`SourceController` 的排位接口）仅在服务端存在，客户端没有对应编辑界面。
 
