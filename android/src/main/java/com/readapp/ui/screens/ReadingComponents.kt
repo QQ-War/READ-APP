@@ -165,29 +165,31 @@ internal fun BottomControlBar(
                 .navigationBarsPadding()
         ) {
             if (showTts) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onPrevP) { Icon(Icons.Default.KeyboardArrowUp, null) }
-                    FloatingActionButton(
-                        onClick = onPlay,
-                        containerColor = MaterialTheme.customColors.gradientStart,
-                        modifier = Modifier.size(48.dp)
+                if (isPlaying) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            null,
-                            tint = Color.White
-                        )
+                        IconButton(onClick = onPrevP) { Icon(Icons.Default.KeyboardArrowUp, null) }
+                        FloatingActionButton(
+                            onClick = onPlay,
+                            containerColor = MaterialTheme.customColors.gradientStart,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                null,
+                                tint = Color.White
+                            )
+                        }
+                        IconButton(onClick = onNextP) { Icon(Icons.Default.KeyboardArrowDown, null) }
+                        IconButton(onClick = onStop) { Icon(Icons.Default.Stop, null, tint = MaterialTheme.colorScheme.error) }
                     }
-                    IconButton(onClick = onNextP) { Icon(Icons.Default.KeyboardArrowDown, null) }
-                    IconButton(onClick = onStop) { Icon(Icons.Default.Stop, null, tint = MaterialTheme.colorScheme.error) }
+                    Divider(modifier = Modifier.padding(bottom = 12.dp), color = MaterialTheme.customColors.border.copy(alpha = 0.5f))
                 }
-                Divider(modifier = Modifier.padding(bottom = 12.dp), color = MaterialTheme.customColors.border.copy(alpha = 0.5f))
             }
 
             Row(
@@ -214,11 +216,15 @@ internal fun BottomControlBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (showTts && !isPlaying) {
+                        Text("听书", modifier = Modifier.clickable(onClick = onPlay), style = MaterialTheme.typography.labelLarge)
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
                     Text("列表", modifier = Modifier.clickable(onClick = onList), style = MaterialTheme.typography.labelLarge)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("排版", modifier = Modifier.clickable(onClick = onFont), style = MaterialTheme.typography.labelLarge)
                 }
-                if (!isManga) {
+                if (isManga) {
                     Text(
                         if (isForceLandscape) "竖屏" else "横屏",
                         modifier = Modifier.clickable(onClick = onToggleRotation),

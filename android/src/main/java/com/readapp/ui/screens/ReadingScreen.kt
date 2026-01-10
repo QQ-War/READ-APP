@@ -599,7 +599,7 @@ fun ReadingScreen(
                 onFont = { showFontDialog = true },
                 canPrev = currentChapterIndex > 0,
                 canNext = currentChapterIndex < chapters.size - 1,
-                showTts = showTtsControls && !isMangaMode
+                showTts = !isMangaMode
             )
         }
 
