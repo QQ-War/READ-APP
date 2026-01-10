@@ -787,13 +787,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if currentReadingMode == .vertical { 
             verticalVC?.setHighlight(index: sentenceIndex, secondaryIndices: Set(ttsManager.preloadedIndices), isPlaying: ttsManager.isPlaying)
         }
-        
+
         // 2. 视口跟随逻辑 (只有在非交互状态下执行)
         let now = Date().timeIntervalSince1970
         guard !isUserInteracting, ttsManager.isPlaying, now >= suppressTTSFollowUntil else { return }
-        
+
         if currentReadingMode == .vertical {
-            verticalVC?.ensureSentenceVisible(index: sentenceIndex)
+            // 避免因段落转折回翻上一页：仅在刚到新句且 offset=0 时确保可见，其它情况保持当前视图
+            if ttsManager.currentSentenceOffset == 0 {
+                verticalVC?.ensureSentenceVisible(index: sentenceIndex)
+            }
         } else if currentReadingMode == .horizontal {
             syncHorizontalPageToTTS(sentenceIndex: sentenceIndex, sentenceOffset: sentenceOffset)
         }
