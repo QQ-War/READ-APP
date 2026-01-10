@@ -123,6 +123,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var prefetchedMangaNextContent: String?
     private var lastChapterSwitchTime: TimeInterval = 0
     private let chapterSwitchCooldown: TimeInterval = 1.0
+    private var suppressTTSFollowUntil: TimeInterval = 0
     private var lastLoggedCacheChapterIndex: Int = -1
     private var lastLoggedNextUrl: String?
     private var lastLoggedPrevUrl: String?
@@ -792,7 +793,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         
         // 2. 视口跟随逻辑 (只有在非交互状态下执行)
-        guard !isUserInteracting, ttsManager.isPlaying else { return }
+        let now = Date().timeIntervalSince1970
+        guard !isUserInteracting, ttsManager.isPlaying, now >= suppressTTSFollowUntil else { return }
         
         if currentReadingMode == .vertical {
             verticalVC?.ensureSentenceVisible(index: sentenceIndex)
@@ -881,10 +883,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func notifyUserInteractionStarted() {
         isUserInteracting = true
         pendingTTSPositionSync = true
+        suppressTTSFollowUntil = Date().timeIntervalSince1970 + 3.0
         ttsSyncCoordinator?.userInteractionStarted()
     }
 
     private func notifyUserInteractionEnded() {
+        suppressTTSFollowUntil = Date().timeIntervalSince1970 + 3.0
         ttsSyncCoordinator?.scheduleCatchUp()
     }
     
