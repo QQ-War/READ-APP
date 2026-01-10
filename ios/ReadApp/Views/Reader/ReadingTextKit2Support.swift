@@ -184,6 +184,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     static let debugLogTopFragments = false
     private var lastLoggedPageIndex: Int?
     var pageIndex: Int?
+    var onVisibleFragments: ((Int, [String]) -> Void)?
     var renderStore: TextKit2RenderStore?
     var pageInfo: TK2PageInfo? {
         didSet {
@@ -356,6 +357,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         if !lines.isEmpty {
             LogManager.shared.log("ReadContent2View top fragments page=\(pageIdx): \(lines.joined(separator: " | "))", category: "TTS")
         }
+        onVisibleFragments?(pageIdx, lines)
     }
 
     private func sanitizedPreviewText(_ text: String, limit: Int) -> String {
