@@ -72,6 +72,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var onReachedBottom: (() -> Void)?; var onReachedTop: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
+    private let horizontalTextMargin: CGFloat = 10
+    private let viewportTopMargin: CGFloat = 10
+    private let charDetectionYOffset: CGFloat = 5
+    private var contentTopPadding: CGFloat { safeAreaTop + viewportTopMargin }
     var threshold: CGFloat = 80
     var seamlessSwitchThreshold: CGFloat = 120
     
@@ -325,7 +329,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         var h1: CGFloat = 0
         s.layoutManager.enumerateTextLayoutFragments(from: s.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h1 = f.layoutFragmentFrame.maxY; return false }
         let m = (view.bounds.width - s.layoutWidth) / 2
-        let topPadding = safeAreaTop + 10
+        let topPadding = contentTopPadding
         
         if isInfiniteScrollEnabled {
             var currentY = topPadding
@@ -380,7 +384,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func scrollViewDidScroll(_ s: UIScrollView) {
         if isUpdatingLayout { return }
         let rawOffset = s.contentOffset.y
-        let y = s.contentOffset.y - (safeAreaTop + 10)
+        let y = s.contentOffset.y - contentTopPadding
         
         if isInfiniteScrollEnabled { handleAutoSwitchIfNeeded(rawOffset: rawOffset) }
         handleHoldSwitchIfNeeded(rawOffset: rawOffset)
@@ -390,7 +394,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if s.contentOffset.y < s.bounds.height * 0.6 { onReachedTop?() }
         }
         
-        let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
+        let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + charDetectionYOffset }) ?? 0
         if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
     }
 
@@ -469,18 +473,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         onInteractionChanged?(false)
     }
 
-    func scrollToSentence(index: Int, animated: Bool) { guard index >= 0 && index < sentenceYOffsets.count else { return }; let y = max(0, sentenceYOffsets[index] + safeAreaTop + 10); scrollView.setContentOffset(CGPoint(x: 0, y: min(y, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: animated) }
+    func scrollToSentence(index: Int, animated: Bool) { guard index >= 0 && index < sentenceYOffsets.count else { return }; let y = max(0, sentenceYOffsets[index] + contentTopPadding); scrollView.setContentOffset(CGPoint(x: 0, y: min(y, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: animated) }
     func ensureSentenceVisible(index: Int) {
         guard !scrollView.isDragging && !scrollView.isDecelerating, index >= 0 && index < sentenceYOffsets.count, index != lastTTSSyncIndex else { return }
-        let y = sentenceYOffsets[index] + safeAreaTop + 10; let cur = scrollView.contentOffset.y; let vH = scrollView.bounds.height
+        let y = sentenceYOffsets[index] + contentTopPadding; let cur = scrollView.contentOffset.y; let vH = scrollView.bounds.height
         if y > cur + vH - 150 {
             lastTTSSyncIndex = index
-            scrollView.setContentOffset(CGPoint(x: 0, y: max(0, y - (safeAreaTop + 10))), animated: true)
+            scrollView.setContentOffset(CGPoint(x: 0, y: max(0, y - contentTopPadding)), animated: true)
         }
     }
     func isSentenceVisible(index: Int) -> Bool {
         guard index >= 0 && index < sentenceYOffsets.count else { return true }
-        let y = sentenceYOffsets[index] + safeAreaTop + 10
+        let y = sentenceYOffsets[index] + contentTopPadding
         let cur = scrollView.contentOffset.y
         let vH = scrollView.bounds.height
         return y >= cur - 20 && y <= cur + vH + 20
@@ -498,13 +502,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
     func getCurrentSentenceIndex() -> Int {
         guard !sentenceYOffsets.isEmpty else { return 0 }
-        let y = scrollView.contentOffset.y - (safeAreaTop + 10)
-        let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + 5 }) ?? 0
+        let y = scrollView.contentOffset.y - contentTopPadding
+        let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + charDetectionYOffset }) ?? 0
         return max(0, idx)
     }
     func getCurrentCharOffset() -> Int {
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
-        let point = CGPoint(x: 10, y: scrollView.contentOffset.y - (safeAreaTop + 10) + 5)
+        let point = CGPoint(x: horizontalTextMargin, y: scrollView.contentOffset.y - contentTopPadding + charDetectionYOffset)
         if let f = s.layoutManager.textLayoutFragment(for: point) {
             return s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
         }
