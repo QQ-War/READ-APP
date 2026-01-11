@@ -1052,7 +1052,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
         
-        logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), sentenceStart=\(sentenceStart), intra=\(intra)", category: "TTS")
+        logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), sentenceStart=\(sentenceStart), intra=\(intra), prevStart=\(sentenceIndex > 0 ? starts[sentenceIndex-1] : -1)", category: "TTS")
         
         let offsetInSentence = intra
         
