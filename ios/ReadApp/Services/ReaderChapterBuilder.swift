@@ -109,7 +109,7 @@ final class ReaderChapterBuilder {
         bodyStyle.lineSpacing = readerSettings.lineSpacing
         bodyStyle.alignment = .justified
 
-        let indentedText = sentences.map { "　　" + $0 }.joined(separator: "\n")
+        let indentedText = sentences.map { String(repeating: "　", count: paragraphIndentLength) + $0 }.joined(separator: "\n")
         fullAttr.append(
             NSAttributedString(
                 string: indentedText,
@@ -128,7 +128,7 @@ final class ReaderChapterBuilder {
         var current = prefixLen
         for (idx, sentence) in sentences.enumerated() {
             starts.append(current)
-            current += (sentence.utf16.count + 2)
+            current += (sentence.utf16.count + paragraphIndentLength)
             if idx < sentences.count - 1 {
                 current += 1
             }

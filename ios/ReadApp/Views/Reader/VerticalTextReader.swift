@@ -312,7 +312,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             ]))
         }
         
-        let text = sents.map { "　　" + $0 }.joined(separator: "\n")
+        let text = sents.map { String(repeating: "　", count: paragraphIndentLength) + $0 }.joined(separator: "\n")
         let p = NSMutableParagraphStyle()
         p.lineSpacing = lineSpacing
         p.alignment = .justified

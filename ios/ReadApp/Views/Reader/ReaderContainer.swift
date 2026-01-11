@@ -1050,10 +1050,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
 
         let sentenceStart = starts[sentenceIndex]
-        // 减去缩进的 2 个字符，因为 paragraphStarts 包含了缩进位置
-        // 而 TTS 需要从内容开始读
-        let intra = max(0, charOffset - sentenceStart - 2)
-        
+        let intra = max(0, charOffset - sentenceStart - paragraphIndentLength)
         logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), sentenceStart=\(sentenceStart), intra=\(intra)", category: "TTS")
         
         let offsetInSentence = intra

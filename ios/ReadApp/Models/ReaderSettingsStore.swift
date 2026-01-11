@@ -1,6 +1,9 @@
 import Combine
 import SwiftUI
 
+// 段落缩进：2个全角空格
+let paragraphIndentLength = 2
+
 final class ReaderSettingsStore: ObservableObject {
     let objectWillChange = PassthroughSubject<Void, Never>()
     private let preferences: UserPreferences
