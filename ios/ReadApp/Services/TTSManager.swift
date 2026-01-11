@@ -15,6 +15,7 @@ class TTSManager: NSObject, ObservableObject {
     @Published var preloadedIndices: Set<Int> = []
     @Published var currentSentenceDuration: TimeInterval = 0
     @Published var currentSentenceOffset: Int = 0
+    @Published var currentCharOffset: Int = 0  // 直接使用传入的 charOffset，不做二次计算
     var currentBaseSentenceIndex: Int = 0
     
     private var audioPlayer: AVAudioPlayer?
@@ -536,9 +537,10 @@ class TTSManager: NSObject, ObservableObject {
         currentSentenceIndex = targetIndex
         let sentenceLength = sentences[targetIndex].utf16.count
         currentSentenceOffset = max(0, min(position.sentenceOffset, sentenceLength))
+        currentCharOffset = position.charOffset  // 直接使用传入的 charOffset
         
         // 调试日志
-        logger.log("TTSManager update position - requested=\(position.sentenceIndex), adjusted=\(targetIndex), offset=\(currentSentenceOffset)", category: "TTS")
+        logger.log("TTSManager update position - requested=\(position.sentenceIndex), adjusted=\(targetIndex), offset=\(currentSentenceOffset), charOffset=\(currentCharOffset)", category: "TTS")
         
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
         guard restartIfPlaying && isPlaying else { return }
