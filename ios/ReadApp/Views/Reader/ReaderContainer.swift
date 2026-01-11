@@ -1050,13 +1050,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
 
         let sentenceStart = starts[sentenceIndex]
-        let intra = max(0, charOffset - sentenceStart)
+        // 减去缩进的 2 个字符，因为 paragraphStarts 包含了缩进位置
+        // 而 TTS 需要从内容开始读
+        let intra = max(0, charOffset - sentenceStart - 2)
         
-        // 诊断：打印 paragraphStarts 中 sentenceIndex 附近的值
-        let rangeStart = max(0, sentenceIndex - 2)
-        let rangeEnd = min(starts.count, sentenceIndex + 3)
-        let nearbyStarts = (rangeStart..<rangeEnd).map { "\($0):\($0 == sentenceIndex ? "*" : "")\($0 == sentenceIndex ? "\(starts[$0])" : "\(starts[$0])")" }.joined(separator: ", ")
-        logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), intra=\(intra), nearbyStarts=[\(nearbyStarts)]", category: "TTS")
+        logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), sentenceStart=\(sentenceStart), intra=\(intra)", category: "TTS")
         
         let offsetInSentence = intra
         
