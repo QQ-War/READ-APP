@@ -63,7 +63,7 @@ struct SourceListView: View {
                     Task {
                         if let content = try? String(contentsOf: url) {
                             try? await apiService.saveBookSource(jsonContent: content)
-                            await viewModel.fetchSources()
+                            viewModel.fetchSources()
                         }
                     }
                 }
@@ -97,10 +97,10 @@ struct SourceListView: View {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let content = String(data: data, encoding: .utf8) {
                 try await apiService.saveBookSource(jsonContent: content)
-                await viewModel.fetchSources()
+                viewModel.fetchSources()
             }
         } catch {
-            await MainActor.run {
+            _ = await MainActor.run {
                 addResultMessage = "导入失败: \(error.localizedDescription)"
                 showAddResultAlert = true
             }
@@ -294,12 +294,12 @@ struct SourceListView: View {
         Task {
             do {
                 let kinds = try await apiService.fetchExploreKinds(bookSourceUrl: source.bookSourceUrl)
-                await MainActor.run {
+                _ = await MainActor.run {
                     exploreKinds[source.id] = kinds
                     loadingExploreIds.remove(source.id)
                 }
             } catch {
-                await MainActor.run {
+                _ = await MainActor.run {
                     loadingExploreIds.remove(source.id)
                 }
             }

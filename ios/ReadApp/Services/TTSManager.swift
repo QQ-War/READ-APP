@@ -61,7 +61,7 @@ class TTSManager: NSObject, ObservableObject {
     }
 
     private func removeCachedAudio(for index: Int) {
-        preloadStateQueue.sync { audioCache.removeValue(forKey: index) }
+        preloadStateQueue.sync { _ = audioCache.removeValue(forKey: index) }
     }
 
     private func clearAudioCache() {
@@ -609,7 +609,7 @@ class TTSManager: NSObject, ObservableObject {
         guard index < sentences.count else { return false }
         let sentence = sentences[index]
         if isPunctuationOnly(sentence) {
-            await MainActor.run { preloadedIndices.insert(index) }
+            _ = await MainActor.run { preloadedIndices.insert(index) }
             return true
         }
         guard let data = await fetchAudioData(for: sentence, isChapterTitle: false) else { return false }

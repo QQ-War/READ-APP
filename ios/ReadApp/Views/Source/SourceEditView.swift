@@ -288,6 +288,7 @@ struct SearchRuleView: View {
         .navigationTitle("搜索规则")
     }
     
+    @discardableResult
     private func ensureRule() -> SearchRule {
         if rule == nil { rule = SearchRule() }
         return rule!
@@ -310,6 +311,7 @@ struct BookInfoRuleView: View {
         .navigationTitle("详情页规则")
     }
     
+    @discardableResult
     private func ensureRule() -> BookInfoRule {
         if rule == nil { rule = BookInfoRule() }
         return rule!
@@ -332,6 +334,7 @@ struct TocRuleView: View {
         .navigationTitle("目录规则")
     }
     
+    @discardableResult
     private func ensureRule() -> TocRule {
         if rule == nil { rule = TocRule() }
         return rule!
@@ -354,6 +357,7 @@ struct ContentRuleView: View {
         .navigationTitle("正文规则")
     }
     
+    @discardableResult
     private func ensureRule() -> ContentRule {
         if rule == nil { rule = ContentRule() }
         return rule!
