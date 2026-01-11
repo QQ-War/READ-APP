@@ -883,7 +883,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if currentReadingMode == .vertical {
             // 避免因段落转折回翻上一页：仅在刚到新句且 offset=0 时确保可见，其它情况保持当前视图
             if ttsManager.currentSentenceOffset == 0 {
-                verticalVC?.ensureSentenceVisible(index: sentenceIndex)
+                let isVisible = verticalVC?.isSentenceVisible(index: sentenceIndex) ?? true
+                logger.log("TTS 垂直同步 -> sentence=\(sentenceIndex), isVisible=\(isVisible), userInteracting=\(isUserInteracting)", category: "TTS")
+                if !isVisible {
+                    verticalVC?.ensureSentenceVisible(index: sentenceIndex)
+                }
             }
         } else if currentReadingMode == .horizontal {
             // 方案：直接用 charOffset 判断是否在当前页，不要用 sentenceIndex 二次计算
@@ -901,28 +905,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                         }
                     }
                 }
-            }
-        }
-    }
-
-    private func syncHorizontalPageToTTS(sentenceIndex: Int, sentenceOffset: Int) { 
-        let starts = currentCache.paragraphStarts
-        guard sentenceIndex < starts.count else { return }
-        let totalOffset = starts[sentenceIndex] + sentenceOffset
-        
-        // 优化：如果当前页已经包含这个位置，不做任何处理，防止微小计算偏差导致回跳
-        let currentIndex = horizontalPageIndexForDisplay()
-        if currentIndex < currentCache.pages.count {
-            let currentRange = currentCache.pages[currentIndex].globalRange
-            if NSLocationInRange(totalOffset, currentRange) {
-                return
-            }
-        }
-
-        if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(totalOffset, $0.globalRange) }) {
-            if targetPage != currentPageIndex {
-                logger.log("TTS 横翻跳页 -> fromPage=\(currentPageIndex) toPage=\(targetPage) totalOffset=\(totalOffset), sentence=\(sentenceIndex)", category: "TTS")
-                updateHorizontalPage(to: targetPage, animated: true)
             }
         }
     }
