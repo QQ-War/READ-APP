@@ -529,10 +529,14 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.01 }) {
                     let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
                     let lineStart = line.characterRange.location
-                    return fragmentStart + lineStart
+                    let result = fragmentStart + lineStart
+                    LogManager.shared.log("Vertical getCurrentCharOffset: point.y=\(point.y), fragStart=\(fragmentStart), lineStart=\(lineStart), result=\(result)", category: "TTS")
+                    return result
                 }
             }
-            return s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+            let result = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+            LogManager.shared.log("Vertical getCurrentCharOffset (Fallback): result=\(result)", category: "TTS")
+            return result
         }
         return 0
     }
