@@ -74,8 +74,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
     private struct CharDetectionConfig {
         static let minHorizontalInset: CGFloat = 10
-        static let minVerticalOffset: CGFloat = 5
-        static let maxVerticalOffset: CGFloat = 18
+        static let minVerticalOffset: CGFloat = 2 // 从 5 调低到 2，提高精度
+        static let maxVerticalOffset: CGFloat = 12 // 从 18 调低到 12
     }
     private let viewportTopMargin: CGFloat = 10
     private var contentTopPadding: CGFloat { safeAreaTop + viewportTopMargin }
@@ -494,10 +494,15 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
     func isSentenceVisible(index: Int) -> Bool {
         guard index >= 0 && index < sentenceYOffsets.count else { return true }
-        let y = sentenceYOffsets[index] + contentTopPadding
+        let startY = sentenceYOffsets[index] + contentTopPadding
+        let endY = (index + 1 < sentenceYOffsets.count) ? (sentenceYOffsets[index+1] + contentTopPadding) : scrollView.contentSize.height
+        
         let cur = scrollView.contentOffset.y
         let vH = scrollView.bounds.height
-        return y >= cur - 20 && y <= cur + vH + 20
+        
+        // 修正判定逻辑：只要段落的任意一部分在可见区域内，或者包含当前视口顶部，就认为可见
+        // 允许 50pt 的缓冲，防止频繁重定位
+        return (startY <= cur + vH + 50) && (endY >= cur - 50)
     }
     func scrollToTop(animated: Bool) { scrollView.setContentOffset(.zero, animated: animated) }
     func scrollToBottom(animated: Bool) {
