@@ -67,10 +67,6 @@ struct TextKit2Paginator {
                         let fragmentStart = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
                         let lineStart = line.characterRange.location // relative to element
                         let calcOffset = fragmentStart + lineStart
-                        
-                        let logManager = LogManager.shared
-                        logManager.log("TextKit2Paginator DEBUG - currentY=\(currentY), fragMinY=\(f.layoutFragmentFrame.minY), relativeY=\(relativeY), fragStart=\(fragmentStart), lineStart=\(lineStart), calcOffset=\(calcOffset)", category: "TTS")
-                        
                         startOffset = calcOffset
                     } else {
                         // Fallback
