@@ -122,6 +122,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         scrollView.addGestureRecognizer(tap)
         
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
+        longPress.minimumPressDuration = 0.8
         longPress.delegate = self
         scrollView.addGestureRecognizer(longPress)
         
@@ -165,28 +166,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
            let te = f.textElement, let range = te.elementRange, 
            let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
             let txt = (store.attributedString.string as NSString).substring(with: r)
-            self.pendingSelectedText = txt
-            if #available(iOS 16.0, *) {
-                if let interaction = editMenuInteraction as? UIEditMenuInteraction {
-                    let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: g.location(in: view))
-                    interaction.presentEditMenu(with: configuration)
-                }
-            } else {
-                becomeFirstResponder()
-                let menu = UIMenuController.shared
-                menu.menuItems = [UIMenuItem(title: "添加净化规则", action: #selector(addToReplaceRule))]
-                menu.showMenu(from: view, rect: CGRect(origin: g.location(in: view), size: .zero))
-            }
+            // 直接触发，不再显示菜单
+            onAddReplaceRule?(txt)
         }
     }
 
     override var canBecomeFirstResponder: Bool { true }
-    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        return action == #selector(addToReplaceRule)
-    }
-    @objc private func addToReplaceRule() {
-        if let t = pendingSelectedText { onAddReplaceRule?(t) }
-    }
+
 
     @discardableResult
     func update(sentences: [String], nextSentences: [String]?, prevSentences: [String]?, title: String?, nextTitle: String?, prevTitle: String?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
@@ -987,12 +973,3 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
 }
 
-@available(iOS 16.0, *)
-extension VerticalTextViewController: UIEditMenuInteractionDelegate {
-    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
-        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
-            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
-        }
-        return UIMenu(children: [addAction] + suggestedActions)
-    }
-}

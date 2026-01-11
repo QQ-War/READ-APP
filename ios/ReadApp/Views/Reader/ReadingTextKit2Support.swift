@@ -226,6 +226,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         addGestureRecognizer(tap)
         
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
+        longPress.minimumPressDuration = 0.8
         longPress.delegate = self
         addGestureRecognizer(longPress)
         
@@ -257,28 +258,12 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
            let te = f.textElement, let range = te.elementRange,
            let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
             let txt = (store.attributedString.string as NSString).substring(with: r)
-            self.pendingSelectedText = txt
-            if #available(iOS 16.0, *) {
-                if let interaction = editMenuInteraction as? UIEditMenuInteraction {
-                    let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: pointInContent)
-                    interaction.presentEditMenu(with: configuration)
-                }
-            } else {
-                becomeFirstResponder()
-                let menu = UIMenuController.shared
-                menu.menuItems = [UIMenuItem(title: "添加净化规则", action: #selector(addToReplaceRule))]
-                menu.showMenu(from: self, rect: CGRect(origin: pointInContent, size: .zero))
-            }
+            // 直接触发，不再显示菜单
+            onAddReplaceRule?(txt)
         }
     }
 
     override var canBecomeFirstResponder: Bool { true }
-    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        return action == #selector(addToReplaceRule)
-    }
-    @objc private func addToReplaceRule() {
-        if let t = pendingSelectedText { onAddReplaceRule?(t) }
-    }
     
     override func draw(_ rect: CGRect) {
         guard let s = renderStore, let info = pageInfo else { return }
@@ -375,12 +360,3 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     }
 }
 
-@available(iOS 16.0, *)
-extension ReadContent2View: UIEditMenuInteractionDelegate {
-    func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration, suggestedActions: [UIMenuElement]) -> UIMenu? {
-        let addAction = UIAction(title: "添加净化规则") { [weak self] _ in
-            if let t = self?.pendingSelectedText { self?.onAddReplaceRule?(t) }
-        }
-        return UIMenu(children: [addAction] + suggestedActions)
-    }
-}
