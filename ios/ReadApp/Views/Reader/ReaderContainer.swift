@@ -458,6 +458,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         } else {
             guard currentChapterIndex < chapters.count else { return }
             let startPos = currentStartPosition()
+            
+            // 确保 TTS 起始位置在当前页内，如果不在则翻页
+            if currentReadingMode == .horizontal {
+                let currentPageRange = currentCache.pages[currentPageIndex].globalRange
+                if !NSLocationInRange(startPos.charOffset, currentPageRange) {
+                    if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(startPos.charOffset, $0.globalRange) }) {
+                        updateHorizontalPage(to: targetPage, animated: false)
+                    }
+                }
+            }
+            
             let ttsSentences = currentCache.contentSentences
             ttsManager.startReading(
                 text: currentCache.rawContent,
