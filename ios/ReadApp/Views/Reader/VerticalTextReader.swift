@@ -48,7 +48,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private let prevContentView = VerticalTextContentView()
     private let currentContentView = VerticalTextContentView()
     private let nextContentView = VerticalTextContentView() // 下一章拼接视图
-    private var editMenuInteraction: Any?
     private let switchHintLabel = UILabel()
     private var pendingSwitchDirection: Int = 0
     private var switchReady = false
@@ -100,7 +99,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var previousContentHeight: CGFloat = 0
     private var lastPrevContentHeight: CGFloat = 0
     private var lastPrevHasContent = false
-    private var pendingSelectedText: String?
     
     // 无限流无缝切换标记 (0: 无, 1: 下一章, -1: 上一章)
     private var pendingSeamlessSwitch: Int = 0
@@ -125,12 +123,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         longPress.minimumPressDuration = 0.8
         longPress.delegate = self
         scrollView.addGestureRecognizer(longPress)
-        
-        if #available(iOS 16.0, *) {
-            let interaction = UIEditMenuInteraction(delegate: self)
-            view.addInteraction(interaction)
-            editMenuInteraction = interaction
-        }
     }
     
     override func viewDidLayoutSubviews() {

@@ -206,8 +206,6 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     
     var horizontalInset: CGFloat = 16
     var onTapLocation: ((ReaderTapLocation) -> Void)?
-    var editMenuInteraction: Any?
-    var pendingSelectedText: String?
     
     // 兼容属性
     var onAddReplaceRule: ((String) -> Void)?
@@ -229,12 +227,6 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         longPress.minimumPressDuration = 0.8
         longPress.delegate = self
         addGestureRecognizer(longPress)
-        
-        if #available(iOS 16.0, *) {
-            let interaction = UIEditMenuInteraction(delegate: self)
-            addInteraction(interaction)
-            editMenuInteraction = interaction
-        }
     }
     
     required init?(coder: NSCoder) { fatalError() }
