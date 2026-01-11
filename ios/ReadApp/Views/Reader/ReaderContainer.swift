@@ -1037,9 +1037,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             if pageIndex < pageInfos.count {
                 let pageInfo = pageInfos[pageIndex]
                 charOffset = pageInfo.range.location
-                // 直接信任 pageInfo 中的 startSentenceIndex，不要二次计算
-                // 避免因 paragraphStarts 边界问题导致 sentenceIndex 不一致
-                sentenceIndex = pageInfo.startSentenceIndex
+                // 使用 pageInfo.range.location 找到正确的段落
+                // 而不是直接用 pageInfo.startSentenceIndex（可能因 paragraphStarts 不一致而错误）
+                sentenceIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? pageInfo.startSentenceIndex
             }
         } else if currentReadingMode == .vertical {
             charOffset = verticalVC?.getCurrentCharOffset() ?? 0
@@ -1049,14 +1049,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         // 边界检查
         sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
 
-        let sentenceStart = starts[sentenceIndex]
-        let intra = max(0, charOffset - sentenceStart)
-        
-        let pageIdx = horizontalPageIndexForDisplay()
-        let pageRangeStr = pageIdx < pageInfos.count ? "\(pageInfos[pageIdx].range.location)" : "N/A"
-        logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), sentenceStart=\(sentenceStart), intra=\(intra), prevStart=\(sentenceIndex > 0 ? starts[sentenceIndex-1] : -1), pageRangeLoc=\(pageRangeStr)", category: "TTS")
-        
-        let offsetInSentence = intra
+        // 使用 pageInfo.range.location 作为 charOffset
+        // 直接用这个值找到正确的段落，而不是依赖 paragraphStarts
+        let offsetInSentence = charOffset
         
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
