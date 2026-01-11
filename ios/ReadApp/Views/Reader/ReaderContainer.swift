@@ -1049,12 +1049,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         // 边界检查
         sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
 
-        // 使用 pageInfo.range.location 作为 charOffset
-        // 直接用这个值找到正确的段落，而不是依赖 paragraphStarts
-        let offsetInSentence = charOffset
+        let sentenceStart = starts[sentenceIndex]
+        let intra = max(0, charOffset - sentenceStart)
+        let offsetInSentence = intra
         
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
+        
         let visibleInfo = visibleTopSentenceInfo()
         let previewLines = previewSentences(from: sentenceIndex, limit: 2)
         let pageSnippet = horizontalPageStartSnippet(for: pageIdx, limit: 120)
