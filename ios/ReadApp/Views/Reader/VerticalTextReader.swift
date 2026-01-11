@@ -523,24 +523,29 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
     func getCurrentCharOffset() -> Int {
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
+        
+        // 避障偏移：根据字体大小动态计算，确保只读出至少显示了一大半的行
+        // 灵动岛遮挡已经在 safeAreaTop 中体现。我们要找的是在灵动岛下方且显示清晰的第一行。
+        let detectionOffset = lastFontSize * 0.8
+        
         let point = CGPoint(
             x: horizontalMarginForDetection,
-            y: scrollView.contentOffset.y - contentTopPadding + verticalDetectionOffset
+            y: scrollView.contentOffset.y + safeAreaTop + detectionOffset - contentTopPadding
         )
+        
         if let f = s.layoutManager.textLayoutFragment(for: point) {
             if #available(iOS 15.0, *) {
-                // 查找视觉上位于 point 处的具体行，而不是 Fragment 的第一行
+                // 查找视觉上位于 point 处的具体行
                 let relativeY = point.y - f.layoutFragmentFrame.minY
                 if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.01 }) {
                     let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
                     let lineStart = line.characterRange.location
                     let result = fragmentStart + lineStart
-                    LogManager.shared.log("Vertical getCurrentCharOffset: point.y=\(point.y), fragStart=\(fragmentStart), lineStart=\(lineStart), result=\(result)", category: "TTS")
+                    LogManager.shared.log("Vertical getCurrentCharOffset: point.y=\(point.y), detectionOffset=\(detectionOffset), result=\(result)", category: "TTS")
                     return result
                 }
             }
             let result = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
-            LogManager.shared.log("Vertical getCurrentCharOffset (Fallback): result=\(result)", category: "TTS")
             return result
         }
         return 0
