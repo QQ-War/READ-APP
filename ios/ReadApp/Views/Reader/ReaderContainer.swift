@@ -329,7 +329,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
                 let sentenceIdx = self.ttsManager.currentSentenceIndex
                 if self.currentReadingMode == .horizontal {
-                    self.syncHorizontalPageToTTS(sentenceIndex: sentenceIdx, sentenceOffset: self.ttsManager.currentSentenceOffset)
+                    // 使用 charOffset 直接定位
+                    if let targetPage = self.currentCache.pages.firstIndex(where: { NSLocationInRange(self.ttsManager.currentCharOffset, $0.globalRange) }) {
+                        self.updateHorizontalPage(to: targetPage, animated: false)
+                    }
                 } else {
                     self.verticalVC?.scrollToSentence(index: sentenceIdx, animated: false)
                 }
@@ -869,7 +872,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func syncTTSState() {
         if isMangaMode { return }
         let sentenceIndex = ttsManager.currentSentenceIndex
-        let sentenceOffset = ttsManager.currentSentenceOffset
         
         // 1. 垂直模式：局部高亮更新，避免全局刷新
         if currentReadingMode == .vertical { 
