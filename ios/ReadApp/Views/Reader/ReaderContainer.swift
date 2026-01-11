@@ -1052,7 +1052,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
         
-        logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), sentenceStart=\(sentenceStart), intra=\(intra), prevStart=\(sentenceIndex > 0 ? starts[sentenceIndex-1] : -1), pageRange=\(pageInfos[horizontalPageIndexForDisplay()].range)", category: "TTS")
+        let pageIdx = horizontalPageIndexForDisplay()
+        let pageRangeStr = pageIdx < pageInfos.count ? "\(pageInfos[pageIdx].range.location)" : "N/A"
+        logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), sentenceStart=\(sentenceStart), intra=\(intra), prevStart=\(sentenceIndex > 0 ? starts[sentenceIndex-1] : -1), pageRangeLoc=\(pageRangeStr)", category: "TTS")
         
         let offsetInSentence = intra
         

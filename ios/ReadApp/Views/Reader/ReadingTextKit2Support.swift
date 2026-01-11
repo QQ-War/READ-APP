@@ -80,6 +80,10 @@ struct TextKit2Paginator {
             
             let startSentenceIdx = paragraphStarts.lastIndex(where: { $0 <= startOffset }) ?? 0
             
+            // 诊断：打印 startOffset 和 pageInfo 的计算值
+            let logManager = LogManager.shared
+            logManager.log("TextKit2Paginator - page=\(pages.count), startOffset=\(startOffset), startSentenceIdx=\(startSentenceIdx)", category: "TTS")
+            
             // 查找本页理论结束位置附近的 Fragment
             let targetY = currentY + usableHeight
             // 往回一点点探测，获取位于底部的那个 Fragment
