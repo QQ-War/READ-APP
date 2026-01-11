@@ -66,7 +66,12 @@ struct TextKit2Paginator {
                     if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.01 }) {
                         let fragmentStart = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
                         let lineStart = line.characterRange.location // relative to element
-                        startOffset = fragmentStart + lineStart
+                        let calcOffset = fragmentStart + lineStart
+                        
+                        let logManager = LogManager.shared
+                        logManager.log("TextKit2Paginator DEBUG - currentY=\(currentY), fragMinY=\(f.layoutFragmentFrame.minY), relativeY=\(relativeY), fragStart=\(fragmentStart), lineStart=\(lineStart), calcOffset=\(calcOffset)", category: "TTS")
+                        
+                        startOffset = calcOffset
                     } else {
                         // Fallback
                         startOffset = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
@@ -79,10 +84,6 @@ struct TextKit2Paginator {
             if startOffset >= attributedStringLength(storage) { break }
             
             let startSentenceIdx = paragraphStarts.lastIndex(where: { $0 <= startOffset }) ?? 0
-            
-            // 诊断：打印 startOffset 和 pageInfo 的计算值
-            let logManager = LogManager.shared
-            logManager.log("TextKit2Paginator - page=\(pages.count), startOffset=\(startOffset), startSentenceIdx=\(startSentenceIdx)", category: "TTS")
             
             // 查找本页理论结束位置附近的 Fragment
             let targetY = currentY + usableHeight
