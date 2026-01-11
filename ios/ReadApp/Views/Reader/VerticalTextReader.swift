@@ -525,23 +525,29 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
         
         // 避障偏移：根据字体大小动态计算，确保只读出至少显示了一大半的行
-        // 灵动岛遮挡已经在 safeAreaTop 中体现。我们要找的是在灵动岛下方且显示清晰的第一行。
         let detectionOffset = lastFontSize * 0.8
+        
+        // 计算探测点在全局坐标系中的 Y 坐标
+        let globalY = scrollView.contentOffset.y + safeAreaTop + detectionOffset
+        
+        // 将全局坐标转换为当前章节视图 (currentContentView) 的局部坐标
+        // 在无限流模式下，currentContentView.frame.minY 可能不为 0（取决于前面是否有上一章）
+        let localY = globalY - currentContentView.frame.minY
         
         let point = CGPoint(
             x: horizontalMarginForDetection,
-            y: scrollView.contentOffset.y + safeAreaTop + detectionOffset - contentTopPadding
+            y: localY
         )
         
         if let f = s.layoutManager.textLayoutFragment(for: point) {
             if #available(iOS 15.0, *) {
-                // 查找视觉上位于 point 处的具体行
-                let relativeY = point.y - f.layoutFragmentFrame.minY
+                // 查找视觉上位于 localY 处的具体行
+                let relativeY = localY - f.layoutFragmentFrame.minY
                 if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.01 }) {
                     let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
                     let lineStart = line.characterRange.location
                     let result = fragmentStart + lineStart
-                    LogManager.shared.log("Vertical getCurrentCharOffset: point.y=\(point.y), detectionOffset=\(detectionOffset), result=\(result)", category: "TTS")
+                    LogManager.shared.log("Vertical getCurrentCharOffset: localY=\(localY), fragMinY=\(f.layoutFragmentFrame.minY), result=\(result)", category: "TTS")
                     return result
                 }
             }
