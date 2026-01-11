@@ -1058,7 +1058,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         let visibleInfo = visibleTopSentenceInfo()
         let previewLines = previewSentences(from: sentenceIndex, limit: 2)
-        let pageSnippet = horizontalPageStartSnippet(for: pageIdx, limit: 120)
+        let pageSnippet = horizontalPageStartSnippet(for: horizontalPageIndexForDisplay(), limit: 120)
         logTTSStartSnapshot(
             sentenceIndex: sentenceIndex,
             sentenceOffset: clampedOffset,

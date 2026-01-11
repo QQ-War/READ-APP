@@ -338,7 +338,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
             // 核心修复：处理跨页段落的缩进异常
             // 如果这个 fragment 的起始位置不是段落的物理起始位置 (paragraphStarts)，说明它是被切分的，需要移除首行缩进
             let fragmentOffset = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
-            let isParagraphStart = self.paragraphStarts.contains(fragmentOffset)
+            _ = self.paragraphStarts.contains(fragmentOffset)
             
             fragment.draw(at: frame.origin, in: ctx)
             return true
