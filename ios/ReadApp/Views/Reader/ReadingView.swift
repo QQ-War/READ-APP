@@ -27,6 +27,12 @@ struct ReadingView: View {
     @State private var timerRemaining: Int = 0
     @State private var timerActive = false
     @State private var sleepTimer: Timer? = nil
+    
+    // 辅助选择相关状态
+    @State private var showSelectionHelper = false
+    @State private var textToSelect = ""
+    @State private var showReplaceRuleEditor = false
+    @State private var finalPattern = ""
 
     init(book: Book) {
         self.book = book
@@ -95,6 +101,15 @@ struct ReadingView: View {
         }
         .sheet(isPresented: $showFontSettings) { 
             ReaderOptionsSheet(preferences: preferences, isMangaMode: isMangaMode) 
+        }
+        .sheet(isPresented: $showSelectionHelper) {
+            TextSelectionHelperSheet(originalText: textToSelect) { selected in
+                self.finalPattern = selected
+                self.showReplaceRuleEditor = true
+            }
+        }
+        .sheet(isPresented: $showReplaceRuleEditor) {
+            ReplaceRuleEditView(viewModel: replaceRuleViewModel, rule: ReplaceRule(name: "新规则", pattern: finalPattern))
         }
     }
 
