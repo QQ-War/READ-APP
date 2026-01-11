@@ -459,16 +459,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             guard currentChapterIndex < chapters.count else { return }
             let startPos = currentStartPosition()
             
-            // 确保 TTS 起始位置在当前页内，如果不在则翻页
-            if currentReadingMode == .horizontal {
-                let currentPageRange = currentCache.pages[currentPageIndex].globalRange
-                if !NSLocationInRange(startPos.charOffset, currentPageRange) {
-                    if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(startPos.charOffset, $0.globalRange) }) {
-                        updateHorizontalPage(to: targetPage, animated: false)
-                    }
-                }
-            }
-            
             let ttsSentences = currentCache.contentSentences
             ttsManager.startReading(
                 text: currentCache.rawContent,
@@ -1048,8 +1038,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             if pageIndex < pageInfos.count {
                 let pageInfo = pageInfos[pageIndex]
                 charOffset = pageInfo.range.location
-                sentenceIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? pageInfo.startSentenceIndex
-                sentenceIndex = max(0, min(sentenceIndex, currentCache.contentSentences.count - 1))
+                // 直接信任 pageInfo 中的 startSentenceIndex，不要二次计算
+                // 避免因 paragraphStarts 边界问题导致 sentenceIndex 不一致
+                sentenceIndex = pageInfo.startSentenceIndex
             }
         } else if currentReadingMode == .vertical {
             charOffset = verticalVC?.getCurrentCharOffset() ?? 0
