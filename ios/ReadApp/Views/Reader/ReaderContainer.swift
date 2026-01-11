@@ -1049,6 +1049,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart)
+        
+        logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), sentenceStart=\(sentenceStart), intra=\(intra)", category: "TTS")
+        
         let offsetInSentence = intra
         
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
