@@ -523,10 +523,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             y: scrollView.contentOffset.y - contentTopPadding + verticalDetectionOffset
         )
         if let f = s.layoutManager.textLayoutFragment(for: point) {
-            if #available(iOS 17, *) {
-                if let line = f.textLineFragments.first {
+            if #available(iOS 15.0, *) {
+                // 查找视觉上位于 point 处的具体行，而不是 Fragment 的第一行
+                let relativeY = point.y - f.layoutFragmentFrame.minY
+                if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.01 }) {
                     let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
-                    let lineStart = line.characterRange.location // 相对于 Fragment
+                    let lineStart = line.characterRange.location
                     return fragmentStart + lineStart
                 }
             }

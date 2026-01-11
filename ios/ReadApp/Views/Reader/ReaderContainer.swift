@@ -1043,6 +1043,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             }
         } else if currentReadingMode == .vertical {
             charOffset = verticalVC?.getCurrentCharOffset() ?? 0
+            // 垂直模式：直接使用 charOffset 作为 sentenceOffset
+            // getCurrentCharOffset() 返回的是当前可见区域顶部的行偏移
+            // 不需要通过 paragraphStarts 计算偏移
             sentenceIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? 0
         }
 
@@ -1052,6 +1055,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let sentenceStart = starts[sentenceIndex]
         let intra = max(0, charOffset - sentenceStart - paragraphIndentLength)
         logger.log("TTS 启动位置诊断 -> charOffset=\(charOffset), sentenceIndex=\(sentenceIndex), sentenceStart=\(sentenceStart), intra=\(intra)", category: "TTS")
+        
+        let offsetInSentence = intra
         
         let offsetInSentence = intra
         
