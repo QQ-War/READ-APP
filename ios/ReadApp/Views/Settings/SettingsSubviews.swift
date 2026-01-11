@@ -161,7 +161,7 @@ struct ReadingSettingsView: View {
             
             Section(header: Text("缓存管理")) {
                 NavigationLink(destination: CacheManagementView().environmentObject(apiService)) {
-                    Text("离线缓存管理")
+                    Label("离线缓存管理", systemImage: "archivebox")
                 }
             }
         }
@@ -256,26 +256,30 @@ struct TTSSettingsView: View {
                 }
                 
                 NavigationLink(destination: TTSSelectionView().environmentObject(apiService)) {
-                    HStack {
-                        Text("当前使用引擎")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if preferences.useSystemTTS {
-                            Text("系统内置")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        } else {
-                            if preferences.selectedTTSId.isEmpty && preferences.narrationTTSId.isEmpty {
-                                Text("未选择")
-                                    .foregroundColor(.orange)
-                                    .font(.caption)
-                            } else {
-                                Text(ttsSummary.isEmpty ? "已选择" : ttsSummary)
+                    Label {
+                        HStack {
+                            Text("当前使用引擎")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if preferences.useSystemTTS {
+                                Text("系统内置")
                                     .foregroundColor(.secondary)
                                     .font(.caption)
-                                    .lineLimit(1)
+                            } else {
+                                if preferences.selectedTTSId.isEmpty && preferences.narrationTTSId.isEmpty {
+                                    Text("未选择")
+                                        .foregroundColor(.orange)
+                                        .font(.caption)
+                                } else {
+                                    Text(ttsSummary.isEmpty ? "已选择" : ttsSummary)
+                                        .foregroundColor(.secondary)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                }
                             }
                         }
+                    } icon: {
+                        Image(systemName: "waveform")
                     }
                 }
             }
@@ -401,12 +405,16 @@ struct ContentSettingsView: View {
                 
                 if preferences.searchSourcesFromBookshelf {
                     NavigationLink(destination: PreferredSourcesView().environmentObject(apiService)) {
-                        HStack {
-                            Text("指定搜索源")
-                            Spacer()
-                            Text(preferences.preferredSearchSourceUrls.isEmpty ? "全部启用源" : "已选 \(preferences.preferredSearchSourceUrls.count) 个")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
+                        Label {
+                            HStack {
+                                Text("指定搜索源")
+                                Spacer()
+                                Text(preferences.preferredSearchSourceUrls.isEmpty ? "全部启用源" : "已选 \(preferences.preferredSearchSourceUrls.count) 个")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                            }
+                        } icon: {
+                            Image(systemName: "magnifyingglass")
                         }
                     }
                 }
@@ -414,7 +422,7 @@ struct ContentSettingsView: View {
 
             Section(header: Text("内容净化")) {
                 NavigationLink(destination: ReplaceRuleListView()) {
-                    Text("净化规则管理")
+                    Label("净化规则管理", systemImage: "broom")
                 }
             }
             

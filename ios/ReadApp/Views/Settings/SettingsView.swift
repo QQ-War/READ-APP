@@ -39,7 +39,7 @@ struct SettingsView: View {
                     Label("内容与净化", systemImage: "shield.checkered")
                 }
                 NavigationLink(destination: RssSourcesView()) {
-                    Label("订阅源管理", systemImage: "rss")
+                    Label("订阅源管理", systemImage: "newspaper.fill")
                 }
             }
 
