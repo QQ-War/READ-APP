@@ -501,6 +501,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 textProcessor: { [rules = replaceRuleViewModel?.rules] text in
                     ReadingTextProcessor.prepareText(text, rules: rules)
                 },
+                replaceRules: replaceRuleViewModel?.rules,
                 startAtSentenceIndex: startPos.sentenceIndex,
                 startAtSentenceOffset: startPos.sentenceOffset,
                 shouldSpeakChapterTitle: startPos.isAtChapterStart
@@ -1019,6 +1020,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             textProcessor: { [rules = replaceRuleViewModel?.rules] text in
                 ReadingTextProcessor.prepareText(text, rules: rules)
             },
+            replaceRules: replaceRuleViewModel?.rules,
             startAtSentenceIndex: startPos.sentenceIndex,
             startAtSentenceOffset: startPos.sentenceOffset,
             shouldSpeakChapterTitle: startPos.isAtChapterStart

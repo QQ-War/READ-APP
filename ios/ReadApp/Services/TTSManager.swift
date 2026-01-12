@@ -33,6 +33,7 @@ class TTSManager: NSObject, ObservableObject {
     private var coverArtwork: MPMediaItemArtwork?
     private var onChapterChange: ((Int) -> Void)?
     private var textProcessor: ((String) -> String)?
+    private var replaceRules: [ReplaceRule]?
     
     // Preload Cache
     private var audioCache: [Int: Data] = [: ]
@@ -253,7 +254,7 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
     
-    func startReading(text: String, chapters: [BookChapter], currentIndex: Int, bookUrl: String, bookSourceUrl: String?, bookTitle: String, coverUrl: String?, onChapterChange: @escaping (Int) -> Void, processedSentences: [String]? = nil, textProcessor: ((String) -> String)? = nil, startAtSentenceIndex: Int? = nil, startAtSentenceOffset: Int? = nil, shouldSpeakChapterTitle: Bool = true) {
+    func startReading(text: String, chapters: [BookChapter], currentIndex: Int, bookUrl: String, bookSourceUrl: String?, bookTitle: String, coverUrl: String?, onChapterChange: @escaping (Int) -> Void, processedSentences: [String]? = nil, textProcessor: ((String) -> String)? = nil, replaceRules: [ReplaceRule]? = nil, startAtSentenceIndex: Int? = nil, startAtSentenceOffset: Int? = nil, shouldSpeakChapterTitle: Bool = true) {
         self.chapters = chapters
         self.currentChapterIndex = currentIndex
         self.bookUrl = bookUrl
@@ -262,6 +263,7 @@ class TTSManager: NSObject, ObservableObject {
         self.bookCoverUrl = coverUrl
         self.onChapterChange = onChapterChange
         self.textProcessor = textProcessor
+        self.replaceRules = replaceRules
         self.allowChapterTitlePlayback = shouldSpeakChapterTitle
         
         loadCoverArtwork()
@@ -429,7 +431,7 @@ class TTSManager: NSObject, ObservableObject {
 
     private func splitTextIntoSentences(_ text: String) -> [String] {
         let chunkLimit = UserPreferences.shared.ttsSentenceChunkLimit
-        return ReadingTextProcessor.splitSentences(text, rules: ReplaceRuleService.shared.rules, chunkLimit: chunkLimit)
+        return ReadingTextProcessor.splitSentences(text, rules: self.replaceRules, chunkLimit: chunkLimit)
     }
 
     private func ttsId(for sentence: String, isChapterTitle: Bool = false) -> String? {

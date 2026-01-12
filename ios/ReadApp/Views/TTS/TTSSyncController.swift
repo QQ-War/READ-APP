@@ -12,6 +12,7 @@ struct TTSStartContext {
     let startPosition: ReadingPosition
     let onChapterChange: (Int) -> Void
     let textProcessor: ((String) -> String)?
+    let replaceRules: [ReplaceRule]?
 }
 
 final class TTSSyncController {
@@ -39,6 +40,7 @@ final class TTSSyncController {
             onChapterChange: ctx.onChapterChange,
             processedSentences: ctx.processedSentences,
             textProcessor: ctx.textProcessor,
+            replaceRules: ctx.replaceRules,
             startAtSentenceIndex: ctx.startPosition.sentenceIndex,
             startAtSentenceOffset: ctx.startPosition.sentenceOffset,
             shouldSpeakChapterTitle: ctx.startPosition.isAtChapterStart
