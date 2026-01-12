@@ -419,8 +419,22 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             }
         }
         
-        let highlightIdx = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
-        v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: readerSettings.fontSize, lineSpacing: readerSettings.lineSpacing, margin: readerSettings.pageHorizontalMargin, highlightIndex: highlightIdx, secondaryIndices: secondaryIndices, isPlaying: ttsManager.isPlaying)
+        var highlightIdx = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
+        var finalSecondaryIndices = secondaryIndices
+        
+        // 处理标题偏移导致的索引对齐问题
+        if let hIdx = highlightIdx, ttsManager.hasChapterTitleInSentences {
+            if ttsManager.isReadingChapterTitle {
+                highlightIdx = nil // 正在读标题时不显示正文高亮
+            } else {
+                highlightIdx = hIdx - 1
+            }
+            
+            // 同步处理预加载高亮索引
+            finalSecondaryIndices = Set(secondaryIndices.compactMap { $0 > 0 ? ($0 - 1) : nil })
+        }
+        
+        v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: readerSettings.fontSize, lineSpacing: readerSettings.lineSpacing, margin: readerSettings.pageHorizontalMargin, highlightIndex: highlightIdx, secondaryIndices: finalSecondaryIndices, isPlaying: ttsManager.isPlaying)
     }
 
 
@@ -878,7 +892,19 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         // 1. 垂直模式：局部高亮更新，避免全局刷新
         if currentReadingMode == .vertical { 
-            verticalVC?.setHighlight(index: sentenceIndex, secondaryIndices: Set(ttsManager.preloadedIndices), isPlaying: ttsManager.isPlaying)
+            var finalIdx: Int? = sentenceIndex
+            var secondaryIdxs = Set(ttsManager.preloadedIndices)
+            
+            if ttsManager.hasChapterTitleInSentences {
+                if ttsManager.isReadingChapterTitle {
+                    finalIdx = nil
+                } else {
+                    finalIdx = sentenceIndex - 1
+                }
+                secondaryIdxs = Set(ttsManager.preloadedIndices.compactMap { $0 > 0 ? ($0 - 1) : nil })
+            }
+            
+            verticalVC?.setHighlight(index: finalIdx, secondaryIndices: secondaryIdxs, isPlaying: ttsManager.isPlaying)
         }
 
         // 2. 视口跟随逻辑 (只有在非交互状态下执行)
@@ -895,12 +921,24 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 }
             }
         } else if currentReadingMode == .horizontal {
-            let sentenceIdx = ttsManager.currentSentenceIndex
+            // 处理标题偏移导致的索引对齐问题
+            if ttsManager.isReadingChapterTitle {
+                // 如果正在读标题，保持在第一页即可，不执行复杂的正文同步逻辑
+                if currentPageIndex != 0 {
+                    updateHorizontalPage(to: 0, animated: true)
+                }
+                return
+            }
+            
+            // 如果播放列表中包含标题，则正文句子的索引需要减 1
+            let bodySentenceIdx = ttsManager.hasChapterTitleInSentences ? (sentenceIndex - 1) : sentenceIndex
+            guard bodySentenceIdx >= 0 else { return }
+            
             let sentenceOffset = ttsManager.currentSentenceOffset
             let starts = currentCache.paragraphStarts
             
-            if sentenceIdx >= 0 && sentenceIdx < starts.count {
-                let realTimeOffset = starts[sentenceIdx] + sentenceOffset + paragraphIndentLength
+            if bodySentenceIdx < starts.count {
+                let realTimeOffset = starts[bodySentenceIdx] + sentenceOffset + paragraphIndentLength
                 
                 let currentIndex = horizontalPageIndexForDisplay()
                 if currentIndex < currentCache.pages.count {
@@ -908,7 +946,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     if !NSLocationInRange(realTimeOffset, currentRange) {
                         if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(realTimeOffset, $0.globalRange) }) {
                             if targetPage != currentPageIndex {
-                                logger.log("TTS 横翻跳页 -> fromPage=\(currentPageIndex) toPage=\(targetPage) realTimeOffset=\(realTimeOffset), sentence=\(sentenceIdx)", category: "TTS")
+                                logger.log("TTS 横翻跳页 -> fromPage=\(currentPageIndex) toPage=\(targetPage) realTimeOffset=\(realTimeOffset), bodySentence=\(bodySentenceIdx)", category: "TTS")
                                 updateHorizontalPage(to: targetPage, animated: true)
                             }
                         }
@@ -968,14 +1006,23 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if currentReadingMode == .vertical {
             return verticalVC?.isSentenceVisible(index: ttsManager.currentSentenceIndex) ?? true
         }
+        
+        // 标题特殊处理
+        if ttsManager.isReadingChapterTitle {
+            return currentPageIndex == 0
+        }
+        
         let pageInfos = currentCache.pageInfos ?? []
         let pageIndex = horizontalPageIndexForDisplay()
         guard pageIndex < pageInfos.count else { return true }
         let starts = currentCache.paragraphStarts
+        
         let sentenceIdx = ttsManager.currentSentenceIndex
-        guard sentenceIdx >= 0 && sentenceIdx < starts.count else { return false }
+        let bodySentenceIdx = ttsManager.hasChapterTitleInSentences ? (sentenceIdx - 1) : sentenceIdx
+        
+        guard bodySentenceIdx >= 0 && bodySentenceIdx < starts.count else { return false }
         let indentLen = 2
-        let totalOffset = starts[sentenceIdx] + ttsManager.currentSentenceOffset + indentLen
+        let totalOffset = starts[bodySentenceIdx] + ttsManager.currentSentenceOffset + indentLen
         return NSLocationInRange(totalOffset, pageInfos[pageIndex].range)
     }
 

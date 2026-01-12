@@ -13,39 +13,13 @@ class TTSManager: NSObject, ObservableObject {
     @Published var currentSentenceIndex = 0
     @Published var totalSentences = 0
     @Published var isLoading = false
+    @Published var isReadingChapterTitle = false
     @Published var preloadedIndices: Set<Int> = []
     @Published var currentSentenceDuration: TimeInterval = 0
     @Published var currentSentenceOffset: Int = 0
     @Published var currentCharOffset: Int = 0  // 直接使用传入的 charOffset，不做二次计算
     var currentBaseSentenceIndex: Int = 0
-    
-    private var audioPlayer: AVAudioPlayer?
-    private let speechSynthesizer = AVSpeechSynthesizer()
-    private var sentences: [String] = []
-    var currentChapterIndex: Int = 0
-    private var chapters: [BookChapter] = []
-    var bookUrl: String = ""
-    private var bookSourceUrl: String?
-    private var bookTitle: String = ""
-    private var bookCoverUrl: String?
-    private var coverArtwork: MPMediaItemArtwork?
-    private var onChapterChange: ((Int) -> Void)?
-    private var textProcessor: ((String) -> String)?
-    
-    // Preload Cache
-    private var audioCache: [Int: Data] = [:]
-    private var preloadQueue: [Int] = []
-    private var isPreloading = false
-    private let maxPreloadRetries = 3
-    private let maxConcurrentDownloads = 6
-    private let preloadStateQueue = DispatchQueue(label: "com.readapp.tts.preloadStateQueue")
-    
-    // Next Chapter Preload
-    private var nextChapterSentences: [String] = []
-    private var nextChapterCache: [Int: Data] = [:]
-    
-    private var isReadingChapterTitle = false
-    private var allowChapterTitlePlayback = true
+    var hasChapterTitleInSentences = false
     private var offsetTimer: Timer?
     private var playbackStartOffset: Int = 0
     
@@ -285,7 +259,16 @@ class TTSManager: NSObject, ObservableObject {
             if !sentences.contains(title) {
                 sentences.insert(title, at: 0)
                 isReadingChapterTitle = true
+                hasChapterTitleInSentences = true // 只有插入新行才视为存在位移
+            } else {
+                // 如果标题已经在正文中
+                if sentences.first == title {
+                    isReadingChapterTitle = true
+                }
+                hasChapterTitleInSentences = false // 没有插入新行，索引是 1:1 的，不需要位移补偿
             }
+        } else {
+            hasChapterTitleInSentences = false
         }
         
         totalSentences = sentences.count
@@ -798,27 +781,52 @@ class TTSManager: NSObject, ObservableObject {
     private func loadAndReadChapter() {
         audioPlayer?.stop(); audioPlayer = nil
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
+        
+        let processChapterContent: (String) -> Void = { [weak self] content in
+            guard let self = self else { return }
+            self.sentences = self.splitTextIntoSentences(content)
+            self.currentSentenceIndex = 0
+            self.currentSentenceOffset = 0
+            
+            self.allowChapterTitlePlayback = !self.chapters[self.currentChapterIndex].title.isEmpty
+            if self.allowChapterTitlePlayback {
+                let title = self.chapters[self.currentChapterIndex].title
+                if !self.sentences.contains(title) {
+                    self.sentences.insert(title, at: 0)
+                    self.hasChapterTitleInSentences = true
+                } else {
+                    self.hasChapterTitleInSentences = false
+                }
+                self.isReadingChapterTitle = true
+            } else {
+                self.hasChapterTitleInSentences = false
+                self.isReadingChapterTitle = false
+            }
+            
+            self.totalSentences = self.sentences.count
+            self.isPlaying = true
+            self.isPaused = false
+            self.isLoading = false
+            
+            if self.currentChapterIndex < self.chapters.count {
+                self.updateNowPlayingInfo(chapterTitle: self.chapters[self.currentChapterIndex].title)
+            }
+            self.checkAndPreloadNextChapter(force: true)
+            self.speakNextSentence()
+        }
+
         if !nextChapterSentences.isEmpty {
-            sentences = nextChapterSentences; totalSentences = sentences.count; currentSentenceIndex = 0; currentSentenceOffset = 0
+            let content = nextChapterSentences.joined(separator: "\n") // 重新组合以应用一致的分割逻辑
             preloadedIndices = moveNextChapterCacheToCurrent()
             nextChapterSentences.removeAll()
-            isPlaying = true; isPaused = false; isLoading = false
-            if currentChapterIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title) }
-            checkAndPreloadNextChapter(force: true)
-            allowChapterTitlePlayback = !chapters[currentChapterIndex].title.isEmpty
-            if allowChapterTitlePlayback { speakChapterTitle() } else { speakNextSentence() }
+            processChapterContent(content)
             return
         }
+        
         Task {
             if let content = try? await APIService.shared.fetchChapterContent(bookUrl: bookUrl, bookSourceUrl: bookSourceUrl, index: currentChapterIndex) {
                 await MainActor.run {
-                    sentences = splitTextIntoSentences(content); totalSentences = sentences.count; currentSentenceIndex = 0; currentSentenceOffset = 0
-                    clearAudioCache(); updatePreloadQueue([]); setIsPreloading(false); preloadedIndices.removeAll()
-                    isPlaying = true; isPaused = false
-                    if currentChapterIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title) }
-                    checkAndPreloadNextChapter(force: true)
-                    allowChapterTitlePlayback = !chapters[currentChapterIndex].title.isEmpty
-                    if allowChapterTitlePlayback { speakChapterTitle() } else { speakNextSentence() }
+                    processChapterContent(content)
                 }
             }
         }
