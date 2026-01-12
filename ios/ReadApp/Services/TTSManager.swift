@@ -415,8 +415,7 @@ class TTSManager: NSObject, ObservableObject {
         if let regex = try? NSRegularExpression(pattern: imgPattern, options: [.caseInsensitive]) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
         }
-        result = result.replacingOccurrences(of: #"__IMG__[^
-]+"#, with: "", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"__IMG__[^\s\n]+"#, with: "", options: .regularExpression)
         let htmlPattern = "<[^>]+>"
         if let regex = try? NSRegularExpression(pattern: htmlPattern, options: []) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
