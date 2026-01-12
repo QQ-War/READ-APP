@@ -129,6 +129,13 @@ internal class TtsController(private val viewModel: BookViewModel) {
         speakParagraph(index)
     }
 
+    private fun refreshStatusFlags() {
+        val title = viewModel.currentChapterTitle
+        val sentences = viewModel.currentSentences
+        val hasTitle = viewModel._keepPlaying.value && sentences.isNotEmpty() && sentences[0] == title
+        viewModel.isReadingChapterTitle = hasTitle && viewModel._currentParagraphIndex.value == 0
+    }
+
     private inner class ControllerListener : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             viewModel._isPlaying.value = isPlaying
@@ -167,16 +174,19 @@ internal class TtsController(private val viewModel: BookViewModel) {
             }
 
             viewModel._keepPlaying.value = true
-            viewModel.currentSentences = viewModel.parseParagraphs(content)
+            // 在 ViewModel 中处理好包含标题的句子列表
+            viewModel.currentSentences = viewModel.parseParagraphs(content, includeTitle = true)
             viewModel.currentParagraphs = viewModel.currentSentences
             viewModel._totalParagraphs.value = viewModel.currentSentences.size.coerceAtLeast(1)
+            
             val normalizedStart = if (startParagraphIndex in viewModel.currentSentences.indices) {
                 startParagraphIndex
             } else if (viewModel._currentParagraphIndex.value >= 0) {
-                viewModel._currentParagraphIndex.value
+                viewModel._currentParagraphIndex.value.coerceIn(viewModel.currentSentences.indices)
             } else {
                 0
             }
+            
             viewModel._currentParagraphIndex.value = normalizedStart
             val normalizedOffset = if (normalizedStart == startParagraphIndex) {
                 startOffsetInParagraph.coerceAtLeast(0)
@@ -195,23 +205,13 @@ internal class TtsController(private val viewModel: BookViewModel) {
             ReadAudioService.startService(viewModel.appContext)
             viewModel._isPaused.value = false
 
-            if (normalizedStart == 0 && normalizedOffset == 0) {
-                speakChapterTitle()
-            } else {
-                viewModel.isReadingChapterTitle = false
-                speakParagraph(normalizedStart)
-            }
-
+            refreshStatusFlags()
+            speakParagraph(normalizedStart)
             observeProgress()
         }
     }
 
     private fun playNextSeamlessly() {
-        if (viewModel.isReadingChapterTitle) {
-            viewModel.isReadingChapterTitle = false
-            speakParagraph(0)
-            return
-        }
         val nextIndex = viewModel._currentParagraphIndex.value + 1
         speakParagraph(nextIndex)
     }
@@ -233,6 +233,8 @@ internal class TtsController(private val viewModel: BookViewModel) {
         viewModel.viewModelScope.launch {
             viewModel._currentParagraphIndex.value = index
             viewModel._playbackProgress.value = 0f
+            
+            refreshStatusFlags()
 
             if (index < 0 || index >= viewModel.currentSentences.size) {
                 if (viewModel._keepPlaying.value && moveToNextChapterForTts()) {
@@ -461,36 +463,6 @@ internal class TtsController(private val viewModel: BookViewModel) {
         viewModel.isReadingChapterTitle = false
         viewModel._preloadedParagraphs.value = emptySet()
         viewModel.resetPlayback()
-    }
-
-    private fun speakChapterTitle() {
-        viewModel.viewModelScope.launch {
-            viewModel.isReadingChapterTitle = true
-            viewModel._currentParagraphIndex.value = -1
-            val title = viewModel.currentChapterTitle
-            if (title.isBlank()) {
-                playNextSeamlessly()
-                return@launch
-            }
-
-            if (viewModel._useSystemTts.value) {
-                speakWithSystemTts(title)
-            } else {
-                val audioRequest = viewModel.buildTtsAudioRequest(title, isChapterTitle = true)
-                if (audioRequest == null) {
-                    playNextSeamlessly()
-                    return@launch
-                }
-                val data = fetchAudioBytes(audioRequest)
-                if (data == null) {
-                    playNextSeamlessly()
-                    return@launch
-                }
-                val key = "title_${viewModel._selectedBook.value?.bookUrl}_${viewModel._currentChapterIndex.value}"
-                AudioCache.put(key, data)
-                playFromService(key)
-            }
-        }
     }
 
     private fun observeProgress() {

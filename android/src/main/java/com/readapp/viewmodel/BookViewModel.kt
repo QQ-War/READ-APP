@@ -907,10 +907,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun prefetchAdjacentChapters() = readerInteractor.prefetchAdjacentChapters()
     private suspend fun fetchChapterContentForIndex(index: Int, effectiveType: Int): String? =
         readerInteractor.fetchChapterContentForIndex(index, effectiveType)
-    internal fun parseParagraphs(content: String, chunkLimit: Int = ttsSentenceChunkLimit.value): List<String> {
+    internal fun parseParagraphs(content: String, chunkLimit: Int = ttsSentenceChunkLimit.value, includeTitle: Boolean = false): List<String> {
         val lines = content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
         val finalParagraphs = mutableListOf<String>()
         
+        if (includeTitle) {
+            val title = currentChapterTitle
+            if (title.isNotBlank()) {
+                if (lines.isEmpty() || lines[0] != title) {
+                    finalParagraphs.add(title)
+                }
+            }
+        }
+
         // 启发式判断：如果全文包含图片且文本较少，极可能是漫画，开启更强过滤
         val likelyManga = content.contains("__IMG__") && content.length < 5000
 
