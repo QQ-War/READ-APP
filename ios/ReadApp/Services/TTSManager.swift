@@ -20,6 +20,33 @@ class TTSManager: NSObject, ObservableObject {
     @Published var currentCharOffset: Int = 0  // 直接使用传入的 charOffset，不做二次计算
     var currentBaseSentenceIndex: Int = 0
     var hasChapterTitleInSentences = false
+    
+    private var audioPlayer: AVAudioPlayer?
+    private let speechSynthesizer = AVSpeechSynthesizer()
+    private var sentences: [String] = []
+    var currentChapterIndex: Int = 0
+    private var chapters: [BookChapter] = []
+    var bookUrl: String = ""
+    private var bookSourceUrl: String?
+    private var bookTitle: String = ""
+    private var bookCoverUrl: String?
+    private var coverArtwork: MPMediaItemArtwork?
+    private var onChapterChange: ((Int) -> Void)?
+    private var textProcessor: ((String) -> String)?
+    
+    // Preload Cache
+    private var audioCache: [Int: Data] = [: ]
+    private var preloadQueue: [Int] = []
+    private var isPreloading = false
+    private let maxPreloadRetries = 3
+    private let maxConcurrentDownloads = 6
+    private let preloadStateQueue = DispatchQueue(label: "com.readapp.tts.preloadStateQueue")
+    
+    // Next Chapter Preload
+    private var nextChapterSentences: [String] = []
+    private var nextChapterCache: [Int: Data] = [: ]
+    
+    private var allowChapterTitlePlayback = true
     private var offsetTimer: Timer?
     private var playbackStartOffset: Int = 0
     
@@ -259,13 +286,12 @@ class TTSManager: NSObject, ObservableObject {
             if !sentences.contains(title) {
                 sentences.insert(title, at: 0)
                 isReadingChapterTitle = true
-                hasChapterTitleInSentences = true // 只有插入新行才视为存在位移
+                hasChapterTitleInSentences = true
             } else {
-                // 如果标题已经在正文中
                 if sentences.first == title {
                     isReadingChapterTitle = true
                 }
-                hasChapterTitleInSentences = false // 没有插入新行，索引是 1:1 的，不需要位移补偿
+                hasChapterTitleInSentences = false
             }
         } else {
             hasChapterTitleInSentences = false
@@ -389,7 +415,8 @@ class TTSManager: NSObject, ObservableObject {
         if let regex = try? NSRegularExpression(pattern: imgPattern, options: [.caseInsensitive]) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
         }
-        result = result.replacingOccurrences(of: #"__IMG__[^\s\n]+"#, with: "", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"__IMG__[^
+]+"#, with: "", options: .regularExpression)
         let htmlPattern = "<[^>]+>"
         if let regex = try? NSRegularExpression(pattern: htmlPattern, options: []) {
             result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count), withTemplate: "")
@@ -478,7 +505,6 @@ class TTSManager: NSObject, ObservableObject {
             sentenceToSpeak = sentence
         }
         logger.log("TTS play snapshot - chapter=\(currentChapterIndex) sentenceIdx=\(currentSentenceIndex) sentenceOffset=\(currentSentenceOffset) text=\(sanitizedPreviewText(sentenceToSpeak, limit: 120))", category: "TTS")
-        // 注意：不在这里重置 currentSentenceOffset，由播放器开始后通过 Timer 或 Delegate 更新
         
         if sentenceToSpeak.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             currentSentenceIndex += 1
@@ -517,7 +543,6 @@ class TTSManager: NSObject, ObservableObject {
         // 处理章节标题插入导致的索引偏移
         var targetIndex = position.sentenceIndex
         if isReadingChapterTitle || (allowChapterTitlePlayback && !sentences.isEmpty && sentences[0] == chapters[currentChapterIndex].title) {
-            // 如果插入了章节标题，需要调整索引
             targetIndex += 1
         }
         
@@ -525,10 +550,7 @@ class TTSManager: NSObject, ObservableObject {
         currentSentenceIndex = targetIndex
         let sentenceLength = sentences[targetIndex].utf16.count
         currentSentenceOffset = max(0, min(position.sentenceOffset, sentenceLength))
-        currentCharOffset = position.charOffset  // 直接使用传入的 charOffset
-        
-        // 调试日志
-        logger.log("TTSManager update position - requested=\(position.sentenceIndex), adjusted=\(targetIndex), offset=\(currentSentenceOffset), charOffset=\(currentCharOffset)", category: "TTS")
+        currentCharOffset = position.charOffset
         
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
         
@@ -659,10 +681,8 @@ class TTSManager: NSObject, ObservableObject {
             guard let self = self, let player = self.audioPlayer, player.isPlaying, player.duration > 0 else { return }
             let progress = player.currentTime / player.duration
             let sentenceLen = self.sentences.indices.contains(self.currentSentenceIndex) ? self.sentences[self.currentSentenceIndex].utf16.count : 0
-            
             let remainingLen = max(0, sentenceLen - self.playbackStartOffset)
             let newOffset = self.playbackStartOffset + Int(Double(remainingLen) * progress)
-            
             if abs(newOffset - self.currentSentenceOffset) > 2 {
                 DispatchQueue.main.async { self.currentSentenceOffset = newOffset }
             }
@@ -816,7 +836,7 @@ class TTSManager: NSObject, ObservableObject {
         }
 
         if !nextChapterSentences.isEmpty {
-            let content = nextChapterSentences.joined(separator: "\n") // 重新组合以应用一致的分割逻辑
+            let content = nextChapterSentences.joined(separator: "\n")
             preloadedIndices = moveNextChapterCacheToCurrent()
             nextChapterSentences.removeAll()
             processChapterContent(content)
