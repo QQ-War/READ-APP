@@ -47,6 +47,7 @@ class TTSManager: NSObject, ObservableObject {
     private var isReadingChapterTitle = false
     private var allowChapterTitlePlayback = true
     private var offsetTimer: Timer?
+    private var playbackStartOffset: Int = 0
     
     // 后台保活
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -651,6 +652,7 @@ class TTSManager: NSObject, ObservableObject {
     private func playAudioWithData(data: Data) {
         do {
             stopKeepAlive()
+            playbackStartOffset = currentSentenceOffset
             audioPlayer = try AVAudioPlayer(data: data)
             audioPlayer?.delegate = self
             audioPlayer?.volume = 1.0
@@ -674,7 +676,10 @@ class TTSManager: NSObject, ObservableObject {
             guard let self = self, let player = self.audioPlayer, player.isPlaying, player.duration > 0 else { return }
             let progress = player.currentTime / player.duration
             let sentenceLen = self.sentences.indices.contains(self.currentSentenceIndex) ? self.sentences[self.currentSentenceIndex].utf16.count : 0
-            let newOffset = Int(Double(sentenceLen) * progress)
+            
+            let remainingLen = max(0, sentenceLen - self.playbackStartOffset)
+            let newOffset = self.playbackStartOffset + Int(Double(remainingLen) * progress)
+            
             if abs(newOffset - self.currentSentenceOffset) > 2 {
                 DispatchQueue.main.async { self.currentSentenceOffset = newOffset }
             }
