@@ -458,12 +458,7 @@ class TTSManager: NSObject, ObservableObject {
         let sentence = sentences[currentSentenceIndex]
         if isPunctuationOnly(sentence) { currentSentenceIndex += 1; speakNextSentence(); return }
         
-        // 更新是否正在读标题的状态
-        if currentSentenceIndex == 0 && chapters.indices.contains(currentChapterIndex) && sentence == chapters[currentChapterIndex].title {
-            isReadingChapterTitle = true
-        } else {
-            isReadingChapterTitle = false
-        }
+        refreshStatusFlags()
         
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
         let sentenceToSpeak: String
@@ -503,34 +498,6 @@ class TTSManager: NSObject, ObservableObject {
                 await MainActor.run { stop() }
             }
         }
-    }
-
-    func updateReadingPosition(to position: ReadingPosition, restartIfPlaying: Bool = true) {
-        guard position.chapterIndex == currentChapterIndex, !sentences.isEmpty else { return }
-        
-        isReady = false
-        // 处理章节标题插入导致的索引偏移
-        var targetIndex = position.sentenceIndex
-        if isReadingChapterTitle || (allowChapterTitlePlayback && !sentences.isEmpty && sentences[0] == chapters[currentChapterIndex].title) {
-            targetIndex += 1
-        }
-        
-        targetIndex = max(0, min(targetIndex, sentences.count - 1))
-        currentSentenceIndex = targetIndex
-        let sentenceLength = sentences[targetIndex].utf16.count
-        currentSentenceOffset = max(0, min(position.sentenceOffset, sentenceLength))
-        currentCharOffset = position.charOffset
-        
-        UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
-        
-        isReady = true
-        guard restartIfPlaying && isPlaying else { return }
-        audioPlayer?.stop()
-        audioPlayer = nil
-        if UserPreferences.shared.useSystemTTS {
-            if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
-        }
-        speakNextSentence()
     }
     
     private func speakWithSystemTTS(text: String) {
