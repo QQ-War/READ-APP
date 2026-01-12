@@ -9,6 +9,7 @@ class TTSManager: NSObject, ObservableObject {
     
     @Published var isPlaying = false
     @Published var isPaused = false
+    @Published var isReady = false
     @Published var currentSentenceIndex = 0
     @Published var totalSentences = 0
     @Published var isLoading = false
@@ -267,6 +268,7 @@ class TTSManager: NSObject, ObservableObject {
         preloadedIndices.removeAll()
         updatePreloadQueue([])
         setIsPreloading(false)
+        isReady = false
         clearNextChapterCache()
         nextChapterSentences.removeAll()
         
@@ -309,6 +311,7 @@ class TTSManager: NSObject, ObservableObject {
         isPaused = false
         activateAudioSession()
         
+        isReady = true
         speakNextSentence()
     }
 
@@ -526,6 +529,7 @@ class TTSManager: NSObject, ObservableObject {
     func updateReadingPosition(to position: ReadingPosition, restartIfPlaying: Bool = true) {
         guard position.chapterIndex == currentChapterIndex, !sentences.isEmpty else { return }
         
+        isReady = false
         // 处理章节标题插入导致的索引偏移
         var targetIndex = position.sentenceIndex
         if isReadingChapterTitle || (allowChapterTitlePlayback && !sentences.isEmpty && sentences[0] == chapters[currentChapterIndex].title) {
@@ -543,6 +547,8 @@ class TTSManager: NSObject, ObservableObject {
         logger.log("TTSManager update position - requested=\(position.sentenceIndex), adjusted=\(targetIndex), offset=\(currentSentenceOffset), charOffset=\(currentCharOffset)", category: "TTS")
         
         UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
+        
+        isReady = true
         guard restartIfPlaying && isPlaying else { return }
         audioPlayer?.stop()
         audioPlayer = nil
@@ -762,7 +768,7 @@ class TTSManager: NSObject, ObservableObject {
         audioPlayer?.stop()
         audioPlayer = nil
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
-        isPlaying = false; isPaused = false; currentSentenceIndex = 0; currentBaseSentenceIndex = 0; sentences = []
+        isPlaying = false; isPaused = false; isReady = false; currentSentenceIndex = 0; currentBaseSentenceIndex = 0; sentences = []
         currentSentenceOffset = 0
         isLoading = false; clearAudioCache(); updatePreloadQueue([]); setIsPreloading(false); clearNextChapterCache(); nextChapterSentences.removeAll()
         coverArtwork = nil; endBackgroundTask()

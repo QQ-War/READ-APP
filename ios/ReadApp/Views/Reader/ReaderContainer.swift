@@ -872,6 +872,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
     func syncTTSState() {
         if isMangaMode { return }
+        guard ttsManager.isReady else { return }
+        
         let sentenceIndex = ttsManager.currentSentenceIndex
         
         // 1. 垂直模式：局部高亮更新，避免全局刷新
