@@ -238,6 +238,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     func updateReplaceRules(_ rules: [ReplaceRule]) { 
         chapterBuilder?.updateReplaceRules(rules)
+        ttsManager.replaceRules = rules
         if !currentCache.rawContent.isEmpty && !isMangaMode { 
             reRenderCurrentContent()
         } else if !isMangaMode && currentReadingMode == .vertical {

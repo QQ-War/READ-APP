@@ -33,7 +33,7 @@ class TTSManager: NSObject, ObservableObject {
     private var coverArtwork: MPMediaItemArtwork?
     private var onChapterChange: ((Int) -> Void)?
     private var textProcessor: ((String) -> String)?
-    private var replaceRules: [ReplaceRule]?
+    var replaceRules: [ReplaceRule]?
     
     // Preload Cache
     private var audioCache: [Int: Data] = [: ]
@@ -50,6 +50,13 @@ class TTSManager: NSObject, ObservableObject {
     private var allowChapterTitlePlayback = true
     private var offsetTimer: Timer?
     private var playbackStartOffset: Int = 0
+
+    private func refreshStatusFlags() {
+        let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+        let hasTitle = allowChapterTitlePlayback && !sentences.isEmpty && sentences[0] == title
+        self.hasChapterTitleInSentences = hasTitle
+        self.isReadingChapterTitle = hasTitle && currentSentenceIndex == 0
+    }
     
     // 后台保活
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -319,6 +326,7 @@ class TTSManager: NSObject, ObservableObject {
         isPaused = false
         activateAudioSession()
         
+        refreshStatusFlags()
         isReady = true
         speakNextSentence()
     }
@@ -759,9 +767,44 @@ class TTSManager: NSObject, ObservableObject {
         loadAndReadChapter()
     }
     
+    func updateReadingPosition(to position: ReadingPosition, restartIfPlaying: Bool = true) {
+        guard position.chapterIndex == currentChapterIndex, !sentences.isEmpty else { return }
+        
+        isReady = false
+        // 使用通用的校准逻辑：如果 Index 0 是标题，正文进度需加 1
+        var targetIndex = position.sentenceIndex
+        let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+        if allowChapterTitlePlayback && !sentences.isEmpty && sentences[0] == title {
+            targetIndex += 1
+        }
+        
+        targetIndex = max(0, min(targetIndex, sentences.count - 1))
+        currentSentenceIndex = targetIndex
+        let sentenceLength = sentences[targetIndex].utf16.count
+        currentSentenceOffset = max(0, min(position.sentenceOffset, sentenceLength))
+        currentCharOffset = position.charOffset
+        
+        UserPreferences.shared.saveTTSProgress(bookUrl: bookUrl, chapterIndex: currentChapterIndex, sentenceIndex: currentSentenceIndex, sentenceOffset: currentSentenceOffset)
+        
+        refreshStatusFlags()
+        isReady = true
+        
+        guard restartIfPlaying && isPlaying else { return }
+        audioPlayer?.stop()
+        audioPlayer = nil
+        if UserPreferences.shared.useSystemTTS {
+            if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
+        }
+        speakNextSentence()
+    }
+    
     private func loadAndReadChapter() {
         audioPlayer?.stop(); audioPlayer = nil
         if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
+        
+        // 跨章时立即更新标题播放权限
+        let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+        self.allowChapterTitlePlayback = !title.isEmpty
         
         let processChapterContent: (String) -> Void = { [weak self] content in
             guard let self = self else { return }
@@ -769,20 +812,13 @@ class TTSManager: NSObject, ObservableObject {
             self.currentSentenceIndex = 0
             self.currentSentenceOffset = 0
             
-            let title = self.chapters[self.currentChapterIndex].title
-            self.allowChapterTitlePlayback = !title.isEmpty
-            
             if self.allowChapterTitlePlayback {
                 if self.sentences.first != title {
                     self.sentences.insert(title, at: 0)
                 }
-                self.hasChapterTitleInSentences = true
-                self.isReadingChapterTitle = true
-            } else {
-                self.hasChapterTitleInSentences = false
-                self.isReadingChapterTitle = false
             }
             
+            self.refreshStatusFlags()
             self.totalSentences = self.sentences.count
             self.isPlaying = true
             self.isPaused = false
@@ -803,8 +839,10 @@ class TTSManager: NSObject, ObservableObject {
             self.sentences = s
             self.currentSentenceIndex = 0
             self.currentSentenceOffset = 0
-            self.hasChapterTitleInSentences = self.allowChapterTitlePlayback
-            self.isReadingChapterTitle = self.allowChapterTitlePlayback
+            
+            // 确保标志位根据新章节内容校准
+            self.refreshStatusFlags()
+            
             self.totalSentences = self.sentences.count
             self.isPlaying = true
             self.isPaused = false
