@@ -893,16 +893,20 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 }
             }
         } else if currentReadingMode == .horizontal {
-            // 方案：直接用 charOffset 判断是否在当前页，不要用 sentenceIndex 二次计算
-            let ttsCharOffset = ttsManager.currentCharOffset
-            if ttsCharOffset > 0 {
+            let sentenceIdx = ttsManager.currentSentenceIndex
+            let sentenceOffset = ttsManager.currentSentenceOffset
+            let starts = currentCache.paragraphStarts
+            
+            if sentenceIdx >= 0 && sentenceIdx < starts.count {
+                let realTimeOffset = starts[sentenceIdx] + sentenceOffset + paragraphIndentLength
+                
                 let currentIndex = horizontalPageIndexForDisplay()
                 if currentIndex < currentCache.pages.count {
                     let currentRange = currentCache.pages[currentIndex].globalRange
-                    if !NSLocationInRange(ttsCharOffset, currentRange) {
-                        if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(ttsCharOffset, $0.globalRange) }) {
+                    if !NSLocationInRange(realTimeOffset, currentRange) {
+                        if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(realTimeOffset, $0.globalRange) }) {
                             if targetPage != currentPageIndex {
-                                logger.log("TTS 横翻跳页 -> fromPage=\(currentPageIndex) toPage=\(targetPage) charOffset=\(ttsCharOffset), sentence=\(sentenceIndex)", category: "TTS")
+                                logger.log("TTS 横翻跳页 -> fromPage=\(currentPageIndex) toPage=\(targetPage) realTimeOffset=\(realTimeOffset), sentence=\(sentenceIdx)", category: "TTS")
                                 updateHorizontalPage(to: targetPage, animated: true)
                             }
                         }
