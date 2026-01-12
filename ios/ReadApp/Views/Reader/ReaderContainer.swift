@@ -486,7 +486,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 bookTitle: book.name ?? "未知书名",
                 coverUrl: book.coverUrl,
                 onChapterChange: { [weak self] newIndex in
-                    DispatchQueue.main.async { self?.jumpToChapter(newIndex) }
+                    DispatchQueue.main.async {
+                        guard let self = self else { return }
+                        if self.currentReadingMode == .horizontal && newIndex == self.currentChapterIndex + 1 && !self.nextCache.pages.isEmpty {
+                            self.animateToAdjacentChapter(offset: 1, targetPage: 0)
+                        } else if self.currentReadingMode == .horizontal && newIndex == self.currentChapterIndex - 1 && !self.prevCache.pages.isEmpty {
+                            self.animateToAdjacentChapter(offset: -1, targetPage: self.prevCache.pages.count - 1)
+                        } else {
+                            self.jumpToChapter(newIndex)
+                        }
+                    }
                 },
                 processedSentences: ttsSentences,
                 textProcessor: { [rules = replaceRuleViewModel?.rules] text in
@@ -888,6 +897,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if isMangaMode { return }
         guard ttsManager.isReady else { return }
         
+        // 确保阅读器记录的章节索引与 TTS 一致，且缓存已更新为该章节，防止由于加载延迟导致页面跳回旧章第一页
+        guard ttsManager.currentChapterIndex == currentChapterIndex else { return }
+        if chapters.indices.contains(currentChapterIndex) {
+            guard currentCache.chapterUrl == chapters[currentChapterIndex].url else { return }
+        }
+        
         let sentenceIndex = ttsManager.currentSentenceIndex
         
         // 1. 垂直模式：局部高亮更新，避免全局刷新
@@ -989,7 +1004,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             bookTitle: book.name ?? "未知书名",
             coverUrl: book.coverUrl,
             onChapterChange: { [weak self] newIndex in
-                DispatchQueue.main.async { self?.jumpToChapter(newIndex) }
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    if self.currentReadingMode == .horizontal && newIndex == self.currentChapterIndex + 1 && !self.nextCache.pages.isEmpty {
+                        self.animateToAdjacentChapter(offset: 1, targetPage: 0)
+                    } else if self.currentReadingMode == .horizontal && newIndex == self.currentChapterIndex - 1 && !self.prevCache.pages.isEmpty {
+                        self.animateToAdjacentChapter(offset: -1, targetPage: self.prevCache.pages.count - 1)
+                    } else {
+                        self.jumpToChapter(newIndex)
+                    }
+                }
             },
             processedSentences: ttsSentences,
             textProcessor: { [rules = replaceRuleViewModel?.rules] text in
