@@ -280,21 +280,17 @@ class TTSManager: NSObject, ObservableObject {
             sentences = splitTextIntoSentences(text)
         }
         
-        // 索引统一：将标题作为 sentences[0]
+        // 索引统一：只要允许播放标题，标题就强制占领 Index 0
         if shouldSpeakChapterTitle && currentIndex < chapters.count {
             let title = chapters[currentIndex].title
-            if !sentences.contains(title) {
+            if sentences.first != title {
                 sentences.insert(title, at: 0)
-                isReadingChapterTitle = true
-                hasChapterTitleInSentences = true
-            } else {
-                if sentences.first == title {
-                    isReadingChapterTitle = true
-                }
-                hasChapterTitleInSentences = false
             }
+            isReadingChapterTitle = true
+            hasChapterTitleInSentences = true
         } else {
             hasChapterTitleInSentences = false
+            isReadingChapterTitle = false
         }
         
         totalSentences = sentences.count
@@ -432,11 +428,8 @@ class TTSManager: NSObject, ObservableObject {
     }
 
     private func splitTextIntoSentences(_ text: String) -> [String] {
-        let processed = textProcessor?(text) ?? removeSVGTags(text)
-        return processed
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        let chunkLimit = UserPreferences.shared.ttsSentenceChunkLimit
+        return ReadingTextProcessor.splitSentences(text, rules: ReplaceRuleService.shared.rules, chunkLimit: chunkLimit)
     }
 
     private func ttsId(for sentence: String, isChapterTitle: Bool = false) -> String? {
@@ -448,39 +441,6 @@ class TTSManager: NSObject, ObservableObject {
         return targetId.isEmpty ? nil : targetId
     }
 
-    private func speakChapterTitle() {
-        guard currentChapterIndex < chapters.count else { speakNextSentence(); return }
-        let title = chapters[currentChapterIndex].title
-        isReadingChapterTitle = true
-        if UserPreferences.shared.useSystemTTS {
-            speakWithSystemTTS(text: title)
-            return
-        }
-        if let cachedData = cachedAudio(for: -1) {
-            playAudioWithData(data: cachedData)
-            startPreloading()
-            return
-        }
-        startPreloading()
-        Task {
-                if let data = await fetchAudioData(for: title, isChapterTitle: true) {
-                    await MainActor.run {
-                        cacheAudio(data, for: -1)
-                        playAudioWithData(data: data)
-                        startPreloading()
-                        if currentChapterIndex < chapters.count {
-                            updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
-                        }
-                    }
-                } else {
-                await MainActor.run {
-                    isReadingChapterTitle = false
-                    speakNextSentence()
-                }
-            }
-        }
-    }
-    
     private func speakNextSentence() {
         guard isPlaying else { return }
         stopOffsetTimer()
@@ -514,7 +474,7 @@ class TTSManager: NSObject, ObservableObject {
         if UserPreferences.shared.useSystemTTS { speakWithSystemTTS(text: sentenceToSpeak); return }
         startPreloading()
         
-        let targetIdx = isReadingChapterTitle ? -1 : currentSentenceIndex
+        let targetIdx = currentSentenceIndex
         if let cachedData = cachedAudio(for: targetIdx) {
             playAudioWithData(data: cachedData); return
         }
@@ -737,24 +697,24 @@ class TTSManager: NSObject, ObservableObject {
     private func preloadNextChapter() {
         if UserPreferences.shared.useSystemTTS || !nextChapterSentences.isEmpty || currentChapterIndex >= chapters.count - 1 { return }
         let nextIdx = currentChapterIndex + 1
-        preloadNextChapterTitle(chapterIndex: nextIdx)
+        let title = chapters[nextIdx].title
+        
         Task {
             if let content = try? await APIService.shared.fetchChapterContent(bookUrl: bookUrl, bookSourceUrl: bookSourceUrl, index: nextIdx) {
                 await MainActor.run {
-                    nextChapterSentences = splitTextIntoSentences(content)
+                    var s = splitTextIntoSentences(content)
+                    // 预加载时也执行相同的索引对齐逻辑
+                    if !title.isEmpty {
+                        if s.first != title {
+                            s.insert(title, at: 0)
+                        }
+                    }
+                    self.nextChapterSentences = s
+                    
                     let count = min(max(UserPreferences.shared.ttsPreloadCount, 3), nextChapterSentences.count)
+                    // 从 0 开始预加载（包含标题）
                     for i in 0..<count { preloadNextChapterAudio(at: i) }
                 }
-            }
-        }
-    }
-    
-    private func preloadNextChapterTitle(chapterIndex: Int) {
-        if UserPreferences.shared.useSystemTTS || chapterIndex >= chapters.count || nextChapterCache[-1] != nil { return }
-        let title = chapters[chapterIndex].title
-        Task {
-            if let data = await fetchAudioData(for: title, isChapterTitle: true) {
-                await MainActor.run { cacheNextChapterAudio(data, for: -1) }
             }
         }
     }
@@ -807,15 +767,14 @@ class TTSManager: NSObject, ObservableObject {
             self.currentSentenceIndex = 0
             self.currentSentenceOffset = 0
             
-            self.allowChapterTitlePlayback = !self.chapters[self.currentChapterIndex].title.isEmpty
+            let title = self.chapters[self.currentChapterIndex].title
+            self.allowChapterTitlePlayback = !title.isEmpty
+            
             if self.allowChapterTitlePlayback {
-                let title = self.chapters[self.currentChapterIndex].title
-                if !self.sentences.contains(title) {
+                if self.sentences.first != title {
                     self.sentences.insert(title, at: 0)
-                    self.hasChapterTitleInSentences = true
-                } else {
-                    self.hasChapterTitleInSentences = false
                 }
+                self.hasChapterTitleInSentences = true
                 self.isReadingChapterTitle = true
             } else {
                 self.hasChapterTitleInSentences = false
@@ -835,10 +794,25 @@ class TTSManager: NSObject, ObservableObject {
         }
 
         if !nextChapterSentences.isEmpty {
-            let content = nextChapterSentences.joined(separator: "\n")
+            let s = nextChapterSentences
             preloadedIndices = moveNextChapterCacheToCurrent()
             nextChapterSentences.removeAll()
-            processChapterContent(content)
+            
+            self.sentences = s
+            self.currentSentenceIndex = 0
+            self.currentSentenceOffset = 0
+            self.hasChapterTitleInSentences = self.allowChapterTitlePlayback
+            self.isReadingChapterTitle = self.allowChapterTitlePlayback
+            self.totalSentences = self.sentences.count
+            self.isPlaying = true
+            self.isPaused = false
+            self.isLoading = false
+            
+            if self.currentChapterIndex < self.chapters.count {
+                self.updateNowPlayingInfo(chapterTitle: self.chapters[self.currentChapterIndex].title)
+            }
+            self.checkAndPreloadNextChapter(force: true)
+            self.speakNextSentence()
             return
         }
         
