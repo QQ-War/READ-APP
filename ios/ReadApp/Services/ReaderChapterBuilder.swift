@@ -78,7 +78,8 @@ final class ReaderChapterBuilder {
             paragraphStarts: [],
             chapterPrefixLen: 0,
             isFullyPaginated: false,
-            chapterUrl: chapterUrl
+            chapterUrl: chapterUrl,
+            anchorPageIndex: 0
         )
     }
 

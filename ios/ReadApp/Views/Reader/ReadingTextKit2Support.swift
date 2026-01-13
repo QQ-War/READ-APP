@@ -196,17 +196,6 @@ struct TextKit2Paginator {
         return NSRange(location: start, length: end - start)
     }
 }
-    
-    private static func attributedStringLength(_ storage: NSTextContentStorage) -> Int {
-        return storage.attributedString?.length ?? 0
-    }
-    
-    static func rangeFromTextRange(_ textRange: NSTextRange, in storage: NSTextContentStorage) -> NSRange? {
-        let start = storage.offset(from: storage.documentRange.location, to: textRange.location)
-        let end = storage.offset(from: storage.documentRange.location, to: textRange.endLocation)
-        return NSRange(location: start, length: end - start)
-    }
-}
 
 // MARK: - 渲染视图 (视口对齐版)
 class ReadContent2View: UIView, UIGestureRecognizerDelegate {
