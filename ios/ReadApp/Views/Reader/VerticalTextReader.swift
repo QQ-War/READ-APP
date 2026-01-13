@@ -365,7 +365,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         } else {
             // 非无限流：ContentSize 仅为当前章
             currentContentView.frame = CGRect(x: m, y: topPadding, width: s.layoutWidth, height: h1)
-            scrollView.contentSize = CGSize(width: view.bounds.width, height: topPadding + h1)
+            // 关键优化：增加 100px 底部余量，确保最后一章节的末尾也能滚到探测点
+            scrollView.contentSize = CGSize(width: view.bounds.width, height: topPadding + h1 + 100)
             
             // 预览内容放置在 100px 间距外
             if let ps = prevRenderStore {
@@ -573,8 +574,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
         
         // 探测点改进：使用 contentTopPadding (safeAreaTop + 10)
-        // 这样当 contentOffset 为 0 时，探测点正好是正文第一行
-        let detectionOffset: CGFloat = 2.0
+        // 避障偏移：使用字体大小的 20%，确保落在行内
+        let detectionOffset = max(2.0, lastFontSize * 0.2)
         let globalY = scrollView.contentOffset.y + contentTopPadding + detectionOffset
         let localY = globalY - currentContentView.frame.minY
         
@@ -591,12 +592,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                     let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
                     let lineStart = line.characterRange.location
                     result = fragmentStart + lineStart
-                    LogManager.shared.log("垂直模式获取精确Offset: localY=\(localY), lineStart=\(lineStart), result=\(result)", category: "ReaderProgress")
+                    LogManager.shared.log("垂直模式获取精确Offset: localY=\(localY), lineStart=\(lineStart), result=\(result), margin=\(lastMargin)", category: "ReaderProgress")
                 }
             }
             if result == 0 {
                 result = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
-                LogManager.shared.log("垂直模式获取片段Offset: localY=\(localY), result=\(result)", category: "ReaderProgress")
+                LogManager.shared.log("垂直模式获取片段Offset: localY=\(localY), result=\(result), margin=\(lastMargin)", category: "ReaderProgress")
             }
         }
         return result
@@ -605,7 +606,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if let yInContent = getYOffsetForCharOffset(o) {
             let absY = yInContent + currentContentView.frame.minY
             let vH = scrollView.bounds.height
-            let targetY = max(0, absY - safeAreaTop - 10)
+            // 目标 Y 坐标计算：确保 yInContent 刚好位于 contentTopPadding 处
+            let targetY = max(0, absY - contentTopPadding)
             LogManager.shared.log("垂直模式执行行级滚动: charOffset=\(o), yInContent=\(yInContent), absY=\(absY), targetY=\(targetY)", category: "ReaderProgress")
             scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - vH))), animated: animated)
         } else {

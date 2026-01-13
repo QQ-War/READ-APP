@@ -411,32 +411,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let prevTitle = (currentChapterIndex - 1 >= 0) ? chapters[currentChapterIndex - 1].title : nil
         
         // 始终尝试传递预加载内容。
-        // 在非无限流模式下，这能让用户在拉动边缘时看到上一章/下一章的“预览”，增强平滑感
         let nextSentences = nextCache.contentSentences.isEmpty ? nil : nextCache.contentSentences
         let prevSentences = prevCache.contentSentences.isEmpty ? nil : prevCache.contentSentences
 
-        if readerSettings.isInfiniteScrollEnabled {
-            let nextUrl = nextCache.chapterUrl
-            let prevUrl = prevCache.chapterUrl
-            let nextCount = nextCache.contentSentences.count
-            let prevCount = prevCache.contentSentences.count
-            if currentChapterIndex != lastLoggedCacheChapterIndex ||
-                nextUrl != lastLoggedNextUrl ||
-                prevUrl != lastLoggedPrevUrl ||
-                nextCount != lastLoggedNextCount ||
-                prevCount != lastLoggedPrevCount {
-                lastLoggedCacheChapterIndex = currentChapterIndex
-                lastLoggedNextUrl = nextUrl
-                lastLoggedPrevUrl = prevUrl
-                lastLoggedNextCount = nextCount
-                lastLoggedPrevCount = prevCount
-                _ = nextUrl
-                _ = prevUrl
-                _ = nextCount
-                _ = prevCount
-            }
-        }
-        
         var highlightIdx = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
         var finalSecondaryIndices = secondaryIndices
         
@@ -447,12 +424,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             } else {
                 highlightIdx = hIdx - 1
             }
-            
-            // 同步处理预加载高亮索引
             finalSecondaryIndices = Set(secondaryIndices.compactMap { $0 > 0 ? ($0 - 1) : nil })
         }
         
-        v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: readerSettings.fontSize, lineSpacing: readerSettings.lineSpacing, margin: readerSettings.pageHorizontalMargin, highlightIndex: highlightIdx, secondaryIndices: finalSecondaryIndices, isPlaying: ttsManager.isPlaying)
+        // 统一边距：使用与水平模式一致的 currentLayoutSpec.sideMargin
+        let unifiedMargin = currentLayoutSpec.sideMargin
+        v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: readerSettings.fontSize, lineSpacing: readerSettings.lineSpacing, margin: unifiedMargin, highlightIndex: highlightIdx, secondaryIndices: finalSecondaryIndices, isPlaying: ttsManager.isPlaying)
     }
 
 
