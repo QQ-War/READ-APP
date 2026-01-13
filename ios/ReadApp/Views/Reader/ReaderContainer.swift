@@ -227,31 +227,39 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     }
                 }
             }    
-        func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
-        func updateSettings(_ settings: ReaderSettingsStore) {
-            let oldSettings = self.readerSettings!
-            self.readerSettings = settings
-            chapterBuilder?.updateSettings(settings)
-            if let v = verticalVC, v.isInfiniteScrollEnabled != settings.isInfiniteScrollEnabled {
-                v.isInfiniteScrollEnabled = settings.isInfiniteScrollEnabled
-                if !isMangaMode && currentReadingMode == .vertical {
+            func updateSettings(_ settings: ReaderSettingsStore) {
+                let oldSettings = self.readerSettings!
+                self.readerSettings = settings
+                chapterBuilder?.updateSettings(settings)
+                
+                // 关键改进：在任何设置更改（特别是无限滚动切换）之前，先捕获当前的偏移量
+                let currentOffset = getCurrentReadingCharOffset()
+                logger.log("设置更新触发: offset=\(currentOffset), 无限滚动: \(oldSettings.isInfiniteScrollEnabled) -> \(settings.isInfiniteScrollEnabled)", category: "ReaderProgress")
+        
+                if let v = verticalVC, v.isInfiniteScrollEnabled != settings.isInfiniteScrollEnabled {
+                    v.isInfiniteScrollEnabled = settings.isInfiniteScrollEnabled
+                    if !isMangaMode && currentReadingMode == .vertical {
+                        updateVerticalAdjacent()
+                    }
+                }
+                
+                if (oldSettings.fontSize != settings.fontSize || oldSettings.lineSpacing != settings.lineSpacing) && !isMangaMode {
+                    if currentReadingMode == .horizontal {
+                        reRenderCurrentContent(anchorOffset: currentOffset)
+                    } else {
+                        reRenderCurrentContent()
+                    }
+                } else if !isMangaMode && currentReadingMode == .vertical {
                     updateVerticalAdjacent()
                 }
-            }
-            if (oldSettings.fontSize != settings.fontSize || oldSettings.lineSpacing != settings.lineSpacing) && !isMangaMode {
-                // 排版参数变化，需重新分页。
-                // 如果是水平模式，以当前进度为锚点
-                if currentReadingMode == .horizontal {
-                    let offset = getCurrentReadingCharOffset()
-                    reRenderCurrentContent(anchorOffset: offset)
-                } else {
-                    reRenderCurrentContent()
+                
+                // 设置更新后，针对垂直模式强制重对齐一次
+                if currentReadingMode == .vertical && !isMangaMode {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                        self?.scrollToCharOffset(currentOffset, animated: false)
+                    }
                 }
-            } else if !isMangaMode && currentReadingMode == .vertical {
-                updateVerticalAdjacent()
-            }
-        }
-        func updateReplaceRules(_ rules: [ReplaceRule]) { 
+            }        func updateReplaceRules(_ rules: [ReplaceRule]) { 
             chapterBuilder?.updateReplaceRules(rules)
             ttsManager.replaceRules = rules
             if !currentCache.rawContent.isEmpty && !isMangaMode { 

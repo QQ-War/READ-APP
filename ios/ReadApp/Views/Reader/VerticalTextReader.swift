@@ -270,6 +270,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                         LogManager.shared.log("无限流内容补偿: displacement=\(displacement), offset \(oldOffset) -> \(newOffset)", category: "ReaderProgress")
                         scrollView.contentOffset.y = newOffset 
                     }
+                } else if modeChanged {
+                    // 仅由于模式切换（非无限->无限）导致的布局变化，强制刷新当前 contentOffset 触发一次校验
+                    let newOffset = oldOffset + (currentContentView.frame.minY - oldCurrY)
+                    LogManager.shared.log("由于模式切换进入无限流: offset \(oldOffset) -> \(newOffset)", category: "ReaderProgress")
+                    scrollView.contentOffset.y = newOffset
                 }
             } else if modeChanged && !isInfiniteScrollEnabled {
                 // 从无限流切回普通模式
