@@ -90,7 +90,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var pendingRelocationOffset: Int?
     
     private var currentLayoutSpec: ReaderLayoutSpec {
-        // 安全检查：如果 readerSettings 尚未准备好，返回默认 Spec
         let sideMargin = (readerSettings != nil) ? (readerSettings.pageHorizontalMargin + 8) : 28
         return ReaderLayoutSpec(
             topInset: max(safeAreaTop, view.safeAreaInsets.top) + 15,
@@ -131,6 +130,19 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     private var lastChapterSwitchTime: TimeInterval = 0
     private let chapterSwitchCooldown: TimeInterval = 1.0
+    
+    private var pendingTTSPositionSync = false
+    private var prefetchedMangaNextIndex: Int?
+    private var prefetchedMangaNextContent: String?
+    private var suppressTTSFollowUntil: TimeInterval = 0
+    private var paragraphIndentLength: Int = 2
+    private var verticalDetectionOffset: CGFloat = 20
+
+    private var visibleHorizontalPageIndex: Int? {
+        guard let pageVC = horizontalVC?.viewControllers?.first as? PageContentViewController else { return nil }
+        guard pageVC.chapterOffset == 0 else { return nil }
+        return pageVC.pageIndex
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -504,15 +516,114 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         mangaVC?.update(urls: currentCache.contentSentences)
     }
     
-    func syncTTSState() {}
-    func syncTTSReadingPositionIfNeeded() {}
-    func consumePrefetchedMangaContent(for index: Int) -> String? { return nil }
-    func resetMangaPrefetchedContent() {}
-    private func currentStartPosition() -> (sentenceIndex: Int, sentenceOffset: Int, isAtChapterStart: Bool) { return (0, 0, true) }
-    private func safeToggleMenu() { onToggleMenu?() }
-    private func notifyUserInteractionStarted() {}
-    private func notifyUserInteractionEnded() {}
-    private func finalizeUserInteraction() {}
+    // MARK: - TTS Support
+    func syncTTSReadingPositionIfNeeded() {
+        guard pendingTTSPositionSync else { return }
+        pendingTTSPositionSync = false
+        guard let bookUrl = book.bookUrl, ttsManager.bookUrl == bookUrl else { return }
+        let position = currentStartPosition()
+        ttsManager.updateReadingPosition(to: position)
+    }
+
+    func handleUserScrollCatchUp() {
+        guard pendingTTSPositionSync else { return }
+        pendingTTSPositionSync = false
+        guard let bookUrl = book.bookUrl, ttsManager.bookUrl == bookUrl else { return }
+        guard ttsManager.isPlaying && !ttsManager.isPaused else { return }
+        if !isTTSPositionInCurrentPage() { restartTTSFromCurrentPageStart() } else { syncTTSState() }
+    }
+
+    func syncTTSState() {
+        if isMangaMode { return }
+        guard ttsManager.isReady && ttsManager.currentChapterIndex == currentChapterIndex else { return }
+        if chapters.indices.contains(currentChapterIndex) {
+            guard currentCache.chapterUrl == chapters[currentChapterIndex].url else { return }
+        }
+        let sentenceIndex = ttsManager.currentSentenceIndex
+        if currentReadingMode == .vertical { 
+            var finalIdx: Int? = sentenceIndex
+            var secondaryIdxs = Set(ttsManager.preloadedIndices)
+            if ttsManager.hasChapterTitleInSentences {
+                finalIdx = ttsManager.isReadingChapterTitle ? nil : (sentenceIndex - 1)
+                secondaryIdxs = Set(ttsManager.preloadedIndices.compactMap { $0 > 0 ? ($0 - 1) : nil })
+            }
+            verticalVC?.setHighlight(index: finalIdx, secondaryIndices: secondaryIdxs, isPlaying: ttsManager.isPlaying)
+        }
+        let now = Date().timeIntervalSince1970
+        guard !isUserInteracting, ttsManager.isPlaying, now >= suppressTTSFollowUntil else { return }
+        if currentReadingMode == .vertical {
+            verticalVC?.ensureSentenceVisible(index: sentenceIndex)
+        } else if currentReadingMode == .horizontal {
+            if ttsManager.isReadingChapterTitle { if currentPageIndex != 0 { updateHorizontalPage(to: 0, animated: true) }; return }
+            let bodySentenceIdx = ttsManager.hasChapterTitleInSentences ? (sentenceIndex - 1) : sentenceIndex
+            guard bodySentenceIdx >= 0 else { return }
+            let starts = currentCache.paragraphStarts
+            if bodySentenceIdx < starts.count {
+                let realTimeOffset = starts[bodySentenceIdx] + ttsManager.currentSentenceOffset + paragraphIndentLength
+                let currentIndex = horizontalPageIndexForDisplay()
+                if currentIndex < currentCache.pages.count {
+                    if !NSLocationInRange(realTimeOffset, currentCache.pages[currentIndex].globalRange) {
+                        if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(realTimeOffset, $0.globalRange) }) {
+                            if targetPage != currentPageIndex { updateHorizontalPage(to: targetPage, animated: true) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func isTTSPositionInCurrentPage() -> Bool {
+        guard ttsManager.currentChapterIndex == currentChapterIndex else { return false }
+        if currentReadingMode == .vertical { return verticalVC?.isSentenceVisible(index: ttsManager.currentSentenceIndex) ?? true }
+        if ttsManager.isReadingChapterTitle { return currentPageIndex == 0 }
+        let pageIndex = horizontalPageIndexForDisplay()
+        guard pageIndex < (currentCache.pageInfos?.count ?? 0) else { return true }
+        let starts = currentCache.paragraphStarts
+        let bodySentenceIdx = ttsManager.hasChapterTitleInSentences ? (ttsManager.currentSentenceIndex - 1) : ttsManager.currentSentenceIndex
+        guard bodySentenceIdx >= 0 && bodySentenceIdx < starts.count else { return false }
+        let totalOffset = starts[bodySentenceIdx] + ttsManager.currentSentenceOffset + paragraphIndentLength
+        return NSLocationInRange(totalOffset, currentCache.pages[pageIndex].globalRange)
+    }
+
+    private func restartTTSFromCurrentPageStart() {
+        guard currentChapterIndex < chapters.count else { return }
+        let startPos = currentStartPosition()
+        ttsManager.startReading(text: currentCache.rawContent, chapters: chapters, currentIndex: currentChapterIndex, bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, bookTitle: book.name ?? "未知", coverUrl: book.coverUrl, onChapterChange: { [weak self] in self?.jumpToChapter($0) }, processedSentences: currentCache.contentSentences, textProcessor: { ReadingTextProcessor.prepareText($0, rules: self.replaceRuleViewModel?.rules) }, replaceRules: replaceRuleViewModel?.rules, startAtSentenceIndex: startPos.sentenceIndex, startAtSentenceOffset: startPos.sentenceOffset, shouldSpeakChapterTitle: startPos.isAtChapterStart)
+    }
+
+    private func currentStartPosition() -> ReadingPosition {
+        let starts = currentCache.paragraphStarts
+        guard !starts.isEmpty else { return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: 0, sentenceOffset: 0, charOffset: 0) }
+        var charOffset = 0
+        if currentReadingMode == .horizontal {
+            let idx = horizontalPageIndexForDisplay()
+            if idx < (currentCache.pageInfos?.count ?? 0) { charOffset = currentCache.pageInfos?[idx].range.location ?? 0 }
+        } else { charOffset = verticalVC?.getCurrentCharOffset() ?? 0 }
+        let sentenceIndex = max(0, min(starts.lastIndex(where: { $0 <= charOffset }) ?? 0, currentCache.contentSentences.count - 1))
+        let offsetInSentence = max(0, charOffset - starts[sentenceIndex] - paragraphIndentLength)
+        return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: min(currentCache.contentSentences[sentenceIndex].utf16.count, offsetInSentence), charOffset: charOffset)
+    }
+
+    private func horizontalPageIndexForDisplay() -> Int {
+        if let visible = visibleHorizontalPageIndex, visible >= 0, visible < currentCache.pages.count { return visible }
+        return currentPageIndex
+    }
+
+    private func notifyUserInteractionStarted() {
+        isUserInteracting = true; pendingTTSPositionSync = true
+        suppressTTSFollowUntil = Date().timeIntervalSince1970 + (readerSettings?.ttsFollowCooldown ?? 5.0)
+        ttsSyncCoordinator?.userInteractionStarted()
+    }
+    private func notifyUserInteractionEnded() {
+        suppressTTSFollowUntil = Date().timeIntervalSince1970 + (readerSettings?.ttsFollowCooldown ?? 5.0)
+        ttsSyncCoordinator?.scheduleCatchUp(delay: readerSettings?.ttsFollowCooldown ?? 5.0)
+    }
+    func finalizeUserInteraction() { isUserInteracting = false }
+    func consumePrefetchedMangaContent(for index: Int) -> String? {
+        guard prefetchedMangaNextIndex == index else { return nil }
+        let c = prefetchedMangaNextContent; prefetchedMangaNextIndex = nil; prefetchedMangaNextContent = nil; return c
+    }
+    func resetMangaPrefetchedContent() { nextCache = .empty; prefetchedMangaNextIndex = nil; prefetchedMangaNextContent = nil }
 }
 
 class PageContentViewController: UIViewController {
