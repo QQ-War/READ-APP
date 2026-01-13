@@ -606,9 +606,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if let yInContent = getYOffsetForCharOffset(o) {
             let absY = yInContent + currentContentView.frame.minY
             let vH = scrollView.bounds.height
-            // 目标 Y 坐标计算：确保 yInContent 刚好位于 contentTopPadding 处
+            // 目标 Y 坐标计算：确保 yInContent 刚好位于 contentTopPadding 处 (safeAreaTop + 10)
             let targetY = max(0, absY - contentTopPadding)
-            LogManager.shared.log("垂直模式执行行级滚动: charOffset=\(o), yInContent=\(yInContent), absY=\(absY), targetY=\(targetY)", category: "ReaderProgress")
+            LogManager.shared.log("垂直模式执行行级滚动: charOffset=\(o), yInContent=\(yInContent), absY=\(absY), targetY=\(targetY), topPadding=\(contentTopPadding)", category: "ReaderProgress")
             scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - vH))), animated: animated)
         } else {
             let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0

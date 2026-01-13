@@ -159,9 +159,12 @@ struct TextKit2Paginator {
             if #available(iOS 15.0, *) {
                 for line in endFragment.textLineFragments {
                     let lineMaxY = endFragment.layoutFragmentFrame.minY + line.typographicBounds.maxY
+                    // 核心修复：只考虑在本页范围内且在起始点之后的行
                     if lineMaxY <= targetY + 0.01 {
-                        lastLineEndOffset = fragmentStartOffset + line.characterRange.upperBound
-                        lastLineMaxY = lineMaxY
+                        if lineMaxY > fromY + 0.01 {
+                            lastLineEndOffset = fragmentStartOffset + line.characterRange.upperBound
+                            lastLineMaxY = lineMaxY
+                        }
                     } else { break }
                 }
             }
@@ -204,12 +207,9 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     var pageIndex: Int?
     var onVisibleFragments: ((Int, [String]) -> Void)?
     var renderStore: TextKit2RenderStore?
-    var pageInfo: TK2PageInfo? {
+    var pageInfo: TK22PageInfo? {
         didSet {
             guard let info = pageInfo else { return }
-            // 核心逻辑修改：直接移动 View 的视口 (Bounds) 去找文字
-            // 让 Bounds 的原点 y 对应 (文字起始y - 顶部留白)
-            // 这样，yOffset 处的文字就会正好绘制在 topInset 处
             let viewportY = info.yOffset - info.contentInset
             self.bounds.origin = CGPoint(x: 0, y: viewportY)
             setNeedsDisplay()
@@ -219,7 +219,6 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     var horizontalInset: CGFloat = 16
     var onTapLocation: ((ReaderTapLocation) -> Void)?
     
-    // 兼容属性
     var onAddReplaceRule: ((String) -> Void)?
     var highlightIndex: Int? { didSet { setNeedsDisplay() } }
     var secondaryIndices: Set<Int> = [] { didSet { setNeedsDisplay() } }
@@ -262,7 +261,6 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
            let te = f.textElement, let range = te.elementRange,
            let r = TextKit2Paginator.rangeFromTextRange(range, in: store.contentStorage) {
             let txt = (store.attributedString.string as NSString).substring(with: r)
-            // 直接触发，不再显示菜单
             onAddReplaceRule?(txt)
         }
     }
@@ -275,14 +273,12 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         
         ctx.saveGState()
         
-        // 增加裁剪区域，防止文字或高亮溢出到 topInset 或 bottomInset 之外
         let clipRect = CGRect(x: 0, y: info.yOffset, width: bounds.width, height: info.actualContentHeight)
         ctx.clip(to: clipRect)
         
         ctx.translateBy(x: horizontalInset, y: 0)
         logVisibleFragmentsIfNeeded(info: info, store: s)
         
-        // 2. 绘制 TTS 高亮
         if isPlayingHighlight {
             ctx.saveGState()
             let allIndices = ([highlightIndex].compactMap { $0 } + Array(secondaryIndices))
@@ -298,11 +294,10 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
                     
                     if let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: range.location) {
                         s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { f in
-                            let fRange = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
-                            if fRange >= range.location + range.length { return false }
+                            let fRangeStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                            if fRangeStart >= range.location + range.length { return false }
                             
                             let frame = f.layoutFragmentFrame
-                            // 修正判断条件
                             if frame.maxY > info.yOffset && frame.minY < info.yOffset + info.actualContentHeight {
                                 ctx.fill(frame.insetBy(dx: -2, dy: -1))
                             }
@@ -314,17 +309,10 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
             ctx.restoreGState()
         }
         
-        // 3. 绘制文字 (直接使用原始坐标)
         guard let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: info.range.location) else { return }
         s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame
             if frame.minY >= info.yOffset + info.actualContentHeight { return false }
-            
-            // 核心修复：处理跨页段落的缩进异常
-            // 如果这个 fragment 的起始位置不是段落的物理起始位置 (paragraphStarts)，说明它是被切分的，需要移除首行缩进
-            let fragmentOffset = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
-            _ = self.paragraphStarts.contains(fragmentOffset)
-            
             fragment.draw(at: frame.origin, in: ctx)
             return true
         }
@@ -336,24 +324,17 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         guard let pageIdx = pageIndex else { return }
         if lastLoggedPageIndex == pageIdx { return }
         lastLoggedPageIndex = pageIdx
-        guard let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: info.range.location) else { return }
-        var lines: [String] = []
-        store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { fragment in
-            let fragmentStart = store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
-            let fragmentEnd = store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: fragment.rangeInElement.endLocation)
-            let length = fragmentEnd - fragmentStart
-            guard fragmentStart + length <= store.attributedString.length else { return false }
-            let raw = (store.attributedString.string as NSString).substring(with: NSRange(location: fragmentStart, length: length))
-            let cleaned = sanitizedPreviewText(raw, limit: 120)
-            if !cleaned.isEmpty {
-                lines.append(cleaned)
-            }
-            return lines.count < 2
+        
+        // 核心修复：基于 info.range 获取片段，解决日志误导问题
+        let snippetLen = min(120, info.range.length)
+        guard snippetLen > 0 else { return }
+        let raw = (store.attributedString.string as NSString).substring(with: NSRange(location: info.range.location, length: snippetLen))
+        let cleaned = sanitizedPreviewText(raw, limit: 120)
+        
+        if Self.debugLogTopFragments {
+            LogManager.shared.log("ReadContent2View content page=\(pageIdx): \(cleaned)", category: "TTS")
         }
-        if !lines.isEmpty && Self.debugLogTopFragments {
-            LogManager.shared.log("ReadContent2View top fragments page=\(pageIdx): \(lines.joined(separator: " | "))", category: "TTS")
-        }
-        onVisibleFragments?(pageIdx, lines)
+        onVisibleFragments?(pageIdx, [cleaned])
     }
 
     private func sanitizedPreviewText(_ text: String, limit: Int) -> String {

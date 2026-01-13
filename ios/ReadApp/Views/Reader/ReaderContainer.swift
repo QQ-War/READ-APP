@@ -412,27 +412,33 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.syncTTSReadingPositionIfNeeded()
         }
         
-        private func reRenderCurrentContent(rawContentOverride: String? = nil, anchorOffset: Int = 0) {
-            guard let builder = chapterBuilder else { return }
-            let rawContent = rawContentOverride ?? currentCache.rawContent
-            let chapterUrl = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
-            let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
-            if isMangaMode {
-                currentCache = builder.buildMangaCache(rawContent: rawContent, chapterUrl: chapterUrl)
-            } else {
-                currentCache = builder.buildTextCache(
-                    rawContent: rawContent,
-                    title: title,
-                    layoutSpec: currentLayoutSpec,
-                    reuseStore: currentCache.renderStore,
-                    chapterUrl: chapterUrl,
-                    anchorOffset: anchorOffset
-                )
-            }
-            setupReaderMode()
-            updateProgressUI()
-        }
-    
+            private func reRenderCurrentContent(rawContentOverride: String? = nil, anchorOffset: Int = 0) {
+                guard let builder = chapterBuilder else { return }
+                let rawContent = rawContentOverride ?? currentCache.rawContent
+                let chapterUrl = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
+                let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+                if isMangaMode {
+                    currentCache = builder.buildMangaCache(rawContent: rawContent, chapterUrl: chapterUrl)
+                } else {
+                    currentCache = builder.buildTextCache(
+                        rawContent: rawContent,
+                        title: title,
+                        layoutSpec: currentLayoutSpec,
+                        reuseStore: currentCache.renderStore,
+                        chapterUrl: chapterUrl,
+                        anchorOffset: anchorOffset
+                    )
+                }
+                
+                // 核心同步：渲染后立即更新当前页码为锚点页码
+                if currentReadingMode == .horizontal {
+                    self.currentPageIndex = currentCache.anchorPageIndex
+                    logger.log("重渲染完成: 锚点Offset=\(anchorOffset), 目标页码=\(currentPageIndex)/\(currentCache.pages.count)", category: "ReaderProgress")
+                }
+                
+                setupReaderMode()
+                updateProgressUI()
+            }    
         private func rebuildPaginationForLayout() {
             guard !isMangaMode, !currentCache.rawContent.isEmpty else { return }
             let offset = getCurrentReadingCharOffset()
