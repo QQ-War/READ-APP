@@ -190,13 +190,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
 
     func updateSettings(_ settings: ReaderSettingsStore) {
-        if self.readerSettings == nil { self.readerSettings = settings; return }
+        if self.readerSettings == nil { self.readerSettings = settings }
         let oldSettings = self.readerSettings!
         self.readerSettings = settings
         
+        chapterBuilder?.updateSettings(settings)
+        
         let currentSettingsSig = "\(settings.fontSize)-\(settings.lineSpacing)-\(settings.pageHorizontalMargin)-\(currentReadingMode.rawValue)"
         let needsRerender = currentSettingsSig != lastAppliedLayoutSettings
-        chapterBuilder?.updateSettings(settings)
         
         if !needsRerender && oldSettings.isInfiniteScrollEnabled == settings.isInfiniteScrollEnabled {
             return
@@ -212,7 +213,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         if needsRerender && !isMangaMode {
             if currentReadingMode == .horizontal {
-                reRenderCurrentContent(anchorOffset: currentOffset >= 0 ? currentOffset : 0)
+                reRenderCurrentContent(anchorOffset: max(0, currentOffset))
             } else {
                 reRenderCurrentContent()
             }
@@ -273,7 +274,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             return verticalVC?.getCurrentCharOffset() ?? 0
         } else if !currentCache.pages.isEmpty {
             let idx = horizontalPageIndexForDisplay()
-            return (idx < currentCache.pages.count) ? currentCache.pages[idx].globalRange.location : 0
+            if idx >= 0 && idx < currentCache.pages.count {
+                return currentCache.pages[idx].globalRange.location
+            }
         }
         return 0
     }
@@ -593,15 +596,31 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func currentStartPosition() -> ReadingPosition {
         let starts = currentCache.paragraphStarts
-        guard !starts.isEmpty else { return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: 0, sentenceOffset: 0, charOffset: 0) }
+        let sentences = currentCache.contentSentences
+        guard !starts.isEmpty && !sentences.isEmpty else { 
+            return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: 0, sentenceOffset: 0, charOffset: 0) 
+        }
+        
         var charOffset = 0
         if currentReadingMode == .horizontal {
             let idx = horizontalPageIndexForDisplay()
             if idx < (currentCache.pageInfos?.count ?? 0) { charOffset = currentCache.pageInfos?[idx].range.location ?? 0 }
         } else { charOffset = verticalVC?.getCurrentCharOffset() ?? 0 }
-        let sentenceIndex = max(0, min(starts.lastIndex(where: { $0 <= charOffset }) ?? 0, currentCache.contentSentences.count - 1))
-        let offsetInSentence = max(0, charOffset - starts[sentenceIndex] - paragraphIndentLength)
-        return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: min(currentCache.contentSentences[sentenceIndex].utf16.count, offsetInSentence), charOffset: charOffset)
+        
+        // 确保索引在有效范围内
+        let foundIdx = starts.lastIndex(where: { $0 <= charOffset }) ?? 0
+        let sentenceIndex = max(0, min(foundIdx, sentences.count - 1))
+        
+        let sentenceStart = starts[sentenceIndex]
+        let offsetInSentence = max(0, charOffset - sentenceStart - paragraphIndentLength)
+        let maxSentenceLen = sentences[sentenceIndex].utf16.count
+        
+        return ReadingPosition(
+            chapterIndex: currentChapterIndex, 
+            sentenceIndex: sentenceIndex, 
+            sentenceOffset: min(maxSentenceLen, offsetInSentence), 
+            charOffset: charOffset
+        )
     }
 
     private func horizontalPageIndexForDisplay() -> Int {
