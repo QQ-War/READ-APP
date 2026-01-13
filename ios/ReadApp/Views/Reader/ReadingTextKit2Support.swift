@@ -207,7 +207,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     var pageIndex: Int?
     var onVisibleFragments: ((Int, [String]) -> Void)?
     var renderStore: TextKit2RenderStore?
-    var pageInfo: TK22PageInfo? {
+    var pageInfo: TK2PageInfo? {
         didSet {
             guard let info = pageInfo else { return }
             let viewportY = info.yOffset - info.contentInset
