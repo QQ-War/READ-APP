@@ -214,50 +214,47 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         self.readerSettings = settings
         if !isInitialized { checkAndInitialize(); return }
         
-        let oldSettings = settings // 这里简化一下，直接比对签名
         let currentSettingsSig = "\(settings.fontSize)-\(settings.lineSpacing)-\(settings.pageHorizontalMargin)-\(currentReadingMode.rawValue)"
         let needsRerender = currentSettingsSig != lastAppliedLayoutSettings
         
         chapterBuilder?.updateSettings(settings)
-        if !needsRerender && lastAppliedLayoutSettings != "" { return }
         
-        lastAppliedLayoutSettings = currentSettingsSig
-        let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
-        
-        if let v = verticalVC {
+        // 如果无限流设置变了，更新 VC
+        if let v = verticalVC, v.isInfiniteScrollEnabled != settings.isInfiniteScrollEnabled {
             v.isInfiniteScrollEnabled = settings.isInfiniteScrollEnabled
-            if !isMangaMode && currentReadingMode == .vertical { updateVerticalAdjacent() }
+            if !isMangaMode && currentReadingMode == .vertical {
+                updateVerticalAdjacent()
+            }
         }
-        
+
         if needsRerender && !isMangaMode {
-            if currentReadingMode == .horizontal {
-                reRenderCurrentContent(anchorOffset: max(0, currentOffset))
-            } else {
-                reRenderCurrentContent()
+            let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
+            lastAppliedLayoutSettings = currentSettingsSig
+            
+            reRenderCurrentContent(anchorOffset: currentOffset)
+            
+            if currentReadingMode == .vertical && pendingRelocationOffset == nil && currentOffset >= 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    self?.scrollToCharOffset(currentOffset, animated: false)
+                }
             }
         } else if !isMangaMode && currentReadingMode == .vertical {
             updateVerticalAdjacent()
-        }
-        
-        if currentReadingMode == .vertical && !isMangaMode && pendingRelocationOffset == nil && currentOffset >= 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                self?.scrollToCharOffset(currentOffset, animated: false)
-            }
         }
     }
 
-    func updateReplaceRules(_ rules: [ReplaceRule]) { 
+    func updateReplaceRules(_ rules: [ReplaceRule]) {
+        let oldRules = ttsManager?.replaceRules
         chapterBuilder?.updateReplaceRules(rules)
         ttsManager?.replaceRules = rules
-        if !currentCache.rawContent.isEmpty && !isMangaMode { 
-            let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
-            if currentReadingMode == .horizontal {
-                reRenderCurrentContent(anchorOffset: max(0, currentOffset))
-            } else {
-                reRenderCurrentContent()
+        
+        if oldRules != rules && !isMangaMode {
+            if !currentCache.rawContent.isEmpty {
+                let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
+                reRenderCurrentContent(anchorOffset: currentOffset)
+            } else if currentReadingMode == .vertical {
+                updateVerticalAdjacent()
             }
-        } else if !isMangaMode && currentReadingMode == .vertical {
-            updateVerticalAdjacent()
         }
     }
 
