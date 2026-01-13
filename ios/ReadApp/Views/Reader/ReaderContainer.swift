@@ -929,13 +929,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard !isUserInteracting, ttsManager.isPlaying, now >= suppressTTSFollowUntil else { return }
 
         if currentReadingMode == .vertical {
-            // 避免因段落转折回翻上一页：仅在刚到新句且 offset=0 时确保可见，其它情况保持当前视图
-            if ttsManager.currentSentenceOffset == 0 {
-                let isVisible = verticalVC?.isSentenceVisible(index: sentenceIndex) ?? true
-                logger.log("TTS 垂直同步 -> sentence=\(sentenceIndex), isVisible=\(isVisible), userInteracting=\(isUserInteracting)", category: "TTS")
-                if !isVisible {
-                    verticalVC?.ensureSentenceVisible(index: sentenceIndex)
-                }
+            // 垂直模式：利用优化后的 ensureSentenceVisible 实现平滑滚动
+            // 内部会根据 charOffset 自动判断是否需要滚动，不再局限于段落开头
+            let isVisible = verticalVC?.isSentenceVisible(index: sentenceIndex) ?? true
+            if !isVisible {
+                verticalVC?.ensureSentenceVisible(index: sentenceIndex)
+            } else {
+                // 即便可见，如果正在播放，也允许其内部进行微调（例如快出底部时）
+                verticalVC?.ensureSentenceVisible(index: sentenceIndex)
             }
         } else if currentReadingMode == .horizontal {
             // 处理标题偏移导致的索引对齐问题

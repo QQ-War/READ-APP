@@ -462,7 +462,47 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func scrollToSentence(index: Int, animated: Bool) { guard index >= 0 && index < sentenceYOffsets.count else { return }; let y = max(0, sentenceYOffsets[index] + contentTopPadding); scrollView.setContentOffset(CGPoint(x: 0, y: min(y, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: animated) }
+
+    private func getYOffsetForCharOffset(_ o: Int) -> CGFloat? {
+        guard let s = renderStore else { return nil }
+        s.layoutManager.ensureLayout(for: s.contentStorage.documentRange)
+        
+        if let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: o),
+           let f = s.layoutManager.textLayoutFragment(for: loc) {
+            let fragMinY = f.layoutFragmentFrame.minY
+            
+            if #available(iOS 15.0, *) {
+                let offsetInFrag = o - s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                for line in f.textLineFragments {
+                    if line.characterRange.location + line.characterRange.length > offsetInFrag {
+                        return fragMinY + line.typographicBounds.minY
+                    }
+                }
+            }
+            return fragMinY
+        }
+        return nil
+    }
+
     func ensureSentenceVisible(index: Int) {
+        // 如果是 TTS 正在播放，尝试获取更精确的字符级偏移
+        if let tts = TTSManager.shared.isPlaying ? TTSManager.shared : nil, tts.currentChapterIndex == (self.parent as? ReaderContainerViewController)?.currentChapterIndex {
+            let charOffset = tts.currentCharOffset
+            if let yInContent = getYOffsetForCharOffset(charOffset) {
+                let absY = yInContent + currentContentView.frame.minY
+                let cur = scrollView.contentOffset.y
+                let vH = scrollView.bounds.height
+                
+                // 只要当前行超出了屏幕底部的 120pt 缓冲，就向下滚动
+                if absY > cur + vH - 120 {
+                    lastTTSSyncIndex = index
+                    let targetY = max(0, absY - 100)
+                    scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, scrollView.contentSize.height - vH)), animated: true)
+                }
+                return
+            }
+        }
+
         guard !scrollView.isDragging && !scrollView.isDecelerating, index >= 0 && index < sentenceYOffsets.count, index != lastTTSSyncIndex else { return }
         let y = sentenceYOffsets[index] + contentTopPadding; let cur = scrollView.contentOffset.y; let vH = scrollView.bounds.height
         if y > cur + vH - 150 {
@@ -502,14 +542,13 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func getCurrentCharOffset() -> Int {
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
         
-        // 避障偏移：根据字体大小动态计算，确保只读出至少显示了一大半的行
-        let detectionOffset = lastFontSize * 0.8
+        // 避障偏移：调小一点，确保在行首切换时更精准
+        let detectionOffset: CGFloat = 2.0
         
         // 计算探测点在全局坐标系中的 Y 坐标
         let globalY = scrollView.contentOffset.y + safeAreaTop + detectionOffset
         
         // 将全局坐标转换为当前章节视图 (currentContentView) 的局部坐标
-        // 在无限流模式下，currentContentView.frame.minY 可能不为 0（取决于前面是否有上一章）
         let localY = globalY - currentContentView.frame.minY
         
         let point = CGPoint(
@@ -521,11 +560,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if #available(iOS 15.0, *) {
                 // 查找视觉上位于 localY 处的具体行
                 let relativeY = localY - f.layoutFragmentFrame.minY
-                if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.01 }) {
+                if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.001 }) {
                     let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
                     let lineStart = line.characterRange.location
                     let result = fragmentStart + lineStart
-                    LogManager.shared.log("Vertical getCurrentCharOffset: localY=\(localY), fragMinY=\(f.layoutFragmentFrame.minY), result=\(result)", category: "TTS")
                     return result
                 }
             }
@@ -535,8 +573,15 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         return 0
     }
     func scrollToCharOffset(_ o: Int, animated: Bool) {
-        let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
-        scrollToSentence(index: index, animated: animated)
+        if let yInContent = getYOffsetForCharOffset(o) {
+            let absY = yInContent + currentContentView.frame.minY
+            let vH = scrollView.bounds.height
+            let targetY = max(0, absY - safeAreaTop - 10)
+            scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - vH))), animated: animated)
+        } else {
+            let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
+            scrollToSentence(index: index, animated: animated)
+        }
     }
 
     func setHighlight(index: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) {
