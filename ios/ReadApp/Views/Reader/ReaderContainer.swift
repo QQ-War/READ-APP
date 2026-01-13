@@ -84,92 +84,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     var onChapterIndexChanged: ((Int) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?
     
     private var safeAreaTop: CGFloat = 47; private var safeAreaBottom: CGFloat = 34
-    private var currentLayoutSpec: ReaderLayoutSpec {
-        return ReaderLayoutSpec(
-            topInset: max(safeAreaTop, view.safeAreaInsets.top) + 15,
-            bottomInset: max(safeAreaBottom, view.safeAreaInsets.bottom) + 40,
-            sideMargin: readerSettings.pageHorizontalMargin + 8,
-            pageSize: view.bounds.size
-        )
-    }
-    
-    private(set) var currentChapterIndex: Int = 0
-    var lastReportedChapterIndex: Int = -1
-    var verticalThreshold: CGFloat = 80 {
-        didSet {
-            verticalVC?.threshold = verticalThreshold
-            mangaVC?.threshold = verticalThreshold
-        }
-    }
-        private(set) var currentReadingMode: ReadingMode = .vertical
-        private var activePaginationAnchor: Int = 0 // 分页锚点
-        var isInternalTransitioning = false
-        private var isFirstLoad = true
-        private var isUserInteracting = false
-        private var ttsSyncCoordinator: TTSReadingSyncCoordinator?
-        
-        private var chapterBuilder: ReaderChapterBuilder?
-        private var currentCache: ChapterCache = .empty
-        private var nextCache: ChapterCache = .empty
-        private var prevCache: ChapterCache = .empty
-        private var currentPageIndex: Int = 0
-        private var visibleHorizontalPageIndex: Int? {
-            guard let pageVC = horizontalVC?.viewControllers?.first as? PageContentViewController else { return nil }
-            guard pageVC.chapterOffset == 0 else { return nil }
-            return pageVC.pageIndex
-        }
-        private func horizontalPageIndexForDisplay() -> Int {
-            if let visible = visibleHorizontalPageIndex, visible >= 0, visible < currentCache.pages.count {
-                return visible
-            }
-            return currentPageIndex
-        }
-        private func previewSentences(from startIndex: Int, limit: Int) -> [String] {
-            guard !currentCache.contentSentences.isEmpty else { return [] }
-            var lines: [String] = []
-            for idx in startIndex..<min(startIndex + limit, currentCache.contentSentences.count) {
-                lines.append(sanitizedPreviewText(currentCache.contentSentences[idx]))
-            }
-            return lines
-        }
-        private func sanitizedPreviewText(_ text: String) -> String {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
-            guard trimmed.count > 120 else { return trimmed }
-            let endIndex = trimmed.index(trimmed.startIndex, offsetBy: 120)
-            return String(trimmed[..<endIndex]) + "…"
-        }
-        private func visibleTopSentenceInfo() -> (index: Int, sentences: [String]) {
-            guard !currentCache.contentSentences.isEmpty else { return (0, []) }
-            let startIndex: Int
-            if currentReadingMode == .vertical {
-                startIndex = verticalVC?.getCurrentSentenceIndex() ?? 0
-            } else {
-                let pageIndex = horizontalPageIndexForDisplay()
-                if let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count {
-                    startIndex = pageInfos[pageIndex].startSentenceIndex
-                } else {
-                    startIndex = 0
-                }
-            }
-            let sentences = previewSentences(from: startIndex, limit: 2)
-            return (startIndex, sentences)
-        }
-        private func horizontalPageStartSnippet(for pageIndex: Int, limit: Int) -> String {
-            guard let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count else { return "" }
-            let range = pageInfos[pageIndex].range
-            let attributed = currentCache.attributedText.string as NSString
-            let validLen = max(0, min(limit, attributed.length - range.location))
-            guard validLen > 0 else { return "" }
-            let fragment = attributed.substring(with: NSRange(location: range.location, length: validLen))
-            return sanitizedPreviewText(fragment)
-        }
-        private var isMangaMode = false
-        private var latestVisibleFragmentLines: [String] = []
-    
-        private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
-        private let progressLabel = UILabel()
-        private var lastLayoutSignature: String = ""
-        private var loadToken: Int = 0
+    private var lastLayoutSignature: String = ""
+    private var lastAppliedLayoutSettings: String = ""
+    private var loadToken: Int = 0
         private let prefetchCoordinator = ReaderPrefetchCoordinator()
         private var pendingTTSPositionSync = false
         private var prefetchedMangaNextIndex: Int?
@@ -253,69 +170,53 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
                 func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
         
-                func updateSettings(_ settings: ReaderSettingsStore) {
-        
-                    let oldSettings = self.readerSettings!
-        
-                    self.readerSettings = settings
-        
-                    chapterBuilder?.updateSettings(settings)
-        
-                    
-        
-                    // 如果正在进行模式切换跳转，不在此处重新捕获进度，防止捕获到临时的 Offset 0
-        
-                    let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
-        
-                    
-        
-                    if let v = verticalVC, v.isInfiniteScrollEnabled != settings.isInfiniteScrollEnabled {
-        
-                        v.isInfiniteScrollEnabled = settings.isInfiniteScrollEnabled
-        
-                        if !isMangaMode && currentReadingMode == .vertical {
-        
-                            updateVerticalAdjacent()
-        
-                        }
-        
-                    }
-        
-                    
-        
-                    if (oldSettings.fontSize != settings.fontSize || oldSettings.lineSpacing != settings.lineSpacing) && !isMangaMode {
-        
-                        if currentReadingMode == .horizontal {
-        
-                            reRenderCurrentContent(anchorOffset: currentOffset)
-        
-                        } else {
-        
-                            reRenderCurrentContent()
-        
-                        }
-        
-                    } else if !isMangaMode && currentReadingMode == .vertical {
-        
-                        updateVerticalAdjacent()
-        
-                    }
-        
-                    
-        
-                    // 只有当没有挂起的模式切换跳转时，才执行设置更新后的重定位
-        
-                    if currentReadingMode == .vertical && !isMangaMode && pendingRelocationOffset == nil {
-        
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-        
-                            self?.scrollToCharOffset(currentOffset, animated: false)
-        
-                        }
-        
-                    }
-        
+        func updateSettings(_ settings: ReaderSettingsStore) {
+            let oldSettings = self.readerSettings!
+            self.readerSettings = settings
+            
+            // 关键逻辑：生成当前排版设置签名。包含所有会影响 TextKit 2 排版结果的参数。
+            let currentSettingsSig = "\(settings.fontSize)-\(settings.lineSpacing)-\(settings.pageHorizontalMargin)-\(currentReadingMode.rawValue)"
+            let needsRerender = currentSettingsSig != lastAppliedLayoutSettings
+            
+            chapterBuilder?.updateSettings(settings)
+            
+            // 如果不需要重绘，且无限流开关没变，直接返回。
+            // 注意：无限流开关改变需要更新 verticalVC 的属性，但不一定需要全局重绘。
+            if !needsRerender && oldSettings.isInfiniteScrollEnabled == settings.isInfiniteScrollEnabled {
+                return
+            }
+            
+            // 更新最后应用的签名
+            lastAppliedLayoutSettings = currentSettingsSig
+            
+            // 如果正在进行模式切换跳转，不在此处重新捕获进度，防止捕获到临时的 Offset 0
+            let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
+            
+            if let v = verticalVC, v.isInfiniteScrollEnabled != settings.isInfiniteScrollEnabled {
+                v.isInfiniteScrollEnabled = settings.isInfiniteScrollEnabled
+                if !isMangaMode && currentReadingMode == .vertical {
+                    updateVerticalAdjacent()
                 }
+            }
+            
+            // 只有配置真正改变时才重绘
+            if needsRerender && !isMangaMode {
+                if currentReadingMode == .horizontal {
+                    reRenderCurrentContent(anchorOffset: currentOffset >= 0 ? currentOffset : 0)
+                } else {
+                    reRenderCurrentContent()
+                }
+            } else if !isMangaMode && currentReadingMode == .vertical {
+                updateVerticalAdjacent()
+            }
+            
+            // 只有当没有挂起的模式切换跳转，且进度有效（>=0）时，才执行设置更新后的重定位
+            if currentReadingMode == .vertical && !isMangaMode && pendingRelocationOffset == nil && currentOffset >= 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    self?.scrollToCharOffset(currentOffset, animated: false)
+                }
+            }
+        }
         
                 
         
@@ -497,10 +398,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
                     }
         
-        private func scrollToCharOffset(_ offset: Int, animated: Bool) {
-            logger.log("执行滚动重定位: targetOffset=\(offset), mode=\(currentReadingMode.rawValue)", category: "ReaderProgress")
+        private func scrollToCharOffset(_ offset: Int, animated: Bool, isEnd: Bool = false) {
+            logger.log("执行滚动重定位: targetOffset=\(offset), mode=\(currentReadingMode.rawValue), isEnd=\(isEnd)", category: "ReaderProgress")
             if currentReadingMode == .vertical {
-                verticalVC?.scrollToCharOffset(offset, animated: animated)
+                verticalVC?.scrollToCharOffset(offset, animated: animated, isEnd: isEnd)
             } else {
                 if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(offset, $0.globalRange) }) {
                     logger.log("定位到水平页: offset=\(offset) -> pageIndex=\(targetPage)", category: "ReaderProgress")
@@ -591,7 +492,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     }
                 }
             } else if startAtEnd {
-                self.scrollToChapterEnd(animated: false)
+                self.scrollToCharOffset(self.currentCache.rawContent.count, animated: false, isEnd: true)
             } else {
                 self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
                 self.verticalVC?.scrollToTop(animated: false)

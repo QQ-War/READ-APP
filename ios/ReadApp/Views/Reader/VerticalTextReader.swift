@@ -563,6 +563,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let y = max(0, scrollView.contentSize.height - scrollView.bounds.height)
         scrollView.setContentOffset(CGPoint(x: 0, y: y), animated: animated)
     }
+    func scrollToChapterEnd(animated: Bool) {
+        guard let s = renderStore else { return }
+        scrollToCharOffset(s.attributedString.length, animated: animated, isEnd: true)
+    }
     func scrollToProgress(_ pos: Double) {
         guard let s = renderStore else { return }
         let total = s.attributedString.length
@@ -585,9 +589,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let globalY = scrollView.contentOffset.y + contentTopPadding + detectionOffset
         let localY = globalY - currentContentView.frame.minY
         
-        // 边界保护：如果在当前章节视图上方，返回 0
-        if localY < 0 {
-            return 0
+        // 边界保护：如果在当前章节视图上方 50pt 以上，说明视觉中心还在上一章，返回 -1 标识不要重定位
+        if localY < -50 {
+            return -1
         }
         
         // 边界保护：如果在当前章节视图下方，返回最后一个字符
@@ -597,7 +601,84 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         let point = CGPoint(
             x: horizontalMarginForDetection,
-            y: localY
+            y: max(0, localY) // 修正：虽然上面判断了 -50，但传入 point 最好是非负
+        )
+        
+        var result: Int = 0
+        if let f = s.layoutManager.textLayoutFragment(for: point) {
+            if #available(iOS 15.0, *) {
+                let relativeY = max(0, localY - f.layoutFragmentFrame.minY)
+                if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.001 }) {
+                    let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                    let lineStart = line.characterRange.location
+                    result = fragmentStart + lineStart
+                    LogManager.shared.log("垂直模式获取精确Offset: localY=\(localY), lineStart=\(lineStart), result=\(result), margin=\(lastMargin)", category: "ReaderProgress")
+                }
+            }
+            if result == 0 {
+                result = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                LogManager.shared.log("垂直模式获取片段Offset: localY=\(localY), result=\(result), margin=\(lastMargin)", category: "ReaderProgress")
+            }
+        }
+        return result
+    }
+    func scrollToCharOffset(_ o: Int, animated: Bool, isEnd: Bool = false) {
+        if isEnd {
+            let y = max(0, currentContentView.frame.maxY - scrollView.bounds.height)
+            LogManager.shared.log("垂直模式执行跳转末尾: targetY=\(y)", category: "ReaderProgress")
+            scrollView.setContentOffset(CGPoint(x: 0, y: y), animated: animated)
+            return
+        }
+        
+        if let yInContent = getYOffsetForCharOffset(o) {
+            let absY = yInContent + currentContentView.frame.minY
+            let vH = scrollView.bounds.height
+            // 目标 Y 坐标计算：确保 yInContent 刚好位于 contentTopPadding 处 (safeAreaTop + 10)
+            let targetY = max(0, absY - contentTopPadding)
+            LogManager.shared.log("垂直模式执行行级滚动: charOffset=\(o), yInContent=\(yInContent), absY=\(absY), targetY=\(targetY), topPadding=\(contentTopPadding)", category: "ReaderProgress")
+            scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - vH))), animated: animated)
+        } else {
+            let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
+            LogManager.shared.log("垂直模式退回段落滚动: charOffset=\(o), paragraphIndex=\(index)", category: "ReaderProgress")
+            scrollToSentence(index: index, animated: animated)
+        }
+    }
+
+    func scrollToProgress(_ pos: Double) {
+        guard let s = renderStore else { return }
+        let total = s.attributedString.length
+        let offset = Int(pos * Double(total))
+        scrollToCharOffset(offset, animated: false)
+    }
+    func getCurrentSentenceIndex() -> Int {
+        guard !sentenceYOffsets.isEmpty else { return 0 }
+        let y = scrollView.contentOffset.y - contentTopPadding
+        let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + verticalDetectionOffset }) ?? 0
+        return max(0, idx)
+    }
+    func getCurrentCharOffset() -> Int {
+        guard let s = renderStore, viewIfLoaded != nil else { return 0 }
+        
+        // 关键：确保排版已计算，否则 textLayoutFragment 可能返回 nil
+        s.layoutManager.ensureLayout(for: s.contentStorage.documentRange)
+        
+        let detectionOffset = max(2.0, lastFontSize * 0.2)
+        let globalY = scrollView.contentOffset.y + contentTopPadding + detectionOffset
+        let localY = globalY - currentContentView.frame.minY
+        
+        // 边界保护：如果在当前章节视图上方 50pt 以上，说明视觉中心还在上一章，返回 -1 标识不要重定位
+        if localY < -50 {
+            return -1
+        }
+        
+        // 边界保护：如果在当前章节视图下方，返回最后一个字符
+        if localY > currentContentView.frame.height {
+            return s.attributedString.length > 0 ? s.attributedString.length - 1 : 0
+        }
+        
+        let point = CGPoint(
+            x: horizontalMarginForDetection,
+            y: max(0, localY) // 修正：虽然上面判断了 -50，但传入 point 最好是非负
         )
         
         var result: Int = 0
