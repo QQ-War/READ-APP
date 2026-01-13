@@ -87,7 +87,93 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var lastLayoutSignature: String = ""
     private var lastAppliedLayoutSettings: String = ""
     private var loadToken: Int = 0
-        private let prefetchCoordinator = ReaderPrefetchCoordinator()
+    
+    private var currentLayoutSpec: ReaderLayoutSpec {
+        return ReaderLayoutSpec(
+            topInset: max(safeAreaTop, view.safeAreaInsets.top) + 15,
+            bottomInset: max(safeAreaBottom, view.safeAreaInsets.bottom) + 40,
+            sideMargin: readerSettings.pageHorizontalMargin + 8,
+            pageSize: view.bounds.size
+        )
+    }
+    
+    private(set) var currentChapterIndex: Int = 0
+    var lastReportedChapterIndex: Int = -1
+    var verticalThreshold: CGFloat = 80 {
+        didSet {
+            verticalVC?.threshold = verticalThreshold
+            mangaVC?.threshold = verticalThreshold
+        }
+    }
+    private(set) var currentReadingMode: ReadingMode = .vertical
+    private var activePaginationAnchor: Int = 0 // 分页锚点
+    var isInternalTransitioning = false
+    private var isFirstLoad = true
+    private var isUserInteracting = false
+    private var ttsSyncCoordinator: TTSReadingSyncCoordinator?
+    
+    private var chapterBuilder: ReaderChapterBuilder?
+    private var currentCache: ChapterCache = .empty
+    private var nextCache: ChapterCache = .empty
+    private var prevCache: ChapterCache = .empty
+    private var currentPageIndex: Int = 0
+    private var visibleHorizontalPageIndex: Int? {
+        guard let pageVC = horizontalVC?.viewControllers?.first as? PageContentViewController else { return nil }
+        guard pageVC.chapterOffset == 0 else { return nil }
+        return pageVC.pageIndex
+    }
+    private func horizontalPageIndexForDisplay() -> Int {
+        if let visible = visibleHorizontalPageIndex, visible >= 0, visible < currentCache.pages.count {
+            return visible
+        }
+        return currentPageIndex
+    }
+    private func previewSentences(from startIndex: Int, limit: Int) -> [String] {
+        guard !currentCache.contentSentences.isEmpty else { return [] }
+        var lines: [String] = []
+        for idx in startIndex..<min(startIndex + limit, currentCache.contentSentences.count) {
+            lines.append(sanitizedPreviewText(currentCache.contentSentences[idx]))
+        }
+        return lines
+    }
+    private func sanitizedPreviewText(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
+        guard trimmed.count > 120 else { return trimmed }
+        let endIndex = trimmed.index(trimmed.startIndex, offsetBy: 120)
+        return String(trimmed[..<endIndex]) + "…"
+    }
+    private func visibleTopSentenceInfo() -> (index: Int, sentences: [String]) {
+        guard !currentCache.contentSentences.isEmpty else { return (0, []) }
+        let startIndex: Int
+        if currentReadingMode == .vertical {
+            startIndex = verticalVC?.getCurrentSentenceIndex() ?? 0
+        } else {
+            let pageIndex = horizontalPageIndexForDisplay()
+            if let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count {
+                startIndex = pageInfos[pageIndex].startSentenceIndex
+            } else {
+                startIndex = 0
+            }
+        }
+        let sentences = previewSentences(from: startIndex, limit: 2)
+        return (startIndex, sentences)
+    }
+    private func horizontalPageStartSnippet(for pageIndex: Int, limit: Int) -> String {
+        guard let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count else { return "" }
+        let range = pageInfos[pageIndex].range
+        let attributed = currentCache.attributedText.string as NSString
+        let validLen = max(0, min(limit, attributed.length - range.location))
+        guard validLen > 0 else { return "" }
+        let fragment = attributed.substring(with: NSRange(location: range.location, length: validLen))
+        return sanitizedPreviewText(fragment)
+    }
+    private var isMangaMode = false
+    private var latestVisibleFragmentLines: [String] = []
+
+    private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
+    private let progressLabel = UILabel()
+    
+    private let prefetchCoordinator = ReaderPrefetchCoordinator()
         private var pendingTTSPositionSync = false
         private var prefetchedMangaNextIndex: Int?
         private var prefetchedMangaNextContent: String?
