@@ -22,7 +22,8 @@ final class ReaderChapterBuilder {
         title: String,
         layoutSpec: ReaderLayoutSpec,
         reuseStore: TextKit2RenderStore?,
-        chapterUrl: String? = nil
+        chapterUrl: String? = nil,
+        anchorOffset: Int = 0 // 新增锚点支持
     ) -> ChapterCache {
         let chunkLimit = UserPreferences.shared.ttsSentenceChunkLimit
         let sentences = ReadingTextProcessor.splitSentences(rawContent, rules: replaceRules, chunkLimit: chunkLimit)
@@ -38,7 +39,10 @@ final class ReaderChapterBuilder {
 
         let prefixLen = title.isEmpty ? 0 : (title + "\n").utf16.count
         let paragraphStarts = paragraphStarts(for: sentences, prefixLen: prefixLen)
-        let result = TextKit2Paginator.paginate(
+        
+        // 使用新增的锚点分页方法
+        let result = TextKit2Paginator.paginateFromAnchor(
+            anchorOffset: anchorOffset,
             renderStore: store,
             pageSize: layoutSpec.pageSize,
             paragraphStarts: paragraphStarts,
@@ -57,7 +61,8 @@ final class ReaderChapterBuilder {
             paragraphStarts: paragraphStarts,
             chapterPrefixLen: prefixLen,
             isFullyPaginated: true,
-            chapterUrl: chapterUrl
+            chapterUrl: chapterUrl,
+            anchorPageIndex: result.anchorPageIndex
         )
     }
 

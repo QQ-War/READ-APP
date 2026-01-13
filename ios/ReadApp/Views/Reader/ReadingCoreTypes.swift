@@ -69,10 +69,11 @@ struct ChapterCache {
     let paragraphStarts: [Int]
     let chapterPrefixLen: Int
     let isFullyPaginated: Bool
-    let chapterUrl: String? // 新增
+    let chapterUrl: String?
+    let anchorPageIndex: Int // 新增：锚点所在的页码索引
     
     static var empty: ChapterCache {
-        ChapterCache(pages: [], renderStore: nil, pageInfos: nil, contentSentences: [], rawContent: "", attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false, chapterUrl: nil)
+        ChapterCache(pages: [], renderStore: nil, pageInfos: nil, contentSentences: [], rawContent: "", attributedText: NSAttributedString(), paragraphStarts: [], chapterPrefixLen: 0, isFullyPaginated: false, chapterUrl: nil, anchorPageIndex: 0)
     }
 }
 

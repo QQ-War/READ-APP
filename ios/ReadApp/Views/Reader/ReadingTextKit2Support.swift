@@ -37,142 +37,165 @@ struct TextKit2Paginator {
     struct PaginationResult {
         let pages: [PaginatedPage]
         let pageInfos: [TK2PageInfo]
+        let anchorPageIndex: Int // 锚点所在的页索引
     }
     
+    /// 标准分页：从头开始
     static func paginate(renderStore: TextKit2RenderStore, pageSize: CGSize, paragraphStarts: [Int], prefixLen: Int, topInset: CGFloat, bottomInset: CGFloat) -> PaginationResult {
+        return paginateFromAnchor(anchorOffset: 0, renderStore: renderStore, pageSize: pageSize, paragraphStarts: paragraphStarts, prefixLen: prefixLen, topInset: topInset, bottomInset: bottomInset)
+    }
+
+    /// 锚点分页：从指定偏移量开始双向切片
+    static func paginateFromAnchor(anchorOffset: Int, renderStore: TextKit2RenderStore, pageSize: CGSize, paragraphStarts: [Int], prefixLen: Int, topInset: CGFloat, bottomInset: CGFloat) -> PaginationResult {
         let lm = renderStore.layoutManager
         let storage = renderStore.contentStorage
         lm.ensureLayout(for: storage.documentRange)
         
-        var pages: [PaginatedPage] = []
-        var pageInfos: [TK2PageInfo] = []
-        
-        // 关键优化：给可用高度留出 8pt 的呼吸空间，防止底行文字紧贴边缘
         let safeBottomPadding: CGFloat = 8.0
         let usableHeight = max(100, pageSize.height - topInset - bottomInset - safeBottomPadding)
-        var currentY: CGFloat = 0
+        let totalTextLen = storage.attributedString?.length ?? 0
         
-        lm.ensureLayout(for: storage.documentRange)
+        // 1. 定位锚点行
+        var effectiveAnchorOffset = max(0, min(anchorOffset, totalTextLen))
+        var anchorY: CGFloat = 0
+        if let loc = storage.location(storage.documentRange.location, offsetBy: effectiveAnchorOffset),
+           let f = lm.textLayoutFragment(for: loc) {
+            anchorY = f.layoutFragmentFrame.minY
+            if #available(iOS 15.0, *) {
+                let offsetInFrag = effectiveAnchorOffset - storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
+                if let line = f.textLineFragments.first(where: { $0.characterRange.location + $0.characterRange.length > offsetInFrag }) {
+                    anchorY += line.typographicBounds.minY
+                    // 修正：同步 effectiveAnchorOffset 到该行开头，确保切片严丝合缝
+                    effectiveAnchorOffset = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location) + line.characterRange.location
+                }
+            }
+        }
+
+        // 2. 向后切片 (Forward)
+        var forwardPages: [PaginatedPage] = []
+        var forwardInfos: [TK2PageInfo] = []
+        var currentY = anchorY
+        var currentOffset = effectiveAnchorOffset
         
-        while true {
-            // 修正：精确获取当前页面的起始字符偏移量，而不仅仅是 LayoutFragment 的起始位置
-            var startOffset = attributedStringLength(storage)
-            if let f = lm.textLayoutFragment(for: CGPoint(x: 0, y: currentY)) {
-                if #available(iOS 15.0, *) {
-                    // 修正逻辑：查找视觉上位于 currentY 处的具体行 (Line Fragment)
-                    // 而不是简单地取 Fragment 的第一行 (它可能在上一页)
-                    let relativeY = currentY - f.layoutFragmentFrame.minY
-                    // 使用 0.01 的容差处理浮点数边界
-                    if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.01 }) {
-                        let fragmentStart = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
-                        let lineStart = line.characterRange.location // relative to element
-                        let calcOffset = fragmentStart + lineStart
-                        startOffset = calcOffset
-                    } else {
-                        // Fallback
-                        startOffset = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
-                    }
-                } else {
-                    startOffset = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
-                }
-            }
-            
-            if startOffset >= attributedStringLength(storage) { break }
-            
-            let startSentenceIdx = paragraphStarts.lastIndex(where: { $0 <= startOffset }) ?? 0
-            
-            // 查找本页理论结束位置附近的 Fragment
-            let targetY = currentY + usableHeight
-            // 往回一点点探测，获取位于底部的那个 Fragment
-            guard let endFragment = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY - 5.0)) else {
-                // 如果探测不到，说明可能已经到底或者传入的 targetY 已经越界
-                if let fallback = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY)) {
-                    let endOffset = storage.offset(from: storage.documentRange.location, to: fallback.rangeInElement.endLocation)
-                    let pageRange = NSRange(location: startOffset, length: max(1, endOffset - startOffset))
-                    pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx))
-                    pageInfos.append(TK2PageInfo(range: pageRange, yOffset: currentY, pageHeight: pageSize.height, actualContentHeight: fallback.layoutFragmentFrame.maxY - currentY, startSentenceIndex: startSentenceIdx, contentInset: topInset))
-                    currentY = fallback.layoutFragmentFrame.maxY
-                    if currentY >= lm.usageBoundsForTextContainer.height { break }
-                    continue
-                } else if currentY < lm.usageBoundsForTextContainer.height {
-                    let endOffset = attributedStringLength(storage)
-                    let pageRange = NSRange(location: startOffset, length: max(1, endOffset - startOffset))
-                    let actualContentHeight = max(0, lm.usageBoundsForTextContainer.height - currentY)
-                    pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx))
-                    pageInfos.append(TK2PageInfo(
-                        range: pageRange,
-                        yOffset: currentY,
-                        pageHeight: pageSize.height,
-                        actualContentHeight: actualContentHeight,
-                        startSentenceIndex: startSentenceIdx,
-                        contentInset: topInset
-                    ))
-                }
-                break
-            }
-            
-            var pageEndOffset: Int = 0
-            var nextPageStartY: CGFloat = 0
-            
-            // 核心判定：防截断逻辑
-            // 如果该段落的底部超出了本页可用高度，尝试按行切分
-            if endFragment.layoutFragmentFrame.maxY > targetY {
-                let fragmentStartOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.location)
-                var lastLineEndOffset: Int?
-                var lastLineMaxY: CGFloat?
-                
-                for line in endFragment.textLineFragments {
-                    let lineFrame = line.typographicBounds.offsetBy(dx: endFragment.layoutFragmentFrame.origin.x, dy: endFragment.layoutFragmentFrame.origin.y)
-                    if lineFrame.maxY <= targetY {
-                        lastLineEndOffset = fragmentStartOffset + line.characterRange.upperBound
-                        lastLineMaxY = lineFrame.maxY
-                    } else {
-                        break
-                    }
-                }
-                
-                // Case 1: 找到可容纳的行 -> 按行切分，允许段落跨页
-                if let end = lastLineEndOffset, end > startOffset {
-                    pageEndOffset = end
-                    nextPageStartY = lastLineMaxY ?? endFragment.layoutFragmentFrame.minY
-                }
-                // Case 2: 本页没有一行能容纳 -> 推到下一页
-                else if fragmentStartOffset > startOffset {
-                    pageEndOffset = fragmentStartOffset
-                    nextPageStartY = endFragment.layoutFragmentFrame.minY
-                }
-                // Case 3: 这一行是本页第一行（超大字号占满整页） -> 只能强行放入
-                else {
-                    pageEndOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.endLocation)
-                    nextPageStartY = endFragment.layoutFragmentFrame.maxY
-                }
-            } else {
-                // Case 3: 完全在界内 -> 正常包含
-                pageEndOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.endLocation)
-                nextPageStartY = endFragment.layoutFragmentFrame.maxY
-            }
-            
-            let pageRange = NSRange(location: startOffset, length: pageEndOffset - startOffset)
-            
-            // 记录分页信息
-            pages.append(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx))
-            pageInfos.append(TK2PageInfo(
-                range: pageRange,
-                yOffset: currentY,
-                pageHeight: pageSize.height,
-                actualContentHeight: nextPageStartY - currentY, // 记录真实的排版高度
-                startSentenceIndex: startSentenceIdx,
-                contentInset: topInset
-            ))
-            
-            // 步进
-            currentY = nextPageStartY
-            
+        while currentOffset < totalTextLen {
+            let page = sliceNextPage(fromOffset: currentOffset, fromY: currentY, usableHeight: usableHeight, storage: storage, lm: lm, paragraphStarts: paragraphStarts, pageSize: pageSize, topInset: topInset)
+            forwardPages.append(page.0)
+            forwardInfos.append(page.1)
+            currentOffset = page.0.globalRange.location + page.0.globalRange.length
+            currentY = page.1.yOffset + page.1.actualContentHeight
             if currentY >= lm.usageBoundsForTextContainer.height { break }
         }
         
-        return PaginationResult(pages: pages, pageInfos: pageInfos)
+        // 3. 向前切片 (Backward)
+        var backwardPages: [PaginatedPage] = []
+        var backwardInfos: [TK2PageInfo] = []
+        currentY = anchorY
+        currentOffset = effectiveAnchorOffset
+        
+        while currentOffset > 0 {
+            // 向上寻找一屏高度的内容
+            let targetY = max(0, currentY - usableHeight)
+            // 探测目标位置的 Fragment
+            guard let f = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY)) else { break }
+            
+            var pageStartY = f.layoutFragmentFrame.minY
+            var pageStartOffset = storage.offset(from: storage.documentRange.location, to: f.rangeInElement.location)
+            
+            if #available(iOS 15.0, *) {
+                let relativeY = targetY - f.layoutFragmentFrame.minY
+                if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.01 }) {
+                    pageStartY += line.typographicBounds.minY
+                    pageStartOffset += line.characterRange.location
+                }
+            }
+            
+            // 如果计算出的起始位置没变（说明已经到头或陷入死循环），强制跳出
+            if pageStartOffset >= currentOffset {
+                if targetY <= 0 {
+                    pageStartOffset = 0
+                    pageStartY = 0
+                } else { break }
+            }
+            
+            let pageRange = NSRange(location: pageStartOffset, length: currentOffset - pageStartOffset)
+            let startSentenceIdx = paragraphStarts.lastIndex(where: { $0 <= pageStartOffset }) ?? 0
+            
+            backwardPages.insert(PaginatedPage(globalRange: pageRange, startSentenceIndex: startSentenceIdx), at: 0)
+            backwardInfos.insert(TK2PageInfo(range: pageRange, yOffset: pageStartY, pageHeight: pageSize.height, actualContentHeight: currentY - pageStartY, startSentenceIndex: startSentenceIdx, contentInset: topInset), at: 0)
+            
+            currentOffset = pageStartOffset
+            currentY = pageStartY
+            if currentY <= 0 { break }
+        }
+        
+        return PaginationResult(
+            pages: backwardPages + forwardPages,
+            pageInfos: backwardInfos + forwardInfos,
+            anchorPageIndex: backwardPages.count
+        )
     }
+    
+    private static func sliceNextPage(fromOffset: Int, fromY: CGFloat, usableHeight: CGFloat, storage: NSTextContentStorage, lm: NSTextLayoutManager, paragraphStarts: [Int], pageSize: CGSize, topInset: CGFloat) -> (PaginatedPage, TK2PageInfo) {
+        let totalTextLen = storage.attributedString?.length ?? 0
+        let startSentenceIdx = paragraphStarts.lastIndex(where: { $0 <= fromOffset }) ?? 0
+        let targetY = fromY + usableHeight
+        
+        guard let endFragment = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY - 2.0)) else {
+            // 到底了
+            let endOffset = totalTextLen
+            let range = NSRange(location: fromOffset, length: endOffset - fromOffset)
+            let info = TK2PageInfo(range: range, yOffset: fromY, pageHeight: pageSize.height, actualContentHeight: max(10, lm.usageBoundsForTextContainer.height - fromY), startSentenceIndex: startSentenceIdx, contentInset: topInset)
+            return (PaginatedPage(globalRange: range, startSentenceIndex: startSentenceIdx), info)
+        }
+        
+        var pageEndOffset = totalTextLen
+        var nextPageStartY = lm.usageBoundsForTextContainer.height
+        
+        if endFragment.layoutFragmentFrame.maxY > targetY {
+            let fragmentStartOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.location)
+            var lastLineEndOffset: Int?
+            var lastLineMaxY: CGFloat?
+            
+            if #available(iOS 15.0, *) {
+                for line in endFragment.textLineFragments {
+                    let lineMaxY = endFragment.layoutFragmentFrame.minY + line.typographicBounds.maxY
+                    if lineMaxY <= targetY + 0.01 {
+                        lastLineEndOffset = fragmentStartOffset + line.characterRange.upperBound
+                        lastLineMaxY = lineMaxY
+                    } else { break }
+                }
+            }
+            
+            if let end = lastLineEndOffset, end > fromOffset {
+                pageEndOffset = end
+                nextPageStartY = lastLineMaxY ?? endFragment.layoutFragmentFrame.minY
+            } else if fragmentStartOffset > fromOffset {
+                pageEndOffset = fragmentStartOffset
+                nextPageStartY = endFragment.layoutFragmentFrame.minY
+            } else {
+                pageEndOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.endLocation)
+                nextPageStartY = endFragment.layoutFragmentFrame.maxY
+            }
+        } else {
+            pageEndOffset = storage.offset(from: storage.documentRange.location, to: endFragment.rangeInElement.endLocation)
+            nextPageStartY = endFragment.layoutFragmentFrame.maxY
+        }
+        
+        let range = NSRange(location: fromOffset, length: max(1, pageEndOffset - fromOffset))
+        let info = TK2PageInfo(range: range, yOffset: fromY, pageHeight: pageSize.height, actualContentHeight: nextPageStartY - fromY, startSentenceIndex: startSentenceIdx, contentInset: topInset)
+        return (PaginatedPage(globalRange: range, startSentenceIndex: startSentenceIdx), info)
+    }
+    
+    private static func attributedStringLength(_ storage: NSTextContentStorage) -> Int {
+        return storage.attributedString?.length ?? 0
+    }
+    
+    static func rangeFromTextRange(_ textRange: NSTextRange, in storage: NSTextContentStorage) -> NSRange? {
+        let start = storage.offset(from: storage.documentRange.location, to: textRange.location)
+        let end = storage.offset(from: storage.documentRange.location, to: textRange.endLocation)
+        return NSRange(location: start, length: end - start)
+    }
+}
     
     private static func attributedStringLength(_ storage: NSTextContentStorage) -> Int {
         return storage.attributedString?.length ?? 0
