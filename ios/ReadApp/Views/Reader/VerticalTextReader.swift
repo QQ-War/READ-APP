@@ -480,23 +480,35 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func scrollToSentence(index: Int, animated: Bool) { guard index >= 0 && index < sentenceYOffsets.count else { return }; let y = max(0, sentenceYOffsets[index] + contentTopPadding); scrollView.setContentOffset(CGPoint(x: 0, y: min(y, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: animated) }
 
     private func getYOffsetForCharOffset(_ o: Int) -> CGFloat? {
-        guard let s = renderStore else { return nil }
+        guard let s = renderStore else { 
+            LogManager.shared.log("getYOffsetForCharOffset: renderStore 为空", category: "ReaderProgress")
+            return nil 
+        }
+        let totalLen = s.contentStorage.length
+        let clampedO = max(0, min(o, totalLen - 1))
+        
+        LogManager.shared.log("getYOffsetForCharOffset 开始: offset=\(o), totalLen=\(totalLen)", category: "ReaderProgress")
         s.layoutManager.ensureLayout(for: s.contentStorage.documentRange)
         
-        if let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: o),
+        if let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: clampedO),
            let f = s.layoutManager.textLayoutFragment(for: loc) {
             let fragMinY = f.layoutFragmentFrame.minY
             
             if #available(iOS 15.0, *) {
-                let offsetInFrag = o - s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                let offsetInFrag = clampedO - fragmentStart
                 for line in f.textLineFragments {
                     if line.characterRange.location + line.characterRange.length > offsetInFrag {
-                        return fragMinY + line.typographicBounds.minY
+                        let lineY = fragMinY + line.typographicBounds.minY
+                        LogManager.shared.log("getYOffsetForCharOffset 命中行: lineY=\(lineY), offsetInFrag=\(offsetInFrag)", category: "ReaderProgress")
+                        return lineY
                     }
                 }
             }
+            LogManager.shared.log("getYOffsetForCharOffset 仅命中片段: fragMinY=\(fragMinY)", category: "ReaderProgress")
             return fragMinY
         }
+        LogManager.shared.log("getYOffsetForCharOffset 未命中任何位置", category: "ReaderProgress")
         return nil
     }
 
@@ -509,10 +521,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 let cur = scrollView.contentOffset.y
                 let vH = scrollView.bounds.height
                 
-                // 只要当前行超出了屏幕底部的 120pt 缓冲，就向下滚动
-                if absY > cur + vH - 120 {
+                // 只要当前行超出了屏幕底部的 150pt 缓冲（约 3-4 行），就向下滚动
+                if absY > cur + vH - 150 {
                     lastTTSSyncIndex = index
-                    let targetY = max(0, absY - 100)
+                    // 平滑滚动：将当前行滚动到屏幕中间偏上位置 (1/3 处)
+                    let targetY = max(0, absY - vH / 3.0)
+                    LogManager.shared.log("TTS 平滑滚动触发: absY=\(absY), targetY=\(targetY)", category: "TTS")
                     scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, scrollView.contentSize.height - vH)), animated: true)
                 }
                 return
@@ -558,8 +572,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func getCurrentCharOffset() -> Int {
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
         
+        // 探测点改进：使用 contentTopPadding (safeAreaTop + 10)
+        // 这样当 contentOffset 为 0 时，探测点正好是正文第一行
         let detectionOffset: CGFloat = 2.0
-        let globalY = scrollView.contentOffset.y + safeAreaTop + detectionOffset
+        let globalY = scrollView.contentOffset.y + contentTopPadding + detectionOffset
         let localY = globalY - currentContentView.frame.minY
         
         let point = CGPoint(
