@@ -484,8 +484,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             LogManager.shared.log("getYOffsetForCharOffset: renderStore 为空", category: "ReaderProgress")
             return nil 
         }
-        let totalLen = s.contentStorage.length
-        let clampedO = max(0, min(o, totalLen - 1))
+        let totalLen = s.attributedString.length
+        let clampedO = max(0, min(o, totalLen > 0 ? totalLen - 1 : 0))
         
         LogManager.shared.log("getYOffsetForCharOffset 开始: offset=\(o), totalLen=\(totalLen)", category: "ReaderProgress")
         s.layoutManager.ensureLayout(for: s.contentStorage.documentRange)
