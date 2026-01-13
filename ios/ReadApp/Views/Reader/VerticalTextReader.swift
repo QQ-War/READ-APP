@@ -73,10 +73,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
     private struct CharDetectionConfig {
         static let minHorizontalInset: CGFloat = 10
-        static let minVerticalOffset: CGFloat = 2 // 从 5 调低到 2，提高精度
-        static let maxVerticalOffset: CGFloat = 12 // 从 18 调低到 12
+        static let minVerticalOffset: CGFloat = 2 
+        static let maxVerticalOffset: CGFloat = 12
     }
-    private let viewportTopMargin: CGFloat = 10
+    private let viewportTopMargin: CGFloat = 15 // 统一调整为 15，与水平模式对齐
     private var contentTopPadding: CGFloat { safeAreaTop + viewportTopMargin }
     private var horizontalMarginForDetection: CGFloat {
         max(CharDetectionConfig.minHorizontalInset, lastMargin)

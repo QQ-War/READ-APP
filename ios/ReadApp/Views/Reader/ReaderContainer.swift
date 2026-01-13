@@ -209,23 +209,24 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             NSLayoutConstraint.activate([progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12), progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4)])
         }
         
-        override func viewDidLayoutSubviews() {
-            super.viewDidLayoutSubviews()
-            guard !isInternalTransitioning else { return }
-            let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaVC?.view.frame = b
-            
-            if !isMangaMode, currentCache.renderStore != nil, currentReadingMode == .horizontal {
-                let spec = currentLayoutSpec
-                let signature = "\(Int(spec.pageSize.width))x\(Int(spec.pageSize.height))|\(Int(spec.topInset))"
-                if signature != lastLayoutSignature {
-                    lastLayoutSignature = signature
-                    // 屏幕尺寸变化时，以当前页的起始字符作为新锚点重新分页
-                    let offset = (currentPageIndex < currentCache.pages.count) ? currentCache.pages[currentPageIndex].globalRange.location : 0
-                    reRenderCurrentContent(anchorOffset: offset)
+            private var lastKnownSize: CGSize = .zero
+            override func viewDidLayoutSubviews() {
+                super.viewDidLayoutSubviews()
+                guard !isInternalTransitioning else { return }
+                let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaVC?.view.frame = b
+                
+                if b.size != lastKnownSize {
+                    let spec = currentLayoutSpec
+                    let signature = "\(Int(spec.pageSize.width))x\(Int(spec.pageSize.height))|\(Int(spec.topInset))"
+                    if signature != lastLayoutSignature {
+                        lastLayoutSignature = signature
+                        lastKnownSize = b.size
+                        if !isMangaMode, currentCache.renderStore != nil, currentReadingMode == .horizontal {
+                            rebuildPaginationForLayout()
+                        }
+                    }
                 }
-            }
-        }
-    
+            }    
         func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
         func updateSettings(_ settings: ReaderSettingsStore) {
             let oldSettings = self.readerSettings!
