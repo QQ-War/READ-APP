@@ -15,12 +15,8 @@ struct LogView: View {
                         Spacer()
                     }
                 } else {
-                    ScrollView {
-                        Text(logText)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                    }
+                    NativeLogTextView(text: logText)
+                        .edgesIgnoringSafeArea(.bottom)
                 }
                 
                 Divider()
@@ -81,5 +77,34 @@ struct LogView: View {
 struct LogView_Previews: PreviewProvider {
     static var previews: some View {
         LogView()
+    }
+}
+
+// MARK: - Native UITextView Wrapper
+struct NativeLogTextView: UIViewRepresentable {
+    let text: String
+    
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.backgroundColor = .clear
+        textView.textContainerInset = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+        
+        // 确保支持长按选取
+        textView.dataDetectorTypes = []
+        
+        // 自动滚动到最后一行（可选，但通常日志查看需要）
+        return textView
+    }
+    
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        uiView.text = text
+        // 自动滚动到底部以便查看最新日志
+        if !text.isEmpty {
+            let range = NSRange(location: text.count - 1, length: 1)
+            uiView.scrollRangeToVisible(range)
+        }
     }
 }
