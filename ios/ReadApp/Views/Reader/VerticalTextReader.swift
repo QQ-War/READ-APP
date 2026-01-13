@@ -253,14 +253,30 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 self.isTransitioning = false
             } else if isInfiniteScrollEnabled {
                 if isChapterSwap {
-                    if wasPrevVisible { scrollView.contentOffset.y = max(0, oldOffset - oldPrevHeightPlusGap) }
+                    if wasPrevVisible { 
+                        let newOffset = max(0, oldOffset - oldPrevHeightPlusGap)
+                        LogManager.shared.log("无限流章节交换(Next): offset \(oldOffset) -> \(newOffset)", category: "ReaderProgress")
+                        scrollView.contentOffset.y = newOffset 
+                    }
                 } else if isChapterSwapToPrev {
                     let newPrevHeightPlusGap = lastPrevHasContent ? (lastPrevContentHeight + chapterGap) : 0
-                    scrollView.contentOffset.y = oldOffset + newPrevHeightPlusGap
+                    let newOffset = oldOffset + newPrevHeightPlusGap
+                    LogManager.shared.log("无限流章节交换(Prev): offset \(oldOffset) -> \(newOffset)", category: "ReaderProgress")
+                    scrollView.contentOffset.y = newOffset
                 } else if prevChanged && !isChapterSwapToPrev {
                     let displacement = currentContentView.frame.minY - oldCurrY
-                    if displacement != 0 { scrollView.contentOffset.y = oldOffset + displacement }
+                    if displacement != 0 { 
+                        let newOffset = oldOffset + displacement
+                        LogManager.shared.log("无限流内容补偿: displacement=\(displacement), offset \(oldOffset) -> \(newOffset)", category: "ReaderProgress")
+                        scrollView.contentOffset.y = newOffset 
+                    }
                 }
+            } else if modeChanged && !isInfiniteScrollEnabled {
+                // 从无限流切回普通模式
+                let displacement = currentContentView.frame.minY - oldCurrY
+                let newOffset = oldOffset + displacement
+                LogManager.shared.log("从无限流退出: displacement=\(displacement), offset \(oldOffset) -> \(newOffset)", category: "ReaderProgress")
+                scrollView.contentOffset.y = newOffset
             }
             isUpdatingLayout = false
 
@@ -542,13 +558,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func getCurrentCharOffset() -> Int {
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
         
-        // 避障偏移：调小一点，确保在行首切换时更精准
         let detectionOffset: CGFloat = 2.0
-        
-        // 计算探测点在全局坐标系中的 Y 坐标
         let globalY = scrollView.contentOffset.y + safeAreaTop + detectionOffset
-        
-        // 将全局坐标转换为当前章节视图 (currentContentView) 的局部坐标
         let localY = globalY - currentContentView.frame.minY
         
         let point = CGPoint(
@@ -556,30 +567,34 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             y: localY
         )
         
+        var result: Int = 0
         if let f = s.layoutManager.textLayoutFragment(for: point) {
             if #available(iOS 15.0, *) {
-                // 查找视觉上位于 localY 处的具体行
                 let relativeY = localY - f.layoutFragmentFrame.minY
                 if let line = f.textLineFragments.first(where: { $0.typographicBounds.maxY > relativeY + 0.001 }) {
                     let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
                     let lineStart = line.characterRange.location
-                    let result = fragmentStart + lineStart
-                    return result
+                    result = fragmentStart + lineStart
+                    LogManager.shared.log("垂直模式获取精确Offset: localY=\(localY), lineStart=\(lineStart), result=\(result)", category: "ReaderProgress")
                 }
             }
-            let result = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
-            return result
+            if result == 0 {
+                result = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                LogManager.shared.log("垂直模式获取片段Offset: localY=\(localY), result=\(result)", category: "ReaderProgress")
+            }
         }
-        return 0
+        return result
     }
     func scrollToCharOffset(_ o: Int, animated: Bool) {
         if let yInContent = getYOffsetForCharOffset(o) {
             let absY = yInContent + currentContentView.frame.minY
             let vH = scrollView.bounds.height
             let targetY = max(0, absY - safeAreaTop - 10)
+            LogManager.shared.log("垂直模式执行行级滚动: charOffset=\(o), yInContent=\(yInContent), absY=\(absY), targetY=\(targetY)", category: "ReaderProgress")
             scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - vH))), animated: animated)
         } else {
             let index = paragraphStarts.lastIndex(where: { $0 <= o }) ?? 0
+            LogManager.shared.log("垂直模式退回段落滚动: charOffset=\(o), paragraphIndex=\(index)", category: "ReaderProgress")
             scrollToSentence(index: index, animated: animated)
         }
     }

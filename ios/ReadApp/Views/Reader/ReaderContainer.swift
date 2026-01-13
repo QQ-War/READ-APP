@@ -251,32 +251,49 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     func switchReadingMode(to mode: ReadingMode) {
         let offset = getCurrentReadingCharOffset()
+        let oldMode = currentReadingMode
         currentReadingMode = mode
+        logger.log("模式切换触发: \(oldMode.rawValue) -> \(mode.rawValue), 捕获Offset: \(offset)", category: "ReaderProgress")
+        
         setupReaderMode()
         
         // 模式切换后的进度同步
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.scrollToCharOffset(offset, animated: false)
+            guard let self = self else { return }
+            logger.log("执行模式切换后的重定位: Offset \(offset) -> \(self.currentReadingMode.rawValue)", category: "ReaderProgress")
+            self.scrollToCharOffset(offset, animated: false)
         }
     }
     
     private func getCurrentReadingCharOffset() -> Int {
+        let offset: Int
         if currentReadingMode == .vertical {
-            return verticalVC?.getCurrentCharOffset() ?? 0
+            offset = verticalVC?.getCurrentCharOffset() ?? 0
+            logger.log("获取进度(垂直模式): offset=\(offset)", category: "ReaderProgress")
         } else if !currentCache.pages.isEmpty {
             let idx = horizontalPageIndexForDisplay()
-            guard idx < currentCache.pages.count else { return 0 }
-            return currentCache.pages[idx].globalRange.location
+            if idx < currentCache.pages.count {
+                offset = currentCache.pages[idx].globalRange.location
+                logger.log("获取进度(水平模式): page=\(idx), offset=\(offset)", category: "ReaderProgress")
+            } else {
+                offset = 0
+            }
+        } else {
+            offset = 0
         }
-        return 0
+        return offset
     }
     
     private func scrollToCharOffset(_ offset: Int, animated: Bool) {
+        logger.log("执行滚动重定位: targetOffset=\(offset), mode=\(currentReadingMode.rawValue)", category: "ReaderProgress")
         if currentReadingMode == .vertical {
             verticalVC?.scrollToCharOffset(offset, animated: animated)
         } else {
             if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(offset, $0.globalRange) }) {
+                logger.log("定位到水平页: offset=\(offset) -> pageIndex=\(targetPage)", category: "ReaderProgress")
                 updateHorizontalPage(to: targetPage, animated: animated)
+            } else {
+                logger.log("定位失败: Offset \(offset) 不在当前章节任何页面内", category: "ReaderProgress")
             }
         }
     }
