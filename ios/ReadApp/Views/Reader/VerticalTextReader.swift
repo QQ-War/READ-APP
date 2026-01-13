@@ -578,11 +578,22 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     func getCurrentCharOffset() -> Int {
         guard let s = renderStore, viewIfLoaded != nil else { return 0 }
         
-        // 探测点改进：使用 contentTopPadding (safeAreaTop + 10)
-        // 避障偏移：使用字体大小的 20%，确保落在行内
+        // 关键：确保排版已计算，否则 textLayoutFragment 可能返回 nil
+        s.layoutManager.ensureLayout(for: s.contentStorage.documentRange)
+        
         let detectionOffset = max(2.0, lastFontSize * 0.2)
         let globalY = scrollView.contentOffset.y + contentTopPadding + detectionOffset
         let localY = globalY - currentContentView.frame.minY
+        
+        // 边界保护：如果在当前章节视图上方，返回 0
+        if localY < 0 {
+            return 0
+        }
+        
+        // 边界保护：如果在当前章节视图下方，返回最后一个字符
+        if localY > currentContentView.frame.height {
+            return s.attributedString.length > 0 ? s.attributedString.length - 1 : 0
+        }
         
         let point = CGPoint(
             x: horizontalMarginForDetection,

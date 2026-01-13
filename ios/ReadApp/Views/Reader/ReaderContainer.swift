@@ -403,47 +403,99 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
                 
         
-                private func getCurrentReadingCharOffset() -> Int {
+                    private func getCurrentReadingCharOffset() -> Int {
         
-                    // 如果有挂起的跳转，优先返回跳转目标，避免在视图未准备好时探测到 0
+                
         
-                    if let pending = pendingRelocationOffset {
+                        // 如果有挂起的跳转，优先返回跳转目标，避免在视图未准备好时探测到 0
         
-                        return pending
+                
         
-                    }
+                        if let pending = pendingRelocationOffset {
         
-                    
+                
         
-                    let offset: Int
+                            logger.log("获取进度(锁定中): 返回挂起Offset=\(pending)", category: "ReaderProgress")
         
-                    if currentReadingMode == .vertical {
+                
         
-                        offset = verticalVC?.getCurrentCharOffset() ?? 0
+                            return pending
         
-                    } else if !currentCache.pages.isEmpty {
-        
-                        let idx = horizontalPageIndexForDisplay()
-        
-                        if idx < currentCache.pages.count {
-        
-                            offset = currentCache.pages[idx].globalRange.location
-        
-                        } else {
-        
-                            offset = 0
+                
         
                         }
         
-                    } else {
+                
         
-                        offset = 0
+                        
+        
+                
+        
+                        let offset: Int
+        
+                
+        
+                        if currentReadingMode == .vertical {
+        
+                
+        
+                            offset = verticalVC?.getCurrentCharOffset() ?? 0
+        
+                
+        
+                            logger.log("获取进度(垂直模式): offset=\(offset)", category: "ReaderProgress")
+        
+                
+        
+                        } else if !currentCache.pages.isEmpty {
+        
+                
+        
+                            let idx = horizontalPageIndexForDisplay()
+        
+                
+        
+                            if idx < currentCache.pages.count {
+        
+                
+        
+                                offset = currentCache.pages[idx].globalRange.location
+        
+                
+        
+                                logger.log("获取进度(水平模式): page=\(idx), offset=\(offset)", category: "ReaderProgress")
+        
+                
+        
+                            } else {
+        
+                
+        
+                                offset = 0
+        
+                
+        
+                            }
+        
+                
+        
+                        } else {
+        
+                
+        
+                            offset = 0
+        
+                
+        
+                        }
+        
+                
+        
+                        return offset
+        
+                
         
                     }
-        
-                    return offset
-        
-                }
         
         private func scrollToCharOffset(_ offset: Int, animated: Bool) {
             logger.log("执行滚动重定位: targetOffset=\(offset), mode=\(currentReadingMode.rawValue)", category: "ReaderProgress")
