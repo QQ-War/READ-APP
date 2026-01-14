@@ -767,6 +767,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _currentChapterContent.value = ""
         currentParagraphs = emptyList()
         clearAdjacentChapterCache()
+        
+        saveBookProgress()
+        
         if (shouldContinuePlaying) {
             ttsController.startTts()
         } else {
@@ -795,6 +798,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _currentChapterContent.value = ""
         currentParagraphs = emptyList()
         _pendingScrollIndex.value = anchorParagraphIndex.coerceAtLeast(0)
+        
+        saveBookProgress()
 
         val preloadedContent = when (direction) {
             -1 -> if (_prevChapterIndex.value == target) _prevChapterContent.value else null

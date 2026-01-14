@@ -988,7 +988,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         v.onVisibleIndexChanged = { [weak self] idx in 
             guard let self = self else { return }
             let count = max(1, self.currentCache.contentSentences.count)
-            self.onProgressChanged?(self.currentChapterIndex, Double(idx) / Double(count)) 
+            self.onProgressChanged?(self.currentChapterIndex, Double(idx) / Double(count))
+            
+            // 后台保存进度
+            Task { [weak self] in
+                guard let self = self else { return }
+                let title = self.chapters.indices.contains(self.currentChapterIndex) ? self.chapters[self.currentChapterIndex].title : ""
+                try? await APIService.shared.saveBookProgress(bookUrl: self.book.bookUrl ?? "", index: self.currentChapterIndex, pos: Double(idx), title: title)
+            }
         }
         v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.safeToggleMenu() }
         v.isInfiniteScrollEnabled = readerSettings.isInfiniteScrollEnabled
@@ -1081,6 +1088,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 guard target >= 0 && target < self.chapters.count else { return }
                 self.lastChapterSwitchTime = now
                 self.jumpToChapter(target, startAtEnd: offset < 0)
+                
+                // 漫画模式切章即存进度
+                Task { [weak self] in
+                    guard let self = self else { return }
+                    let title = self.chapters.indices.contains(target) ? self.chapters[target].title : ""
+                    try? await APIService.shared.saveBookProgress(bookUrl: self.book.bookUrl ?? "", index: target, pos: 0.0, title: title)
+                }
             }
             vc.threshold = verticalThreshold
             vc.dampingFactor = readerSettings.verticalDampingFactor

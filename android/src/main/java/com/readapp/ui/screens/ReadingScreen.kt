@@ -333,7 +333,7 @@ fun ReadingScreen(
 
     LaunchedEffect(currentChapterIndex, isMangaMode) {
         if (isMangaMode && mangaNavIntent == ChapterNavIntent.NONE) {
-            mangaNavIntent = ChapterNavIntent.FIRST
+            // 不再强制设为 FIRST，允许恢复保存的进度
         }
     }
 
