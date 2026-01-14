@@ -67,6 +67,10 @@ fun BookshelfScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
+    LaunchedEffect(Unit) {
+        bookViewModel.refreshBooks()
+    }
+
     val refreshState = rememberPullRefreshState(
         refreshing = isLoading,
         onRefresh = { bookViewModel.refreshBooks() }

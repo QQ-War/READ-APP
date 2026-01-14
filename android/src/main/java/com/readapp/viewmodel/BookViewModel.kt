@@ -486,6 +486,20 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val progress = if (_currentParagraphIndex.value >= 0) _currentParagraphIndex.value.toDouble() else 0.0
         val title = _chapters.value.getOrNull(index)?.title ?: book.durChapterTitle
 
+        // 立即更新本地状态，确保 UI 响应
+        val now = System.currentTimeMillis()
+        val updatedBook = book.copy(
+            durChapterIndex = index,
+            durChapterProgress = _currentParagraphIndex.value,
+            durChapterTitle = title,
+            durChapterPos = progress,
+            durChapterTime = now
+        )
+        
+        _selectedBook.value = updatedBook
+        allBooks = allBooks.map { if (it.bookUrl == bookUrl) updatedBook else it }
+        applyBooksFilterAndSort()
+
         viewModelScope.launch {
             bookRepository.saveBookProgress(
                 currentServerEndpoint(),
@@ -496,7 +510,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 progress,
                 title
             ).onFailure { error ->
-                Log.w(TAG, "淇濆瓨闃呰杩涘害澶辫触: ${error.message}", error)
+                Log.w(TAG, "保存阅读进度失败: ${error.message}", error)
             }
         }
     }
