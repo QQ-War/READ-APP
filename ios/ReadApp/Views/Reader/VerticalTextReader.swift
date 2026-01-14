@@ -913,6 +913,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var threshold: CGFloat = 80
     var maxZoomScale: CGFloat = 3.0
     var currentVisibleIndex: Int = 0
+    var pendingScrollIndex: Int?
     private var imageUrls: [String] = []
 
     override func viewDidLoad() {
@@ -963,23 +964,47 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         guard urls != self.imageUrls else { return }
         self.imageUrls = urls
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for urlStr in urls {
+        for (index, urlStr) in urls.enumerated() {
             let iv = UIImageView()
             iv.contentMode = .scaleAspectFit
             iv.clipsToBounds = true
             stackView.addArrangedSubview(iv)
             let url = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
             Task {
-                if let u = URL(string: url), let (data, _) = try? await URLSession.shared.data(from: u), let img = UIImage(data: data) {
+                if let data = await ImageCache.shared.getImage(url), let image = UIImage(data: data) {
                     await MainActor.run {
-                        iv.image = img
-                        if img.size.width > 0 {
-                            iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: img.size.height / img.size.width).isActive = true
+                        iv.image = image
+                        let ratio = image.size.height / image.size.width
+                        iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
+                        
+                        // 如果刚好加载的是目标图片，或者是最后一张图片且目标在范围内，尝试触发滚动
+                        if self.pendingScrollIndex == index {
+                            self.scrollToIndex(index, animated: false)
                         }
                     }
                 }
             }
         }
+    }
+
+    func scrollToIndex(_ index: Int, animated: Bool = false) {
+        self.pendingScrollIndex = index
+        guard index >= 0, index < stackView.arrangedSubviews.count else { return }
+        
+        let targetView = stackView.arrangedSubviews[index]
+        // 只有当高度大于 0 时才认为布局完成
+        if targetView.frame.height > 0 {
+            self.view.layoutIfNeeded()
+            let targetY = targetView.frame.origin.y - safeAreaTop
+            scrollView.setContentOffset(CGPoint(x: 0, y: targetY), animated: animated)
+            self.pendingScrollIndex = nil // 完成后清除
+        }
+    }
+    
+    func scrollToBottom(animated: Bool = false) {
+        self.view.layoutIfNeeded()
+        let bottomOffset = CGPoint(x: 0, y: max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height))
+        scrollView.setContentOffset(bottomOffset, animated: animated)
     }
 
     func scrollViewDidScroll(_ s: UIScrollView) {

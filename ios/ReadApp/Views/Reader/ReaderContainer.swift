@@ -208,7 +208,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             // 退出阅读器时强制保存进度
             Task {
                 let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
-                // 尝试捕获当前精确偏移（文字模式）或页码（漫画模式）
                 var pos: Double = 0.0
                 if currentReadingMode == .vertical {
                     if isMangaMode {
@@ -218,7 +217,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                         let idx = verticalVC?.lastReportedIndex ?? 0
                         pos = Double(idx) / Double(count)
                     }
+                } else if !currentCache.pages.isEmpty {
+                    // 水平模式
+                    pos = Double(currentPageIndex) / Double(currentCache.pages.count)
                 }
+                
+                // 本地和远程同步
+                UserDefaults.standard.set(currentChapterIndex, forKey: "lastChapter_\(book.bookUrl ?? "")")
                 try? await APIService.shared.saveBookProgress(bookUrl: book.bookUrl ?? "", index: currentChapterIndex, pos: pos, title: title)
             }
         }
@@ -553,29 +558,39 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
             if isMangaMode { nextCache = .empty }
     
-            if self.isFirstLoad && !self.isMangaMode {
+            if self.isFirstLoad {
                 self.isFirstLoad = false
-                if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
-                    let sentenceIdx = self.ttsManager.currentSentenceIndex
-                    if self.currentReadingMode == .horizontal {
-                        // 已经通过锚点分页了，直接跳到 anchorPageIndex
-                        self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
+                if !isManga {
+                    if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
+                        let sentenceIdx = self.ttsManager.currentSentenceIndex
+                        if self.currentReadingMode == .horizontal {
+                            // 已经通过锚点分页了，直接跳到 anchorPageIndex
+                            self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
+                        } else {
+                            self.verticalVC?.scrollToSentence(index: sentenceIdx, animated: false)
+                        }
                     } else {
-                        self.verticalVC?.scrollToSentence(index: sentenceIdx, animated: false)
+                        if self.currentReadingMode == .horizontal {
+                            self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
+                        } else {
+                            let pos = self.book.durChapterPos ?? 0
+                            self.verticalVC?.scrollToProgress(pos)
+                        }
                     }
                 } else {
-                    if self.currentReadingMode == .horizontal {
-                        self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
-                    } else {
-                        let pos = self.book.durChapterPos ?? 0
-                        self.verticalVC?.scrollToProgress(pos)
-                    }
+                    // 漫画模式首次加载恢复
+                    let pos = self.book.durChapterPos ?? 0
+                    self.mangaVC?.scrollToIndex(Int(pos), animated: false)
                 }
             } else if startAtEnd {
                 self.scrollToChapterEnd(animated: false)
             } else {
-                self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
-                self.verticalVC?.scrollToTop(animated: false)
+                if !isManga {
+                    self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
+                    self.verticalVC?.scrollToTop(animated: false)
+                } else {
+                    self.mangaVC?.scrollToIndex(0, animated: false)
+                }
             }
             self.prefetchAdjacentChapters(index: index)
             self.syncTTSReadingPositionIfNeeded()
@@ -1009,13 +1024,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             guard let self = self else { return }
             let count = max(1, self.currentCache.contentSentences.count)
             self.onProgressChanged?(self.currentChapterIndex, Double(idx) / Double(count))
-            
-            // 后台保存进度
-            Task { [weak self] in
-                guard let self = self else { return }
-                let title = self.chapters.indices.contains(self.currentChapterIndex) ? self.chapters[self.currentChapterIndex].title : ""
-                try? await APIService.shared.saveBookProgress(bookUrl: self.book.bookUrl ?? "", index: self.currentChapterIndex, pos: Double(idx), title: title)
-            }
         }
         v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.safeToggleMenu() }
         v.isInfiniteScrollEnabled = readerSettings.isInfiniteScrollEnabled
@@ -1112,13 +1120,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 guard target >= 0 && target < self.chapters.count else { return }
                 self.lastChapterSwitchTime = now
                 self.jumpToChapter(target, startAtEnd: offset < 0)
-                
-                // 漫画模式切章即存进度
-                Task { [weak self] in
-                    guard let self = self else { return }
-                    let title = self.chapters.indices.contains(target) ? self.chapters[target].title : ""
-                    try? await APIService.shared.saveBookProgress(bookUrl: self.book.bookUrl ?? "", index: target, pos: 0.0, title: title)
-                }
             }
             vc.threshold = verticalThreshold
             vc.dampingFactor = readerSettings.verticalDampingFactor
@@ -1391,14 +1392,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: clampedOffset, charOffset: charOffset)
     }
     private func scrollToChapterEnd(animated: Bool) { 
-        if isMangaMode, let m = mangaVC { 
-            let sv = m.scrollView
-            sv.setContentOffset(CGPoint(x: 0, y: max(0, sv.contentSize.height - sv.bounds.height)), animated: animated) 
+        if isMangaMode {
+            mangaVC?.scrollToBottom(animated: animated)
         } else if currentReadingMode == .vertical { 
             verticalVC?.scrollToBottom(animated: animated) 
-        } else if !currentCache.pages.isEmpty { 
+        } else { 
             updateHorizontalPage(to: max(0, currentCache.pages.count - 1), animated: animated) 
         } 
+    }
+
     }
     private func logTTSStartSnapshot(sentenceIndex: Int, sentenceOffset: Int, charOffset: Int, visibleTopIndex: Int, visibleTopLines: [String], previewLines: [String], pageSnippet: String, visibleFragmentLines: [String]) {
         let pageIdx = horizontalPageIndexForDisplay()
