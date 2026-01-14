@@ -158,9 +158,9 @@ fun ReadingScreen(
     var mangaEdgeHint by remember { mutableStateOf<EdgeHint?>(null) }
     val transitionPolicy = remember { ChapterTransitionPolicy() }
     
-    val mangaSwitchThreshold by readerState.mangaSwitchThreshold.collectAsState()
-    val verticalDampingFactor by readerState.verticalDampingFactor.collectAsState()
-    val mangaMaxZoom by readerState.mangaMaxZoom.collectAsState()
+    val mangaSwitchThreshold = readerState.mangaSwitchThreshold
+    val verticalDampingFactor = readerState.verticalDampingFactor
+    val mangaMaxZoom = readerState.mangaMaxZoom
     
     // 强制旋转状态
     var isForceLandscape by remember { mutableStateOf(false) }

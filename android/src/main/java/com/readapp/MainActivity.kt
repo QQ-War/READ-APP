@@ -203,9 +203,9 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                             bookViewModel.setCurrentChapter(index)
                         },
                         onInfiniteScrollSwitch = { direction, anchorIndex ->
-
                             bookViewModel.switchChapterFromInfiniteScroll(direction, anchorIndex)
                         },
+
                         onLoadChapterContent = { index ->
                             bookViewModel.loadChapterContent(index)
                         },
