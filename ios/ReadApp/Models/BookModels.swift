@@ -6,21 +6,21 @@ struct Book: Codable, Identifiable {
     private let fallbackId = UUID().uuidString
 
     var id: String { bookUrl ?? fallbackId }
-    let name: String?
-    let author: String?
-    let bookUrl: String?
+    var name: String?
+    var author: String?
+    var bookUrl: String?
     var origin: String?
     var originName: String?
-    let coverUrl: String?
-    let intro: String?
-    let durChapterTitle: String?
-    let durChapterIndex: Int?
-    let durChapterPos: Double?
-    let totalChapterNum: Int?
-    let latestChapterTitle: String?
-    let kind: String?
-    let type: Int?
-    let durChapterTime: Int64?  // 最后阅读时间（时间戳）
+    var coverUrl: String?
+    var intro: String?
+    var durChapterTitle: String?
+    var durChapterIndex: Int?
+    var durChapterPos: Double?
+    var totalChapterNum: Int?
+    var latestChapterTitle: String?
+    var kind: String?
+    var type: Int?
+    var durChapterTime: Int64?  // 最后阅读时间（时间戳）
 
     var sourceDisplayName: String? // For global search results
 

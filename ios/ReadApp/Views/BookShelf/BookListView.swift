@@ -116,11 +116,13 @@ struct BookListView: View {
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker { url in Task { await importBook(from: url) } }
         }
-        .fullScreenCover(item: $selectedBook) { book in
+        .fullScreenCover(item: $selectedBook, onDismiss: {
+            Task { await loadBooks() }
+        }) { book in
             ReadingView(book: book).environmentObject(apiService)
         }
         .task { 
-            if apiService.books.isEmpty { await loadBooks() }
+            await loadBooks()
             if apiService.availableSources.isEmpty { _ = try? await apiService.fetchBookSources() }
         }
         .overlay {

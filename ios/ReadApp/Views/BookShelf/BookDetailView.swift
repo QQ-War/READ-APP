@@ -4,6 +4,10 @@ struct BookDetailView: View {
     let book: Book
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var apiService: APIService
+    
+    private var currentBook: Book {
+        apiService.books.first { $0.bookUrl == book.bookUrl } ?? book
+    }
     @StateObject private var preferences = UserPreferences.shared
     @State private var chapters: [BookChapter] = []
     @State private var isLoading = false
@@ -166,7 +170,7 @@ struct BookDetailView: View {
         .confirmationDialog("选择缓存范围", isPresented: $showingDownloadOptions, titleVisibility: .visible) {
             Button("缓存全文") { startDownload(start: 1, end: chapters.count) }
             Button("缓存后续 50 章") { 
-                let current = (book.durChapterIndex ?? 0) + 1
+                let current = (currentBook.durChapterIndex ?? 0) + 1
                 startDownload(start: current, end: min(current + 50, chapters.count)) 
             }
             Button("自定义范围") { withAnimation { showCustomRange = true } }
@@ -257,8 +261,12 @@ struct BookDetailView: View {
                         .foregroundColor(.white)
                         .cornerRadius(8)
                 }
-                .fullScreenCover(isPresented: $isReading) {
-                    ReadingView(book: book).environmentObject(apiService)
+                .fullScreenCover(isPresented: $isReading, onDismiss: {
+                    Task {
+                        try? await apiService.fetchBookshelf()
+                    }
+                }) {
+                    ReadingView(book: currentBook).environmentObject(apiService)
                 }
             }
         }
@@ -342,7 +350,7 @@ struct BookDetailView: View {
             chapters = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             if endChapter.isEmpty { endChapter = "\(chapters.count)" }
             // 自动跳转到当前章节所在的分组
-            let initialIndex = book.durChapterIndex ?? 0
+            let initialIndex = currentBook.durChapterIndex ?? 0
             selectedGroupIndex = initialIndex / 50
             refreshCachedStatus()
         } catch { errorMessage = error.localizedDescription }

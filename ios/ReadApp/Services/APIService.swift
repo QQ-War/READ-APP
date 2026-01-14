@@ -125,6 +125,22 @@ class APIService: ObservableObject {
     // MARK: - 保存阅读进度
     func saveBookProgress(bookUrl: String, index: Int, pos: Double, title: String?) async throws {
         try await booksService.saveBookProgress(bookUrl: bookUrl, index: index, pos: pos, title: title)
+        
+        // 更新本地书籍列表中的进度，确保 UI 能够立即响应而无需重新请求整个书架
+        await MainActor.run {
+            if let idx = self.books.firstIndex(where: { $0.bookUrl == bookUrl }) {
+                var updatedBook = self.books[idx]
+                updatedBook.durChapterIndex = index
+                updatedBook.durChapterPos = pos
+                updatedBook.durChapterTitle = title
+                updatedBook.durChapterTime = Int64(Date().timeIntervalSince1970 * 1000)
+                self.books[idx] = updatedBook
+                
+                // 强制触发出版物更新（如果是 Struct 可能需要重新赋值数组）
+                let currentBooks = self.books
+                self.books = currentBooks
+            }
+        }
     }
     
     // MARK: - TTS 相关
