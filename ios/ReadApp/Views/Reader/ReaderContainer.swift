@@ -1400,8 +1400,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             updateHorizontalPage(to: max(0, currentCache.pages.count - 1), animated: animated) 
         } 
     }
-
-    }
     private func logTTSStartSnapshot(sentenceIndex: Int, sentenceOffset: Int, charOffset: Int, visibleTopIndex: Int, visibleTopLines: [String], previewLines: [String], pageSnippet: String, visibleFragmentLines: [String]) {
         let pageIdx = horizontalPageIndexForDisplay()
         let topLinesDesc = visibleTopLines.isEmpty ? "[]" : visibleTopLines.joined(separator: " | ")

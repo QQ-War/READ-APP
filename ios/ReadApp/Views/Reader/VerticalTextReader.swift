@@ -969,9 +969,9 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             iv.contentMode = .scaleAspectFit
             iv.clipsToBounds = true
             stackView.addArrangedSubview(iv)
-            let url = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
+            let urlStr2 = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
             Task {
-                if let data = await ImageCache.shared.getImage(url), let image = UIImage(data: data) {
+                if let u = URL(string: urlStr2), let (data, _) = try? await URLSession.shared.data(from: u), let image = UIImage(data: data) {
                     await MainActor.run {
                         iv.image = image
                         let ratio = image.size.height / image.size.width
