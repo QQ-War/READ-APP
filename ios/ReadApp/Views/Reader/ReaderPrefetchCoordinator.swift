@@ -71,7 +71,7 @@ final class ReaderPrefetchCoordinator {
         let nextIdx = index + 1
         if nextIdx < chapters.count {
             let alreadyHasNext = isMangaMode ? !nextCache.contentSentences.isEmpty : nextCache.renderStore != nil
-            if alreadyHasNext { return }
+            if alreadyHasNext && nextCache.chapterUrl == chapters[nextIdx].url { return }
             if fetchingNextIndex == nextIdx { return }
             nextTask?.cancel()
             fetchingNextIndex = nextIdx
@@ -127,7 +127,7 @@ final class ReaderPrefetchCoordinator {
         let prevIdx = index - 1
         if prevIdx >= 0 {
             let alreadyHasPrev = isMangaMode ? !prevCache.contentSentences.isEmpty : prevCache.renderStore != nil
-            if alreadyHasPrev { return }
+            if alreadyHasPrev && prevCache.chapterUrl == chapters[prevIdx].url { return }
             if fetchingPrevIndex == prevIdx { return }
             prevTask?.cancel()
             fetchingPrevIndex = prevIdx
