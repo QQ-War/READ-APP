@@ -1025,6 +1025,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         v.threshold = verticalThreshold
         v.seamlessSwitchThreshold = readerSettings.infiniteScrollSwitchThreshold
+        v.dampingFactor = readerSettings.verticalDampingFactor
         self.verticalVC = v
         addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
         
@@ -1082,6 +1083,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 self.jumpToChapter(target, startAtEnd: offset < 0)
             }
             vc.threshold = verticalThreshold
+            vc.dampingFactor = readerSettings.verticalDampingFactor
+            vc.maxZoomScale = readerSettings.mangaMaxZoom
             addChild(vc); view.insertSubview(vc.view, at: 0); vc.view.frame = view.bounds; vc.didMove(toParent: self)
             self.mangaVC = vc
         }

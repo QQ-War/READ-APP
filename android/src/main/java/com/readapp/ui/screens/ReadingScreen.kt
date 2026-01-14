@@ -115,6 +115,7 @@ fun ReadingScreen(
     onUserScrollState: (Boolean) -> Unit = {},
     onForceMangaProxyChange: (Boolean) -> Unit = {},
     onInfiniteScrollSwitch: (Int, Int) -> Unit = { _, _ -> },
+    onMangaMaxZoomChange: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val book = readerState.book ?: return
@@ -152,6 +153,10 @@ fun ReadingScreen(
     var mangaPendingScrollIndex by remember { mutableStateOf<Int?>(null) }
     var mangaEdgeHint by remember { mutableStateOf<EdgeHint?>(null) }
     val transitionPolicy = remember { ChapterTransitionPolicy() }
+    
+    val mangaSwitchThreshold by readerState.mangaSwitchThreshold.collectAsState()
+    val verticalDampingFactor by readerState.verticalDampingFactor.collectAsState()
+    val mangaMaxZoom by readerState.mangaMaxZoom.collectAsState()
     
     // 强制旋转状态
     var isForceLandscape by remember { mutableStateOf(false) }
@@ -435,6 +440,9 @@ fun ReadingScreen(
                 chapterUrl = currentChapterUrl,
                 forceProxy = forceMangaProxy,
                 pendingScrollIndex = mangaPendingScrollIndex,
+                mangaSwitchThreshold = mangaSwitchThreshold,
+                verticalDampingFactor = verticalDampingFactor,
+                mangaMaxZoom = mangaMaxZoom,
                 onToggleControls = { showControls = !showControls },
                 onScroll = {
                     onScrollUpdate(it)
@@ -612,7 +620,7 @@ fun ReadingScreen(
         }
 
         if (showChapterList) ChapterListDialog(chapters, currentChapterIndex, preloadedChapters, book.bookUrl ?: "", onChapter = { onChapterClick(it); showChapterList = false }, onDismiss = { showChapterList = false })
-        if (showFontDialog) FontSizeDialog(readingFontSize, onReadingFontSizeChange, readingHorizontalPadding, onReadingHorizontalPaddingChange, lockPageOnTTS, onLockPageOnTTSChange, pageTurningMode, onPageTurningModeChange, darkModeConfig, onDarkModeChange, forceMangaProxy, onForceMangaProxyChange, readingMode, onReadingModeChange, isInfiniteScrollEnabled, onInfiniteScrollEnabledChange, isMangaMode, onDismiss = { showFontDialog = false })
+        if (showFontDialog) FontSizeDialog(readingFontSize, onReadingFontSizeChange, readingHorizontalPadding, onReadingHorizontalPaddingChange, lockPageOnTTS, onLockPageOnTTSChange, pageTurningMode, onPageTurningModeChange, darkModeConfig, onDarkModeChange, forceMangaProxy, onForceMangaProxyChange, readingMode, onReadingModeChange, isInfiniteScrollEnabled, onInfiniteScrollEnabledChange, mangaSwitchThreshold, verticalDampingFactor, mangaMaxZoom, onMangaSwitchThresholdChange, onVerticalDampingFactorChange, onMangaMaxZoomChange, isMangaMode, onDismiss = { showFontDialog = false })
     }
 }
 
@@ -729,15 +737,28 @@ private fun handleHorizontalTap(offset: Offset, size: IntSize, show: Boolean, st
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, infiniteScrollEnabled: Boolean, onInfiniteScrollEnabledChange: (Boolean) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
+private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, infiniteScrollEnabled: Boolean, onInfiniteScrollEnabledChange: (Boolean) -> Unit, mangaSwitchThreshold: Int, verticalDampingFactor: Float, mangaMaxZoom: Float, onMangaSwitchThresholdChange: (Int) -> Unit, onVerticalDampingFactorChange: (Float) -> Unit, onMangaMaxZoomChange: (Float) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("阅读选项") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
             if (!isManga) {
                 Column { Text("阅读模式", style = MaterialTheme.typography.labelMedium); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ReadingMode.values().forEach { m -> FilterChip(selected = mode == m, onClick = { onMode(m) }, label = { Text(if (m == ReadingMode.Vertical) "上下滚动" else "左右翻页") }, modifier = Modifier.weight(1f)) } } }
                 Divider()
             }
             Column { Text("夜间模式", style = MaterialTheme.typography.labelMedium); Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { DarkModeConfig.values().forEach { c -> FilterChip(selected = darkConfig == c, onClick = { onDark(c) }, label = { Text(when(c){ DarkModeConfig.ON->"开启"; DarkModeConfig.OFF->"关闭"; DarkModeConfig.AUTO->"系统"}) }, modifier = Modifier.weight(1f)) } } }
             if (isManga) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onForceProxy(!forceProxy) }) { Column(modifier = Modifier.weight(1f)) { Text("强制服务器代理", style = MaterialTheme.typography.bodyLarge); Text("如果漫画加载失败请开启", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline) }; Switch(checked = forceProxy, onCheckedChange = onForceProxy) }
+            
+            if (isManga) {
+                Column {
+                    Text("漫画最大放大倍数: ${"%.1f".format(mangaMaxZoom)}x", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = mangaMaxZoom,
+                        onValueChange = onMangaMaxZoomChange,
+                        valueRange = 1f..10f,
+                        steps = 18
+                    )
+                }
+            }
+
             if (!isManga) {
                 Divider()
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onInfiniteScrollEnabledChange(!infiniteScrollEnabled) }) {
@@ -757,8 +778,8 @@ private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hP
 }
 
 @Composable
-private fun FontSizeDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, infiniteScrollEnabled: Boolean, onInfiniteScrollEnabledChange: (Boolean) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
-    ReaderOptionsDialog(fontSize, onFontSize, hPadding, onHPadding, lockTTS, onLockTTS, turnMode, onTurnMode, darkConfig, onDark, forceProxy, onForceProxy, mode, onMode, infiniteScrollEnabled, onInfiniteScrollEnabledChange, isManga, onDismiss)
+private fun FontSizeDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, infiniteScrollEnabled: Boolean, onInfiniteScrollEnabledChange: (Boolean) -> Unit, mangaSwitchThreshold: Int, verticalDampingFactor: Float, mangaMaxZoom: Float, onMangaSwitchThresholdChange: (Int) -> Unit, onVerticalDampingFactorChange: (Float) -> Unit, onMangaMaxZoomChange: (Float) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
+    ReaderOptionsDialog(fontSize, onFontSize, hPadding, onHPadding, lockTTS, onLockTTS, turnMode, onTurnMode, darkConfig, onDark, forceProxy, onForceProxy, mode, onMode, infiniteScrollEnabled, onInfiniteScrollEnabledChange, mangaSwitchThreshold, verticalDampingFactor, mangaMaxZoom, onMangaSwitchThresholdChange, onVerticalDampingFactorChange, onMangaMaxZoomChange, isManga, onDismiss)
 }
 
 @Composable

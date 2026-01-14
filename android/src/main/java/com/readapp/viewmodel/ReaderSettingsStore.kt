@@ -42,6 +42,15 @@ class ReaderSettingsStore(
     private val _ttsSentenceChunkLimit = MutableStateFlow(600)
     val ttsSentenceChunkLimit: StateFlow<Int> = _ttsSentenceChunkLimit.asStateFlow()
 
+    private val _mangaSwitchThreshold = MutableStateFlow(80)
+    val mangaSwitchThreshold: StateFlow<Int> = _mangaSwitchThreshold.asStateFlow()
+
+    private val _verticalDampingFactor = MutableStateFlow(0.15f)
+    val verticalDampingFactor: StateFlow<Float> = _verticalDampingFactor.asStateFlow()
+
+    private val _mangaMaxZoom = MutableStateFlow(3.0f)
+    val mangaMaxZoom: StateFlow<Float> = _mangaMaxZoom.asStateFlow()
+
     private val _manualMangaUrls = MutableStateFlow<Set<String>>(emptySet())
     val manualMangaUrls: StateFlow<Set<String>> = _manualMangaUrls.asStateFlow()
 
@@ -58,6 +67,9 @@ class ReaderSettingsStore(
         _infiniteScrollEnabled.value = preferences.infiniteScrollEnabled.first()
         _ttsFollowCooldownSeconds.value = preferences.ttsFollowCooldownSeconds.first()
         _ttsSentenceChunkLimit.value = preferences.ttsSentenceChunkLimit.first()
+        _mangaSwitchThreshold.value = preferences.mangaSwitchThreshold.first()
+        _verticalDampingFactor.value = preferences.verticalDampingFactor.first()
+        _mangaMaxZoom.value = preferences.mangaMaxZoom.first()
         val manualRaw = preferences.manualMangaUrls.first()
         _manualMangaUrls.value = if (manualRaw.isBlank()) emptySet() else manualRaw.split(";").toSet()
         _forceMangaProxy.value = preferences.forceMangaProxy.first()
@@ -107,6 +119,21 @@ class ReaderSettingsStore(
     fun updateTtsSentenceChunkLimit(limit: Int) {
         _ttsSentenceChunkLimit.value = limit.coerceIn(300, 1000)
         scope.launch { preferences.saveTtsSentenceChunkLimit(_ttsSentenceChunkLimit.value) }
+    }
+
+    fun updateMangaSwitchThreshold(threshold: Int) {
+        _mangaSwitchThreshold.value = threshold.coerceIn(40, 300)
+        scope.launch { preferences.saveMangaSwitchThreshold(_mangaSwitchThreshold.value) }
+    }
+
+    fun updateVerticalDampingFactor(factor: Float) {
+        _verticalDampingFactor.value = factor.coerceIn(0f, 0.5f)
+        scope.launch { preferences.saveVerticalDampingFactor(_verticalDampingFactor.value) }
+    }
+
+    fun updateMangaMaxZoom(zoom: Float) {
+        _mangaMaxZoom.value = zoom.coerceIn(1f, 10f)
+        scope.launch { preferences.saveMangaMaxZoom(_mangaMaxZoom.value) }
     }
 
     fun updatePageTurningMode(mode: PageTurningMode) {

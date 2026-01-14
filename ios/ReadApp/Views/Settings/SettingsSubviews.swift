@@ -156,6 +156,34 @@ struct ReadingSettingsView: View {
                         }
                         .padding(.vertical, 4)
                     }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("切章拉伸阻尼")
+                            Spacer()
+                            Text(String(format: "%.2f", preferences.verticalDampingFactor))
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(value: $preferences.verticalDampingFactor, in: 0...0.5, step: 0.01)
+                        Text("数值越小拉伸感越强（建议 0.1-0.2）")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("漫画最大放大倍数")
+                            Spacer()
+                            Text(String(format: "%.1f x", preferences.mangaMaxZoom))
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(value: $preferences.mangaMaxZoom, in: 1...10, step: 0.5)
+                        Text("控制漫画模式下的最大缩放比例")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
             }
             

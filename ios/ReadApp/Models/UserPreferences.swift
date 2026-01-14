@@ -191,6 +191,18 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    @Published var verticalDampingFactor: CGFloat {
+        didSet {
+            UserDefaults.standard.set(verticalDampingFactor, forKey: "verticalDampingFactor")
+        }
+    }
+
+    @Published var mangaMaxZoom: CGFloat {
+        didSet {
+            UserDefaults.standard.set(mangaMaxZoom, forKey: "mangaMaxZoom")
+        }
+    }
+
     @Published var infiniteScrollSwitchThreshold: CGFloat {
         didSet {
             UserDefaults.standard.set(infiniteScrollSwitchThreshold, forKey: "infiniteScrollSwitchThreshold")
@@ -299,6 +311,10 @@ class UserPreferences: ObservableObject {
         self.isInfiniteScrollEnabled = UserDefaults.standard.object(forKey: "isInfiniteScrollEnabled") as? Bool ?? true
         let savedVerticalThreshold = CGFloat(UserDefaults.standard.float(forKey: "verticalThreshold"))
         self.verticalThreshold = savedVerticalThreshold == 0 ? 80 : savedVerticalThreshold
+        let savedVerticalDampingFactor = CGFloat(UserDefaults.standard.float(forKey: "verticalDampingFactor"))
+        self.verticalDampingFactor = savedVerticalDampingFactor == 0 ? 0.15 : savedVerticalDampingFactor
+        let savedMangaMaxZoom = CGFloat(UserDefaults.standard.float(forKey: "mangaMaxZoom"))
+        self.mangaMaxZoom = savedMangaMaxZoom == 0 ? 3.0 : savedMangaMaxZoom
         let savedInfiniteSwitchThreshold = CGFloat(UserDefaults.standard.float(forKey: "infiniteScrollSwitchThreshold"))
         self.infiniteScrollSwitchThreshold = savedInfiniteSwitchThreshold == 0 ? 120 : savedInfiniteSwitchThreshold
         let savedTtsFollowCooldown = UserDefaults.standard.double(forKey: "ttsFollowCooldown")

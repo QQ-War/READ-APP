@@ -6,6 +6,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
     let sentences: [String]; let fontSize: CGFloat; let lineSpacing: CGFloat; let horizontalMargin: CGFloat; let highlightIndex: Int?; let secondaryIndices: Set<Int>; let isPlayingHighlight: Bool; let chapterUrl: String?
     let title: String?; let nextTitle: String?; let prevTitle: String?
     let verticalThreshold: CGFloat
+    let verticalDampingFactor: CGFloat
     @Binding var currentVisibleIndex: Int; @Binding var pendingScrollIndex: Int?
     var forceScrollToTop: Bool = false; var onScrollFinished: (() -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
     var safeAreaTop: CGFloat = 0
@@ -27,6 +28,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
         vc.onReachedBottom = onReachedBottom; vc.onReachedTop = onReachedTop; vc.onChapterSwitched = onChapterSwitched
         vc.onInteractionChanged = onInteractionChanged
         vc.threshold = verticalThreshold
+        vc.dampingFactor = verticalDampingFactor
         
         let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, prevSentences: prevChapterSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
         
@@ -63,7 +65,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var isTransitioning = false
     private var suppressAutoSwitchUntil: TimeInterval = 0
     private var dragStartTime: TimeInterval = 0
-    private let dampingFactor: CGFloat = 0.12
+    var dampingFactor: CGFloat = 0.12
     private let chapterGap: CGFloat = 80
     private var lastInfiniteSetting: Bool?
 
@@ -398,6 +400,22 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         if isInfiniteScrollEnabled { handleAutoSwitchIfNeeded(rawOffset: rawOffset) }
         handleHoldSwitchIfNeeded(rawOffset: rawOffset)
+        
+        // 当关闭无限流时，应用视觉阻尼
+        if !isInfiniteScrollEnabled {
+            let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+            if rawOffset < -safeAreaTop {
+                let diff = -safeAreaTop - rawOffset
+                currentContentView.transform = CGAffineTransform(translationX: 0, y: diff * dampingFactor)
+            } else if rawOffset > actualMaxScrollY {
+                let diff = rawOffset - actualMaxScrollY
+                currentContentView.transform = CGAffineTransform(translationX: 0, y: -diff * dampingFactor)
+            } else {
+                currentContentView.transform = .identity
+            }
+        } else {
+            currentContentView.transform = .identity
+        }
         
         if isInfiniteScrollEnabled {
             if s.contentOffset.y > s.contentSize.height - s.bounds.height * 1.5 { onReachedBottom?() }
@@ -878,13 +896,14 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     private var switchReady = false
     private var switchWorkItem: DispatchWorkItem?
     private let switchHoldDuration: TimeInterval = 0.6
-    private let dampingFactor: CGFloat = 0.2
+    var dampingFactor: CGFloat = 0.2
     
     var onChapterSwitched: ((Int) -> Void)?
     var onToggleMenu: (() -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0
     var threshold: CGFloat = 80
+    var maxZoomScale: CGFloat = 3.0
     private var imageUrls: [String] = []
 
     override func viewDidLoad() {
@@ -894,6 +913,8 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.alwaysBounceVertical = true
         scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
+        scrollView.maximumZoomScale = maxZoomScale
+        scrollView.minimumZoomScale = 1.0
         view.addSubview(scrollView)
         
         stackView.axis = .vertical
@@ -925,6 +946,10 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     
     @objc private func handleTap() { onToggleMenu?() }
 
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        return stackView
+    }
+
     func update(urls: [String]) {
         guard urls != self.imageUrls else { return }
         self.imageUrls = urls
@@ -951,6 +976,17 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     func scrollViewDidScroll(_ s: UIScrollView) {
         let rawOffset = s.contentOffset.y
         handleHoldSwitchIfNeeded(rawOffset: rawOffset)
+        
+        let actualMaxScrollY = max(-safeAreaTop, stackView.frame.height - scrollView.bounds.height)
+        if rawOffset < -safeAreaTop {
+            let diff = -safeAreaTop - rawOffset
+            stackView.transform = CGAffineTransform(translationX: 0, y: diff * dampingFactor)
+        } else if rawOffset > actualMaxScrollY {
+            let diff = rawOffset - actualMaxScrollY
+            stackView.transform = CGAffineTransform(translationX: 0, y: -diff * dampingFactor)
+        } else {
+            stackView.transform = .identity
+        }
     }
     
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {

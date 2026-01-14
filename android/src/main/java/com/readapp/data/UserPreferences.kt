@@ -62,6 +62,9 @@ class UserPreferences(private val context: Context) {
         val InfiniteScrollEnabled = booleanPreferencesKey("infiniteScrollEnabled")
         val TtsFollowCooldownSeconds = floatPreferencesKey("ttsFollowCooldownSeconds")
         val TtsSentenceChunkLimit = intPreferencesKey("ttsSentenceChunkLimit")
+        val MangaSwitchThreshold = intPreferencesKey("mangaSwitchThreshold")
+        val VerticalDampingFactor = floatPreferencesKey("verticalDampingFactor")
+        val MangaMaxZoom = floatPreferencesKey("mangaMaxZoom")
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080" }
@@ -83,6 +86,9 @@ class UserPreferences(private val context: Context) {
     val infiniteScrollEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.InfiniteScrollEnabled] ?: true }
     val ttsFollowCooldownSeconds: Flow<Float> = context.dataStore.data.map { it[Keys.TtsFollowCooldownSeconds] ?: 3f }
     val ttsSentenceChunkLimit: Flow<Int> = context.dataStore.data.map { it[Keys.TtsSentenceChunkLimit] ?: 600 }
+    val mangaSwitchThreshold: Flow<Int> = context.dataStore.data.map { it[Keys.MangaSwitchThreshold] ?: 80 }
+    val verticalDampingFactor: Flow<Float> = context.dataStore.data.map { it[Keys.VerticalDampingFactor] ?: 0.15f }
+    val mangaMaxZoom: Flow<Float> = context.dataStore.data.map { it[Keys.MangaMaxZoom] ?: 3.0f }
     val narrationTtsId: Flow<String> = context.dataStore.data.map { it[Keys.NarrationTtsId] ?: "" }
     val dialogueTtsId: Flow<String> = context.dataStore.data.map { it[Keys.DialogueTtsId] ?: "" }
     val speakerTtsMapping: Flow<String> = context.dataStore.data.map { it[Keys.SpeakerTtsMapping] ?: "" }
@@ -136,6 +142,24 @@ class UserPreferences(private val context: Context) {
     suspend fun saveTtsSentenceChunkLimit(value: Int) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.TtsSentenceChunkLimit] = value
+        }
+    }
+
+    suspend fun saveMangaSwitchThreshold(value: Int) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.MangaSwitchThreshold] = value
+        }
+    }
+
+    suspend fun saveVerticalDampingFactor(value: Float) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.VerticalDampingFactor] = value
+        }
+    }
+
+    suspend fun saveMangaMaxZoom(value: Float) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.MangaMaxZoom] = value
         }
     }
 

@@ -158,11 +158,17 @@ fun ReadingSettingsScreen(
     horizontalPadding: Float,
     darkModeConfig: com.readapp.data.DarkModeConfig,
     infiniteScrollEnabled: Boolean,
+    mangaSwitchThreshold: Int,
+    verticalDampingFactor: Float,
+    mangaMaxZoom: Float,
     onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onHorizontalPaddingChange: (Float) -> Unit,
     onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit,
     onInfiniteScrollEnabledChange: (Boolean) -> Unit,
+    onMangaSwitchThresholdChange: (Int) -> Unit,
+    onVerticalDampingFactorChange: (Float) -> Unit,
+    onMangaMaxZoomChange: (Float) -> Unit,
     onClearCache: () -> Unit,
     onNavigateToCache: () -> Unit,
     onNavigateBack: () -> Unit
@@ -220,6 +226,42 @@ fun ReadingSettingsScreen(
                     Text("启用无限滚动", style = MaterialTheme.typography.titleSmall)
                     Text("滚动过边界自动切换章节", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 }
+            }
+
+            if (infiniteScrollEnabled && readingMode == com.readapp.data.ReadingMode.Vertical) {
+                Column {
+                    Text("无缝切章触发距离: ${mangaSwitchThreshold}dp", style = MaterialTheme.typography.titleSmall)
+                    Slider(
+                        value = mangaSwitchThreshold.toFloat(),
+                        onValueChange = { onMangaSwitchThresholdChange(it.toInt()) },
+                        valueRange = 40f..300f,
+                        steps = 25
+                    )
+                    Text("数值越小越容易切章，数值越大越稳", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                }
+            }
+
+            if (!infiniteScrollEnabled || readingMode == com.readapp.data.ReadingMode.Vertical) {
+                Column {
+                    Text("切章拉伸阻尼: ${"%.2f".format(verticalDampingFactor)}", style = MaterialTheme.typography.titleSmall)
+                    Slider(
+                        value = verticalDampingFactor,
+                        onValueChange = onVerticalDampingFactorChange,
+                        valueRange = 0f..0.5f
+                    )
+                    Text("数值越小拉伸感越强（建议 0.1-0.2）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                }
+            }
+
+            Column {
+                Text("漫画最大放大倍数: ${"%.1f".format(mangaMaxZoom)}x", style = MaterialTheme.typography.titleSmall)
+                Slider(
+                    value = mangaMaxZoom,
+                    onValueChange = onMangaMaxZoomChange,
+                    valueRange = 1f..10f,
+                    steps = 18
+                )
+                Text("控制漫画模式下的最大缩放比例", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

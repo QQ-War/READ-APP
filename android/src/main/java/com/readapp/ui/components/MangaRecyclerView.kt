@@ -3,6 +3,7 @@ package com.readapp.ui.components
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -119,6 +120,9 @@ fun MangaNativeReader(
     chapterUrl: String?,
     forceProxy: Boolean,
     pendingScrollIndex: Int?,
+    mangaSwitchThreshold: Int,
+    verticalDampingFactor: Float,
+    mangaMaxZoom: Float,
     onToggleControls: () -> Unit,
     onScroll: (Int) -> Unit,
     onEdgeHint: (EdgeHint?) -> Unit,
@@ -129,8 +133,16 @@ fun MangaNativeReader(
     val updatedOnScroll by rememberUpdatedState(onScroll)
     val updatedOnEdgeHint by rememberUpdatedState(onEdgeHint)
     val updatedOnEdgeSwitch by rememberUpdatedState(onEdgeSwitch)
+
+    var scale by remember { mutableStateOf(1f) }
+    
     AndroidView(
-        modifier = modifier,
+        modifier = modifier
+            .fillMaxSize()
+            .graphicsLayer(
+                scaleX = scale,
+                scaleY = scale,
+            ),
         factory = { context ->
             val rv = RecyclerView(context).apply {
                 layoutManager = LinearLayoutManager(context)
@@ -150,7 +162,7 @@ fun MangaNativeReader(
 
             val density = context.resources.displayMetrics.density
             val hintStartPx = 24f * density
-            val thresholdPx = 90f * density
+            val thresholdPx = mangaSwitchThreshold.toFloat() * density
             var isAtTop = true
             var isAtBottom = false
             var pullingTop = false
@@ -195,6 +207,7 @@ fun MangaNativeReader(
                     updatedOnEdgeHint(null)
                     lastHint = null
                 }
+                rv.translationY = 0f
             }
 
             rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -217,7 +230,22 @@ fun MangaNativeReader(
                 }
             })
 
+            val scaleGestureDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                    scale *= detector.scaleFactor
+                    scale = scale.coerceIn(1f, mangaMaxZoom)
+                    return true
+                }
+            })
+
             rv.setOnTouchListener { _, event ->
+                if (event.pointerCount >= 2) {
+                    scaleGestureDetector.onTouchEvent(event)
+                    // 当处于缩放状态时，重置拉动状态
+                    if (pullingTop || pullingBottom) resetPullState()
+                    return@setOnTouchListener true
+                }
+                
                 gestureDetector.onTouchEvent(event)
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
@@ -227,32 +255,44 @@ fun MangaNativeReader(
                         hapticTriggered = false
                     }
                     MotionEvent.ACTION_MOVE -> {
-                        var delta = event.y - pullStartY
+                        val rawDelta = event.y - pullStartY
                         if (!pullingTop && !pullingBottom) {
-                            if (isAtTop && delta > 0f) {
+                            if (isAtTop && rawDelta > 0f) {
                                 pullingTop = true
                                 pullStartY = event.y
-                                delta = 0f
-                            } else if (isAtBottom && delta < 0f) {
+                            } else if (isAtBottom && rawDelta < 0f) {
                                 pullingBottom = true
                                 pullStartY = event.y
-                                delta = 0f
                             }
                         }
 
-                        when {
-                            pullingTop && delta > 0f -> updateHint(delta, true)
-                            pullingBottom && delta < 0f -> updateHint(delta, false)
-                            else -> updateHint(0f, true)
+                        if (pullingTop || pullingBottom) {
+                            val delta = event.y - pullStartY
+                            // 应用阻尼系数
+                            val dampedDelta = delta * verticalDampingFactor
+                            
+                            when {
+                                pullingTop && delta > 0f -> {
+                                    rv.translationY = dampedDelta
+                                    updateHint(delta, true)
+                                }
+                                pullingBottom && delta < 0f -> {
+                                    rv.translationY = dampedDelta
+                                    updateHint(-delta, false)
+                                }
+                                else -> {
+                                    rv.translationY = 0f
+                                    updateHint(0f, true)
+                                }
+                            }
                         }
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        val delta = event.y - pullStartY
-                        val readyTop = pullingTop && delta > thresholdPx
-                        val readyBottom = pullingBottom && delta < -thresholdPx
+                        val delta = if (pullingTop) event.y - pullStartY else if (pullingBottom) pullStartY - event.y else 0f
+                        val ready = delta > thresholdPx
                         val now = System.currentTimeMillis()
-                        if ((readyTop || readyBottom) && now - lastSwitchTime > 700) {
-                            updatedOnEdgeSwitch(if (readyTop) -1 else 1)
+                        if (ready && now - lastSwitchTime > 700) {
+                            updatedOnEdgeSwitch(if (pullingTop) -1 else 1)
                             lastSwitchTime = now
                         }
                         resetPullState()

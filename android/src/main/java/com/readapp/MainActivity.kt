@@ -281,17 +281,26 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
 
             composable(Screen.SettingsReading.route) {
                 val readerState by bookViewModel.readerUiState.collectAsState()
+                val mangaSwitchThreshold by bookViewModel.mangaSwitchThreshold.collectAsState()
+                val verticalDampingFactor by bookViewModel.verticalDampingFactor.collectAsState()
+                val mangaMaxZoom by bookViewModel.mangaMaxZoom.collectAsState()
                 ReadingSettingsScreen(
                     readingMode = readerState.readingMode,
                     fontSize = readerState.readingFontSize,
                     horizontalPadding = readerState.readingHorizontalPadding,
                     darkModeConfig = readerState.darkModeConfig,
                     infiniteScrollEnabled = readerState.infiniteScrollEnabled,
+                    mangaSwitchThreshold = mangaSwitchThreshold,
+                    verticalDampingFactor = verticalDampingFactor,
+                    mangaMaxZoom = mangaMaxZoom,
                     onReadingModeChange = bookViewModel::updateReadingMode,
                     onFontSizeChange = bookViewModel::updateReadingFontSize,
                     onHorizontalPaddingChange = bookViewModel::updateReadingHorizontalPadding,
                     onDarkModeChange = bookViewModel::updateDarkModeConfig,
                     onInfiniteScrollEnabledChange = bookViewModel::updateInfiniteScrollEnabled,
+                    onMangaSwitchThresholdChange = bookViewModel::updateMangaSwitchThreshold,
+                    onVerticalDampingFactorChange = bookViewModel::updateVerticalDampingFactor,
+                    onMangaMaxZoomChange = bookViewModel::updateMangaMaxZoom,
                     onClearCache = { bookViewModel.clearCache() },
                     onNavigateToCache = { navController.navigate(Screen.SettingsCache.route) },
                     onNavigateBack = { navController.popBackStack() }

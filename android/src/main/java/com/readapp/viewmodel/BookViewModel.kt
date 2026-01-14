@@ -1,4 +1,4 @@
-﻿package com.readapp.viewmodel
+package com.readapp.viewmodel
 
 import android.app.Application
 import android.net.Uri
@@ -173,6 +173,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val preferredSearchSourceUrls: StateFlow<Set<String>> = _preferredSearchSourceUrls.asStateFlow()
     val manualMangaUrls: StateFlow<Set<String>> = readerSettings.manualMangaUrls
     val forceMangaProxy: StateFlow<Boolean> = readerSettings.forceMangaProxy
+    val mangaSwitchThreshold: StateFlow<Int> = readerSettings.mangaSwitchThreshold
+    val verticalDampingFactor: StateFlow<Float> = readerSettings.verticalDampingFactor
+    val mangaMaxZoom: StateFlow<Float> = readerSettings.mangaMaxZoom
 
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = readerSettings.readingMode
     val lockPageOnTTS: StateFlow<Boolean> = readerSettings.lockPageOnTTS
@@ -1178,6 +1181,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun toggleManualManga(url: String) { readerSettings.toggleManualManga(url) }
     fun updateForceMangaProxy(enabled: Boolean) { readerSettings.updateForceMangaProxy(enabled) }
+    fun updateMangaSwitchThreshold(threshold: Int) { readerSettings.updateMangaSwitchThreshold(threshold) }
+    fun updateVerticalDampingFactor(factor: Float) { readerSettings.updateVerticalDampingFactor(factor) }
+    fun updateMangaMaxZoom(zoom: Float) { readerSettings.updateMangaMaxZoom(zoom) }
     fun clearCache() {
         viewModelScope.launch {
             ttsController.clearCache()
