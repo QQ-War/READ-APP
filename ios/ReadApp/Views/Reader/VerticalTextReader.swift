@@ -908,9 +908,11 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var onChapterSwitched: ((Int) -> Void)?
     var onToggleMenu: (() -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
+    var onVisibleIndexChanged: ((Int) -> Void)?
     var safeAreaTop: CGFloat = 0
     var threshold: CGFloat = 80
     var maxZoomScale: CGFloat = 3.0
+    var currentVisibleIndex: Int = 0
     private var imageUrls: [String] = []
 
     override func viewDidLoad() {
@@ -999,6 +1001,27 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             // 正常区域，确保清除位移但保留缩放
             if stackView.transform.ty != 0 || stackView.transform.a != currentScale {
                 stackView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale)
+            }
+        }
+        
+        // 计算当前可见的图片索引
+        let visibleY = rawOffset + safeAreaTop
+        var found = false
+        for (index, view) in stackView.arrangedSubviews.enumerated() {
+            if view.frame.maxY > visibleY {
+                if currentVisibleIndex != index {
+                    currentVisibleIndex = index
+                    onVisibleIndexChanged?(index)
+                }
+                found = true
+                break
+            }
+        }
+        if !found && !stackView.arrangedSubviews.isEmpty {
+            let lastIdx = stackView.arrangedSubviews.count - 1
+            if currentVisibleIndex != lastIdx {
+                currentVisibleIndex = lastIdx
+                onVisibleIndexChanged?(lastIdx)
             }
         }
     }

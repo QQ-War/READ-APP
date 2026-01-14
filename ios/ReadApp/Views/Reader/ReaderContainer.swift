@@ -202,6 +202,26 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             ttsSyncCoordinator = TTSReadingSyncCoordinator(reader: self, ttsManager: ttsManager)
             ttsSyncCoordinator?.start()
         }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            // 退出阅读器时强制保存进度
+            Task {
+                let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+                // 尝试捕获当前精确偏移（文字模式）或页码（漫画模式）
+                var pos: Double = 0.0
+                if currentReadingMode == .vertical {
+                    if isMangaMode {
+                        pos = Double(mangaVC?.currentVisibleIndex ?? 0)
+                    } else {
+                        let count = max(1, currentCache.contentSentences.count)
+                        let idx = verticalVC?.lastReportedIndex ?? 0
+                        pos = Double(idx) / Double(count)
+                    }
+                }
+                try? await APIService.shared.saveBookProgress(bookUrl: book.bookUrl ?? "", index: currentChapterIndex, pos: pos, title: title)
+            }
+        }
         
         private func setupProgressLabel() {
             progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular); progressLabel.textColor = .secondaryLabel
@@ -1079,6 +1099,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 } else {
                     self.notifyUserInteractionEnded()
                 }
+            }
+            vc.onVisibleIndexChanged = { [weak self] idx in
+                guard let self = self else { return }
+                self.onProgressChanged?(self.currentChapterIndex, Double(idx))
             }
             vc.onChapterSwitched = { [weak self] offset in
                 guard let self = self else { return }
