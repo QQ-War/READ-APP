@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.readapp.data.ReadingMode
 import com.readapp.data.DarkModeConfig
 import com.readapp.data.model.Chapter
@@ -115,6 +117,8 @@ fun ReadingScreen(
     onUserScrollState: (Boolean) -> Unit = {},
     onForceMangaProxyChange: (Boolean) -> Unit = {},
     onInfiniteScrollSwitch: (Int, Int) -> Unit = { _, _ -> },
+    onMangaSwitchThresholdChange: (Int) -> Unit = {},
+    onVerticalDampingFactorChange: (Float) -> Unit = {},
     onMangaMaxZoomChange: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {

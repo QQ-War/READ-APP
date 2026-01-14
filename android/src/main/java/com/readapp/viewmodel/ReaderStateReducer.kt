@@ -26,6 +26,9 @@ class ReaderStateReducer(
     darkMode: StateFlow<DarkModeConfig>,
     infiniteScrollEnabled: StateFlow<Boolean>,
     forceMangaProxy: StateFlow<Boolean>,
+    mangaSwitchThreshold: StateFlow<Int>,
+    verticalDampingFactor: StateFlow<Float>,
+    mangaMaxZoom: StateFlow<Float>,
     manualMangaUrls: StateFlow<Set<String>>,
     serverAddress: StateFlow<String>,
     apiBackend: StateFlow<com.readapp.data.ApiBackend>
@@ -103,6 +106,9 @@ class ReaderStateReducer(
         lastVisibleParagraphIndexFlow,
         pendingScrollIndexFlow,
         forceMangaProxy,
+        mangaSwitchThreshold,
+        verticalDampingFactor,
+        mangaMaxZoom,
         manualMangaUrls,
         serverAddress,
         apiBackend
@@ -129,9 +135,12 @@ class ReaderStateReducer(
             lastVisibleParagraphIndex = values[18] as Int,
             pendingScrollIndex = values[19] as Int?,
             forceMangaProxy = values[20] as Boolean,
-            manualMangaUrls = values[21] as Set<String>,
-            serverUrl = values[22] as String,
-            apiBackend = values[23] as com.readapp.data.ApiBackend
+            mangaSwitchThreshold = values[21] as Int,
+            verticalDampingFactor = values[22] as Float,
+            mangaMaxZoom = values[23] as Float,
+            manualMangaUrls = values[24] as Set<String>,
+            serverUrl = values[25] as String,
+            apiBackend = values[26] as com.readapp.data.ApiBackend
         )
     }.stateIn(scope, SharingStarted.Eagerly, ReaderUiState(
         book = null,
@@ -155,6 +164,9 @@ class ReaderStateReducer(
         lastVisibleParagraphIndex = 0,
         pendingScrollIndex = null,
         forceMangaProxy = false,
+        mangaSwitchThreshold = 80,
+        verticalDampingFactor = 0.15f,
+        mangaMaxZoom = 3.0f,
         manualMangaUrls = emptySet(),
         serverUrl = "",
         apiBackend = com.readapp.data.ApiBackend.Read

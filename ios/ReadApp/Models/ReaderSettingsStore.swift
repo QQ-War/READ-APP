@@ -71,6 +71,16 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.verticalThreshold = newValue }
     }
 
+    var verticalDampingFactor: CGFloat {
+        get { preferences.verticalDampingFactor }
+        set { preferences.verticalDampingFactor = newValue }
+    }
+
+    var mangaMaxZoom: CGFloat {
+        get { preferences.mangaMaxZoom }
+        set { preferences.mangaMaxZoom = newValue }
+    }
+
     var infiniteScrollSwitchThreshold: CGFloat {
         get { preferences.infiniteScrollSwitchThreshold }
         set { preferences.infiniteScrollSwitchThreshold = newValue }

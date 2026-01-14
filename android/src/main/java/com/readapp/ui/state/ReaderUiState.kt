@@ -29,6 +29,9 @@ data class ReaderUiState(
     val lastVisibleParagraphIndex: Int,
     val pendingScrollIndex: Int?,
     val forceMangaProxy: Boolean,
+    val mangaSwitchThreshold: Int,
+    val verticalDampingFactor: Float,
+    val mangaMaxZoom: Float,
     val manualMangaUrls: Set<String>,
     val serverUrl: String,
     val apiBackend: ApiBackend

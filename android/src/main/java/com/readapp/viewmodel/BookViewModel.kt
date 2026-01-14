@@ -218,6 +218,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             darkMode = darkMode,
             infiniteScrollEnabled = infiniteScrollEnabled,
             forceMangaProxy = forceMangaProxy,
+            mangaSwitchThreshold = mangaSwitchThreshold,
+            verticalDampingFactor = verticalDampingFactor,
+            mangaMaxZoom = mangaMaxZoom,
             manualMangaUrls = manualMangaUrls,
             serverAddress = serverAddress,
             apiBackend = apiBackend

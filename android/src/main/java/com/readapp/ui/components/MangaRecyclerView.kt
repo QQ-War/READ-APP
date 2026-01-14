@@ -10,6 +10,9 @@ import android.widget.ImageView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -133,15 +136,14 @@ fun MangaNativeReader(
     val updatedOnScroll by rememberUpdatedState(onScroll)
     val updatedOnEdgeHint by rememberUpdatedState(onEdgeHint)
     val updatedOnEdgeSwitch by rememberUpdatedState(onEdgeSwitch)
-
-    var scale by remember { mutableStateOf(1f) }
+    val scaleState = remember { mutableStateOf(1f) }
     
     AndroidView(
         modifier = modifier
             .fillMaxSize()
             .graphicsLayer(
-                scaleX = scale,
-                scaleY = scale,
+                scaleX = scaleState.value,
+                scaleY = scaleState.value,
             ),
         factory = { context ->
             val rv = RecyclerView(context).apply {
@@ -232,11 +234,12 @@ fun MangaNativeReader(
 
             val scaleGestureDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                 override fun onScale(detector: ScaleGestureDetector): Boolean {
-                    scale *= detector.scaleFactor
-                    scale = scale.coerceIn(1f, mangaMaxZoom)
+                    val newScale = scaleState.value * detector.scaleFactor
+                    scaleState.value = newScale.coerceIn(1f, mangaMaxZoom)
                     return true
                 }
             })
+
 
             rv.setOnTouchListener { _, event ->
                 if (event.pointerCount >= 2) {

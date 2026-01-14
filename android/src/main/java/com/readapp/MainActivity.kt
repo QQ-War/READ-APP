@@ -195,11 +195,15 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                         onScrollConsumed = { bookViewModel.clearPendingScrollIndex() },
                         onUserScrollState = { scrolling -> bookViewModel.onUserScrollState(scrolling) },
                         onForceMangaProxyChange = { bookViewModel.updateForceMangaProxy(it) },
+                        onMangaSwitchThresholdChange = { bookViewModel.updateMangaSwitchThreshold(it) },
+                        onVerticalDampingFactorChange = { bookViewModel.updateVerticalDampingFactor(it) },
+                        onMangaMaxZoomChange = { bookViewModel.updateMangaMaxZoom(it) },
                         onClearError = { bookViewModel.clearError() },
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
                         },
                         onInfiniteScrollSwitch = { direction, anchorIndex ->
+
                             bookViewModel.switchChapterFromInfiniteScroll(direction, anchorIndex)
                         },
                         onLoadChapterContent = { index ->
