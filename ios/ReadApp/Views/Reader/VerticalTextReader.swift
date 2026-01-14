@@ -404,16 +404,21 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         // 当关闭无限流时，应用视觉阻尼
         if !isInfiniteScrollEnabled {
             let actualMaxScrollY = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height)
+            let currentScale = scrollView.zoomScale
+            
             if rawOffset < -safeAreaTop {
                 let diff = -safeAreaTop - rawOffset
-                currentContentView.transform = currentContentView.transform.translatedBy(x: 0, y: (diff * dampingFactor) / scrollView.zoomScale)
+                let ty = (diff * dampingFactor) / currentScale
+                currentContentView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
             } else if rawOffset > actualMaxScrollY {
                 let diff = rawOffset - actualMaxScrollY
-                currentContentView.transform = currentContentView.transform.translatedBy(x: 0, y: (-diff * dampingFactor) / scrollView.zoomScale)
-            } else if currentContentView.transform.ty != 0 {
-                // 仅当存在之前的位移偏置时才重置位移部分，保留缩放
-                let currentScale = scrollView.zoomScale
-                currentContentView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale)
+                let ty = (-diff * dampingFactor) / currentScale
+                currentContentView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
+            } else {
+                // 正常区域，确保清除位移但保留缩放
+                if currentContentView.transform.ty != 0 || currentContentView.transform.a != currentScale {
+                    currentContentView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale)
+                }
             }
         } else {
             if currentContentView.transform != .identity { currentContentView.transform = .identity }
@@ -979,18 +984,22 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         let rawOffset = s.contentOffset.y
         handleHoldSwitchIfNeeded(rawOffset: rawOffset)
         
-        let actualMaxScrollY = max(-safeAreaTop, stackView.frame.height - scrollView.bounds.height)
+        let actualMaxScrollY = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height)
+        let currentScale = s.zoomScale
+        
         if rawOffset < -safeAreaTop {
             let diff = -safeAreaTop - rawOffset
-            // 使用叠加矩阵，并在缩放状态下调整位移感
-            stackView.transform = stackView.transform.translatedBy(x: 0, y: (diff * dampingFactor) / scrollView.zoomScale)
+            let ty = (diff * dampingFactor) / currentScale
+            stackView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
         } else if rawOffset > actualMaxScrollY {
             let diff = rawOffset - actualMaxScrollY
-            stackView.transform = stackView.transform.translatedBy(x: 0, y: (-diff * dampingFactor) / scrollView.zoomScale)
-        } else if stackView.transform.ty != 0 {
-            // 恢复时仅重置位移，保留当前缩放倍数
-            let currentScale = scrollView.zoomScale
-            stackView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale)
+            let ty = (-diff * dampingFactor) / currentScale
+            stackView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
+        } else {
+            // 正常区域，确保清除位移但保留缩放
+            if stackView.transform.ty != 0 || stackView.transform.a != currentScale {
+                stackView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale)
+            }
         }
     }
     
