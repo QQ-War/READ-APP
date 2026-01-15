@@ -1291,6 +1291,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     func finalizeUserInteraction() {
         isUserInteracting = false
+        suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
+        ttsSyncCoordinator?.scheduleCatchUp(delay: readerSettings.ttsFollowCooldown)
     }
 
     private func notifyUserInteractionStarted() {

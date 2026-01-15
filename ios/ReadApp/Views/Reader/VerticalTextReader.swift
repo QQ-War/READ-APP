@@ -544,10 +544,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func ensureSentenceVisible(index: Int) {
-        // 如果是 TTS 正在播放，尝试获取更精确的字符级偏移
-        if let tts = TTSManager.shared.isPlaying ? TTSManager.shared : nil, tts.currentChapterIndex == (self.parent as? ReaderContainerViewController)?.currentChapterIndex {
-            let charOffset = tts.currentCharOffset
-            if let yInContent = getYOffsetForCharOffset(charOffset) {
+        // 如果是 TTS 正在播放，基于实时 sentenceOffset 计算精确字符偏移
+        if let tts = TTSManager.shared.isPlaying ? TTSManager.shared : nil,
+           tts.currentChapterIndex == (self.parent as? ReaderContainerViewController)?.currentChapterIndex {
+            if tts.isReadingChapterTitle {
+                return
+            }
+            let bodySentenceIndex = tts.hasChapterTitleInSentences ? (tts.currentSentenceIndex - 1) : tts.currentSentenceIndex
+            if bodySentenceIndex >= 0, bodySentenceIndex < paragraphStarts.count {
+                let realTimeOffset = paragraphStarts[bodySentenceIndex] + tts.currentSentenceOffset + paragraphIndentLength
+                if let yInContent = getYOffsetForCharOffset(realTimeOffset) {
                 let absY = yInContent + currentContentView.frame.minY
                 let cur = scrollView.contentOffset.y
                 let vH = scrollView.bounds.height
@@ -561,6 +567,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                     scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, scrollView.contentSize.height - vH)), animated: true)
                 }
                 return
+            }
             }
         }
 
@@ -1167,4 +1174,3 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         pendingSwitchDirection = 0; switchReady = false; hideSwitchHint()
     }
 }
-
