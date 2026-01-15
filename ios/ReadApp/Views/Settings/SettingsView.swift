@@ -31,6 +31,10 @@ struct SettingsView: View {
                     Label("阅读设置", systemImage: "book.pages")
                 }
                 
+                NavigationLink(destination: CacheManagementView().environmentObject(apiService)) {
+                    Label("缓存与下载管理", systemImage: "archivebox")
+                }
+
                 NavigationLink(destination: TTSSettingsView().environmentObject(apiService)) {
                     Label("听书设置", systemImage: "speaker.wave.2")
                 }

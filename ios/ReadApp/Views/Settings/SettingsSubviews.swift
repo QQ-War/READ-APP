@@ -187,11 +187,6 @@ struct ReadingSettingsView: View {
                 }
             }
             
-            Section(header: Text("缓存管理")) {
-                NavigationLink(destination: CacheManagementView().environmentObject(apiService)) {
-                    Label("离线缓存管理", systemImage: "archivebox")
-                }
-            }
         }
         .navigationTitle("阅读设置")
         .ifAvailableHideTabBar()
