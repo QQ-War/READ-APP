@@ -104,6 +104,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     
     // 无限流无缝切换标记 (0: 无, 1: 下一章, -1: 上一章)
     private var pendingSeamlessSwitch: Int = 0
+    private var isAutoScrolling = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -505,6 +506,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        if isAutoScrolling {
+            isAutoScrolling = false
+            return
+        }
         onInteractionChanged?(false)
     }
 
@@ -564,6 +569,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                     // 平滑滚动：将当前行滚动到屏幕中间偏上位置 (1/3 处)
                     let targetY = max(0, absY - vH / 3.0)
                     LogManager.shared.log("TTS 平滑滚动触发: absY=\(absY), targetY=\(targetY)", category: "TTS")
+                    isAutoScrolling = true
                     scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, scrollView.contentSize.height - vH)), animated: true)
                 }
                 return
@@ -921,6 +927,9 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var maxZoomScale: CGFloat = 3.0
     var currentVisibleIndex: Int = 0
     var pendingScrollIndex: Int?
+    var bookUrl: String?
+    var chapterIndex: Int = 0
+    var chapterUrl: String?
     private var imageUrls: [String] = []
 
     override func viewDidLoad() {
@@ -978,20 +987,122 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             stackView.addArrangedSubview(iv)
             let urlStr2 = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
             Task {
-                if let u = URL(string: urlStr2), let (data, _) = try? await URLSession.shared.data(from: u), let image = UIImage(data: data) {
-                    await MainActor.run {
-                        iv.image = image
-                        let ratio = image.size.height / image.size.width
-                        iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
-                        
-                        // 如果刚好加载的是目标图片，或者是最后一张图片且目标在范围内，尝试触发滚动
-                        if self.pendingScrollIndex == index {
-                            self.scrollToIndex(index, animated: false)
+                if let resolved = resolveImageURL(urlStr2) {
+                    let absolute = resolved.absoluteString
+                    if let b = bookUrl,
+                       let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute),
+                       let image = UIImage(data: cachedData) {
+                        await MainActor.run {
+                            iv.image = image
+                            let ratio = image.size.height / image.size.width
+                            iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
+                            if self.pendingScrollIndex == index {
+                                self.scrollToIndex(index, animated: false)
+                            }
+                        }
+                        return
+                    }
+                    if let data = await fetchImageData(for: resolved), let image = UIImage(data: data) {
+                        if let b = bookUrl {
+                            LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)
+                        }
+                        await MainActor.run {
+                            iv.image = image
+                            let ratio = image.size.height / image.size.width
+                            iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
+                            if self.pendingScrollIndex == index {
+                                self.scrollToIndex(index, animated: false)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func resolveImageURL(_ original: String) -> URL? {
+        if original.hasPrefix("http") {
+            return URL(string: original)
+        }
+        let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+        let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
+        return URL(string: resolved)
+    }
+
+    private func fetchImageData(for targetURL: URL) async -> Data? {
+        if UserPreferences.shared.forceMangaProxy, let proxyURL = buildProxyURL(for: targetURL) {
+            return await fetchImageData(requestURL: proxyURL, referer: chapterUrl)
+        }
+
+        if let data = await fetchImageData(requestURL: targetURL, referer: chapterUrl) {
+            return data
+        }
+
+        if let proxyURL = buildProxyURL(for: targetURL) {
+            return await fetchImageData(requestURL: proxyURL, referer: chapterUrl)
+        }
+
+        return nil
+    }
+
+    private func fetchImageData(requestURL: URL, referer: String?) async -> Data? {
+        var request = URLRequest(url: requestURL)
+        request.timeoutInterval = 15
+        request.httpShouldHandleCookies = true
+        request.cachePolicy = .returnCacheDataElseLoad
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("image/webp,image/avif,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+        request.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
+        request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+        request.setValue("no-cors", forHTTPHeaderField: "Sec-Fetch-Mode")
+        request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
+        request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
+
+        var finalReferer = "https://m.kuaikanmanhua.com/"
+        if var customReferer = referer, !customReferer.isEmpty {
+            if customReferer.hasPrefix("http://") {
+                customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
+            }
+            if !customReferer.hasSuffix("/") {
+                customReferer += "/"
+            }
+            finalReferer = customReferer
+        } else if let host = requestURL.host {
+            finalReferer = "https://\(host)/"
+        }
+        request.setValue(finalReferer, forHTTPHeaderField: "Referer")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if statusCode == 200, !data.isEmpty {
+                return data
+            }
+            if statusCode == 403 || statusCode == 401 {
+                var retry = request
+                retry.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
+                let retryCode = (retryResponse as? HTTPURLResponse)?.statusCode ?? 0
+                if retryCode == 200, !retryData.isEmpty {
+                    return retryData
+                }
+            }
+        } catch {
+            return nil
+        }
+
+        return nil
+    }
+
+    private func buildProxyURL(for original: URL) -> URL? {
+        let baseURL = APIService.shared.baseURL
+        var components = URLComponents(string: "\(baseURL)/proxypng")
+        components?.queryItems = [
+            URLQueryItem(name: "url", value: original.absoluteString),
+            URLQueryItem(name: "accessToken", value: UserPreferences.shared.accessToken)
+        ]
+        return components?.url
     }
 
     func scrollToIndex(_ index: Int, animated: Bool = false) {

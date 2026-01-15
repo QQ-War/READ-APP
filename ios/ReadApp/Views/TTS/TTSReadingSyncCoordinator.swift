@@ -28,6 +28,14 @@ final class TTSReadingSyncCoordinator {
             }
             .store(in: &cancellables)
 
+        ttsManager.$currentSentenceOffset
+            .removeDuplicates()
+            .throttle(for: .milliseconds(300), scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] _ in
+                self?.reader?.syncTTSState()
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
