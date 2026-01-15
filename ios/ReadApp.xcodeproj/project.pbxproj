@@ -209,8 +209,6 @@
 		1A000025000000000000001 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C10000010000000000000001 /* MangaImageService.swift */,
-				C10000020000000000000001 /* OfflineDownloadManager.swift */,
 				1A000020000000000000001 /* ReadApp.app */,
 			);
 			name = Products;
@@ -426,8 +424,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C10000010000000000000002 /* MangaImageService.swift in Sources */,
-				C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */,
 				1A000005000000000000001 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
