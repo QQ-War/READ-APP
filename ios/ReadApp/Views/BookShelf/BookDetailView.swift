@@ -427,59 +427,57 @@ struct SourceSwitchView: View {
     let author: String
     let currentSource: String
     let onSelect: (Book) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var apiService: APIService
-    @State private var sources: [BookSource] = []
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var apiService: APIService
     @State private var searchResults: [Book] = []
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var selectedSourceId: String?
-
+    @State private var isSearching = false
+    
     var body: some View {
         NavigationView {
             List {
-                Section(header: Text("当前书籍")) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(bookName).font(.headline)
-                        if !author.isEmpty { Text(author).font(.caption).foregroundColor(.secondary) }
-                        Text("来源: \(currentSource)").font(.caption2).foregroundColor(.secondary)
+                if isSearching {
+                    HStack { Spacer(); ProgressView("正在全网匹配来源..."); Spacer() }
+                } else if searchResults.isEmpty {
+                    VStack(spacing: 12) {
+                        Text("未找到书名完全一致的备选源").foregroundColor(.secondary)
+                        Text("建议：检查书源是否启用或书籍是否更名").font(.caption2).foregroundColor(.gray)
                     }
-                }
-
-                Section(header: Text("书源选择")) {
-                    if sources.isEmpty {
-                        Text("暂无可用书源").foregroundColor(.secondary)
-                    } else {
-                        ForEach(sources) { source in
-                            Button(action: { selectSource(source) }) {
-                                HStack {
-                                    Text(source.bookSourceName)
-                                    Spacer()
-                                    if selectedSourceId == source.bookSourceUrl {
-                                        Image(systemName: "checkmark.circle.fill").foregroundColor(.blue)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Section(header: Text("搜索结果")) {
-                    if isLoading {
-                        HStack { Spacer(); ProgressView("正在搜索..."); Spacer() }
-                    } else if searchResults.isEmpty {
-                        Text("暂无匹配结果").foregroundColor(.secondary)
-                    } else {
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
+                } else {
+                    Section(header: Text("完全匹配的结果 (\(searchResults.count))")) {
                         ForEach(searchResults) { book in
+                            let isAuthorMatch = book.author == author
                             Button(action: { onSelect(book); dismiss() }) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(book.name ?? "未知书名").font(.headline)
-                                    if let author = book.author, !author.isEmpty {
-                                        Text(author).font(.caption).foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text(book.originName ?? "未知源").font(.headline)
+                                        Spacer()
+                                        if isAuthorMatch {
+                                            Text("推荐")
+                                                .font(.caption2).bold()
+                                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                                .background(Color.green.opacity(0.1))
+                                                .foregroundColor(.green).cornerRadius(4)
+                                        }
+                                        if book.origin == currentSource { 
+                                            Text("当前").font(.caption2)
+                                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                                .background(Color.blue.opacity(0.1))
+                                                .foregroundColor(.blue).cornerRadius(4)
+                                        }
                                     }
-                                    if let originName = book.originName, !originName.isEmpty {
-                                        Text(originName).font(.caption2).foregroundColor(.secondary)
+                                    
+                                    HStack {
+                                        Text(book.name ?? "").font(.subheadline)
+                                        Text("•")
+                                        Text(book.author ?? "未知作者")
+                                            .foregroundColor(isAuthorMatch ? .primary : .secondary)
+                                    }
+                                    .font(.subheadline)
+                                    
+                                    if let latest = book.latestChapterTitle { 
+                                        Text("最新: \(latest)").font(.caption2).foregroundColor(.secondary).lineLimit(1) 
                                     }
                                 }
                             }
@@ -487,54 +485,46 @@ struct SourceSwitchView: View {
                     }
                 }
             }
-            .navigationTitle("换源")
+            .navigationTitle("更换来源")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("关闭") { dismiss() }
+            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("关闭") { dismiss() } } }
+            .task { await performSearch() }
+        }
+    }
+    
+    private func performSearch() async {
+        isSearching = true
+        let sources = (try? await apiService.fetchBookSources()) ?? []
+        let enabledSources = sources.filter { $0.enabled }
+        
+        var allMatches: [Book] = []
+        
+        await withTaskGroup(of: [Book]?.self) { group in
+            for source in enabledSources { 
+                group.addTask { 
+                    // 仅使用书名搜索，确保搜得到
+                    return try? await apiService.searchBook(keyword: bookName, bookSourceUrl: source.bookSourceUrl) 
+                } 
+            }
+            for await result in group {
+                if let books = result {
+                    // 本地进行严格书名过滤
+                    let exactMatches = books.filter { $0.name == bookName }
+                    allMatches.append(contentsOf: exactMatches)
                 }
             }
-            .task { await loadSources() }
-            .alert("提示", isPresented: .constant(errorMessage != nil)) {
-                Button("确定") { errorMessage = nil }
-            } message: {
-                if let error = errorMessage { Text(error) }
-            }
         }
-    }
-
-    private func loadSources() async {
-        do {
-            let list = try await apiService.fetchBookSources()
-            await MainActor.run {
-                self.sources = list.filter { $0.enabled }
-            }
-        } catch {
-            await MainActor.run { self.errorMessage = error.localizedDescription }
+        
+        // 排序逻辑：作者一致的排最前面
+        allMatches.sort { b1, b2 in
+            let match1 = (b1.author == author) ? 1 : 0
+            let match2 = (b2.author == author) ? 1 : 0
+            return match1 > match2
         }
-    }
-
-    private func selectSource(_ source: BookSource) {
-        selectedSourceId = source.bookSourceUrl
-        Task { await searchBooks(in: source) }
-    }
-
-    private func searchBooks(in source: BookSource) async {
+        
         await MainActor.run {
-            isLoading = true
-            searchResults.removeAll()
-        }
-        do {
-            let results = try await apiService.searchBook(keyword: bookName, bookSourceUrl: source.bookSourceUrl)
-            await MainActor.run {
-                self.searchResults = results
-                self.isLoading = false
-            }
-        } catch {
-            await MainActor.run {
-                self.isLoading = false
-                self.errorMessage = error.localizedDescription
-            }
+            self.searchResults = allMatches
+            isSearching = false
         }
     }
 }
