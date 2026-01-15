@@ -38,66 +38,176 @@ struct BookDetailView: View {
         return Array(0...((chapters.count - 1) / 50))
     }
     
+    private var groupCount: Int {
+        chapterGroups.count
+    }
+    
     private var isManuallyMarkedAsManga: Bool {
         guard let url = book.bookUrl else { return false }
         return preferences.manualMangaUrls.contains(url)
     }
     
+    private func toggleManualManga() {
+        guard let url = book.bookUrl else { return }
+        if preferences.manualMangaUrls.contains(url) {
+            preferences.manualMangaUrls.remove(url)
+        } else {
+            preferences.manualMangaUrls.insert(url)
+        }
+    }
+
     var body: some View {
         content
             .navigationTitle(book.name ?? "书籍详情")
             .navigationBarTitleDisplayMode(.inline)
             .ifAvailableHideTabBar()
-            .confirmationDialog("选择缓存范围", isPresented: $showingDownloadOptions, titleVisibility: .visible) {
-                Button("缓存全文") { startDownload(start: 1, end: chapters.count) }
-                Button("缓存后续 50 章") {
-                    let current = (currentBook.durChapterIndex ?? 0) + 1
-                    startDownload(start: current, end: min(current + 50, chapters.count))
-                }
-                Button("自定义范围") { withAnimation { showCustomRange = true } }
-                Button("取消", role: .cancel) { }
+        .confirmationDialog("选择缓存范围", isPresented: $showingDownloadOptions, titleVisibility: .visible) {
+            Button("缓存全文") { startDownload(start: 1, end: chapters.count) }
+            Button("缓存后续 50 章") { 
+                let current = (currentBook.durChapterIndex ?? 0) + 1
+                startDownload(start: current, end: min(current + 50, chapters.count)) 
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if let job = downloadManager.job(for: book.bookUrl ?? "") {
-                        Button("停止", role: .destructive) { downloadManager.cancel(jobId: job.id) }
-                    }
-                }
-            }
-            .task { await loadData() }
-            .onReceive(downloadManager.$jobs) { _ in
-                refreshCachedStatus()
-            }
-            .alert("提示", isPresented: .constant(errorMessage != nil)) {
-                Button("确定") { errorMessage = nil }
-            } message: {
-                if let error = errorMessage { Text(error) }
-            }
-            .alert("清除缓存", isPresented: $showingClearCacheAlert) {
-                Button("取消", role: .cancel) { }
-                Button("清除", role: .destructive) { clearBookCache() }
-            } message: {
-                Text("确定要删除本书所有的离线缓存内容吗？")
-            }
-            .alert("已加入书架", isPresented: $showingAddSuccessAlert) { Button("确定", role: .cancel) { } }
-            .alert("已从书架移除", isPresented: $showingRemoveSuccessAlert) { Button("确定", role: .cancel) { } }
-            .sheet(isPresented: $showingSourceSwitch) {
-                SourceSwitchView(bookName: book.name ?? "", author: book.author ?? "", currentSource: book.origin ?? "") { newBook in
-                    updateBookSource(with: newBook)
+            Button("自定义范围") { withAnimation { showCustomRange = true } }
+            Button("取消", role: .cancel) { }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if let job = downloadManager.job(for: book.bookUrl ?? "") {
+                    Button("停止", role: .destructive) { downloadManager.cancel(jobId: job.id) }
                 }
             }
+        }
+        .task { await loadData() }
+        .onReceive(downloadManager.$jobs) { _ in refreshCachedStatus() }
+        .alert("提示", isPresented: .constant(errorMessage != nil)) {
+            Button("确定") { errorMessage = nil }
+        } message: {
+            if let error = errorMessage { Text(error) }
+        }
+        .alert("清除缓存", isPresented: $showingClearCacheAlert) {
+            Button("取消", role: .cancel) { }
+            Button("清除", role: .destructive) { clearBookCache() }
+        } message: {
+            Text("确定要删除本书所有的离线缓存内容吗？")
+        }
+        .alert("已加入书架", isPresented: $showingAddSuccessAlert) {
+            Button("确定", role: .cancel) { }
+        }
+        .alert("已从书架移除", isPresented: $showingRemoveSuccessAlert) {
+            Button("确定", role: .cancel) { }
+        }
+        .sheet(isPresented: $showingSourceSwitch) {
+            SourceSwitchView(bookName: book.name ?? "", author: book.author ?? "", currentSource: book.origin ?? "") { newBook in
+                updateBookSource(with: newBook)
+            }
+        }
     }
 
     private var content: AnyView {
         AnyView(
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    // 1. 头部信息
                     headerSection
-                    mangaToggleSection
-                    actionButtonsSection
+                    
+                    // 漫画模式手动开关
+                    HStack {
+                        Label("强制漫画模式", systemImage: "photo.on.rectangle.angled")
+                            .font(.subheadline)
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { isManuallyMarkedAsManga },
+                            set: { _ in toggleManualManga() }
+                        ))
+                        .labelsHidden()
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color.gray.opacity(0.05))
+                    .cornerRadius(10)
+                    .padding(.horizontal)
+                    
+                    // 2. 操作按钮区
+                    HStack(spacing: 16) {
+                        Button(action: { showingSourceSwitch = true }) {
+                            Label("换源阅读", systemImage: "arrow.2.squarepath")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Color.orange.opacity(0.1))
+                                .foregroundColor(.orange)
+                                .cornerRadius(8)
+                        }
+                        
+                        Button(action: { showingClearCacheAlert = true }) {
+                            Label("清除缓存", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Color.red.opacity(0.1))
+                                .foregroundColor(.red)
+                                .cornerRadius(8)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    // 3. 下载控制区
                     downloadControls
-                    introSection
-                    chaptersListSection
+                    
+                    // 4. 简介区
+                    if let intro = book.intro, !intro.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("简介").font(.headline)
+                            Text(intro)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(nil)
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    // 5. 目录预览
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("目录").font(.headline)
+                            Spacer()
+                            Text("共 \(chapters.count) 章").font(.caption).foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal)
+                        
+                        if chapterGroups.count > 1 {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(chapterGroups, id: \.self) { index in
+                                        let start = index * 50 + 1
+                                        let end = min((index + 1) * 50, chapters.count)
+                                        Button(action: { selectedGroupIndex = index }) {
+                                            Text("\(start)-\(end)")
+                                                .font(.caption)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(selectedGroupIndex == index ? Color.blue : Color.gray.opacity(0.1))
+                                                .foregroundColor(selectedGroupIndex == index ? .white : .primary)
+                                                .cornerRadius(16)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        
+                        if isLoading {
+                            HStack { Spacer(); ProgressView(); Spacer() }.padding()
+                        } else {
+                            let startIndex = selectedGroupIndex * 50
+                            let endIndex = min(startIndex + 50, chapters.count)
+                            let visibleChapters = chapters.indices.contains(startIndex) ? Array(chapters[startIndex..<endIndex]) : []
+                            
+                            LazyVStack(spacing: 0) {
+                                ForEach(visibleChapters) { chapter in
+                                    chapterRow(chapter)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         )
@@ -105,108 +215,6 @@ struct BookDetailView: View {
     
     // MARK: - Subviews
     
-    private var mangaToggleSection: some View {
-        HStack {
-            Label("强制漫画模式", systemImage: "photo.on.rectangle.angled")
-                .font(.subheadline)
-            Spacer()
-            Toggle("", isOn: Binding(
-                get: { isManuallyMarkedAsManga },
-                set: { _ in toggleManualManga() }
-            ))
-            .labelsHidden()
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(10)
-        .padding(.horizontal)
-    }
-    
-    private var actionButtonsSection: some View {
-        HStack(spacing: 16) {
-            Button(action: { showingSourceSwitch = true }) {
-                Label("换源阅读", systemImage: "arrow.2.squarepath")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color.orange.opacity(0.1))
-                    .foregroundColor(.orange)
-                    .cornerRadius(8)
-            }
-            
-            Button(action: { showingClearCacheAlert = true }) {
-                Label("清除缓存", systemImage: "trash")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color.red.opacity(0.1))
-                    .foregroundColor(.red)
-                    .cornerRadius(8)
-            }
-        }
-        .padding(.horizontal)
-    }
-    
-    private var introSection: some View {
-        Group {
-            if let intro = book.intro, !intro.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("简介").font(.headline)
-                    Text(intro)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(nil)
-                }
-                .padding(.horizontal)
-            }
-        }
-    }
-    
-    private var chaptersListSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("目录").font(.headline)
-                Spacer()
-                Text("共 \(chapters.count) 章").font(.caption).foregroundColor(.secondary)
-            }
-            .padding(.horizontal)
-            
-            if chapterGroups.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(chapterGroups, id: \.self) { index in
-                            let start = index * 50 + 1
-                            let end = min((index + 1) * 50, chapters.count)
-                            Button(action: { selectedGroupIndex = index }) {
-                                Text("\(start)-\(end)")
-                                    .font(.caption)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(selectedGroupIndex == index ? Color.blue : Color.gray.opacity(0.1))
-                                    .foregroundColor(selectedGroupIndex == index ? .white : .primary)
-                                    .cornerRadius(16)
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-            }
-            
-            if isLoading {
-                HStack { Spacer(); ProgressView(); Spacer() }.padding()
-            } else {
-                let startIndex = selectedGroupIndex * 50
-                let endIndex = min(startIndex + 50, chapters.count)
-                let visibleChapters = chapters.indices.contains(startIndex) ? Array(chapters[startIndex..<endIndex]) : []
-                
-                LazyVStack(spacing: 0) {
-                    ForEach(visibleChapters) { chapter in
-                        chapterRow(chapter)
-                    }
-                }
-            }
-        }
-    }
-
     private var headerSection: some View {
         HStack(alignment: .top, spacing: 16) {
             if let coverUrl = book.displayCoverUrl {
@@ -259,7 +267,9 @@ struct BookDetailView: View {
                         .cornerRadius(8)
                 }
                 .fullScreenCover(isPresented: $isReading, onDismiss: {
-                    Task { try? await apiService.fetchBookshelf() }
+                    Task {
+                        try? await apiService.fetchBookshelf()
+                    }
                 }) {
                     ReadingView(book: currentBook).environmentObject(apiService)
                 }
@@ -348,6 +358,7 @@ struct BookDetailView: View {
         do {
             chapters = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             if endChapter.isEmpty { endChapter = "\(chapters.count)" }
+            // 自动跳转到当前章节所在的分组
             let initialIndex = currentBook.durChapterIndex ?? 0
             selectedGroupIndex = initialIndex / 50
             refreshCachedStatus()
@@ -370,24 +381,26 @@ struct BookDetailView: View {
         refreshCachedStatus()
     }
     
-    private func toggleManualManga() {
-        guard let url = book.bookUrl else { return }
-        if preferences.manualMangaUrls.contains(url) {
-            preferences.manualMangaUrls.remove(url)
-        } else {
-            preferences.manualMangaUrls.insert(url)
-        }
-    }
-
     private func updateBookSource(with newBook: Book) {
         Task {
             do {
                 guard let oldUrl = book.bookUrl, let newUrl = newBook.bookUrl, let sourceUrl = newBook.origin else { return }
+                
                 isLoading = true
                 try await apiService.changeBookSource(oldBookUrl: oldUrl, newBookUrl: newUrl, newBookSourceUrl: sourceUrl)
+                
+                // 换源成功后，先刷新书架，然后通知父级并返回
                 try await apiService.fetchBookshelf()
-                await MainActor.run { isLoading = false; dismiss() }
-            } catch { await MainActor.run { isLoading = false; errorMessage = "换源失败: \(error.localizedDescription)" } }
+                await MainActor.run {
+                    isLoading = false
+                    dismiss() // 换源后通常需要重新打开详情页
+                }
+            } catch { 
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = "换源失败: \(error.localizedDescription)" 
+                }
+            }
         }
     }
     
@@ -395,9 +408,15 @@ struct BookDetailView: View {
         Task {
             do {
                 try await apiService.saveBook(book: book)
-                try await apiService.fetchBookshelf()
-                await MainActor.run { showingAddSuccessAlert = true }
-            } catch { await MainActor.run { errorMessage = error.localizedDescription } }
+                try await apiService.fetchBookshelf() // Refresh list
+                await MainActor.run {
+                    showingAddSuccessAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                }
+            }
         }
     }
     
@@ -406,9 +425,15 @@ struct BookDetailView: View {
         Task {
             do {
                 try await apiService.deleteBook(bookUrl: bookUrl)
-                try await apiService.fetchBookshelf()
-                await MainActor.run { showingRemoveSuccessAlert = true }
-            } catch { await MainActor.run { errorMessage = error.localizedDescription } }
+                try await apiService.fetchBookshelf() // Refresh list
+                await MainActor.run {
+                    showingRemoveSuccessAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                }
+            }
         }
     }
     
@@ -422,6 +447,7 @@ struct BookDetailView: View {
     }
 }
 
+// MARK: - Source Switch View
 struct SourceSwitchView: View {
     let bookName: String
     let author: String
