@@ -44,60 +44,63 @@ struct BookDetailView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                headerSection
-                
-                mangaToggleSection
-                
-                actionButtonsSection
-                
-                downloadControls
-                
-                introSection
-                
-                chaptersListSection
+        content
+            .navigationTitle(book.name ?? "书籍详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .ifAvailableHideTabBar()
+            .confirmationDialog("选择缓存范围", isPresented: $showingDownloadOptions, titleVisibility: .visible) {
+                Button("缓存全文") { startDownload(start: 1, end: chapters.count) }
+                Button("缓存后续 50 章") {
+                    let current = (currentBook.durChapterIndex ?? 0) + 1
+                    startDownload(start: current, end: min(current + 50, chapters.count))
+                }
+                Button("自定义范围") { withAnimation { showCustomRange = true } }
+                Button("取消", role: .cancel) { }
             }
-        }
-        .navigationTitle(book.name ?? "书籍详情")
-        .navigationBarTitleDisplayMode(.inline)
-        .ifAvailableHideTabBar()
-        .confirmationDialog("选择缓存范围", isPresented: $showingDownloadOptions, titleVisibility: .visible) {
-            Button("缓存全文") { startDownload(start: 1, end: chapters.count) }
-            Button("缓存后续 50 章") { 
-                let current = (currentBook.durChapterIndex ?? 0) + 1
-                startDownload(start: current, end: min(current + 50, chapters.count)) 
-            }
-            Button("自定义范围") { withAnimation { showCustomRange = true } }
-            Button("取消", role: .cancel) { }
-        }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                if let job = downloadManager.job(for: book.bookUrl ?? "") {
-                    Button("停止", role: .destructive) { downloadManager.cancel(jobId: job.id) }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if let job = downloadManager.job(for: book.bookUrl ?? "") {
+                        Button("停止", role: .destructive) { downloadManager.cancel(jobId: job.id) }
+                    }
                 }
             }
-        }
-        .task { await loadData() }
-        .onChange(of: downloadManager.jobs) { _ in refreshCachedStatus() }
-        .alert("提示", isPresented: .constant(errorMessage != nil)) {
-            Button("确定") { errorMessage = nil }
-        } message: {
-            if let error = errorMessage { Text(error) }
-        }
-        .alert("清除缓存", isPresented: $showingClearCacheAlert) {
-            Button("取消", role: .cancel) { }
-            Button("清除", role: .destructive) { clearBookCache() }
-        } message: {
-            Text("确定要删除本书所有的离线缓存内容吗？")
-        }
-        .alert("已加入书架", isPresented: $showingAddSuccessAlert) { Button("确定", role: .cancel) { } }
-        .alert("已从书架移除", isPresented: $showingRemoveSuccessAlert) { Button("确定", role: .cancel) { } }
-        .sheet(isPresented: $showingSourceSwitch) {
-            SourceSwitchView(bookName: book.name ?? "", author: book.author ?? "", currentSource: book.origin ?? "") { newBook in
-                updateBookSource(with: newBook)
+            .task { await loadData() }
+            .onReceive(downloadManager.$jobs) { _ in
+                refreshCachedStatus()
             }
-        }
+            .alert("提示", isPresented: .constant(errorMessage != nil)) {
+                Button("确定") { errorMessage = nil }
+            } message: {
+                if let error = errorMessage { Text(error) }
+            }
+            .alert("清除缓存", isPresented: $showingClearCacheAlert) {
+                Button("取消", role: .cancel) { }
+                Button("清除", role: .destructive) { clearBookCache() }
+            } message: {
+                Text("确定要删除本书所有的离线缓存内容吗？")
+            }
+            .alert("已加入书架", isPresented: $showingAddSuccessAlert) { Button("确定", role: .cancel) { } }
+            .alert("已从书架移除", isPresented: $showingRemoveSuccessAlert) { Button("确定", role: .cancel) { } }
+            .sheet(isPresented: $showingSourceSwitch) {
+                SourceSwitchView(bookName: book.name ?? "", author: book.author ?? "", currentSource: book.origin ?? "") { newBook in
+                    updateBookSource(with: newBook)
+                }
+            }
+    }
+
+    private var content: AnyView {
+        AnyView(
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    headerSection
+                    mangaToggleSection
+                    actionButtonsSection
+                    downloadControls
+                    introSection
+                    chaptersListSection
+                }
+            }
+        )
     }
     
     // MARK: - Subviews
@@ -416,5 +419,122 @@ struct BookDetailView: View {
         }
         let isManga = book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
         _ = downloadManager.startDownload(book: book, chapters: chapters, start: start, end: end, isManga: isManga)
+    }
+}
+
+struct SourceSwitchView: View {
+    let bookName: String
+    let author: String
+    let currentSource: String
+    let onSelect: (Book) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var apiService: APIService
+    @State private var sources: [BookSource] = []
+    @State private var searchResults: [Book] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var selectedSourceId: String?
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section(header: Text("当前书籍")) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(bookName).font(.headline)
+                        if !author.isEmpty { Text(author).font(.caption).foregroundColor(.secondary) }
+                        Text("来源: \(currentSource)").font(.caption2).foregroundColor(.secondary)
+                    }
+                }
+
+                Section(header: Text("书源选择")) {
+                    if sources.isEmpty {
+                        Text("暂无可用书源").foregroundColor(.secondary)
+                    } else {
+                        ForEach(sources) { source in
+                            Button(action: { selectSource(source) }) {
+                                HStack {
+                                    Text(source.bookSourceName)
+                                    Spacer()
+                                    if selectedSourceId == source.bookSourceUrl {
+                                        Image(systemName: "checkmark.circle.fill").foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section(header: Text("搜索结果")) {
+                    if isLoading {
+                        HStack { Spacer(); ProgressView("正在搜索..."); Spacer() }
+                    } else if searchResults.isEmpty {
+                        Text("暂无匹配结果").foregroundColor(.secondary)
+                    } else {
+                        ForEach(searchResults) { book in
+                            Button(action: { onSelect(book); dismiss() }) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(book.name ?? "未知书名").font(.headline)
+                                    if let author = book.author, !author.isEmpty {
+                                        Text(author).font(.caption).foregroundColor(.secondary)
+                                    }
+                                    if let originName = book.originName, !originName.isEmpty {
+                                        Text(originName).font(.caption2).foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("换源")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+            .task { await loadSources() }
+            .alert("提示", isPresented: .constant(errorMessage != nil)) {
+                Button("确定") { errorMessage = nil }
+            } message: {
+                if let error = errorMessage { Text(error) }
+            }
+        }
+    }
+
+    private func loadSources() async {
+        do {
+            let list = try await apiService.fetchBookSources()
+            await MainActor.run {
+                self.sources = list.filter { $0.enabled }
+            }
+        } catch {
+            await MainActor.run { self.errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func selectSource(_ source: BookSource) {
+        selectedSourceId = source.bookSourceUrl
+        Task { await searchBooks(in: source) }
+    }
+
+    private func searchBooks(in source: BookSource) async {
+        await MainActor.run {
+            isLoading = true
+            searchResults.removeAll()
+        }
+        do {
+            let results = try await apiService.searchBook(keyword: bookName, bookSourceUrl: source.bookSourceUrl)
+            await MainActor.run {
+                self.searchResults = results
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.isLoading = false
+                self.errorMessage = error.localizedDescription
+            }
+        }
     }
 }
