@@ -12,15 +12,13 @@ struct BookDetailView: View {
     @State private var chapters: [BookChapter] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @StateObject private var downloadManager = OfflineDownloadManager.shared
     
     // 下载与缓存状态
     @State private var startChapter: String = "1"
     @State private var endChapter: String = ""
-    @State private var isDownloading = false
     @State private var showCustomRange = false
     @State private var showingDownloadOptions = false
-    @State private var downloadProgress: Double = 0
-    @State private var downloadMessage: String = ""
     @State private var cachedChapters: Set<Int> = []
     
     // 交互状态
@@ -178,12 +176,15 @@ struct BookDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if isDownloading {
-                    Button("停止", role: .destructive) { isDownloading = false }
+                if let job = downloadManager.job(for: book.bookUrl ?? "") {
+                    Button("停止", role: .destructive) { downloadManager.cancel(jobId: job.id) }
                 }
             }
         }
         .task { await loadData() }
+        .onChange(of: downloadManager.jobs) { _ in
+            refreshCachedStatus()
+        }
         .alert("提示", isPresented: .constant(errorMessage != nil)) {
             Button("确定") { errorMessage = nil }
         } message: {
@@ -279,7 +280,7 @@ struct BookDetailView: View {
             HStack {
                 Text("离线缓存").font(.headline)
                 Spacer()
-                if !isDownloading {
+                if downloadManager.job(for: book.bookUrl ?? "") == nil {
                     Button(action: { showingDownloadOptions = true }) {
                         HStack {
                             Image(systemName: "arrow.down.circle")
@@ -290,7 +291,7 @@ struct BookDetailView: View {
                 }
             }
             
-            if showCustomRange && !isDownloading {
+            if showCustomRange && downloadManager.job(for: book.bookUrl ?? "") == nil {
                 VStack(spacing: 12) {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -317,10 +318,14 @@ struct BookDetailView: View {
                 .padding(.vertical, 8).transition(.move(edge: .top).combined(with: .opacity))
             }
             
-            if isDownloading || !downloadMessage.isEmpty {
+            if let job = downloadManager.job(for: book.bookUrl ?? "") {
                 VStack(spacing: 8) {
-                    ProgressView(value: downloadProgress, total: 1.0).tint(.blue)
-                    Text(downloadMessage).font(.caption).foregroundColor(.secondary)
+                    let total = max(1, job.totalUnits)
+                    ProgressView(value: Double(job.completedUnits), total: Double(total)).tint(.blue)
+                    Text(job.message).font(.caption).foregroundColor(.secondary)
+                    if job.status == .failed, let error = job.lastError {
+                        Text("失败原因: \(error)").font(.caption2).foregroundColor(.red)
+                    }
                 }
                 .padding(.vertical, 4)
             }
@@ -433,29 +438,8 @@ struct BookDetailView: View {
             errorMessage = "请输入有效的章节范围 (1-\(chapters.count))"
             return
         }
-        let targetRange = chapters.filter { $0.index >= (start - 1) && $0.index <= (end - 1) }
-        guard !targetRange.isEmpty else { return }
-        isDownloading = true; downloadProgress = 0; downloadMessage = "准备下载..."
-        Task {
-            var successCount = 0
-            for (i, chapter) in targetRange.enumerated() {
-                guard isDownloading else { break }
-                await MainActor.run {
-                    downloadMessage = "正在下载: \(chapter.title) (\(i+1)/\(targetRange.count))"
-                    downloadProgress = Double(i + 1) / Double(targetRange.count)
-                }
-                do {
-                    _ = try await apiService.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: chapter.index)
-                    successCount += 1
-                    await MainActor.run { _ = self.cachedChapters.insert(chapter.index) }
-                } catch { print("下载失败: \(chapter.title) - \(error.localizedDescription)") }
-                try? await Task.sleep(nanoseconds: 50_000_000)
-            }
-            await MainActor.run {
-                isDownloading = false
-                downloadMessage = successCount == targetRange.count ? "下载完成！" : "下载结束，成功 \(successCount)/\(targetRange.count) 章"
-            }
-        }
+        let isManga = book.type == 2 || preferences.manualMangaUrls.contains(book.bookUrl ?? "")
+        _ = downloadManager.startDownload(book: book, chapters: chapters, start: start, end: end, isManga: isManga)
     }
 }
 

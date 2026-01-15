@@ -92,6 +92,8 @@ final class ReaderPrefetchCoordinator {
                         let cache: ChapterCache
                         if isMangaMode {
                             cache = builder.buildMangaCache(rawContent: content, chapterUrl: chapterUrl)
+                            // 预加载漫画图片
+                            self.prefetchMangaImages(book: book, chapterIndex: nextIdx, sentences: cache.contentSentences, chapterUrl: chapterUrl)
                         } else {
                             let title = chapters[nextIdx].title
                             cache = builder.buildTextCache(
@@ -148,6 +150,8 @@ final class ReaderPrefetchCoordinator {
                         let cache: ChapterCache
                         if isMangaMode {
                             cache = builder.buildMangaCache(rawContent: content, chapterUrl: chapterUrl)
+                            // 预加载上一章漫画图片
+                            self.prefetchMangaImages(book: book, chapterIndex: prevIdx, sentences: cache.contentSentences, chapterUrl: chapterUrl)
                         } else {
                             let title = chapters[prevIdx].title
                             cache = builder.buildTextCache(
@@ -168,4 +172,31 @@ final class ReaderPrefetchCoordinator {
         }
     }
 
+    private func prefetchMangaImages(book: Book, chapterIndex: Int, sentences: [String], chapterUrl: String?) {
+        guard let bookUrl = book.bookUrl, UserPreferences.shared.isMangaPreloadEnabled else { return }
+        Task {
+            for sentence in sentences {
+                let urlStr = sentence.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
+                guard let resolved = MangaImageService.shared.resolveImageURL(urlStr) else { continue }
+                let absolute = resolved.absoluteString
+                
+                // 如果已在本地磁盘缓存中，跳过
+                if LocalCacheManager.shared.isMangaImageCached(bookUrl: bookUrl, chapterIndex: chapterIndex, imageURL: absolute) {
+                    continue
+                }
+                
+                // 执行下载。注意：即使不存盘，fetchImageData 也会利用系统的 URLSession 内存/临时磁盘缓存，
+                // 这样在阅读器真正显示时就能实现“秒开”。
+                if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl) {
+                    // 只有开启了“自动离线”才写入 LocalCacheManager 持久化
+                    if UserPreferences.shared.isMangaAutoCacheEnabled {
+                        LocalCacheManager.shared.saveMangaImage(bookUrl: bookUrl, chapterIndex: chapterIndex, imageURL: absolute, data: data)
+                    }
+                }
+                
+                // 适当延迟，避免请求过快
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+        }
+    }
 }

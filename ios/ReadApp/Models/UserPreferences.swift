@@ -222,6 +222,27 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 是否开启文字书籍自动离线缓存
+    @Published var isTextAutoCacheEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isTextAutoCacheEnabled, forKey: "isTextAutoCacheEnabled")
+        }
+    }
+
+    /// 是否开启漫画图片自动离线缓存
+    @Published var isMangaAutoCacheEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isMangaAutoCacheEnabled, forKey: "isMangaAutoCacheEnabled")
+        }
+    }
+
+    /// 是否开启漫画后台预加载（提升翻页流畅度）
+    @Published var isMangaPreloadEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isMangaPreloadEnabled, forKey: "isMangaPreloadEnabled")
+        }
+    }
+
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex, sentenceOffset)
     private var ttsProgress: [String: (Int, Int, Int)] {
         get {
@@ -320,6 +341,9 @@ class UserPreferences: ObservableObject {
         let savedTtsFollowCooldown = UserDefaults.standard.double(forKey: "ttsFollowCooldown")
         self.ttsFollowCooldown = savedTtsFollowCooldown == 0 ? 3.0 : savedTtsFollowCooldown
         self.forceMangaProxy = UserDefaults.standard.bool(forKey: "forceMangaProxy")
+        self.isTextAutoCacheEnabled = UserDefaults.standard.object(forKey: "isTextAutoCacheEnabled") as? Bool ?? true
+        self.isMangaAutoCacheEnabled = UserDefaults.standard.object(forKey: "isMangaAutoCacheEnabled") as? Bool ?? true
+        self.isMangaPreloadEnabled = UserDefaults.standard.object(forKey: "isMangaPreloadEnabled") as? Bool ?? true
         let savedChunk = UserDefaults.standard.integer(forKey: "ttsSentenceChunkLimit")
         self.ttsSentenceChunkLimit = savedChunk == 0 ? 600 : savedChunk
 

@@ -113,8 +113,18 @@ class APIService: ObservableObject {
         if apiResponse.isSuccess, let content = apiResponse.data {
             if cachePolicy.saveToCache {
                 await chapterCache.insert(content, for: cacheKey)
-                // 同步存入磁盘缓存
-                LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
+                
+                // 根据内容类型判断是否需要自动存入磁盘
+                let shouldCache: Bool
+                if contentType == 2 { // 漫画内容索引
+                    shouldCache = UserPreferences.shared.isMangaAutoCacheEnabled
+                } else { // 普通文字
+                    shouldCache = UserPreferences.shared.isTextAutoCacheEnabled
+                }
+                
+                if shouldCache {
+                    LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
+                }
             }
             return content
         } else {

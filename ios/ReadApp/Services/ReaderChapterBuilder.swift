@@ -154,13 +154,45 @@ final class ReaderChapterBuilder {
     }
 
     private func extractMangaImageSentences(from text: String) -> [String] {
-        let pattern = #"<img[^>]+(?:src|data-src|data-original)=["']([^"']+)["'][^>]*>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
-        let nsText = text as NSString
-        let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
-        return matches.compactMap { match in
-            guard match.numberOfRanges > 1 else { return nil }
-            return "__IMG__" + nsText.substring(with: match.range(at: 1))
+        var results: [String] = []
+        var seen = Set<String>()
+        
+        // 1. 匹配所有 img 标签
+        let imgTagPattern = #"<img\s+([^>]+)>"#
+        if let imgRegex = try? NSRegularExpression(pattern: imgTagPattern, options: [.caseInsensitive]) {
+            let nsText = text as NSString
+            let matches = imgRegex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
+            
+            for match in matches {
+                guard match.numberOfRanges > 1 else { continue }
+                let attributesString = nsText.substring(with: match.range(at: 1))
+                
+                // 按照优先级尝试提取属性
+                let attrPatterns = [
+                    #"data-original=["']([^"']+)["']"#,
+                    #"data-src=["']([^"']+)["']"#,
+                    #"src=["']([^"']+)["']"#
+                ]
+                
+                var foundUrl: String?
+                for pattern in attrPatterns {
+                    if let attrRegex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                        if let attrMatch = attrRegex.firstMatch(in: attributesString, options: [], range: NSRange(location: 0, length: (attributesString as NSString).length)) {
+                            if attrMatch.numberOfRanges > 1 {
+                                foundUrl = (attributesString as NSString).substring(with: attrMatch.range(at: 1))
+                                break
+                            }
+                        }
+                    }
+                }
+                
+                if let url = foundUrl, !url.isEmpty && !seen.contains(url) {
+                    seen.insert(url)
+                    results.append("__IMG__" + url)
+                }
+            }
         }
+        
+        return results
     }
 }

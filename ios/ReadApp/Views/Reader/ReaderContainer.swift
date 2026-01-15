@@ -1127,6 +1127,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             addChild(vc); view.insertSubview(vc.view, at: 0); vc.view.frame = view.bounds; vc.didMove(toParent: self)
             self.mangaVC = vc
         }
+        mangaVC?.bookUrl = book.bookUrl
+        mangaVC?.chapterIndex = currentChapterIndex
+        mangaVC?.chapterUrl = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
         mangaVC?.update(urls: currentCache.contentSentences)
     }
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
