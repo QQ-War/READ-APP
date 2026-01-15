@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C10000010000000000000002 /* MangaImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000010000000000000001 /* MangaImageService.swift */; };
+		C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000020000000000000001 /* OfflineDownloadManager.swift */; };
 		2A83F7C979DC464A96CE4D4C /* BookSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */; };
 		72FDB17ADA4241E9BF6A5BB9 /* BookSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A79963738344134ACDF2305 /* BookSearchViewModel.swift */; };
 		1A000001000000000000001 /* ReadAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000001 /* ReadAppApp.swift */; };
@@ -87,6 +89,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		C10000010000000000000001 /* MangaImageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaImageService.swift; sourceTree = "<group>"; };
+		C10000020000000000000001 /* OfflineDownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineDownloadManager.swift; sourceTree = "<group>"; };
 		BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSearchView.swift; sourceTree = "<group>"; };
 		0A79963738344134ACDF2305 /* BookSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSearchViewModel.swift; sourceTree = "<group>"; };
 		1A000002000000000000001 /* ReadAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadAppApp.swift; sourceTree = "<group>"; };
@@ -205,6 +209,8 @@
 		1A000025000000000000001 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				C10000010000000000000001 /* MangaImageService.swift */,
+				C10000020000000000000001 /* OfflineDownloadManager.swift */,
 				1A000020000000000000001 /* ReadApp.app */,
 			);
 			name = Products;
@@ -319,6 +325,8 @@
 		1A000027000000000000001 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				C10000010000000000000001 /* MangaImageService.swift */,
+				C10000020000000000000001 /* OfflineDownloadManager.swift */,
 				1A000043000000000000004 /* LocalCacheManager.swift */,
 				1A000008000000000000001 /* APIService.swift */,
 				A10000020000000000000001 /* APIClient.swift */,
@@ -418,6 +426,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C10000010000000000000002 /* MangaImageService.swift in Sources */,
+				C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */,
 				1A000005000000000000001 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -429,6 +439,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C10000010000000000000002 /* MangaImageService.swift in Sources */,
+				C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */,
 				1A000001000000000000001 /* ReadAppApp.swift in Sources */,
 				1A000003000000000000001 /* ContentView.swift in Sources */,
 				1A000013000000000000001 /* ReadingView.swift in Sources */,
