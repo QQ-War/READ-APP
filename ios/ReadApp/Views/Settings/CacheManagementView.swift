@@ -1,5 +1,4 @@
 import SwiftUI
-import CryptoKit
 
 struct CacheManagementView: View {
     @EnvironmentObject var apiService: APIService
@@ -18,20 +17,25 @@ struct CacheManagementView: View {
     }
     
     var body: some View {
-        List {
-            strategySection
-            
-            downloadingSection
-            
-            storageSection
-            
-            cachedBooksSection
-        }
-        .navigationTitle("缓存与下载管理")
-        .navigationBarTitleDisplayMode(.inline)
-        .ifAvailableHideTabBar()
-        .task { await loadCachedData() }
-        .onChange(of: downloadManager.jobs) { _ in Task { await loadCachedData() } }
+        content
+            .navigationTitle("缓存与下载管理")
+            .navigationBarTitleDisplayMode(.inline)
+            .ifAvailableHideTabBar()
+            .task { await loadCachedData() }
+            .onReceive(downloadManager.$jobs) { _ in
+                Task { await loadCachedData() }
+            }
+    }
+
+    private var content: AnyView {
+        AnyView(
+            List {
+                strategySection
+                downloadingSection
+                storageSection
+                cachedBooksSection
+            }
+        )
     }
     
     // MARK: - Sections
@@ -164,7 +168,7 @@ struct CachedBookRow: View {
     let onDelete: () -> Void
     
     var body: some View {
-        NavigationLink(destination: BookDetailView(book: Book(bookUrl: info.id, name: info.name, author: info.author)).environmentObject(apiService)) {
+        NavigationLink(destination: BookDetailView(book: Book(name: info.name, author: info.author, bookUrl: info.id)).environmentObject(apiService)) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(info.name).font(.headline)
