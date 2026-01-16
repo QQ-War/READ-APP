@@ -544,47 +544,101 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     func ensureSentenceVisible(index: Int) {
         // 如果是 TTS 正在播放，基于实时 sentenceOffset 计算精确字符偏移实现平滑跟随
-        if let tts = TTSManager.shared.isPlaying ? TTSManager.shared : nil,
-           tts.currentChapterIndex == (self.parent as? ReaderContainerViewController)?.currentChapterIndex {
-            if tts.isReadingChapterTitle { return }
+        if let tts = TTSManager.shared.isPlaying ? TTSManager.shared : nil {
+            let readerVC = (self.parent as? ReaderContainerViewController)
+            let isCurrentChapter = tts.currentChapterIndex == readerVC?.currentChapterIndex
+            let isNextChapter = tts.currentChapterIndex == (readerVC?.currentChapterIndex ?? -1) + 1
             
+            if tts.isReadingChapterTitle && isCurrentChapter { return }
+            
+            // 确定参考视图和数据源
+            let targetContentView: VerticalTextContentView
+            let targetRenderStore: TextKit2RenderStore?
+            let targetParagraphStarts: [Int]
+            
+            if isCurrentChapter {
+                targetContentView = currentContentView
+                targetRenderStore = renderStore
+                targetParagraphStarts = paragraphStarts
+            } else if isNextChapter && isInfiniteScrollEnabled && !nextContentView.isHidden {
+                targetContentView = nextContentView
+                targetRenderStore = nextRenderStore
+                // 下一章的 paragraphStarts 由于尚未切换，我们只能基于字符查找
+                targetParagraphStarts = [] 
+            } else {
+                return
+            }
+
+            guard let store = targetRenderStore else { return }
+
             let bodySentenceIndex = tts.hasChapterTitleInSentences ? (tts.currentSentenceIndex - 1) : tts.currentSentenceIndex
-            guard bodySentenceIndex >= 0, bodySentenceIndex < paragraphStarts.count else { return }
             
-            let realTimeOffset = paragraphStarts[bodySentenceIndex] + tts.currentSentenceOffset + paragraphIndentLength
-            if let yInContent = getYOffsetForCharOffset(realTimeOffset) {
-                let absY = yInContent + currentContentView.frame.minY
+            // 计算字符偏移对应的 Y 坐标
+            var yInTargetContent: CGFloat? = nil
+            
+            // 计算全局字符偏移
+            let charOffsetInChapter: Int
+            if bodySentenceIndex >= 0 && isCurrentChapter && bodySentenceIndex < targetParagraphStarts.count {
+                charOffsetInChapter = targetParagraphStarts[bodySentenceIndex] + tts.currentSentenceOffset + paragraphIndentLength
+                yInTargetContent = getYOffsetForCharOffset(charOffsetInChapter)
+            } else if isNextChapter {
+                // 如果是下一章，我们需要计算相对于下个章节内容的偏移
+                // 注意：TTSManager 在下一章开始时会将 sentenceIndex 重置为 0
+                // 我们直接根据字符偏移查找，这里假定下一章正文也符合缩进规则
+                let rawOffset = tts.currentSentenceOffset + paragraphIndentLength
+                yInTargetContent = getYOffsetForCharOffsetInStore(store, offset: rawOffset)
+            }
+
+            if let yInContent = yInTargetContent {
+                let absY = yInContent + targetContentView.frame.minY
                 let curY = scrollView.contentOffset.y
-                let vH = scrollView.bounds.height
                 
                 // 核心逻辑：计算当前正在读的行相对于可视区域顶部的偏移
-                // contentTopPadding 是文字在视口中逻辑上的“第一行”位置
                 let currentReadingYRelativeToViewport = absY - (curY + contentTopPadding)
                 
-                // 方案 A 改进版：每读完约两行 (1.8倍行高) 滚动一次
-                // 特殊处理：如果当前是第一行且上方有标题，currentReadingYRelativeToViewport 会很大，会自动触发置顶滚动
-                if currentReadingYRelativeToViewport > estimatedLineHeight * 1.8 {
+                // 策略：
+                // 1. 如果是章节第一句且还没对齐，或者偏离非常大（超过2行），则强制对齐
+                // 2. 如果是普通微调，维持 0.3 行的灵敏度
+                let isFirstSentence = tts.currentSentenceIndex <= (tts.hasChapterTitleInSentences ? 1 : 0)
+                let threshold = isFirstSentence ? 2.0 : (estimatedLineHeight * 0.3)
+                
+                if abs(currentReadingYRelativeToViewport) > threshold {
                     let targetY = max(0, absY - contentTopPadding)
                     isAutoScrolling = true
-                    // 使用系统动画平滑滚动，将正文行推至顶端，从而把标题挤出去
-                    scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - vH))), animated: true)
-                } else if currentReadingYRelativeToViewport < -estimatedLineHeight {
-                    // 如果由于某种原因（如手动滚动）导致当前行在视口上方，也自动找回并置顶
-                    let targetY = max(0, absY - contentTopPadding)
-                    isAutoScrolling = true
-                    scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - vH))), animated: true)
+                    // 如果偏离巨大，说明是刚换章或者用户跳进度了，用非动画形式先跳过去，再由 sync 维持平滑
+                    let shouldAnimate = abs(currentReadingYRelativeToViewport) < vH * 0.5
+                    scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: shouldAnimate)
                 }
                 return
             }
         }
+    }
 
-        // 非播放状态下的普通可见性检查 (兜底逻辑)
-        guard !scrollView.isDragging && !scrollView.isDecelerating, index >= 0 && index < sentenceYOffsets.count, index != lastTTSSyncIndex else { return }
-        let y = sentenceYOffsets[index] + contentTopPadding; let cur = scrollView.contentOffset.y; let vH = scrollView.bounds.height
-        if y > cur + vH - 150 {
-            lastTTSSyncIndex = index
-            scrollView.setContentOffset(CGPoint(x: 0, y: max(0, y - contentTopPadding)), animated: true)
+    private func getYOffsetForCharOffsetInStore(_ s: TextKit2RenderStore, offset: Int) -> CGFloat? {
+        let totalLen = s.attributedString.length
+        let clampedO = max(0, min(offset, totalLen > 0 ? totalLen - 1 : 0))
+        s.layoutManager.ensureLayout(for: s.contentStorage.documentRange)
+        
+        if let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: clampedO),
+           let f = s.layoutManager.textLayoutFragment(for: loc) {
+            let fragMinY = f.layoutFragmentFrame.minY
+            if #available(iOS 15.0, *) {
+                let fragmentStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                let offsetInFrag = clampedO - fragmentStart
+                for line in f.textLineFragments {
+                    if line.characterRange.location + line.characterRange.length > offsetInFrag {
+                        return fragMinY + line.typographicBounds.minY
+                    }
+                }
+            }
+            return fragMinY
         }
+        return nil
+    }
+
+    func ensureSentenceVisible(index: Int) {
+        // 重载版本，保持兼容性但内部路由到 TTS 逻辑
+        self.ensureSentenceVisible(index: index)
     }
     func isSentenceVisible(index: Int) -> Bool {
         guard index >= 0 && index < sentenceYOffsets.count else { return true }

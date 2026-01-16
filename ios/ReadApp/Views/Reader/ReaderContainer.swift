@@ -731,6 +731,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                             self.animateToAdjacentChapter(offset: 1, targetPage: 0)
                         } else if self.currentReadingMode == .horizontal && newIndex == self.currentChapterIndex - 1 && !self.prevCache.pages.isEmpty {
                             self.animateToAdjacentChapter(offset: -1, targetPage: self.prevCache.pages.count - 1)
+                        } else if self.currentReadingMode == .vertical && self.readerSettings.isInfiniteScrollEnabled {
+                            // 垂直无限流平滑换章
+                            let offset = newIndex - self.currentChapterIndex
+                            self.suppressTTSFollowUntil = Date().timeIntervalSince1970 + 0.5
+                            self.switchChapterSeamlessly(offset: offset)
                         } else {
                             self.jumpToChapter(newIndex)
                         }
@@ -1146,7 +1151,20 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if isMangaMode { return }
         guard ttsManager.isReady else { return }
         
-        // 确保阅读器记录的章节索引与 TTS 一致，且缓存已更新为该章节，防止由于加载延迟导致页面跳回旧章第一页
+        // 跨章预判：如果 TTS 已经进入下一章，且我们处于垂直无限流模式
+        if currentReadingMode == .vertical && readerSettings.isInfiniteScrollEnabled {
+            if ttsManager.currentChapterIndex == currentChapterIndex + 1 && nextCache.renderStore != nil {
+                // TTS 已经超前进入下一章，主动发起平滑切换
+                let now = Date().timeIntervalSince1970
+                if now >= suppressTTSFollowUntil {
+                    suppressTTSFollowUntil = now + 0.5
+                    switchChapterSeamlessly(offset: 1)
+                    return
+                }
+            }
+        }
+
+        // 确保阅读器记录的章节索引与 TTS 一致
         guard ttsManager.currentChapterIndex == currentChapterIndex else { return }
         if chapters.indices.contains(currentChapterIndex) {
             guard currentCache.chapterUrl == chapters[currentChapterIndex].url else { return }
@@ -1258,6 +1276,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                         self.animateToAdjacentChapter(offset: 1, targetPage: 0)
                     } else if self.currentReadingMode == .horizontal && newIndex == self.currentChapterIndex - 1 && !self.prevCache.pages.isEmpty {
                         self.animateToAdjacentChapter(offset: -1, targetPage: self.prevCache.pages.count - 1)
+                    } else if self.currentReadingMode == .vertical && self.readerSettings.isInfiniteScrollEnabled {
+                        // 垂直无限流平滑换章
+                        let offset = newIndex - self.currentChapterIndex
+                        self.suppressTTSFollowUntil = Date().timeIntervalSince1970 + 0.5
+                        self.switchChapterSeamlessly(offset: offset)
                     } else {
                         self.jumpToChapter(newIndex)
                     }

@@ -30,7 +30,7 @@ final class TTSReadingSyncCoordinator {
 
         ttsManager.$currentSentenceOffset
             .removeDuplicates()
-            .throttle(for: .milliseconds(300), scheduler: RunLoop.main, latest: true)
+            .throttle(for: .milliseconds(100), scheduler: RunLoop.main, latest: true)
             .sink { [weak self] _ in
                 self?.reader?.syncTTSState()
             }
