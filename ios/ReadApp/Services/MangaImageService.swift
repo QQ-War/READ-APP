@@ -8,11 +8,12 @@ final class MangaImageService {
     private init() {}
     
     func resolveImageURL(_ original: String) -> URL? {
-        if original.hasPrefix("http") {
-            return URL(string: original)
+        let cleaned = sanitizeImageURLString(original)
+        if cleaned.hasPrefix("http") {
+            return URL(string: cleaned)
         }
         let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
-        let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
+        let resolved = cleaned.hasPrefix("/") ? (baseURL + cleaned) : (baseURL + "/" + cleaned)
         return URL(string: resolved)
     }
     
@@ -55,7 +56,8 @@ final class MangaImageService {
         request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
         request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
 
-        let antiScrapingProfile = MangaAntiScrapingService.shared.resolveProfile(imageURL: requestURL, referer: referer)
+        let normalizedReferer = normalizeReferer(referer, imageURL: requestURL)
+        let antiScrapingProfile = MangaAntiScrapingService.shared.resolveProfile(imageURL: requestURL, referer: normalizedReferer)
         if let customUA = antiScrapingProfile?.userAgent {
             request.setValue(customUA, forHTTPHeaderField: "User-Agent")
         }
@@ -66,11 +68,11 @@ final class MangaImageService {
         }
         if verbose {
             let profileKey = antiScrapingProfile?.key ?? "none"
-            logger.log("反爬匹配: profile=\(profileKey) referer=\(referer ?? "nil") requestHost=\(requestURL.host ?? "nil")", category: "漫画调试")
+            logger.log("反爬匹配: profile=\(profileKey) referer=\(normalizedReferer ?? referer ?? "nil") requestHost=\(requestURL.host ?? "nil")", category: "漫画调试")
         }
         
         var finalReferer = antiScrapingProfile?.referer ?? "https://m.kuaikanmanhua.com/"
-        if var customReferer = referer, !customReferer.isEmpty {
+        if var customReferer = normalizedReferer, !customReferer.isEmpty {
             if customReferer.hasPrefix("http://") {
                 customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
             }
@@ -109,6 +111,43 @@ final class MangaImageService {
             return nil
         }
         return nil
+    }
+
+    private func normalizeReferer(_ referer: String?, imageURL: URL) -> String? {
+        guard var value = referer?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        if value.hasPrefix("http://") || value.hasPrefix("https://") {
+            return value
+        }
+        guard let host = imageURL.host else { return value }
+        if !value.hasPrefix("/") {
+            value = "/" + value
+        }
+        return "https://\(host)\(value)"
+    }
+
+    private func sanitizeImageURLString(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let patterns = ["\\.jpg", "\\.jpeg", "\\.png", "\\.webp", "\\.gif", "\\.bmp"]
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+               let match = regex.firstMatch(in: trimmed, options: [], range: NSRange(location: 0, length: (trimmed as NSString).length)) {
+                let end = match.range.location + match.range.length
+                if end < (trimmed as NSString).length {
+                    let prefix = (trimmed as NSString).substring(to: end)
+                    return prefix
+                }
+                return trimmed
+            }
+        }
+        if let idx = trimmed.range(of: ",%7B")?.lowerBound {
+            return String(trimmed[..<idx])
+        }
+        if let idx = trimmed.range(of: ",{")?.lowerBound {
+            return String(trimmed[..<idx])
+        }
+        return trimmed
     }
 
     func buildProxyURL(for original: URL) -> URL? {

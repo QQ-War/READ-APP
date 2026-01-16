@@ -25,7 +25,7 @@ struct MangaAntiScrapingProfile: Identifiable {
 final class MangaAntiScrapingService {
     static let profiles: [MangaAntiScrapingProfile] = [
         MangaAntiScrapingProfile(key: "acg456", name: "acg456", hostSuffixes: ["acg456.com", "www.acg456.com"], referer: "http://www.acg456.com/", userAgent: nil, extraHeaders: [:]),
-        MangaAntiScrapingProfile(key: "baozimh", name: "baozimh", hostSuffixes: ["baozimh.com", "www.baozimh.com"], referer: "https://www.baozimh.com/", userAgent: nil, extraHeaders: [:]),
+        MangaAntiScrapingProfile(key: "baozimh", name: "baozimh", hostSuffixes: ["baozimh.com", "www.baozimh.com", "bzcdn.net"], referer: "https://www.baozimh.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "bilibili", name: "bilibili", hostSuffixes: ["manga.bilibili.com"], referer: "https://manga.bilibili.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "boodo", name: "boodo", hostSuffixes: ["boodo.qq.com"], referer: "https://boodo.qq.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "boylove", name: "boylove", hostSuffixes: ["boylove.cc"], referer: "https://boylove.cc/", userAgent: nil, extraHeaders: [:]),
