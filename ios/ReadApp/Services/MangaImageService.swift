@@ -12,11 +12,17 @@ final class MangaImageService {
     func resolveImageURL(_ original: String) -> URL? {
         let cleaned = sanitizeImageURLString(original)
         if cleaned.hasPrefix("http") {
-            return URL(string: cleaned)
+            if let url = URL(string: cleaned) {
+                return normalizeImageHost(url)
+            }
+            return nil
         }
         let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
         let resolved = cleaned.hasPrefix("/") ? (baseURL + cleaned) : (baseURL + "/" + cleaned)
-        return URL(string: resolved)
+        if let url = URL(string: resolved) {
+            return normalizeImageHost(url)
+        }
+        return nil
     }
     
     func fetchImageData(for url: URL, referer: String?) async -> Data? {
@@ -180,6 +186,18 @@ final class MangaImageService {
             return String(trimmed[..<idx])
         }
         return trimmed
+    }
+
+    private func normalizeImageHost(_ url: URL) -> URL {
+        guard let host = url.host?.lowercased(), host.hasSuffix("bzmh.net") else { return url }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        if host == "bzmh.net" {
+            components?.host = "bzcdn.net"
+        } else if let range = host.range(of: ".bzmh.net", options: .backwards) {
+            let prefix = host[..<range.lowerBound]
+            components?.host = prefix + ".bzcdn.net"
+        }
+        return components?.url ?? url
     }
 
     func buildProxyURL(for original: URL) -> URL? {
