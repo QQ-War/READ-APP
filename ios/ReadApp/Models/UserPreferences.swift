@@ -222,6 +222,20 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 是否开启漫画图片反爬适配
+    @Published var isMangaAntiScrapingEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isMangaAntiScrapingEnabled, forKey: "isMangaAntiScrapingEnabled")
+        }
+    }
+
+    /// 启用的反爬站点列表
+    @Published var mangaAntiScrapingEnabledSites: Set<String> {
+        didSet {
+            UserDefaults.standard.set(Array(mangaAntiScrapingEnabledSites), forKey: "mangaAntiScrapingEnabledSites")
+        }
+    }
+
     /// 是否开启文字书籍自动离线缓存
     @Published var isTextAutoCacheEnabled: Bool {
         didSet {
@@ -341,6 +355,13 @@ class UserPreferences: ObservableObject {
         let savedTtsFollowCooldown = UserDefaults.standard.double(forKey: "ttsFollowCooldown")
         self.ttsFollowCooldown = savedTtsFollowCooldown == 0 ? 3.0 : savedTtsFollowCooldown
         self.forceMangaProxy = UserDefaults.standard.bool(forKey: "forceMangaProxy")
+        self.isMangaAntiScrapingEnabled = UserDefaults.standard.object(forKey: "isMangaAntiScrapingEnabled") as? Bool ?? true
+        let savedAntiScrapingSites = UserDefaults.standard.stringArray(forKey: "mangaAntiScrapingEnabledSites")
+        if let savedAntiScrapingSites, !savedAntiScrapingSites.isEmpty {
+            self.mangaAntiScrapingEnabledSites = Set(savedAntiScrapingSites)
+        } else {
+            self.mangaAntiScrapingEnabledSites = Set(MangaAntiScrapingService.profileKeys)
+        }
         self.isTextAutoCacheEnabled = UserDefaults.standard.object(forKey: "isTextAutoCacheEnabled") as? Bool ?? true
         self.isMangaAutoCacheEnabled = UserDefaults.standard.object(forKey: "isMangaAutoCacheEnabled") as? Bool ?? true
         self.isMangaPreloadEnabled = UserDefaults.standard.object(forKey: "isMangaPreloadEnabled") as? Bool ?? true

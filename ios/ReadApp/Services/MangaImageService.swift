@@ -47,8 +47,18 @@ final class MangaImageService {
         request.setValue("no-cors", forHTTPHeaderField: "Sec-Fetch-Mode")
         request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
         request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
+
+        let antiScrapingProfile = MangaAntiScrapingService.shared.resolveProfile(imageURL: requestURL, referer: referer)
+        if let customUA = antiScrapingProfile?.userAgent {
+            request.setValue(customUA, forHTTPHeaderField: "User-Agent")
+        }
+        if let extraHeaders = antiScrapingProfile?.extraHeaders, !extraHeaders.isEmpty {
+            for (key, value) in extraHeaders {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+        }
         
-        var finalReferer = "https://m.kuaikanmanhua.com/"
+        var finalReferer = antiScrapingProfile?.referer ?? "https://m.kuaikanmanhua.com/"
         if var customReferer = referer, !customReferer.isEmpty {
             if customReferer.hasPrefix("http://") {
                 customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
@@ -70,7 +80,7 @@ final class MangaImageService {
             }
             if statusCode == 403 || statusCode == 401 {
                 var retry = request
-                retry.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
+                retry.setValue(antiScrapingProfile?.referer ?? "https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
                 let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
                 let retryCode = (retryResponse as? HTTPURLResponse)?.statusCode ?? 0
                 if retryCode == 200, !retryData.isEmpty {

@@ -443,6 +443,28 @@ struct ContentSettingsView: View {
                 }
             }
 
+            Section(header: Text("漫画图片")) {
+                Toggle("启用反爬适配", isOn: $preferences.isMangaAntiScrapingEnabled)
+                NavigationLink(destination: MangaAntiScrapingSitesView()) {
+                    Label {
+                        HStack {
+                            Text("支持站点")
+                            Spacer()
+                            let enabledCount = preferences.mangaAntiScrapingEnabledSites.count
+                            let totalCount = MangaAntiScrapingService.profiles.count
+                            Text(enabledCount >= totalCount ? "已全部启用" : "\(enabledCount)/\(totalCount)")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                    } icon: {
+                        Image(systemName: "shield.lefthalf.filled")
+                    }
+                }
+                Text("仅针对支持站点追加 Referer/请求头，其他站点仍按书源规则处理")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
             Section(header: Text("内容净化")) {
                 NavigationLink(destination: ReplaceRuleListView()) {
                     Label("净化规则管理", systemImage: "broom")
@@ -458,6 +480,49 @@ struct ContentSettingsView: View {
         }
         .navigationTitle("内容设置")
         .ifAvailableHideTabBar()
+    }
+}
+
+struct MangaAntiScrapingSitesView: View {
+    @StateObject private var preferences = UserPreferences.shared
+    private let profiles = MangaAntiScrapingService.profiles
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(profiles) { profile in
+                    Toggle(isOn: binding(for: profile.key)) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(profile.name)
+                            if !profile.hostSuffixes.isEmpty {
+                                Text(profile.hostSuffixes.joined(separator: ", "))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                Text("站点匹配按域名后缀判断，仅影响图片请求头设置。")
+            }
+        }
+        .navigationTitle("反爬站点")
+        .ifAvailableHideTabBar()
+    }
+
+    private func binding(for key: String) -> Binding<Bool> {
+        Binding(
+            get: { preferences.mangaAntiScrapingEnabledSites.contains(key) },
+            set: { isOn in
+                var current = preferences.mangaAntiScrapingEnabledSites
+                if isOn {
+                    current.insert(key)
+                } else {
+                    current.remove(key)
+                }
+                preferences.mangaAntiScrapingEnabledSites = current
+            }
+        )
     }
 }
 
