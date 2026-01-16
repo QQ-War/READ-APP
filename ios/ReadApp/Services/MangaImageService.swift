@@ -4,6 +4,8 @@ import UIKit
 final class MangaImageService {
     static let shared = MangaImageService()
     private let logger = LogManager.shared
+    private var lastKuaikanWarmupReferer: String?
+    private var lastKuaikanWarmupAt: Date?
     
     private init() {}
     
@@ -52,6 +54,10 @@ final class MangaImageService {
 
         let normalizedReferer = normalizeReferer(referer, imageURL: requestURL)
         let antiScrapingProfile = MangaAntiScrapingService.shared.resolveProfile(imageURL: requestURL, referer: normalizedReferer)
+        if antiScrapingProfile?.key == "kuaikan" {
+            let warmupReferer = normalizedReferer ?? antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/"
+            await warmupKuaikanCookies(referer: warmupReferer, verbose: verbose)
+        }
         if let customUA = antiScrapingProfile?.userAgent {
             request.setValue(customUA, forHTTPHeaderField: "User-Agent")
         }
@@ -113,6 +119,30 @@ final class MangaImageService {
             return nil
         }
         return nil
+    }
+
+    private func warmupKuaikanCookies(referer: String, verbose: Bool) async {
+        let now = Date()
+        if let lastReferer = lastKuaikanWarmupReferer,
+           let lastAt = lastKuaikanWarmupAt,
+           lastReferer == referer,
+           now.timeIntervalSince(lastAt) < 300 {
+            return
+        }
+        guard let url = URL(string: referer) else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        request.httpShouldHandleCookies = true
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+        request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+        do {
+            _ = try await URLSession.shared.data(for: request)
+            lastKuaikanWarmupReferer = referer
+            lastKuaikanWarmupAt = now
+            if verbose { logger.log("kuaikan 预热Cookie: \(referer)", category: "漫画调试") }
+        } catch {
+            if verbose { logger.log("kuaikan 预热Cookie失败: \(error.localizedDescription)", category: "漫画调试") }
+        }
     }
 
     private func normalizeReferer(_ referer: String?, imageURL: URL) -> String? {
