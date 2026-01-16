@@ -331,9 +331,6 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         let raw = (store.attributedString.string as NSString).substring(with: NSRange(location: info.range.location, length: snippetLen))
         let cleaned = sanitizedPreviewText(raw, limit: 120)
         
-        if Self.debugLogTopFragments {
-            LogManager.shared.log("ReadContent2View content page=\(pageIdx): \(cleaned)", category: "TTS")
-        }
         onVisibleFragments?(pageIdx, [cleaned])
     }
 
