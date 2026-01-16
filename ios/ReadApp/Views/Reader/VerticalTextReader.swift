@@ -577,14 +577,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             var yInTargetContent: CGFloat? = nil
             
             // 计算全局字符偏移
-            let charOffsetInChapter: Int
             if bodySentenceIndex >= 0 && isCurrentChapter && bodySentenceIndex < targetParagraphStarts.count {
-                charOffsetInChapter = targetParagraphStarts[bodySentenceIndex] + tts.currentSentenceOffset + paragraphIndentLength
+                let charOffsetInChapter = targetParagraphStarts[bodySentenceIndex] + tts.currentSentenceOffset + paragraphIndentLength
                 yInTargetContent = getYOffsetForCharOffset(charOffsetInChapter)
             } else if isNextChapter {
                 // 如果是下一章，我们需要计算相对于下个章节内容的偏移
                 // 注意：TTSManager 在下一章开始时会将 sentenceIndex 重置为 0
-                // 我们直接根据字符偏移查找，这里假定下一章正文也符合缩进规则
                 let rawOffset = tts.currentSentenceOffset + paragraphIndentLength
                 yInTargetContent = getYOffsetForCharOffsetInStore(store, offset: rawOffset)
             }
@@ -592,6 +590,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if let yInContent = yInTargetContent {
                 let absY = yInContent + targetContentView.frame.minY
                 let curY = scrollView.contentOffset.y
+                let vH = scrollView.bounds.height
                 
                 // 核心逻辑：计算当前正在读的行相对于可视区域顶部的偏移
                 let currentReadingYRelativeToViewport = absY - (curY + contentTopPadding)
@@ -636,10 +635,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         return nil
     }
 
-    func ensureSentenceVisible(index: Int) {
-        // 重载版本，保持兼容性但内部路由到 TTS 逻辑
-        self.ensureSentenceVisible(index: index)
-    }
     func isSentenceVisible(index: Int) -> Bool {
         guard index >= 0 && index < sentenceYOffsets.count else { return true }
         let startY = sentenceYOffsets[index] + contentTopPadding
