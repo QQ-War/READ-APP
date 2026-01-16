@@ -322,13 +322,14 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private func calculateSentenceOffsets() {
         guard let s = renderStore else { return }; s.layoutManager.ensureLayout(for: s.contentStorage.documentRange); var o: [CGFloat] = []
         let totalLen = s.attributedString.length
+        
+        // 方案优化：行高基准直接采用正文字号，彻底避开大标题干扰
+        let bodyFont = UIFont.systemFont(ofSize: lastFontSize)
+        self.estimatedLineHeight = bodyFont.lineHeight + lastLineSpacing
+        
         for start in paragraphStarts { 
             if start < totalLen, let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: start), let f = s.layoutManager.textLayoutFragment(for: loc) { 
                 o.append(f.layoutFragmentFrame.minY) 
-                // 捕捉行高信息（行高度 + 行间距）
-                if let firstLine = f.textLineFragments.first {
-                    estimatedLineHeight = firstLine.typographicBounds.height + lastLineSpacing
-                }
             } else { 
                 o.append(o.last ?? 0) 
             } 
@@ -561,11 +562,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 let currentReadingYRelativeToViewport = absY - (curY + contentTopPadding)
                 
                 // 方案 A 改进版：每读完约两行 (1.8倍行高) 滚动一次
-                // 将当前/下一行滚到显示区域最上方
+                // 特殊处理：如果当前是第一行且上方有标题，currentReadingYRelativeToViewport 会很大，会自动触发置顶滚动
                 if currentReadingYRelativeToViewport > estimatedLineHeight * 1.8 {
                     let targetY = max(0, absY - contentTopPadding)
                     isAutoScrolling = true
-                    // 使用系统动画平滑滚动
+                    // 使用系统动画平滑滚动，将正文行推至顶端，从而把标题挤出去
                     scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - vH))), animated: true)
                 } else if currentReadingYRelativeToViewport < -estimatedLineHeight {
                     // 如果由于某种原因（如手动滚动）导致当前行在视口上方，也自动找回并置顶
