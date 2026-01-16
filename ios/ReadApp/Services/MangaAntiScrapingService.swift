@@ -49,9 +49,9 @@ final class MangaAntiScrapingService {
             key: "kuaikan",
             name: "kuaikan",
             hostSuffixes: ["kuaikanmanhua.com", "www.kuaikanmanhua.com", "kkmh.com", "tn1.kkmh.com"],
-            referer: "https://m.kuaikanmanhua.com/",
+            referer: "https://www.kuaikanmanhua.com/",
             userAgent: nil,
-            extraHeaders: ["Origin": "https://m.kuaikanmanhua.com"]
+            extraHeaders: ["Origin": "https://www.kuaikanmanhua.com"]
         ),
         MangaAntiScrapingProfile(key: "kuimh", name: "kuimh", hostSuffixes: ["kuimh.com", "www.kuimh.com"], referer: "https://www.kuimh.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "laimanhua", name: "laimanhua", hostSuffixes: ["laimanhua.net", "www.laimanhua.net"], referer: "https://www.laimanhua.net/", userAgent: nil, extraHeaders: [:]),

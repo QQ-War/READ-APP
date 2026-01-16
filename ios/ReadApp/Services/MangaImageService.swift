@@ -30,12 +30,6 @@ final class MangaImageService {
         if let data = await fetchImageData(requestURL: url, referer: referer) {
             return data
         }
-
-        if let proxyURL = buildProxyURL(for: url) {
-            if verbose { logger.log("直连失败，改用代理: \(proxyURL.absoluteString)", category: "漫画调试") }
-            return await fetchImageData(requestURL: proxyURL, referer: referer)
-        }
-
         return nil
     }
 
@@ -71,7 +65,7 @@ final class MangaImageService {
             logger.log("反爬匹配: profile=\(profileKey) referer=\(normalizedReferer ?? referer ?? "nil") requestHost=\(requestURL.host ?? "nil")", category: "漫画调试")
         }
         
-        var finalReferer = antiScrapingProfile?.referer ?? "https://m.kuaikanmanhua.com/"
+        var finalReferer = antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/"
         if antiScrapingProfile?.key == "kuaikan", var customReferer = normalizedReferer, !customReferer.isEmpty {
             if customReferer.hasPrefix("http://") {
                 customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
@@ -104,7 +98,7 @@ final class MangaImageService {
             if statusCode == 403 || statusCode == 401 {
                 if verbose { logger.log("图片被拒绝(Code:\(statusCode))，降级Referer重试", category: "漫画调试") }
                 var retry = request
-                retry.setValue(antiScrapingProfile?.referer ?? "https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
+                retry.setValue(antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
                 let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
                 let retryCode = (retryResponse as? HTTPURLResponse)?.statusCode ?? 0
                 if retryCode == 200, !retryData.isEmpty {
