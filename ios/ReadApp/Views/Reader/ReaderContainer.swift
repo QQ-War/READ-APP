@@ -94,6 +94,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             pageSize: view.bounds.size
         )
     }
+
     
     private(set) var currentChapterIndex: Int = 0
     var lastReportedChapterIndex: Int = -1
@@ -361,7 +362,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
                     pendingRelocationOffset = offset
         
-                    logger.log("模式切换触发: \(oldMode.rawValue) -> \(mode.rawValue), 目标锚点: \(offset)", category: "ReaderProgress")
         
                     
         
@@ -403,7 +403,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
                 
         
-                            logger.log("获取进度(锁定中): 返回挂起Offset=\(pending)", category: "ReaderProgress")
         
                 
         
@@ -431,7 +430,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
                 
         
-                            logger.log("获取进度(垂直模式): offset=\(offset)", category: "ReaderProgress")
         
                 
         
@@ -451,7 +449,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
                 
         
-                                logger.log("获取进度(水平模式): page=\(idx), offset=\(offset)", category: "ReaderProgress")
         
                 
         
@@ -486,15 +483,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     }
         
         private func scrollToCharOffset(_ offset: Int, animated: Bool) {
-            logger.log("执行滚动重定位: targetOffset=\(offset), mode=\(currentReadingMode.rawValue)", category: "ReaderProgress")
             if currentReadingMode == .vertical {
                 verticalVC?.scrollToCharOffset(offset, animated: animated)
             } else {
                 if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(offset, $0.globalRange) }) {
-                    logger.log("定位到水平页: offset=\(offset) -> pageIndex=\(targetPage)", category: "ReaderProgress")
                     updateHorizontalPage(to: targetPage, animated: animated)
                 } else {
-                    logger.log("定位失败: Offset \(offset) 不在当前章节任何页面内", category: "ReaderProgress")
                 }
             }
         }
@@ -629,7 +623,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 // 核心同步：渲染后立即更新当前页码为锚点页码
                 if currentReadingMode == .horizontal {
                     self.currentPageIndex = currentCache.anchorPageIndex
-                    logger.log("重渲染完成: 锚点Offset=\(anchorOffset), 目标页码=\(currentPageIndex)/\(currentCache.pages.count)", category: "ReaderProgress")
                 }
                 
                 setupReaderMode()
@@ -887,7 +880,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             if pageIdx == displayPage {
                 self.latestVisibleFragmentLines = lines
                 let snippet = lines.isEmpty ? "[]" : lines.joined(separator: " | ")
-                self.logger.log("ReadContent2View visible fragments - mode=\(self.currentReadingMode) page=\(pageIdx) currentDisplay=\(displayPage) snippet=\(snippet)", category: "TTS")
             }
         }
         if i < aI.count { 
@@ -1214,7 +1206,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     if !NSLocationInRange(realTimeOffset, currentRange) {
                         if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(realTimeOffset, $0.globalRange) }) {
                             if targetPage != currentPageIndex {
-                                logger.log("TTS 横翻跳页 -> fromPage=\(currentPageIndex) toPage=\(targetPage) realTimeOffset=\(realTimeOffset), bodySentence=\(bodySentenceIdx)", category: "TTS")
                                 updateHorizontalPage(to: targetPage, animated: true)
                             }
                         }
@@ -1246,7 +1237,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func restartTTSFromCurrentPageStart() {
         guard currentChapterIndex < chapters.count else { return }
         let startPos = currentStartPosition()
-        logger.log("TTS重新定位 -> page=\(currentPageIndex), mode=\(currentReadingMode), charOffset=\(startPos.charOffset), sentence=\(startPos.sentenceIndex), sentenceOffset=\(startPos.sentenceOffset)", category: "TTS")
         let ttsSentences = currentCache.contentSentences
         ttsManager.startReading(
             text: currentCache.rawContent,
@@ -1393,19 +1383,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let maxLen = currentCache.contentSentences[sentenceIndex].utf16.count
         let clampedOffset = min(maxLen, offsetInSentence)
         
-        let visibleInfo = visibleTopSentenceInfo()
-        let previewLines = previewSentences(from: sentenceIndex, limit: 2)
-        let pageSnippet = horizontalPageStartSnippet(for: horizontalPageIndexForDisplay(), limit: 120)
-        logTTSStartSnapshot(
-            sentenceIndex: sentenceIndex,
-            sentenceOffset: clampedOffset,
-            charOffset: charOffset,
-            visibleTopIndex: visibleInfo.index,
-            visibleTopLines: visibleInfo.sentences,
-            previewLines: previewLines,
-            pageSnippet: pageSnippet,
-            visibleFragmentLines: latestVisibleFragmentLines
-        )
         return ReadingPosition(chapterIndex: currentChapterIndex, sentenceIndex: sentenceIndex, sentenceOffset: clampedOffset, charOffset: charOffset)
     }
     private func scrollToChapterEnd(animated: Bool) { 
@@ -1417,28 +1394,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             updateHorizontalPage(to: max(0, currentCache.pages.count - 1), animated: animated) 
         } 
     }
-    private func logTTSStartSnapshot(sentenceIndex: Int, sentenceOffset: Int, charOffset: Int, visibleTopIndex: Int, visibleTopLines: [String], previewLines: [String], pageSnippet: String, visibleFragmentLines: [String]) {
-        let pageIdx = horizontalPageIndexForDisplay()
-        let topLinesDesc = visibleTopLines.isEmpty ? "[]" : visibleTopLines.joined(separator: " | ")
-        let previewDesc = previewLines.isEmpty ? "[]" : previewLines.joined(separator: " | ")
-        let snippetDesc = pageSnippet.isEmpty ? "[]" : pageSnippet
-        let fragmentDesc = visibleFragmentLines.isEmpty ? "[]" : visibleFragmentLines.joined(separator: " | ")
-        let pageMatch = matchSentenceIndex(for: pageSnippet)
-        let fragmentMatch = matchSentenceIndex(for: visibleFragmentLines.first ?? "")
-        let previewMatch = matchSentenceIndex(for: previewLines.first ?? "")
-        let detail = { (tuple: (index: Int, offset: Int)?) -> String in
-            guard let tuple = tuple else { return "nil" }
-            return "\(tuple.index)@\(tuple.offset)"
-        }
-        let message = """
-        TTS start snapshot - mode=\(currentReadingMode) chapter=\(currentChapterIndex) currentPageIdx=\(currentPageIndex) visiblePageIdx=\(pageIdx) \
-        visibleTopIdx=\(visibleTopIndex) topLines=\(topLinesDesc) startSentenceIdx=\(sentenceIndex) sentenceOffset=\(sentenceOffset) \
-        charOffset=\(charOffset) previewLines=\(previewDesc) pageSnippet=\(snippetDesc) visibleFragments=\(fragmentDesc) \
-        pageSnippetMatch=\(detail(pageMatch)) fragmentMatch=\(detail(fragmentMatch)) previewMatch=\(detail(previewMatch))
-        """
-        logger.log(message, category: "TTS")
-    }
-
     private func matchSentenceIndex(for snippet: String) -> (index: Int, offset: Int)? {
         let trimmed = snippet.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
