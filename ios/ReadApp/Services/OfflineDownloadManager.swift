@@ -285,61 +285,7 @@ final class OfflineDownloadManager: ObservableObject {
 }
 
 private func extractMangaImageUrls(from rawContent: String) -> [String] {
-    var results: [String] = []
-    var seen = Set<String>()
-
-    // 1. 匹配所有 img 标签
-    let imgTagPattern = #"<img\s+([^>]+)>"#
-    if let imgRegex = try? NSRegularExpression(pattern: imgTagPattern, options: [.caseInsensitive]) {
-        let nsText = rawContent as NSString
-        let matches = imgRegex.matches(in: rawContent, options: [], range: NSRange(location: 0, length: nsText.length))
-        
-        for match in matches {
-            guard match.numberOfRanges > 1 else { continue }
-            let attributesString = nsText.substring(with: match.range(at: 1))
-            
-            // 按照优先级尝试提取属性
-            let attrPatterns = [
-                #"data-original=["']([^"']+)["']"#,
-                #"data-src=["']([^"']+)["']"#,
-                #"src=["']([^"']+)["']"#
-            ]
-            
-            var foundUrl: String?
-            for pattern in attrPatterns {
-                if let attrRegex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
-                    if let attrMatch = attrRegex.firstMatch(in: attributesString, options: [], range: NSRange(location: 0, length: (attributesString as NSString).length)) {
-                        if attrMatch.numberOfRanges > 1 {
-                            foundUrl = (attributesString as NSString).substring(with: attrMatch.range(at: 1))
-                            break
-                        }
-                    }
-                }
-            }
-            
-            if let url = foundUrl, !url.isEmpty && !seen.contains(url) {
-                seen.insert(url)
-                results.append(url)
-            }
-        }
-    }
-
-    // 2. 补充匹配特殊的 __IMG__ 标记
-    let tokenPattern = #"__IMG__(\S+)"#
-    if let regex = try? NSRegularExpression(pattern: tokenPattern, options: []) {
-        let nsText = rawContent as NSString
-        let matches = regex.matches(in: rawContent, options: [], range: NSRange(location: 0, length: nsText.length))
-        for match in matches {
-            guard match.numberOfRanges > 1 else { continue }
-            let url = nsText.substring(with: match.range(at: 1))
-            if !url.isEmpty && !seen.contains(url) {
-                seen.insert(url)
-                results.append(url)
-            }
-        }
-    }
-
-    return results
+    return MangaImageExtractor.extractImageUrls(from: rawContent)
 }
 
 private func mangaDownloadDelay() async {
@@ -347,4 +293,3 @@ private func mangaDownloadDelay() async {
     let jitter = Int.random(in: 0...200_000_000)
     try? await Task.sleep(nanoseconds: UInt64(baseDelay + jitter))
 }
-

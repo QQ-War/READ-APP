@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		C10000010000000000000002 /* MangaImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000010000000000000001 /* MangaImageService.swift */; };
+		C10000030000000000000002 /* MangaImageExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000030000000000000001 /* MangaImageExtractor.swift */; };
 		CB32C6E6EEB05D59848CC517 /* MangaAntiScrapingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1D6F0B56486D3FEE732E99 /* MangaAntiScrapingService.swift */; };
 		C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000020000000000000001 /* OfflineDownloadManager.swift */; };
 		2A83F7C979DC464A96CE4D4C /* BookSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */; };
@@ -91,6 +92,7 @@
 
 /* Begin PBXFileReference section */
 		C10000010000000000000001 /* MangaImageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaImageService.swift; sourceTree = "<group>"; };
+		C10000030000000000000001 /* MangaImageExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaImageExtractor.swift; sourceTree = "<group>"; };
 		C10000020000000000000001 /* OfflineDownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineDownloadManager.swift; sourceTree = "<group>"; };
 		CA1D6F0B56486D3FEE732E99 /* MangaAntiScrapingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaAntiScrapingService.swift; sourceTree = "<group>"; };
 		BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSearchView.swift; sourceTree = "<group>"; };
@@ -326,6 +328,7 @@
 			isa = PBXGroup;
 			children = (
 				C10000010000000000000001 /* MangaImageService.swift */,
+				C10000030000000000000001 /* MangaImageExtractor.swift */,
 				C10000020000000000000001 /* OfflineDownloadManager.swift */,
 				CA1D6F0B56486D3FEE732E99 /* MangaAntiScrapingService.swift */,
 				1A000043000000000000004 /* LocalCacheManager.swift */,
@@ -439,6 +442,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C10000010000000000000002 /* MangaImageService.swift in Sources */,
+				C10000030000000000000002 /* MangaImageExtractor.swift in Sources */,
 				C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */,
 				CB32C6E6EEB05D59848CC517 /* MangaAntiScrapingService.swift in Sources */,
 				1A000001000000000000001 /* ReadAppApp.swift in Sources */,
