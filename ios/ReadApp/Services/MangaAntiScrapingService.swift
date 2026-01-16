@@ -89,12 +89,12 @@ final class MangaAntiScrapingService {
     func resolveProfile(imageURL: URL, referer: String?) -> MangaAntiScrapingProfile? {
         guard UserPreferences.shared.isMangaAntiScrapingEnabled else { return nil }
         let enabledSites = UserPreferences.shared.mangaAntiScrapingEnabledSites
-        guard !enabledSites.isEmpty else { return nil }
+        let effectiveEnabledSites = enabledSites.isEmpty ? Set(Self.profileKeys) : enabledSites
 
         let refererHost = URL(string: referer ?? "")?.host?.lowercased()
         let imageHost = imageURL.host?.lowercased()
         for profile in Self.profiles {
-            if !enabledSites.contains(profile.key) { continue }
+            if !effectiveEnabledSites.contains(profile.key) { continue }
             if let refererHost, profile.matches(host: refererHost) {
                 return profile
             }
