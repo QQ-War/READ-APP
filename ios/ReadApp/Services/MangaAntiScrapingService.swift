@@ -39,7 +39,7 @@ final class MangaAntiScrapingService {
         MangaAntiScrapingProfile(key: "55comic", name: "55comic", hostSuffixes: ["55comic.com", "www.55comic.com"], referer: "https://www.55comic.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "77mh", name: "77mh", hostSuffixes: ["77mh.cc", "www.77mh.cc"], referer: "https://www.77mh.cc/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "copymanga", name: "copymanga", hostSuffixes: ["copymanga.tv"], referer: "https://copymanga.tv/", userAgent: nil, extraHeaders: [:]),
-        MangaAntiScrapingProfile(key: "dm5", name: "dm5", hostSuffixes: ["dm5.com", "www.dm5.com"], referer: "https://www.dm5.com/", userAgent: nil, extraHeaders: [:]),
+        MangaAntiScrapingProfile(key: "dm5", name: "dm5", hostSuffixes: ["dm5.com", "www.dm5.com", "cdndm5.com"], referer: "https://www.dm5.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "dmzj", name: "dmzj", hostSuffixes: ["dmzj.com", "www.dmzj.com"], referer: "https://www.dmzj.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "gufengmh", name: "gufengmh", hostSuffixes: ["gufengmh9.com", "www.gufengmh9.com"], referer: "https://www.gufengmh9.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "iqiyi", name: "iqiyi", hostSuffixes: ["bud.iqiyi.com"], referer: "https://bud.iqiyi.com/", userAgent: nil, extraHeaders: [:]),
