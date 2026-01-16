@@ -56,7 +56,7 @@ enum MangaImageExtractor {
         }
 
         let fallbackText = normalizeEscapedText(rawContent)
-        if results.isEmpty || results.count < minExpectedImageCount || needsSignedUrlFallback(results: results, text: fallbackText) {
+        if results.isEmpty || results.count < minExpectedImageCount || MangaImageNormalizer.shouldPreferSignedUrls(results: results, text: fallbackText) {
             let patterns = [
                 #"https?://[^\s"'<>]+(?:\?|&)(?:sign|t)=[^\s"'<>]+"#,
                 #"https?://[^\s"'<>]+(?:\.(?:jpg|jpeg|png|webp|gif|bmp))(?:\?[^\"'\s<>]*)?"#
@@ -120,15 +120,6 @@ enum MangaImageExtractor {
         if lower.contains("sign=") { return true }
         let suffixes = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]
         return suffixes.contains { lower.contains($0) }
-    }
-
-    private static func needsSignedUrlFallback(results: [String], text: String) -> Bool {
-        guard !results.isEmpty else { return false }
-        let hasSignedInText = text.contains("sign=")
-        if !hasSignedInText { return false }
-        let allFromKkmh = results.allSatisfy { $0.contains("kkmh.com/") }
-        let anySigned = results.contains { $0.contains("sign=") }
-        return allFromKkmh && !anySigned
     }
 
     private static func append(_ url: String, wrapToken: Bool, results: inout [String], seen: inout Set<String>) {

@@ -10,19 +10,13 @@ final class MangaImageService {
     private init() {}
     
     func resolveImageURL(_ original: String) -> URL? {
-        let cleaned = sanitizeImageURLString(original)
+        let cleaned = MangaImageNormalizer.sanitizeUrlString(original)
         if cleaned.hasPrefix("http") {
-            if let url = URL(string: cleaned) {
-                return normalizeImageHost(url)
-            }
-            return nil
+            return URL(string: cleaned).map { MangaImageNormalizer.normalizeHost($0) }
         }
         let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
         let resolved = cleaned.hasPrefix("/") ? (baseURL + cleaned) : (baseURL + "/" + cleaned)
-        if let url = URL(string: resolved) {
-            return normalizeImageHost(url)
-        }
-        return nil
+        return URL(string: resolved).map { MangaImageNormalizer.normalizeHost($0) }
     }
     
     func fetchImageData(for url: URL, referer: String?) async -> Data? {
@@ -165,40 +159,6 @@ final class MangaImageService {
         return "https://\(host)\(value)"
     }
 
-    private func sanitizeImageURLString(_ raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let patterns = ["\\.jpg", "\\.jpeg", "\\.png", "\\.webp", "\\.gif", "\\.bmp"]
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-               let match = regex.firstMatch(in: trimmed, options: [], range: NSRange(location: 0, length: (trimmed as NSString).length)) {
-                let end = match.range.location + match.range.length
-                if end < (trimmed as NSString).length {
-                    let prefix = (trimmed as NSString).substring(to: end)
-                    return prefix
-                }
-                return trimmed
-            }
-        }
-        if let idx = trimmed.range(of: ",%7B")?.lowerBound {
-            return String(trimmed[..<idx])
-        }
-        if let idx = trimmed.range(of: ",{")?.lowerBound {
-            return String(trimmed[..<idx])
-        }
-        return trimmed
-    }
-
-    private func normalizeImageHost(_ url: URL) -> URL {
-        guard let host = url.host?.lowercased(), host.hasSuffix("bzmh.net") else { return url }
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        if host == "bzmh.net" {
-            components?.host = "bzcdn.net"
-        } else if let range = host.range(of: ".bzmh.net", options: .backwards) {
-            let prefix = host[..<range.lowerBound]
-            components?.host = prefix + ".bzcdn.net"
-        }
-        return components?.url ?? url
-    }
 
     func buildProxyURL(for original: URL) -> URL? {
         let baseURL = APIService.shared.baseURL
