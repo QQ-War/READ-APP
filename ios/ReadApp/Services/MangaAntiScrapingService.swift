@@ -45,7 +45,14 @@ final class MangaAntiScrapingService {
         MangaAntiScrapingProfile(key: "iqiyi", name: "iqiyi", hostSuffixes: ["bud.iqiyi.com"], referer: "https://bud.iqiyi.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "jmzj", name: "jmzj", hostSuffixes: ["jmzj.xyz"], referer: "http://jmzj.xyz/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "kanman", name: "kanman", hostSuffixes: ["kanman.com", "www.kanman.com"], referer: "https://www.kanman.com/", userAgent: nil, extraHeaders: [:]),
-        MangaAntiScrapingProfile(key: "kuaikan", name: "kuaikan", hostSuffixes: ["kuaikanmanhua.com", "www.kuaikanmanhua.com"], referer: "https://www.kuaikanmanhua.com/", userAgent: nil, extraHeaders: [:]),
+        MangaAntiScrapingProfile(
+            key: "kuaikan",
+            name: "kuaikan",
+            hostSuffixes: ["kuaikanmanhua.com", "www.kuaikanmanhua.com", "kkmh.com", "tn1.kkmh.com"],
+            referer: "https://m.kuaikanmanhua.com/",
+            userAgent: nil,
+            extraHeaders: ["Origin": "https://m.kuaikanmanhua.com"]
+        ),
         MangaAntiScrapingProfile(key: "kuimh", name: "kuimh", hostSuffixes: ["kuimh.com", "www.kuimh.com"], referer: "https://www.kuimh.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "laimanhua", name: "laimanhua", hostSuffixes: ["laimanhua.net", "www.laimanhua.net"], referer: "https://www.laimanhua.net/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "manhuadb", name: "manhuadb", hostSuffixes: ["manhuadb.com", "www.manhuadb.com"], referer: "https://www.manhuadb.com/", userAgent: nil, extraHeaders: [:]),

@@ -72,7 +72,7 @@ final class MangaImageService {
         }
         
         var finalReferer = antiScrapingProfile?.referer ?? "https://m.kuaikanmanhua.com/"
-        if var customReferer = normalizedReferer, !customReferer.isEmpty {
+        if antiScrapingProfile == nil, var customReferer = normalizedReferer, !customReferer.isEmpty {
             if customReferer.hasPrefix("http://") {
                 customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
             }
@@ -80,7 +80,7 @@ final class MangaImageService {
                 customReferer += "/"
             }
             finalReferer = customReferer
-        } else if let host = requestURL.host {
+        } else if antiScrapingProfile == nil, let host = requestURL.host {
             finalReferer = "https://\(host)/"
         }
         request.setValue(finalReferer, forHTTPHeaderField: "Referer")
