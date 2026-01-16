@@ -513,6 +513,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             Task { [weak self] in
                 guard let self = self else { return }
                 let isM = book.type == 2 || readerSettings.manualMangaUrls.contains(book.bookUrl ?? "")
+                if UserPreferences.shared.isVerboseLoggingEnabled {
+                    let chapterUrl = chapters.indices.contains(index) ? chapters[index].url : nil
+                    let sourceUrl = book.origin ?? "nil"
+                    logger.log("章节内容请求: index=\(index) url=\(chapterUrl ?? "nil") source=\(sourceUrl)", category: "漫画调试")
+                }
                 if !isM || !allowPrefetch { self.resetMangaPrefetchedContent() }
                 if allowPrefetch, isM, let cached = self.consumePrefetchedMangaContent(for: index) {
                     await MainActor.run {
