@@ -134,15 +134,24 @@ struct ChapterListView: View {
     let currentIndex: Int
     let bookUrl: String
     let onSelectChapter: (Int) -> Void
+    let onRebuildChapterUrls: (() async -> Void)?
     @Environment(\.dismiss) var dismiss
     @State private var isReversed = false
     @State private var selectedGroupIndex: Int
+    @State private var isRebuilding = false
     
-    init(chapters: [BookChapter], currentIndex: Int, bookUrl: String, onSelectChapter: @escaping (Int) -> Void) {
+    init(
+        chapters: [BookChapter],
+        currentIndex: Int,
+        bookUrl: String,
+        onSelectChapter: @escaping (Int) -> Void,
+        onRebuildChapterUrls: (() async -> Void)? = nil
+    ) {
         self.chapters = chapters
         self.currentIndex = currentIndex
         self.bookUrl = bookUrl
         self.onSelectChapter = onSelectChapter
+        self.onRebuildChapterUrls = onRebuildChapterUrls
         self._selectedGroupIndex = State(initialValue: currentIndex / 50)
     }
     
@@ -221,6 +230,24 @@ struct ChapterListView: View {
                                     Image(systemName: isReversed ? "arrow.up" : "arrow.down")
                                     Text(isReversed ? "倒序" : "正序")
                                 }.font(.caption)
+                            }
+                        }
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button(action: {
+                                guard !isRebuilding else { return }
+                                isRebuilding = true
+                                Task {
+                                    await onRebuildChapterUrls?()
+                                    await MainActor.run { isRebuilding = false }
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    if isRebuilding {
+                                        ProgressView().scaleEffect(0.7)
+                                    }
+                                    Text("重建URL")
+                                }
+                                .font(.caption)
                             }
                         }
                         ToolbarItem(placement: .navigationBarTrailing) {

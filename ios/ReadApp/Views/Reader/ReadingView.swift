@@ -95,11 +95,19 @@ struct ReadingView: View {
             if isForceLandscape { updateAppOrientation(landscape: false) }
             saveProgress()
         }
-        .sheet(isPresented: $showChapterList) { 
-            ChapterListView(chapters: chapters, currentIndex: currentChapterIndex, bookUrl: book.bookUrl ?? "") { index in
-                currentChapterIndex = index
-                showChapterList = false
-            } 
+        .sheet(isPresented: $showChapterList) {
+            ChapterListView(
+                chapters: chapters,
+                currentIndex: currentChapterIndex,
+                bookUrl: book.bookUrl ?? "",
+                onSelectChapter: { index in
+                    currentChapterIndex = index
+                    showChapterList = false
+                },
+                onRebuildChapterUrls: {
+                    await rebuildChapterUrls()
+                }
+            )
         }
         .sheet(isPresented: $showFontSettings) { 
             ReaderOptionsSheet(preferences: preferences, isMangaMode: isMangaMode) 
@@ -188,6 +196,25 @@ struct ReadingView: View {
         sleepTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
             if self.timerRemaining > 1 { self.timerRemaining -= 1 }
             else { self.timerActive = false; self.sleepTimer?.invalidate(); self.ttsManager.stop() }
+        }
+    }
+
+    private func rebuildChapterUrls() async {
+        await MainActor.run { isLoading = true }
+        defer { Task { await MainActor.run { isLoading = false } } }
+        do {
+            let list = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
+            await MainActor.run {
+                chapters = list
+                if currentChapterIndex >= list.count {
+                    currentChapterIndex = max(0, list.count - 1)
+                }
+            }
+            await MainActor.run {
+                refreshChapterAction?()
+            }
+        } catch {
+            print("Rebuild chapter URLs failed: \(error)")
         }
     }
 }
