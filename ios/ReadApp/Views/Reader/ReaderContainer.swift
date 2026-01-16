@@ -24,6 +24,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     var onAddReplaceRule: (String) -> Void
     var onProgressChanged: (Int, Double) -> Void
     var onToggleTTS: ((@escaping () -> Void) -> Void)?
+    var onRefreshChapter: ((@escaping () -> Void) -> Void)?
     var readingMode: ReadingMode
     var safeAreaInsets: EdgeInsets 
     
@@ -56,6 +57,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
         vc.onChaptersLoaded = { list in context.coordinator.handleChaptersLoaded(list) }
         vc.onModeDetected = { isManga in context.coordinator.handleModeDetected(isManga) }
         onToggleTTS?({ [weak vc] in vc?.toggleTTS() })
+        onRefreshChapter?({ [weak vc] in vc?.refreshCurrentChapter() })
         return vc
     }
     
@@ -512,25 +514,35 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             } catch { } }
         }
         
-        private func loadChapterContent(at index: Int, startAtEnd: Bool = false) {
+        private func loadChapterContent(at index: Int, startAtEnd: Bool = false, cachePolicy: ChapterContentFetchPolicy = .standard, allowPrefetch: Bool = true) {
             loadToken += 1; let token = loadToken
             Task { [weak self] in
                 guard let self = self else { return }
                 let isM = book.type == 2 || readerSettings.manualMangaUrls.contains(book.bookUrl ?? "")
-                if !isM { self.resetMangaPrefetchedContent() }
-                if isM, let cached = self.consumePrefetchedMangaContent(for: index) {
+                if !isM || !allowPrefetch { self.resetMangaPrefetchedContent() }
+                if allowPrefetch, isM, let cached = self.consumePrefetchedMangaContent(for: index) {
                     await MainActor.run {
                         self.processLoadedChapterContent(index: index, rawContent: cached, isManga: isM, startAtEnd: startAtEnd, token: token)
                     }
                     return
                 }
                 do {
-                    let content = try await APIService.shared.fetchChapterContent(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin, index: index, contentType: isM ? 2 : 0)
+                    let content = try await APIService.shared.fetchChapterContent(
+                        bookUrl: book.bookUrl ?? "",
+                        bookSourceUrl: book.origin,
+                        index: index,
+                        contentType: isM ? 2 : 0,
+                        cachePolicy: cachePolicy
+                    )
                     await MainActor.run {
                         self.processLoadedChapterContent(index: index, rawContent: content, isManga: isM, startAtEnd: startAtEnd, token: token)
                     }
                 } catch { }
             }
+        }
+
+        func refreshCurrentChapter() {
+            loadChapterContent(at: currentChapterIndex, cachePolicy: .refresh, allowPrefetch: false)
         }
     
         private func processLoadedChapterContent(index: Int, rawContent: String, isManga: Bool, startAtEnd: Bool, token: Int) {

@@ -23,6 +23,7 @@ struct ReadingView: View {
     @State private var isForceLandscape = false
     @State private var showDetailFromHeader = false
     @State var toggleTTSAction: (() -> Void)?
+    @State var refreshChapterAction: (() -> Void)?
     
     @State private var timerRemaining: Int = 0
     @State private var timerActive = false
@@ -62,6 +63,7 @@ struct ReadingView: View {
                                             onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
                                             onProgressChanged: { _, pos in self.currentPos = pos },
                                             onToggleTTS: { action in self.toggleTTSAction = action },
+                                            onRefreshChapter: { action in self.refreshChapterAction = action },
                                             readingMode: readerSettings.readingMode,
                                             safeAreaInsets: fullScreenProxy.safeAreaInsets
                                         )                    .ignoresSafeArea()
@@ -143,6 +145,11 @@ struct ReadingView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PlainButtonStyle())
+                Button(action: { refreshChapterAction?() }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 18, weight: .semibold))
+                        .padding(8)
+                }
             }
             .padding(.horizontal, 16).padding(.bottom, 10)
         }
