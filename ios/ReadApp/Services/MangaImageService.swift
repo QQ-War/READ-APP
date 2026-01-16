@@ -72,7 +72,15 @@ final class MangaImageService {
         }
         
         var finalReferer = antiScrapingProfile?.referer ?? "https://m.kuaikanmanhua.com/"
-        if antiScrapingProfile == nil, var customReferer = normalizedReferer, !customReferer.isEmpty {
+        if antiScrapingProfile?.key == "kuaikan", var customReferer = normalizedReferer, !customReferer.isEmpty {
+            if customReferer.hasPrefix("http://") {
+                customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
+            }
+            if !customReferer.hasSuffix("/") {
+                customReferer += "/"
+            }
+            finalReferer = customReferer
+        } else if antiScrapingProfile == nil, var customReferer = normalizedReferer, !customReferer.isEmpty {
             if customReferer.hasPrefix("http://") {
                 customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
             }
