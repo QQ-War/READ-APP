@@ -7,6 +7,7 @@ struct SourceListView: View {
     // For specific source search via swipe action
     @State private var showingBookSearchView = false
     @State private var selectedBookSource: BookSource?
+    @State private var bookSearchViewModel: BookSearchViewModel?
     @State private var showAddResultAlert = false
     @State private var addResultMessage = ""
 
@@ -84,8 +85,8 @@ struct SourceListView: View {
                 Text(addResultMessage)
             }
             .sheet(isPresented: $showingBookSearchView) {
-                if let bookSource = selectedBookSource {
-                    BookSearchView(viewModel: BookSearchViewModel(bookSource: bookSource))
+                if let viewModel = bookSearchViewModel {
+                    BookSearchView(viewModel: viewModel)
                         .environmentObject(apiService)
                 }
             }
@@ -176,18 +177,6 @@ struct SourceListView: View {
     @ViewBuilder
     private func sourceRow(_ source: BookSource) -> some View {
         VStack(spacing: 0) {
-            // 解决 disclosure arrow 的隐式跳转
-            // 通过隐藏的 NavigationLink 结合状态驱动，确保不产生多余箭头且不干扰点击
-            NavigationLink(
-                destination: SourceEditView(sourceId: sourceIdToEdit ?? ""),
-                tag: source.bookSourceUrl,
-                selection: $sourceIdToEdit
-            ) {
-                EmptyView()
-            }
-            .frame(width: 0, height: 0)
-            .hidden()
-
             HStack(spacing: 12) {
                 // 左侧及中间：点击展开/隐藏频道 (占据除滑块以外的所有空间)
                 Button(action: { withAnimation { toggleExpand(source) } }) {
@@ -217,7 +206,13 @@ struct SourceListView: View {
                     .scaleEffect(0.7)
                     
                     // 右侧：点击进入编辑 (独立的小按钮)
-                    Button(action: { sourceIdToEdit = source.bookSourceUrl }) {
+                    Button(action: {
+                        // 先清空再设置，确保每次点击都触发跳转
+                        sourceIdToEdit = nil
+                        DispatchQueue.main.async {
+                            sourceIdToEdit = source.bookSourceUrl
+                        }
+                    }) {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.secondary)
@@ -263,8 +258,7 @@ struct SourceListView: View {
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
-                selectedBookSource = source
-                showingBookSearchView = true
+                openBookSearch(for: source)
             } label: {
                 Label("搜索", systemImage: "magnifyingglass")
             }
@@ -276,6 +270,14 @@ struct SourceListView: View {
                 Label("删除", systemImage: "trash")
             }
         }
+    }
+
+    private func openBookSearch(for source: BookSource) {
+        if selectedBookSource?.bookSourceUrl != source.bookSourceUrl || bookSearchViewModel == nil {
+            selectedBookSource = source
+            bookSearchViewModel = BookSearchViewModel(bookSource: source)
+        }
+        showingBookSearchView = true
     }
     
     private func toggleExpand(_ source: BookSource) {

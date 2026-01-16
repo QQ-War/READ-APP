@@ -68,7 +68,7 @@ struct SourceEditView: View {
             }
         }
         .alert("保存成功", isPresented: $showSuccessMessage) {
-            Button("确定") { dismiss() }
+            Button("确定", role: .cancel) { }
         }
         .alert("确定删除吗？", isPresented: $showDeleteConfirmation) {
             Button("取消", role: .cancel) { }
