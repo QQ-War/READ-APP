@@ -55,12 +55,14 @@ enum MangaImageExtractor {
             }
         }
 
-        if results.isEmpty || results.count < minExpectedImageCount {
-            let fallbackText = normalizeEscapedText(rawContent)
+        let fallbackText = normalizeEscapedText(rawContent)
+        if results.isEmpty || results.count < minExpectedImageCount || needsSignedUrlFallback(results: results, text: fallbackText) {
             let patterns = [
                 #"https?://[^\s"'<>]+(?:\?|&)(?:sign|t)=[^\s"'<>]+"#,
                 #"https?://[^\s"'<>]+(?:\.(?:jpg|jpeg|png|webp|gif|bmp))(?:\?[^\"'\s<>]*)?"#
             ]
+            var fallbackResults: [String] = []
+            var fallbackSeen = Set<String>()
             for pattern in patterns {
                 if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
                     let nsText = fallbackText as NSString
@@ -69,10 +71,16 @@ enum MangaImageExtractor {
                         let url = nsText.substring(with: match.range(at: 0))
                         if let normalized = normalizeUrlCandidate(url),
                            isLikelyImageUrl(normalized) {
-                            append(normalized, wrapToken: wrapToken, results: &results, seen: &seen)
+                            if !fallbackSeen.contains(normalized) {
+                                fallbackSeen.insert(normalized)
+                                fallbackResults.append(normalized)
+                            }
                         }
                     }
                 }
+            }
+            if !fallbackResults.isEmpty {
+                results = fallbackResults.map { wrapToken ? "__IMG__" + $0 : $0 }
             }
         }
 
@@ -112,6 +120,15 @@ enum MangaImageExtractor {
         if lower.contains("sign=") { return true }
         let suffixes = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]
         return suffixes.contains { lower.contains($0) }
+    }
+
+    private static func needsSignedUrlFallback(results: [String], text: String) -> Bool {
+        guard !results.isEmpty else { return false }
+        let hasSignedInText = text.contains("sign=")
+        if !hasSignedInText { return false }
+        let allFromKkmh = results.allSatisfy { $0.contains("kkmh.com/") }
+        let anySigned = results.contains { $0.contains("sign=") }
+        return allFromKkmh && !anySigned
     }
 
     private static func append(_ url: String, wrapToken: Bool, results: inout [String], seen: inout Set<String>) {
