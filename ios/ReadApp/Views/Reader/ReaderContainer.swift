@@ -592,7 +592,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 } else {
                     // 漫画模式首次加载恢复
                     let pos = self.book.durChapterPos ?? 0
-                    self.mangaVC?.scrollToIndex(Int(pos), animated: false)
+                    if pos > 1.0 {
+                        // 兼容旧版：pos 是图片索引
+                        self.mangaVC?.scrollToIndex(Int(pos), animated: false)
+                    } else {
+                        // 新版：pos 是比例
+                        let total = self.currentCache.contentSentences.count
+                        let targetIdx = Int(pos * Double(total))
+                        self.mangaVC?.scrollToIndex(targetIdx, animated: false)
+                    }
                 }
             } else if startAtEnd {
                 self.scrollToChapterEnd(animated: false)
@@ -1125,7 +1133,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             }
             vc.onVisibleIndexChanged = { [weak self] idx in
                 guard let self = self else { return }
-                self.onProgressChanged?(self.currentChapterIndex, Double(idx))
+                let total = Double(max(1, self.currentCache.contentSentences.count))
+                self.onProgressChanged?(self.currentChapterIndex, Double(idx) / total)
             }
             vc.onChapterSwitched = { [weak self] offset in
                 guard let self = self else { return }
