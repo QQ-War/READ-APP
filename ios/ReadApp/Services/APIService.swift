@@ -87,9 +87,28 @@ class APIService: ObservableObject {
     
     // MARK: - 获取章节列表
     func fetchChapterList(bookUrl: String, bookSourceUrl: String?) async throws -> [BookChapter] {
+        // 1. 优先从本地缓存加载
+        let cached = LocalCacheManager.shared.loadChapterList(bookUrl: bookUrl)
+        
+        // 如果有缓存，我们直接返回它，让阅读器先跑起来
+        if let cachedList = cached, !cached.isEmpty {
+            // 在后台静默更新目录，不阻塞主流程
+            Task {
+                try? await withTimeout(seconds: 5) { [weak self] in
+                    guard let self = self else { return }
+                    let freshList = try await self.booksService.fetchChapterList(bookUrl: bookUrl, bookSourceUrl: bookSourceUrl)
+                    LocalCacheManager.shared.saveChapterList(bookUrl: bookUrl, chapters: freshList)
+                }
+            }
+            return cachedList
+        }
+        
+        // 2. 如果没有缓存，则执行带超时的强制加载
         return try await withTimeout(seconds: 5) { [weak self] in
             guard let self = self else { throw NSError(domain: "APIService", code: -1) }
-            return try await self.booksService.fetchChapterList(bookUrl: bookUrl, bookSourceUrl: bookSourceUrl)
+            let list = try await self.booksService.fetchChapterList(bookUrl: bookUrl, bookSourceUrl: bookSourceUrl)
+            LocalCacheManager.shared.saveChapterList(bookUrl: bookUrl, chapters: list)
+            return list
         }
     }
     
