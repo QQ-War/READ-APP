@@ -171,9 +171,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         private var isMangaMode = false
         private var latestVisibleFragmentLines: [String] = []
     
-        private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
-        private let progressLabel = UILabel()
-        private var lastLayoutSignature: String = ""
+            private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
+            private var prebuiltNextMangaVC: MangaReaderViewController?
+            private var prebuiltNextIndex: Int?
+            
+            private let progressLabel = UILabel()        private var lastLayoutSignature: String = ""
         private var loadToken: Int = 0
         private let prefetchCoordinator = ReaderPrefetchCoordinator()
         private var pendingTTSPositionSync = false
@@ -1010,6 +1012,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 if self.isMangaMode {
                     self.prefetchedMangaNextIndex = index + 1
                     self.prefetchedMangaNextContent = cache.rawContent
+                    self.preparePrebuiltNextMangaVC(index: index + 1, cache: cache)
                 }
             },
             onPrevCache: { [weak self] cache in
@@ -1146,6 +1149,23 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func setupMangaMode() {
+        // 尝试使用预制视图实现“立等可取”
+        if let prebuilt = prebuiltNextMangaVC, prebuiltNextIndex == currentChapterIndex {
+            mangaVC?.view.removeFromSuperview()
+            mangaVC?.removeFromParent()
+            
+            mangaVC = prebuilt
+            addChild(mangaVC!)
+            view.insertSubview(mangaVC!.view, at: 0)
+            mangaVC!.view.frame = view.bounds
+            mangaVC!.didMove(toParent: self)
+            
+            // 清空预制标记
+            prebuiltNextMangaVC = nil
+            prebuiltNextIndex = nil
+            return
+        }
+
         if mangaVC == nil {
             let vc = MangaReaderViewController()
             vc.safeAreaTop = safeAreaTop
@@ -1394,6 +1414,54 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         nextCache = .empty
         prefetchedMangaNextIndex = nil
         prefetchedMangaNextContent = nil
+        prebuiltNextMangaVC?.view.removeFromSuperview()
+        prebuiltNextMangaVC?.removeFromParent()
+        prebuiltNextMangaVC = nil
+        prebuiltNextIndex = nil
+    }
+
+    private func preparePrebuiltNextMangaVC(index: Int, cache: ChapterCache) {
+        guard isMangaMode else { return }
+        
+        // 如果已经预制过了，且索引一致，跳过
+        if prebuiltNextIndex == index && prebuiltNextMangaVC != nil { return }
+        
+        let vc = MangaReaderViewController()
+        vc.safeAreaTop = safeAreaTop
+        vc.onToggleMenu = { [weak self] in self?.safeToggleMenu() }
+        vc.onInteractionChanged = { [weak self] interacting in
+            guard let self = self else { return }
+            if interacting { self.notifyUserInteractionStarted() } else { self.notifyUserInteractionEnded() }
+        }
+        vc.onVisibleIndexChanged = { [weak self] idx in
+            guard let self = self else { return }
+            let total = Double(max(1, self.currentCache.contentSentences.count))
+            self.onProgressChanged?(self.currentChapterIndex, Double(idx) / total)
+        }
+        vc.onChapterSwitched = { [weak self] offset in
+            guard let self = self else { return }
+            let now = Date().timeIntervalSince1970
+            guard now - self.lastChapterSwitchTime > self.chapterSwitchCooldown else { return }
+            let target = self.currentChapterIndex + offset
+            guard target >= 0 && target < self.chapters.count else { return }
+            self.lastChapterSwitchTime = now
+            self.jumpToChapter(target, startAtEnd: offset < 0)
+        }
+        vc.threshold = verticalThreshold
+        vc.dampingFactor = readerSettings.verticalDampingFactor
+        vc.maxZoomScale = readerSettings.mangaMaxZoom
+        
+        // 设置元数据并触发图片同步加载
+        vc.bookUrl = book.bookUrl
+        vc.chapterIndex = chapters.indices.contains(index) ? chapters[index].index : index
+        vc.chapterUrl = chapters.indices.contains(index) ? chapters[index].url : nil
+        
+        // 关键：给预制视图一个初始尺寸，使其能完成布局
+        vc.view.frame = view.bounds
+        vc.update(urls: cache.contentSentences)
+        
+        self.prebuiltNextMangaVC = vc
+        self.prebuiltNextIndex = index
     }
 
     private func consumePrefetchedMangaContent(for index: Int) -> String? {
