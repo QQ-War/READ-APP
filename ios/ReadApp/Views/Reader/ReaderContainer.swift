@@ -537,7 +537,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     await MainActor.run {
                         self.processLoadedChapterContent(index: index, rawContent: content, isManga: isM, startAtEnd: startAtEnd, token: token)
                     }
-                } catch { }
+                } catch {
+                    await MainActor.run {
+                        let errorMsg = "加载失败: \(error.localizedDescription)\n\n[点击屏幕中心呼出菜单，点击右上角刷新按钮重试]"
+                        self.processLoadedChapterContent(index: index, rawContent: errorMsg, isManga: false, startAtEnd: false, token: token)
+                    }
+                }
             }
         }
 

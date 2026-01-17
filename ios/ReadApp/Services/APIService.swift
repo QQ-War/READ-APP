@@ -97,52 +97,66 @@ class APIService: ObservableObject {
     
     // MARK: - 获取章节内容
     func fetchChapterContent(bookUrl: String, bookSourceUrl: String?, index: Int, contentType: Int = 0, cachePolicy: ChapterContentFetchPolicy = .standard) async throws -> String {
-        // 1. 优先尝试从本地磁盘缓存读取
+        // 1. 优先尝试从本地磁盘缓存读取 (瞬间完成，不受超时影响)
         if cachePolicy.useDiskCache, let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
             return cachedContent
         }
         
-        // 2. 尝试从内存缓存读取
-        let cacheKey = "\(bookUrl)_\(index)_\(contentType)"
-        if cachePolicy.useMemoryCache, let cachedContent = await chapterCache.value(for: cacheKey) {
-            return cachedContent
-        }
-        
-        // 3. 网络请求
-        var queryItems = [
-            URLQueryItem(name: "accessToken", value: accessToken),
-            URLQueryItem(name: "url", value: bookUrl),
-            URLQueryItem(name: "index", value: "\(index)"),
-            URLQueryItem(name: "type", value: "\(contentType)")
-        ]
-        if let bookSourceUrl = bookSourceUrl {
-            queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
-        }
-        
-        let (data, httpResponse) = try await client.requestWithFailback(endpoint: ApiEndpoints.getBookContent, queryItems: queryItems)
-        guard httpResponse.statusCode == 200 else {
-            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
-        }
-        let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
-        if apiResponse.isSuccess, let content = apiResponse.data {
-            if cachePolicy.saveToCache {
-                await chapterCache.insert(content, for: cacheKey)
-                
-                // 根据内容类型判断是否需要自动存入磁盘
-                let shouldCache: Bool
-                if contentType == 2 { // 漫画内容索引
-                    shouldCache = UserPreferences.shared.isMangaAutoCacheEnabled
-                } else { // 普通文字
-                    shouldCache = UserPreferences.shared.isTextAutoCacheEnabled
-                }
-                
-                if shouldCache {
-                    LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
-                }
+        // 2. 包装带超时的网络/内存请求
+        return try await withTimeout(seconds: 5) { [weak self] in
+            guard let self = self else { throw NSError(domain: "APIService", code: -1) }
+            
+            // 尝试从内存缓存读取
+            let cacheKey = "\(bookUrl)_\(index)_\(contentType)"
+            if cachePolicy.useMemoryCache, let cachedContent = await self.chapterCache.value(for: cacheKey) {
+                return cachedContent
             }
-            return content
-        } else {
-            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节内容失败"])
+            
+            // 3. 网络请求
+            var queryItems = [
+                URLQueryItem(name: "accessToken", value: self.accessToken),
+                URLQueryItem(name: "url", value: bookUrl),
+                URLQueryItem(name: "index", value: "\(index)"),
+                URLQueryItem(name: "type", value: "\(contentType)")
+            ]
+            if let bookSourceUrl = bookSourceUrl {
+                queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
+            }
+            
+            let (data, httpResponse) = try await self.client.requestWithFailback(endpoint: ApiEndpoints.getBookContent, queryItems: queryItems)
+            guard httpResponse.statusCode == 200 else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
+            }
+            let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
+            if apiResponse.isSuccess, let content = apiResponse.data {
+                if cachePolicy.saveToCache {
+                    await self.chapterCache.insert(content, for: cacheKey)
+                    
+                    let shouldCache = (contentType == 2) ? UserPreferences.shared.isMangaAutoCacheEnabled : UserPreferences.shared.isTextAutoCacheEnabled
+                    if shouldCache {
+                        LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
+                    }
+                }
+                return content
+            } else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节内容失败"])
+            }
+        }
+    }
+
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw NSError(domain: "APIService", code: 408, userInfo: [NSLocalizedDescriptionKey: "加载超时，请检查网络后重试"])
+            }
+            
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
         }
     }
     
