@@ -124,9 +124,9 @@ struct BookListView: View {
             if apiService.availableSources.isEmpty { _ = try? await apiService.fetchBookSources() }
         }
         .overlay {
-            if isRefreshing {
+            if isRefreshing && apiService.books.isEmpty {
                 ProgressView("加载中...")
-            } else if searchText.isEmpty && apiService.books.isEmpty {
+            } else if !isRefreshing && searchText.isEmpty && apiService.books.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "book.closed")
                         .font(.largeTitle)
@@ -308,7 +308,10 @@ struct BookListView: View {
         do {
             try await apiService.fetchBookshelf()
         } catch {
-            apiService.errorMessage = error.localizedDescription
+            // 只有当书架为空时才显示错误信息，否则静默失败以保证已加载数据的阅读体验
+            if apiService.books.isEmpty {
+                apiService.errorMessage = error.localizedDescription
+            }
         }
         isRefreshing = false
     }

@@ -75,7 +75,7 @@ class APIService: ObservableObject {
 
     // MARK: - 获取书架列表
     func fetchBookshelf() async throws {
-        try await withTimeout(seconds: 8) { [weak self] in
+        try await withTimeout(seconds: 5) { [weak self] in
             guard let self = self else { return }
             let books = try await self.booksService.fetchBookshelf()
             await MainActor.run {
