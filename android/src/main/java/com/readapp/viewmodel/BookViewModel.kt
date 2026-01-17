@@ -950,12 +950,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val bookUrl = book.bookUrl ?: return
         val images = MangaImageExtractor.extractImageUrls(content)
         if (images.isEmpty()) return
-        val profile = MangaAntiScrapingService.resolveProfile(null, chapter.url)
-        val referer = MangaAntiScrapingService.resolveReferer(profile, chapter.url, null)
         val forceProxy = readerSettings.forceMangaProxy.value
         val client = okhttp3.OkHttpClient()
         for (img in images) {
             val resolved = resolveImageUrl(img)
+            val profile = MangaAntiScrapingService.resolveProfile(resolved, chapter.url)
+            val referer = MangaAntiScrapingService.resolveReferer(profile, chapter.url, resolved)
             if (localCache.isMangaImageCached(bookUrl, chapterIndex, resolved)) continue
             val proxyUrl = buildProxyUrl(resolved)
             val requestUrl = if (forceProxy && proxyUrl != null) proxyUrl else resolved
@@ -967,6 +967,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 .header("User-Agent", profile?.userAgent ?: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                .apply {
+                    profile?.extraHeaders?.forEach { (key, value) ->
+                        header(key, value)
+                    }
+                }
                 .build()
             runCatching {
                 client.newCall(request).execute().use { response ->
@@ -989,6 +994,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                         .header("User-Agent", profile?.userAgent ?: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                        .apply {
+                            profile?.extraHeaders?.forEach { (key, value) ->
+                                header(key, value)
+                            }
+                        }
                         .build()
                     client.newCall(fallback).execute().use { response ->
                         if (response.isSuccessful) {
