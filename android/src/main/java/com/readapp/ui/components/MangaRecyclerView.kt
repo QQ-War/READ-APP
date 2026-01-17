@@ -91,7 +91,7 @@ class MangaAdapter(
                     override fun onSuccess(request: ImageRequest, result: SuccessResult) {
                         if (!bookUrl.isNullOrBlank() && chapterIndex != null) {
                             val bytes = drawableToBytes(result.drawable)
-                            if (!bytes.isNullOrEmpty()) {
+                            if (bytes != null && bytes.isNotEmpty()) {
                                 cacheManager.saveMangaImage(bookUrl, chapterIndex, finalUrl, bytes)
                             }
                         }

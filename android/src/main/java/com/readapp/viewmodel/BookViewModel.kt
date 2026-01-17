@@ -977,7 +977,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val bytes = response.body?.bytes()
-                        if (!bytes.isNullOrEmpty()) {
+                        if (bytes != null && bytes.isNotEmpty()) {
                             localCache.saveMangaImage(bookUrl, chapterIndex, resolved, bytes)
                             return@use
                         }
@@ -1003,7 +1003,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     client.newCall(fallback).execute().use { response ->
                         if (response.isSuccessful) {
                             val bytes = response.body?.bytes()
-                            if (!bytes.isNullOrEmpty()) {
+                            if (bytes != null && bytes.isNotEmpty()) {
                                 localCache.saveMangaImage(bookUrl, chapterIndex, resolved, bytes)
                             }
                         }
