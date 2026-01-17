@@ -102,7 +102,7 @@ struct CacheManagementView: View {
             if let bookUrl = book.bookUrl {
                 let size = LocalCacheManager.shared.getCacheSize(for: bookUrl)
                 if size > 0 {
-                    let count = LocalCacheManager.shared.getCachedChapterCount(for: bookUrl, totalChapters: book.totalChapterNum ?? 0)
+                    let count = LocalCacheManager.shared.getCachedChapterCount(for: bookUrl)
                     infos.append(CachedBookInfo(id: bookUrl, name: book.name ?? "未知书名", author: book.author ?? "未知作者", size: size, chapterCount: count))
                     total += size
                 }
@@ -167,8 +167,13 @@ struct CachedBookRow: View {
     let apiService: APIService
     let onDelete: () -> Void
     
+    private var fullBook: Book {
+        apiService.books.first { $0.bookUrl == info.id } ?? 
+        Book(name: info.name, author: info.author, bookUrl: info.id)
+    }
+    
     var body: some View {
-        NavigationLink(destination: BookDetailView(book: Book(name: info.name, author: info.author, bookUrl: info.id)).environmentObject(apiService)) {
+        NavigationLink(destination: BookDetailView(book: fullBook).environmentObject(apiService)) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(info.name).font(.headline)
@@ -177,6 +182,7 @@ struct CachedBookRow: View {
                 Spacer()
                 Text(LocalCacheManager.shared.formatSize(info.size)).font(.subheadline).foregroundColor(.gray)
             }
+            .contentShape(Rectangle())
         }
         .swipeActions(edge: .trailing) {
             Button(role: .destructive, action: onDelete) { Label("删除", systemImage: "trash") }

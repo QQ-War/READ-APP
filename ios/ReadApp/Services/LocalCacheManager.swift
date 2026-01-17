@@ -101,14 +101,13 @@ class LocalCacheManager {
         try? fileManager.removeItem(at: dir)
     }
     
-    func getCachedChapterCount(for bookUrl: String, totalChapters: Int) -> Int {
-        var count = 0
-        for i in 0..<totalChapters {
-            if isChapterCached(bookUrl: bookUrl, index: i) {
-                count += 1
-            }
+    func getCachedChapterCount(for bookUrl: String) -> Int {
+        let dir = bookDir(for: bookUrl)
+        guard let contents = try? fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
+            return 0
         }
-        return count
+        // 过滤出所有以 .raw 结尾的文件，这些代表已缓存的章节
+        return contents.filter { $0.pathExtension == "raw" }.count
     }
     
     func getCacheSize(for bookUrl: String) -> Int64 {
