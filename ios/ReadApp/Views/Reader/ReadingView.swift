@@ -59,6 +59,7 @@ struct ReadingView: View {
                         chapters: $chapters,
                         currentChapterIndex: $currentChapterIndex,
                         isMangaMode: $isMangaMode,
+                        isLoading: $isLoading,
                                             onToggleMenu: { withAnimation { showUIControls.toggle() } },
                                             onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
                                             onProgressChanged: { _, pos in self.currentPos = pos },

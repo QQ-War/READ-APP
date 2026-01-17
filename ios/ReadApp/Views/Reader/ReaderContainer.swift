@@ -19,6 +19,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     @Binding var chapters: [BookChapter]
     @Binding var currentChapterIndex: Int
     @Binding var isMangaMode: Bool
+    @Binding var isLoading: Bool // 新增
     
     var onToggleMenu: () -> Void
     var onAddReplaceRule: (String) -> Void
@@ -56,6 +57,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
         vc.onProgressChanged = { idx, pos in context.coordinator.handleProgress(idx, pos) }
         vc.onChaptersLoaded = { list in context.coordinator.handleChaptersLoaded(list) }
         vc.onModeDetected = { isManga in context.coordinator.handleModeDetected(isManga) }
+        vc.onLoadingChanged = { loading in DispatchQueue.main.async { self.isLoading = loading } }
         onToggleTTS?({ [weak vc] in vc?.toggleTTS() })
         onRefreshChapter?({ [weak vc] in vc?.refreshCurrentChapter() })
         return vc
@@ -83,7 +85,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private let logger = LogManager.shared
     var book: Book!; var chapters: [BookChapter] = []; var readerSettings: ReaderSettingsStore!; var ttsManager: TTSManager!; var replaceRuleViewModel: ReplaceRuleViewModel?
     var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?
-    var onChapterIndexChanged: ((Int) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?
+    var onChapterIndexChanged: ((Int) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?; var onLoadingChanged: ((Bool) -> Void)?
     
     private var safeAreaTop: CGFloat = 47; private var safeAreaBottom: CGFloat = 34
     private var currentLayoutSpec: ReaderLayoutSpec {
@@ -512,6 +514,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             loadToken += 1; let token = loadToken
             Task { [weak self] in
                 guard let self = self else { return }
+                
+                await MainActor.run { self.onLoadingChanged?(true) }
+                defer { Task { @MainActor in if self.loadToken == token { self.onLoadingChanged?(false) } } }
+
                 let isM = book.type == 2 || readerSettings.manualMangaUrls.contains(book.bookUrl ?? "")
                 if UserPreferences.shared.isVerboseLoggingEnabled {
                     let chapterUrl = chapters.indices.contains(index) ? chapters[index].url : nil

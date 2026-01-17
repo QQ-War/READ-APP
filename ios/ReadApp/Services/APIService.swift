@@ -149,12 +149,18 @@ class APIService: ObservableObject {
             group.addTask {
                 try await operation()
             }
+            
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 throw NSError(domain: "APIService", code: 408, userInfo: [NSLocalizedDescriptionKey: "加载超时，请检查网络后重试"])
             }
             
-            let result = try await group.next()!
+            // 谁先跑完就返回谁。如果是超时任务先跑完，这里会直接 throw
+            guard let result = try await group.next() else {
+                throw NSError(domain: "APIService", code: -1, userInfo: [NSLocalizedDescriptionKey: "未知错误"])
+            }
+            
+            // 无论哪个任务先完成，都取消组内的其它任务
             group.cancelAll()
             return result
         }
