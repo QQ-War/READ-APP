@@ -37,13 +37,12 @@ jobs:
         with:
           build-root-directory: android
           gradle-version: 8.2.1
-          cache-disabled: true
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Build release APK
-        run: gradle assembleUnsigned assembleDebug --parallel --no-daemon
+        run: gradle assembleUnsigned assembleDebug --parallel --no-daemon --build-cache
         working-directory: android
 
       - name: Prepare APK artifacts
