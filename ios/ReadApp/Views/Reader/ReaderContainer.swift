@@ -526,10 +526,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                     return
                 }
                 do {
+                    let realIndex = chapters.indices.contains(index) ? chapters[index].index : index
                     let content = try await APIService.shared.fetchChapterContent(
                         bookUrl: book.bookUrl ?? "",
                         bookSourceUrl: book.origin,
-                        index: index,
+                        index: realIndex,
                         contentType: isM ? 2 : 0,
                         cachePolicy: cachePolicy
                     )
@@ -1142,7 +1143,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.mangaVC = vc
         }
         mangaVC?.bookUrl = book.bookUrl
-        mangaVC?.chapterIndex = currentChapterIndex
+        mangaVC?.chapterIndex = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].index : currentChapterIndex
         mangaVC?.chapterUrl = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
         mangaVC?.update(urls: currentCache.contentSentences)
     }

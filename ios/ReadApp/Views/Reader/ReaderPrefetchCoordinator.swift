@@ -78,10 +78,11 @@ final class ReaderPrefetchCoordinator {
             nextTask = Task { [weak self] in
                 guard let self = self else { return }
                 defer { if self.fetchingNextIndex == nextIdx { self.fetchingNextIndex = nil } }
+                let realIndex = chapters[nextIdx].index
                 if let content = try? await APIService.shared.fetchChapterContent(
                     bookUrl: book.bookUrl ?? "",
                     bookSourceUrl: book.origin,
-                    index: nextIdx,
+                    index: realIndex,
                     contentType: contentType
                 ) {
                     await MainActor.run {
@@ -93,7 +94,7 @@ final class ReaderPrefetchCoordinator {
                         if isMangaMode {
                             cache = builder.buildMangaCache(rawContent: content, chapterUrl: chapterUrl)
                             // 预加载漫画图片
-                            self.prefetchMangaImages(book: book, chapterIndex: nextIdx, sentences: cache.contentSentences, chapterUrl: chapterUrl)
+                            self.prefetchMangaImages(book: book, chapterIndex: chapters[nextIdx].index, sentences: cache.contentSentences, chapterUrl: chapterUrl)
                         } else {
                             let title = chapters[nextIdx].title
                             cache = builder.buildTextCache(
@@ -136,10 +137,11 @@ final class ReaderPrefetchCoordinator {
             prevTask = Task { [weak self] in
                 guard let self = self else { return }
                 defer { if self.fetchingPrevIndex == prevIdx { self.fetchingPrevIndex = nil } }
+                let realIndex = chapters[prevIdx].index
                 if let content = try? await APIService.shared.fetchChapterContent(
                     bookUrl: book.bookUrl ?? "",
                     bookSourceUrl: book.origin,
-                    index: prevIdx,
+                    index: realIndex,
                     contentType: contentType
                 ) {
                     await MainActor.run {
@@ -151,7 +153,7 @@ final class ReaderPrefetchCoordinator {
                         if isMangaMode {
                             cache = builder.buildMangaCache(rawContent: content, chapterUrl: chapterUrl)
                             // 预加载上一章漫画图片
-                            self.prefetchMangaImages(book: book, chapterIndex: prevIdx, sentences: cache.contentSentences, chapterUrl: chapterUrl)
+                            self.prefetchMangaImages(book: book, chapterIndex: chapters[prevIdx].index, sentences: cache.contentSentences, chapterUrl: chapterUrl)
                         } else {
                             let title = chapters[prevIdx].title
                             cache = builder.buildTextCache(

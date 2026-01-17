@@ -6,10 +6,22 @@ extension ReadingView {
         guard let bookUrl = book.bookUrl else { return }
         let chapterIdx = self.currentChapterIndex
         let pos = self.currentPos
+        let title = chapters.indices.contains(chapterIdx) ? chapters[chapterIdx].title : nil
+
+        // 立即更新本地内存状态，确保返回书架时无需等待网络请求即可看到最新进度
+        Task { @MainActor in
+            if let idx = apiService.books.firstIndex(where: { $0.bookUrl == bookUrl }) {
+                var updatedBook = apiService.books[idx]
+                updatedBook.durChapterIndex = chapterIdx
+                updatedBook.durChapterPos = pos
+                updatedBook.durChapterTitle = title
+                updatedBook.durChapterTime = Int64(Date().timeIntervalSince1970 * 1000)
+                apiService.books[idx] = updatedBook
+            }
+        }
         
         Task {
-            let title = chapters.indices.contains(chapterIdx) ? chapters[chapterIdx].title : nil
-            // 保存到本地
+            // 保存到本地持久化
             preferences.saveReadingProgress(bookUrl: bookUrl, chapterIndex: chapterIdx, pageIndex: 0, bodyCharIndex: Int(pos * 10000))
             // 保存到服务器
             try? await apiService.saveBookProgress(bookUrl: bookUrl, index: chapterIdx, pos: pos, title: title)

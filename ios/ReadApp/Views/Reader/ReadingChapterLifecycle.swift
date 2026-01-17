@@ -4,11 +4,13 @@ import SwiftUI
 extension ReadingView {
     func previousChapter() {
         if currentChapterIndex > 0 {
+            saveProgress()
             currentChapterIndex -= 1
         }
     }
     func nextChapter() {
         if currentChapterIndex < chapters.count - 1 {
+            saveProgress()
             currentChapterIndex += 1
         }
     }

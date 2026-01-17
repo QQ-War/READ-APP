@@ -48,7 +48,10 @@ final class OfflineDownloadManager: ObservableObject {
             return existing.id
         }
 
-        let target = chapters.filter { $0.index >= (start - 1) && $0.index <= (end - 1) }
+        let startIdx = max(0, start - 1)
+        let endIdx = min(chapters.count - 1, end - 1)
+        guard startIdx <= endIdx else { return nil }
+        let target = Array(chapters[startIdx...endIdx])
         guard !target.isEmpty else { return nil }
 
         let jobId = UUID().uuidString

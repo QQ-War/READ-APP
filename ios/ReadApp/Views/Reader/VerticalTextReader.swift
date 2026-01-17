@@ -1008,11 +1008,29 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
     
     override func viewDidLayoutSubviews() {
+        let oldContentHeight = scrollView.contentSize.height
+        let oldOffset = scrollView.contentOffset.y + safeAreaTop
+        
         super.viewDidLayoutSubviews()
+        
         if view.bounds.size != lastViewSize {
+            let wasAtBottom = oldContentHeight > 0 && oldOffset >= (oldContentHeight - scrollView.bounds.height - 10)
+            let relativeProgress = oldContentHeight > 0 ? (oldOffset / oldContentHeight) : 0
+            
             lastViewSize = view.bounds.size
             scrollView.frame = view.bounds
             scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
+            
+            // 旋转后恢复位置
+            if oldContentHeight > 0 {
+                self.view.layoutIfNeeded()
+                if wasAtBottom {
+                    self.scrollToBottom(animated: false)
+                } else {
+                    let newTargetY = (scrollView.contentSize.height * relativeProgress) - safeAreaTop
+                    scrollView.setContentOffset(CGPoint(x: 0, y: newTargetY), animated: false)
+                }
+            }
         }
     }
     
@@ -1025,40 +1043,49 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     func update(urls: [String]) {
         guard urls != self.imageUrls else { return }
         self.imageUrls = urls
+        
+        // 关键优化：先收集现有视图以便复用或平滑过渡（可选），这里简单处理为先准备好所有图片
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        
         for (index, urlStr) in urls.enumerated() {
             let iv = UIImageView()
             iv.contentMode = .scaleAspectFit
             iv.clipsToBounds = true
+            iv.backgroundColor = UIColor.white.withAlphaComponent(0.05)
             stackView.addArrangedSubview(iv)
+            
             let urlStr2 = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
+            guard let resolved = MangaImageService.shared.resolveImageURL(urlStr2) else { continue }
+            let absolute = resolved.absoluteString
+            
+            // 尝试同步加载本地缓存，减少闪烁
+            if let b = bookUrl,
+               let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute),
+               let image = UIImage(data: cachedData) {
+                iv.image = image
+                let ratio = image.size.height / image.size.width
+                iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
+                if self.pendingScrollIndex == index {
+                    self.scrollToIndex(index, animated: false)
+                }
+                continue
+            }
+            
+            // 缓存未命中，异步下载
             Task {
-                if let resolved = MangaImageService.shared.resolveImageURL(urlStr2) {
-                    let absolute = resolved.absoluteString
-                    if let b = bookUrl,
-                       let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute),
-                       let image = UIImage(data: cachedData) {
-                        await MainActor.run {
-                            iv.image = image
-                            let ratio = image.size.height / image.size.width
-                            iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
-                            if self.pendingScrollIndex == index {
-                                self.scrollToIndex(index, animated: false)
-                            }
-                        }
-                        return
+                if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl), let image = UIImage(data: data) {
+                    if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
+                        LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)
                     }
-                    if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl), let image = UIImage(data: data) {
-                        if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
-                            LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)
-                        }
-                        await MainActor.run {
-                            iv.image = image
-                            let ratio = image.size.height / image.size.width
-                            iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
-                            if self.pendingScrollIndex == index {
-                                self.scrollToIndex(index, animated: false)
-                            }
+                    await MainActor.run {
+                        // 确保视图没被复用或删除
+                        guard iv.superview == self.stackView else { return }
+                        iv.image = image
+                        let ratio = image.size.height / image.size.width
+                        // 移除可能存在的占位高度（如果有的话，目前是靠 intrinsic size 或 0）
+                        iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
+                        if self.pendingScrollIndex == index {
+                            self.scrollToIndex(index, animated: false)
                         }
                     }
                 }

@@ -116,9 +116,7 @@ struct BookListView: View {
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker { url in Task { await importBook(from: url) } }
         }
-        .fullScreenCover(item: $selectedBook, onDismiss: {
-            Task { await loadBooks() }
-        }) { book in
+        .fullScreenCover(item: $selectedBook) { book in
             ReadingView(book: book).environmentObject(apiService)
         }
         .task { 
@@ -375,6 +373,14 @@ struct BookCoverImage: View {
 // 辅助子视图：信息区域
 struct BookInfoArea: View {
     let book: Book
+    
+    private var progressText: String {
+        let pos = book.durChapterPos ?? 0
+        if pos <= 0 { return "" }
+        let percent = Int(pos * 100)
+        return " (\(percent)%)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(book.name ?? "未知书名").font(.headline).lineLimit(1)
@@ -384,7 +390,7 @@ struct BookInfoArea: View {
             }
             HStack {
                 if let dur = book.durChapterTitle {
-                    Text("读至: \(dur)").font(.caption2).foregroundColor(.blue).lineLimit(1)
+                    Text("读至: \(dur)\(progressText)").font(.caption2).foregroundColor(.blue).lineLimit(1)
                 }
                 Spacer()
                 if let total = book.totalChapterNum {

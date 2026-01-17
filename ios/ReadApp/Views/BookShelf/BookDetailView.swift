@@ -199,11 +199,23 @@ struct BookDetailView: View {
                         } else {
                             let startIndex = selectedGroupIndex * 50
                             let endIndex = min(startIndex + 50, chapters.count)
-                            let visibleChapters = chapters.indices.contains(startIndex) ? Array(chapters[startIndex..<endIndex]) : []
                             
                             LazyVStack(spacing: 0) {
-                                ForEach(visibleChapters) { chapter in
-                                    chapterRow(chapter)
+                                ForEach(startIndex..<endIndex, id: \.self) { idx in
+                                    let chapter = chapters[idx]
+                                    Button(action: {
+                                        // 更新本地进度并启动阅读
+                                        if let bookUrl = book.bookUrl,
+                                           let bookIdx = apiService.books.firstIndex(where: { $0.bookUrl == bookUrl }) {
+                                            apiService.books[bookIdx].durChapterIndex = idx
+                                            apiService.books[bookIdx].durChapterTitle = chapter.title
+                                            apiService.books[bookIdx].durChapterPos = 0
+                                        }
+                                        isReading = true
+                                    }) {
+                                        chapterRow(chapter)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
                                 }
                             }
                         }
@@ -266,11 +278,7 @@ struct BookDetailView: View {
                         .foregroundColor(.white)
                         .cornerRadius(8)
                 }
-                .fullScreenCover(isPresented: $isReading, onDismiss: {
-                    Task {
-                        try? await apiService.fetchBookshelf()
-                    }
-                }) {
+                .fullScreenCover(isPresented: $isReading) {
                     ReadingView(book: currentBook).environmentObject(apiService)
                 }
             }

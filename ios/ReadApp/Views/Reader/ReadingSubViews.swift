@@ -205,7 +205,7 @@ struct ChapterListView: View {
                                         .foregroundColor(item.offset == currentIndex ? .blue : .primary)
                                         .fontWeight(item.offset == currentIndex ? .semibold : .regular)
                                     Spacer()
-                                    if LocalCacheManager.shared.isChapterCached(bookUrl: bookUrl, index: item.offset) {
+                                    if LocalCacheManager.shared.isChapterCached(bookUrl: bookUrl, index: item.element.index) {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundColor(.green)
                                             .font(.caption)
