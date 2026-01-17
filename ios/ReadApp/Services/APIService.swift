@@ -75,44 +75,39 @@ class APIService: ObservableObject {
 
     // MARK: - 获取书架列表
     func fetchBookshelf() async throws {
-        do {
-            let books = try await booksService.fetchBookshelf()
+        try await withTimeout(seconds: 8) { [weak self] in
+            guard let self = self else { return }
+            let books = try await self.booksService.fetchBookshelf()
             await MainActor.run {
                 self.books = books
-                // 成功后保存到本地
                 LocalCacheManager.shared.saveBookshelfCache(books)
-            }
-        } catch {
-            // 如果网络请求失败且本地已经有数据（比如初始化加载的），则保持现状，不抛出异常清空 UI
-            if self.books.isEmpty {
-                throw error
             }
         }
     }
     
     // MARK: - 获取章节列表
     func fetchChapterList(bookUrl: String, bookSourceUrl: String?) async throws -> [BookChapter] {
-        try await booksService.fetchChapterList(bookUrl: bookUrl, bookSourceUrl: bookSourceUrl)
+        return try await withTimeout(seconds: 5) { [weak self] in
+            guard let self = self else { throw NSError(domain: "APIService", code: -1) }
+            return try await self.booksService.fetchChapterList(bookUrl: bookUrl, bookSourceUrl: bookSourceUrl)
+        }
     }
     
     // MARK: - 获取章节内容
     func fetchChapterContent(bookUrl: String, bookSourceUrl: String?, index: Int, contentType: Int = 0, cachePolicy: ChapterContentFetchPolicy = .standard) async throws -> String {
-        // 1. 优先尝试从本地磁盘缓存读取 (瞬间完成，不受超时影响)
+        // 1. 优先尝试从本地磁盘缓存读取
         if cachePolicy.useDiskCache, let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
             return cachedContent
         }
         
-        // 2. 包装带超时的网络/内存请求
         return try await withTimeout(seconds: 5) { [weak self] in
             guard let self = self else { throw NSError(domain: "APIService", code: -1) }
             
-            // 尝试从内存缓存读取
             let cacheKey = "\(bookUrl)_\(index)_\(contentType)"
             if cachePolicy.useMemoryCache, let cachedContent = await self.chapterCache.value(for: cacheKey) {
                 return cachedContent
             }
             
-            // 3. 网络请求
             var queryItems = [
                 URLQueryItem(name: "accessToken", value: self.accessToken),
                 URLQueryItem(name: "url", value: bookUrl),
@@ -131,7 +126,6 @@ class APIService: ObservableObject {
             if apiResponse.isSuccess, let content = apiResponse.data {
                 if cachePolicy.saveToCache {
                     await self.chapterCache.insert(content, for: cacheKey)
-                    
                     let shouldCache = (contentType == 2) ? UserPreferences.shared.isMangaAutoCacheEnabled : UserPreferences.shared.isTextAutoCacheEnabled
                     if shouldCache {
                         LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
@@ -146,21 +140,12 @@ class APIService: ObservableObject {
 
     private func withTimeout<T>(seconds: TimeInterval, operation: @escaping @Sendable () async throws -> T) async throws -> T {
         try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask {
-                try await operation()
-            }
-            
+            group.addTask { try await operation() }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 throw NSError(domain: "APIService", code: 408, userInfo: [NSLocalizedDescriptionKey: "加载超时，请检查网络后重试"])
             }
-            
-            // 谁先跑完就返回谁。如果是超时任务先跑完，这里会直接 throw
-            guard let result = try await group.next() else {
-                throw NSError(domain: "APIService", code: -1, userInfo: [NSLocalizedDescriptionKey: "未知错误"])
-            }
-            
-            // 无论哪个任务先完成，都取消组内的其它任务
+            let result = try await group.next()!
             group.cancelAll()
             return result
         }

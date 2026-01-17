@@ -496,18 +496,27 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
     
         private func loadChapters() {
-            Task { do {
-                let list = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
-                await MainActor.run {
-                    self.chapters = list; self.onChaptersLoaded?(list)
-                    // 如果 TTS 正在播放这本书，优先同步到 TTS 的章节
-                    if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
-                        self.currentChapterIndex = ttsManager.currentChapterIndex
-                        self.onChapterIndexChanged?(self.currentChapterIndex)
+            Task {
+                await MainActor.run { self.onLoadingChanged?(true) }
+                do {
+                    let list = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
+                    await MainActor.run {
+                        self.chapters = list; self.onChaptersLoaded?(list)
+                        // 如果 TTS 正在播放这本书，优先同步到 TTS 的章节
+                        if ttsManager.isPlaying && ttsManager.bookUrl == book.bookUrl {
+                            self.currentChapterIndex = ttsManager.currentChapterIndex
+                            self.onChapterIndexChanged?(self.currentChapterIndex)
+                        }
+                        loadChapterContent(at: currentChapterIndex)
                     }
-                    loadChapterContent(at: currentChapterIndex)
+                } catch {
+                    await MainActor.run {
+                        self.onLoadingChanged?(false)
+                        let errorMsg = "获取目录失败: \(error.localizedDescription)\n\n[点击右上角刷新按钮重试]"
+                        self.processLoadedChapterContent(index: currentChapterIndex, rawContent: errorMsg, isManga: false, startAtEnd: false, token: 0)
+                    }
                 }
-            } catch { } }
+            }
         }
         
         private func loadChapterContent(at index: Int, startAtEnd: Bool = false, cachePolicy: ChapterContentFetchPolicy = .standard, allowPrefetch: Bool = true) {

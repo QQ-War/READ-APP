@@ -24,6 +24,9 @@ import com.readapp.data.detectApiBackend
 import com.readapp.data.normalizeApiBaseUrl
 import com.readapp.data.stripApiBasePath
 import com.readapp.data.RemoteDataSourceFactory
+import com.readapp.data.manga.MangaAntiScrapingService
+import com.readapp.data.manga.MangaImageExtractor
+import com.readapp.data.manga.MangaImageNormalizer
 import com.readapp.data.repo.AuthRepository
 import com.readapp.data.repo.BookRepository
 import com.readapp.data.repo.ReplaceRuleRepository
@@ -945,11 +948,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun cacheMangaImages(book: Book, chapter: com.readapp.data.model.Chapter, chapterIndex: Int, content: String) {
         val bookUrl = book.bookUrl ?: return
-        val images = extractMangaImageUrls(content)
+        val images = MangaImageExtractor.extractImageUrls(content)
         if (images.isEmpty()) return
-        val referer = chapter.url.replace("http://", "https://").let {
-            if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
-        }
+        val profile = MangaAntiScrapingService.resolveProfile(null, chapter.url)
+        val referer = MangaAntiScrapingService.resolveReferer(profile, chapter.url, null)
         val forceProxy = readerSettings.forceMangaProxy.value
         val client = okhttp3.OkHttpClient()
         for (img in images) {
@@ -959,8 +961,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             val requestUrl = if (forceProxy && proxyUrl != null) proxyUrl else resolved
             val request = okhttp3.Request.Builder()
                 .url(requestUrl)
-                .header("Referer", referer)
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                .apply {
+                    if (!referer.isNullOrBlank()) {
+                        header("Referer", referer)
+                    }
+                }
+                .header("User-Agent", profile?.userAgent ?: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
                 .build()
             runCatching {
                 client.newCall(request).execute().use { response ->
@@ -977,8 +983,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching {
                     val fallback = okhttp3.Request.Builder()
                         .url(proxyUrl)
-                        .header("Referer", referer)
-                        .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                        .apply {
+                            if (!referer.isNullOrBlank()) {
+                                header("Referer", referer)
+                            }
+                        }
+                        .header("User-Agent", profile?.userAgent ?: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
                         .build()
                     client.newCall(fallback).execute().use { response ->
                         if (response.isSuccessful) {
@@ -993,38 +1003,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun extractMangaImageUrls(content: String): List<String> {
-        val results = linkedSetOf<String>()
-        val imgTagPattern = """<img\s+([^>]+)>""".toRegex(RegexOption.IGNORE_CASE)
-        val attrPatterns = listOf(
-            """data-original=["']([^"']+)["']""",
-            """data-src=["']([^"']+)["']""",
-            """data-lazy=["']([^"']+)["']""",
-            """data-echo=["']([^"']+)["']""",
-            """data-url=["']([^"']+)["']""",
-            """src=["']([^"']+)["']"""
-        ).map { it.toRegex(RegexOption.IGNORE_CASE) }
-        imgTagPattern.findAll(content).forEach { match ->
-            val attrs = match.groupValues.getOrNull(1).orEmpty()
-            for (regex in attrPatterns) {
-                val m = regex.find(attrs)
-                if (m != null) {
-                    results.add(m.groupValues[1])
-                    break
-                }
-            }
-        }
-        val tokenPattern = """__IMG__(\S+)""".toRegex()
-        tokenPattern.findAll(content).forEach { match ->
-            results.add(match.groupValues[1])
-        }
-        return results.toList()
-    }
-
     private fun resolveImageUrl(url: String): String {
-        if (url.startsWith("http")) return url
         val base = stripApiBasePath(currentServerEndpoint())
-        return if (url.startsWith("/")) "$base$url" else "$base/$url"
+        return MangaImageNormalizer.resolveUrl(url, base)
     }
 
     private fun buildProxyUrl(url: String): String? {

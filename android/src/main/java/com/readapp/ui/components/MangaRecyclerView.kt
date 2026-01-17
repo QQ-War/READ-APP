@@ -29,6 +29,8 @@ import com.readapp.data.detectApiBackend
 import com.readapp.data.normalizeApiBaseUrl
 import com.readapp.data.stripApiBasePath
 import com.readapp.data.LocalCacheManager
+import com.readapp.data.manga.MangaAntiScrapingService
+import com.readapp.data.manga.MangaImageNormalizer
 
 class MangaAdapter(
     var paragraphs: List<String>,
@@ -59,10 +61,12 @@ class MangaAdapter(
         val imgUrl = extractImgUrl(text)
         
         if (imgUrl != null) {
-            val finalUrl = resolveUrl(imgUrl)
+            val base = stripApiBasePath(serverUrl)
+            val finalUrl = MangaImageNormalizer.resolveUrl(imgUrl, base)
             val proxyUrl = buildProxyUrl(finalUrl)
             val requestUrl = if (forceProxy && proxyUrl != null) proxyUrl else finalUrl
-            val referer = buildReferer()
+            val profile = MangaAntiScrapingService.resolveProfile(finalUrl, chapterUrl)
+            val referer = MangaAntiScrapingService.resolveReferer(profile, chapterUrl, finalUrl)
             val cacheManager = LocalCacheManager(holder.imageView.context)
             val cachedBytes = if (!bookUrl.isNullOrBlank() && chapterIndex != null) {
                 cacheManager.loadMangaImage(bookUrl, chapterIndex, finalUrl)
@@ -78,7 +82,11 @@ class MangaAdapter(
                 if (referer != null) {
                     addHeader("Referer", referer)
                 }
-                addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                val ua = profile?.userAgent ?: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+                addHeader("User-Agent", ua)
+                profile?.extraHeaders?.forEach { (key, value) ->
+                    addHeader(key, value)
+                }
                 listener(object : coil.request.ImageRequest.Listener {
                     override fun onSuccess(request: ImageRequest, result: SuccessResult) {
                         if (!bookUrl.isNullOrBlank() && chapterIndex != null) {
@@ -110,14 +118,6 @@ class MangaAdapter(
         return pattern.find(text)?.groupValues?.get(1)
     }
 
-    private fun resolveUrl(imgUrl: String): String {
-        return if (imgUrl.startsWith("http")) imgUrl
-        else {
-            val base = stripApiBasePath(serverUrl)
-            if (imgUrl.startsWith("/")) "$base$imgUrl" else "$base/$imgUrl"
-        }
-    }
-
     private fun buildProxyUrl(finalUrl: String): String? {
         val backend = detectApiBackend(serverUrl)
         if (backend != ApiBackend.Read) {
@@ -130,12 +130,6 @@ class MangaAdapter(
             .appendQueryParameter("accessToken", "")
             .build()
             .toString()
-    }
-
-    private fun buildReferer(): String? {
-        return chapterUrl?.replace("http://", "https://")?.let {
-            if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
-        }
     }
 
     private fun drawableToBytes(drawable: android.graphics.drawable.Drawable): ByteArray? {
