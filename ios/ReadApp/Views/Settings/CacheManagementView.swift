@@ -16,6 +16,8 @@ struct CacheManagementView: View {
         let chapterCount: Int
     }
     
+    @State private var lastRefreshTime: Date = .distantPast
+    
     var body: some View {
         content
             .navigationTitle("缓存与下载管理")
@@ -23,8 +25,16 @@ struct CacheManagementView: View {
             .ifAvailableHideTabBar()
             .task { await loadCachedData() }
             .onReceive(downloadManager.$jobs) { _ in
-                Task { await loadCachedData() }
+                throttledRefresh()
             }
+    }
+
+    private func throttledRefresh() {
+        let now = Date()
+        // 限制刷新频率为每 2 秒最多一次，防止频繁更新导致 NavigationLink 闪退
+        if now.timeIntervalSince(lastRefreshTime) < 2.0 { return }
+        lastRefreshTime = now
+        Task { await loadCachedData() }
     }
 
     private var content: AnyView {

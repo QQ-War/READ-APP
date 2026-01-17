@@ -377,7 +377,13 @@ struct BookInfoArea: View {
     private var progressText: String {
         let pos = book.durChapterPos ?? 0
         if pos <= 0 { return "" }
-        let percent = Int(pos * 100)
+        // 兼容旧版索引和新版比例，并封顶 100%
+        let percent: Int
+        if pos > 1.0 {
+            percent = 100 
+        } else {
+            percent = Int(pos * 100)
+        }
         return " (\(percent)%)"
     }
 

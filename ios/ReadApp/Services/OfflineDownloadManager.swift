@@ -162,6 +162,9 @@ final class OfflineDownloadManager: ObservableObject {
                         index: chapter.index,
                         contentType: contentType
                     )
+                    
+                    // 核心修复：强制保存章节正文/索引到磁盘，确保离线计数准确
+                    LocalCacheManager.shared.saveChapter(bookUrl: job.bookUrl, index: chapter.index, content: rawContent)
 
                     await MainActor.run {
                         self.updateJob(jobId) { job in
