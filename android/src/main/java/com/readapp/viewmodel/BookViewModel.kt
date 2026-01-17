@@ -798,6 +798,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         if (index !in _chapters.value.indices) return
         val shouldContinuePlaying = _keepPlaying.value
         ttsController.stopTts()
+        val bookUrl = _selectedBook.value?.bookUrl
+        val isManga = bookUrl != null && (manualMangaUrls.value.contains(bookUrl) || _selectedBook.value?.type == 2)
+        val prefetchedMangaContent = if (isManga && _nextChapterIndex.value == index) {
+            _nextChapterContent.value
+        } else {
+            null
+        }
         _currentChapterIndex.value = index
         _currentChapterContent.value = ""
         currentParagraphs = emptyList()
@@ -805,6 +812,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         
         saveBookProgress()
         
+        if (!prefetchedMangaContent.isNullOrBlank()) {
+            updateChapterContent(index, prefetchedMangaContent)
+            if (shouldContinuePlaying) {
+                ttsController.startTts()
+            }
+            return
+        }
+
         if (shouldContinuePlaying) {
             ttsController.startTts()
         } else {
