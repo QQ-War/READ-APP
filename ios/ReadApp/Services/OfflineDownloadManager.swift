@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 enum OfflineDownloadStatus: String {
     case downloading
@@ -30,8 +31,23 @@ final class OfflineDownloadManager: ObservableObject {
 
     @Published private(set) var jobs: [OfflineDownloadJob] = []
     private var taskHandles: [String: Task<Void, Never>] = [:]
+    private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
 
     private init() {}
+
+    private func beginBackgroundTask() {
+        guard backgroundTaskID == .invalid else { return }
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "OfflineDownload") { [weak self] in
+            self?.endBackgroundTask()
+        }
+    }
+
+    private func endBackgroundTask() {
+        if backgroundTaskID != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
+        }
+    }
 
     func startDownload(
         book: Book,
@@ -41,6 +57,10 @@ final class OfflineDownloadManager: ObservableObject {
         isManga: Bool
     ) -> String? {
         guard let bookUrl = book.bookUrl else { return nil }
+        
+        // 开启后台任务支持
+        beginBackgroundTask()
+        
         if let existing = jobs.first(where: { $0.bookUrl == bookUrl }) {
             if existing.status == .failed || existing.status == .paused {
                 resume(jobId: existing.id)
@@ -101,6 +121,11 @@ final class OfflineDownloadManager: ObservableObject {
         taskHandles[jobId]?.cancel()
         taskHandles[jobId] = nil
         jobs.removeAll { $0.id == jobId }
+        
+        // 检查是否还有剩余任务，如果没有则关闭后台任务标识
+        if taskHandles.isEmpty {
+            endBackgroundTask()
+        }
     }
 
     func job(for bookUrl: String) -> OfflineDownloadJob? {
@@ -122,6 +147,10 @@ final class OfflineDownloadManager: ObservableObject {
         defer {
             Task { @MainActor in
                 self.taskHandles[jobId] = nil
+                // 如果没有正在运行的任务了，结束后台任务
+                if self.taskHandles.isEmpty {
+                    self.endBackgroundTask()
+                }
             }
         }
 
