@@ -145,7 +145,10 @@ class APIService: ObservableObject {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 throw NSError(domain: "APIService", code: 408, userInfo: [NSLocalizedDescriptionKey: "加载超时，请检查网络后重试"])
             }
-            let result = try await group.next()!
+            // 使用安全解包替代强制解包
+            guard let result = try await group.next() else {
+                throw NSError(domain: "APIService", code: -1, userInfo: [NSLocalizedDescriptionKey: "请求任务异常中断"])
+            }
             group.cancelAll()
             return result
         }

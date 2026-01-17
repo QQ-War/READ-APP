@@ -512,8 +512,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 } catch {
                     await MainActor.run {
                         self.onLoadingChanged?(false)
-                        let errorMsg = "获取目录失败: \(error.localizedDescription)\n\n[点击右上角刷新按钮重试]"
-                        self.processLoadedChapterContent(index: currentChapterIndex, rawContent: errorMsg, isManga: false, startAtEnd: false, token: 0)
+                        let errorMsg = "获取目录失败: \(error.localizedDescription)\n\n[点击屏幕中心呼出菜单，点击右上角刷新按钮重试]"
+                        // 使用当前 loadToken 确保渲染请求有效
+                        self.processLoadedChapterContent(index: currentChapterIndex, rawContent: errorMsg, isManga: false, startAtEnd: false, token: self.loadToken)
                     }
                 }
             }
@@ -569,6 +570,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             guard loadToken == token else { return }
             self.isMangaMode = isManga
             self.onModeDetected?(isManga)
+            
+            // 核心修复：如果目录还没加载成功（chapters 为空），仅渲染文字内容（错误提示），跳过后续逻辑
+            if chapters.isEmpty {
+                reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: 0)
+                return
+            }
             
             if self.isFirstLoad && !isManga {
                 let initialOffset: Int
