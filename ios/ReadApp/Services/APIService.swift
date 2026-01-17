@@ -91,7 +91,7 @@ class APIService: ObservableObject {
         let cached = LocalCacheManager.shared.loadChapterList(bookUrl: bookUrl)
         
         // 如果有缓存，我们直接返回它，让阅读器先跑起来
-        if let cachedList = cached, !cached.isEmpty {
+        if let cachedList = cached, !cachedList.isEmpty {
             // 在后台静默更新目录，不阻塞主流程
             Task {
                 try? await withTimeout(seconds: 5) { [weak self] in

@@ -173,11 +173,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
             private var verticalVC: VerticalTextViewController?; private var horizontalVC: UIPageViewController?; private var mangaVC: MangaReaderViewController?
             private var prebuiltNextMangaVC: MangaReaderViewController?
-            private var prebuiltNextIndex: Int?
-            
-            private let progressLabel = UILabel()        private var lastLayoutSignature: String = ""
-        private var loadToken: Int = 0
-        private let prefetchCoordinator = ReaderPrefetchCoordinator()
+                private var prebuiltNextIndex: Int?
+                
+                private let progressLabel = UILabel()
+                private var lastLayoutSignature: String = ""
+                private var loadToken: Int = 0        private let prefetchCoordinator = ReaderPrefetchCoordinator()
         private var pendingTTSPositionSync = false
         private var prefetchedMangaNextIndex: Int?
         private var prefetchedMangaNextContent: String?
@@ -352,13 +352,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
             
         
-                func switchReadingMode(to mode: ReadingMode) {
+                                func switchReadingMode(to mode: ReadingMode) {
         
-                    let offset = getCurrentReadingCharOffset()
+            
         
-                    let oldMode = currentReadingMode
+                                    let offset = getCurrentReadingCharOffset()
         
-                    currentReadingMode = mode
+            
+        
+                                    currentReadingMode = mode
         
                     
         
@@ -927,7 +929,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             let displayPage = self.horizontalPageIndexForDisplay()
             if pageIdx == displayPage {
                 self.latestVisibleFragmentLines = lines
-                let snippet = lines.isEmpty ? "[]" : lines.joined(separator: " | ")
             }
         }
         if i < aI.count { 
