@@ -361,7 +361,7 @@ struct BookListView: View {
 struct BookCoverImage: View {
     let url: String?
     var body: some View {
-        AsyncImage(url: URL(string: url ?? "")) { image in
+        CachedRemoteImage(urlString: url) { image in
             image.resizable().aspectRatio(contentMode: .fill)
         } placeholder: {
             Rectangle().fill(Color.gray.opacity(0.3))
