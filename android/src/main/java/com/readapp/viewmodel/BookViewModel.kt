@@ -617,13 +617,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             applyBooksFilterAndSort()
             localCache.saveBookshelfCache(list)
         }.onFailure { error ->
-            _errorMessage.value = error.message
             if (allBooks.isEmpty()) {
-                localCache.loadBookshelfCache()?.let { cached ->
-                    if (cached.isNotEmpty()) {
-                        allBooks = cached
-                        applyBooksFilterAndSort()
-                    }
+                val cached = localCache.loadBookshelfCache()
+                if (!cached.isNullOrEmpty()) {
+                    allBooks = cached
+                    applyBooksFilterAndSort()
+                } else {
+                    _errorMessage.value = error.message
                 }
             }
         }
@@ -946,7 +946,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         downloadChapters(0, _chapters.value.lastIndex)
     }
 
-    private fun cacheMangaImages(book: Book, chapter: com.readapp.data.model.Chapter, chapterIndex: Int, content: String) {
+    internal fun cacheMangaImages(book: Book, chapter: com.readapp.data.model.Chapter, chapterIndex: Int, content: String) {
         val bookUrl = book.bookUrl ?: return
         val images = MangaImageExtractor.extractImageUrls(content)
         if (images.isEmpty()) return

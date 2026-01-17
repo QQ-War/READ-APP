@@ -10,6 +10,7 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
     private companion object {
         private const val TAG = "ReaderInteractor"
     }
+    private var mangaPrefetchNextIndex: Int? = null
 
     suspend fun loadChapters(book: Book) {
         val bookUrl = book.bookUrl ?: return
@@ -23,7 +24,6 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
                 book.origin
             )
         }.getOrElse { throwable ->
-            viewModel._errorMessage.value = throwable.message
             Log.e(TAG, "加载章节列表失败", throwable)
             val cached = viewModel.loadChapterListFromCache(bookUrl)
             if (!cached.isNullOrEmpty()) {
@@ -31,6 +31,7 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
                 viewModel._isChapterListLoading.value = false
                 return
             }
+            showReaderError("加载失败: 无法获取目录，请检查网络后重试")
             viewModel._isChapterListLoading.value = false
             return
         }
@@ -44,8 +45,12 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
             }
             viewModel._isChapterListLoading.value = false
         }.onFailure { error ->
-            viewModel._errorMessage.value = error.message
             Log.e(TAG, "加载章节列表失败", error)
+            if (viewModel._chapters.value.isEmpty()) {
+                showReaderError("加载失败: 无法获取目录，请检查网络后重试")
+            } else {
+                viewModel._errorMessage.value = error.message
+            }
             viewModel._isChapterListLoading.value = false
         }
     }
@@ -56,7 +61,11 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
 
     suspend fun loadChapterContentInternal(index: Int): String? {
         val book = viewModel._selectedBook.value ?: return null
-        val chapter = viewModel._chapters.value.getOrNull(index) ?: return null
+        val chapter = viewModel._chapters.value.getOrNull(index)
+        if (chapter == null) {
+            showReaderError("加载失败: 章节信息为空，请检查网络后重试")
+            return null
+        }
         val bookUrl = book.bookUrl ?: return null
 
         val isManga = viewModel.manualMangaUrls.value.contains(bookUrl) || book.type == 2
@@ -88,13 +97,12 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
                 updateChapterContent(index, resolvedContent)
                 resolvedContent
             } else {
-                if (contentResult.error == null) {
-                    viewModel._errorMessage.value = "加载失败: 内容为空"
-                }
+                val errorMessage = contentResult.error?.message ?: "内容为空"
+                showReaderError("加载失败: $errorMessage，请检查网络后重试")
                 null
             }
         } catch (e: Exception) {
-            viewModel._errorMessage.value = "系统异常: ${e.localizedMessage}"
+            showReaderError("系统异常: ${e.localizedMessage}")
             Log.e(TAG, "加载章节内容异常", e)
             null
         } finally {
@@ -129,7 +137,7 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
         }
         val book = viewModel._selectedBook.value ?: return
         if (isMangaBook(book)) {
-            clearAdjacentChapterCache()
+            prefetchMangaNextChapter(book)
             return
         }
         val chapters = viewModel._chapters.value
@@ -171,5 +179,48 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
             cacheValidator = { true },
             cleaner = { raw -> viewModel.cleanChapterContent(raw) }
         ).content
+    }
+
+    private fun showReaderError(message: String) {
+        viewModel._currentChapterContent.value = message
+        viewModel.currentParagraphs = viewModel.parseParagraphs(message)
+        viewModel.currentSentences = viewModel.currentParagraphs
+        viewModel._totalParagraphs.value = viewModel.currentParagraphs.size.coerceAtLeast(1)
+        viewModel._preloadedChapters.value = emptySet()
+        clearAdjacentChapterCache()
+    }
+
+    private suspend fun prefetchMangaNextChapter(book: Book) {
+        val chapters = viewModel._chapters.value
+        if (chapters.isEmpty()) {
+            clearAdjacentChapterCache()
+            return
+        }
+        val current = viewModel._currentChapterIndex.value
+        val nextIndex = if (current < chapters.lastIndex) current + 1 else null
+        if (nextIndex == null) {
+            viewModel._nextChapterIndex.value = null
+            viewModel._nextChapterContent.value = null
+            viewModel._preloadedChapters.value = emptySet()
+            return
+        }
+        if (mangaPrefetchNextIndex == nextIndex) return
+        mangaPrefetchNextIndex = nextIndex
+        try {
+            val content = fetchChapterContentForIndex(nextIndex, 2)
+            if (!content.isNullOrBlank()) {
+                viewModel._nextChapterIndex.value = nextIndex
+                viewModel._nextChapterContent.value = content
+                viewModel._preloadedChapters.value = setOf(nextIndex)
+                val chapter = chapters[nextIndex]
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    viewModel.cacheMangaImages(book, chapter, nextIndex, content)
+                }
+            }
+        } finally {
+            if (mangaPrefetchNextIndex == nextIndex) {
+                mangaPrefetchNextIndex = null
+            }
+        }
     }
 }
