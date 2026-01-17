@@ -442,6 +442,8 @@ fun ReadingScreen(
                 paragraphs = currentParagraphs,
                 serverUrl = serverEndpoint,
                 chapterUrl = currentChapterUrl,
+                bookUrl = book.bookUrl,
+                chapterIndex = currentChapterIndex,
                 forceProxy = forceMangaProxy,
                 pendingScrollIndex = mangaPendingScrollIndex,
                 mangaSwitchThreshold = mangaSwitchThreshold,

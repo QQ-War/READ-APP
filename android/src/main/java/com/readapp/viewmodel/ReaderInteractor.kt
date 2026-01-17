@@ -25,11 +25,18 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
         }.getOrElse { throwable ->
             viewModel._errorMessage.value = throwable.message
             Log.e(TAG, "加载章节列表失败", throwable)
+            val cached = viewModel.loadChapterListFromCache(bookUrl)
+            if (!cached.isNullOrEmpty()) {
+                viewModel._chapters.value = cached
+                viewModel._isChapterListLoading.value = false
+                return
+            }
             viewModel._isChapterListLoading.value = false
             return
         }
         chaptersResult.onSuccess { chapterList ->
             viewModel._chapters.value = chapterList
+            viewModel.saveChapterListToCache(bookUrl, chapterList)
             if (chapterList.isNotEmpty()) {
                 val index = viewModel._currentChapterIndex.value.coerceIn(0, chapterList.lastIndex)
                 viewModel._currentChapterIndex.value = index

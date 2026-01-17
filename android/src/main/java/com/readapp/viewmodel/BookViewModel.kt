@@ -332,6 +332,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
             readerSettings.loadInitial()
 
+            localCache.loadBookshelfCache()?.let { cached ->
+                if (cached.isNotEmpty()) {
+                    allBooks = cached
+                    applyBooksFilterAndSort()
+                }
+            }
+
             if (_accessToken.value.isNotBlank()) {
                 _isLoading.value = true
                 try {
@@ -605,7 +612,18 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         booksResult.onSuccess { list ->
             allBooks = list
             applyBooksFilterAndSort()
-        }.onFailure { error -> _errorMessage.value = error.message }
+            localCache.saveBookshelfCache(list)
+        }.onFailure { error ->
+            _errorMessage.value = error.message
+            if (allBooks.isEmpty()) {
+                localCache.loadBookshelfCache()?.let { cached ->
+                    if (cached.isNotEmpty()) {
+                        allBooks = cached
+                        applyBooksFilterAndSort()
+                    }
+                }
+            }
+        }
         if (showLoading) { _isLoading.value = false }
     }
 
@@ -909,6 +927,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     ).onSuccess { content ->
                         val cleaned = cleanChapterContent(content.orEmpty())
                         localCache.saveChapter(book.bookUrl ?: "", i, cleaned)
+                        if (isManga) {
+                            cacheMangaImages(book, chapter, i, cleaned)
+                        }
                     }
                 }
             }
@@ -922,6 +943,104 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         downloadChapters(0, _chapters.value.lastIndex)
     }
 
+    private fun cacheMangaImages(book: Book, chapter: com.readapp.data.model.Chapter, chapterIndex: Int, content: String) {
+        val bookUrl = book.bookUrl ?: return
+        val images = extractMangaImageUrls(content)
+        if (images.isEmpty()) return
+        val referer = chapter.url.replace("http://", "https://").let {
+            if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
+        }
+        val forceProxy = readerSettings.forceMangaProxy.value
+        val client = okhttp3.OkHttpClient()
+        for (img in images) {
+            val resolved = resolveImageUrl(img)
+            if (localCache.isMangaImageCached(bookUrl, chapterIndex, resolved)) continue
+            val proxyUrl = buildProxyUrl(resolved)
+            val requestUrl = if (forceProxy && proxyUrl != null) proxyUrl else resolved
+            val request = okhttp3.Request.Builder()
+                .url(requestUrl)
+                .header("Referer", referer)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                .build()
+            runCatching {
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val bytes = response.body?.bytes()
+                        if (!bytes.isNullOrEmpty()) {
+                            localCache.saveMangaImage(bookUrl, chapterIndex, resolved, bytes)
+                            return@use
+                        }
+                    }
+                }
+            }
+            if (!forceProxy && proxyUrl != null) {
+                runCatching {
+                    val fallback = okhttp3.Request.Builder()
+                        .url(proxyUrl)
+                        .header("Referer", referer)
+                        .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                        .build()
+                    client.newCall(fallback).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val bytes = response.body?.bytes()
+                            if (!bytes.isNullOrEmpty()) {
+                                localCache.saveMangaImage(bookUrl, chapterIndex, resolved, bytes)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun extractMangaImageUrls(content: String): List<String> {
+        val results = linkedSetOf<String>()
+        val imgTagPattern = """<img\s+([^>]+)>""".toRegex(RegexOption.IGNORE_CASE)
+        val attrPatterns = listOf(
+            """data-original=["']([^"']+)["']""",
+            """data-src=["']([^"']+)["']""",
+            """data-lazy=["']([^"']+)["']""",
+            """data-echo=["']([^"']+)["']""",
+            """data-url=["']([^"']+)["']""",
+            """src=["']([^"']+)["']"""
+        ).map { it.toRegex(RegexOption.IGNORE_CASE) }
+        imgTagPattern.findAll(content).forEach { match ->
+            val attrs = match.groupValues.getOrNull(1).orEmpty()
+            for (regex in attrPatterns) {
+                val m = regex.find(attrs)
+                if (m != null) {
+                    results.add(m.groupValues[1])
+                    break
+                }
+            }
+        }
+        val tokenPattern = """__IMG__(\S+)""".toRegex()
+        tokenPattern.findAll(content).forEach { match ->
+            results.add(match.groupValues[1])
+        }
+        return results.toList()
+    }
+
+    private fun resolveImageUrl(url: String): String {
+        if (url.startsWith("http")) return url
+        val base = stripApiBasePath(currentServerEndpoint())
+        return if (url.startsWith("/")) "$base$url" else "$base/$url"
+    }
+
+    private fun buildProxyUrl(url: String): String? {
+        val backend = detectApiBackend(currentServerEndpoint())
+        if (backend != ApiBackend.Read) {
+            return null
+        }
+        val base = stripApiBasePath(normalizeApiBaseUrl(currentServerEndpoint(), backend))
+        return Uri.parse(base).buildUpon()
+            .path("api/5/proxypng")
+            .appendQueryParameter("url", url)
+            .appendQueryParameter("accessToken", _accessToken.value)
+            .build()
+            .toString()
+    }
+
     private suspend fun loadChapters(book: Book) = readerInteractor.loadChapters(book)
 
     fun loadChapterContent(index: Int) { readerInteractor.loadChapterContent(index) }
@@ -932,6 +1051,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun prefetchAdjacentChapters() = readerInteractor.prefetchAdjacentChapters()
     private suspend fun fetchChapterContentForIndex(index: Int, effectiveType: Int): String? =
         readerInteractor.fetchChapterContentForIndex(index, effectiveType)
+
+    internal fun saveChapterListToCache(bookUrl: String, chapters: List<com.readapp.data.model.Chapter>) {
+        localCache.saveChapterList(bookUrl, chapters)
+    }
+
+    internal fun loadChapterListFromCache(bookUrl: String): List<com.readapp.data.model.Chapter>? {
+        return localCache.loadChapterList(bookUrl)
+    }
     internal fun parseParagraphs(content: String, chunkLimit: Int = ttsSentenceChunkLimit.value, includeTitle: Boolean = false): List<String> {
         val lines = content.split("\n").map { it.trim() }.filter { it.isNotBlank() }
         val finalParagraphs = mutableListOf<String>()

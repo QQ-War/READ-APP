@@ -2,12 +2,14 @@ package com.readapp.data
 
 import android.content.Context
 import com.google.gson.Gson
+import com.readapp.data.model.Book
 import com.readapp.data.model.Chapter
 import java.io.File
 import java.security.MessageDigest
 
 class LocalCacheManager(context: Context) {
     private val baseDir = File(context.filesDir, "BookCache").apply { if (!exists()) mkdirs() }
+    private val bookshelfFile = File(context.filesDir, "bookshelf_cache.json")
     private val gson = Gson()
 
     private fun getBookDir(bookUrl: String): File {
@@ -49,6 +51,34 @@ class LocalCacheManager(context: Context) {
         }
     }
 
+    fun saveBookshelfCache(books: List<Book>) {
+        runCatching {
+            bookshelfFile.writeText(gson.toJson(books))
+        }
+    }
+
+    fun loadBookshelfCache(): List<Book>? {
+        if (!bookshelfFile.exists()) return null
+        return runCatching {
+            gson.fromJson(bookshelfFile.readText(), Array<Book>::class.java).toList()
+        }.getOrNull()
+    }
+
+    fun saveMangaImage(bookUrl: String, chapterIndex: Int, imageUrl: String, data: ByteArray) {
+        val dir = getMangaDir(bookUrl, chapterIndex)
+        val file = File(dir, "${md5(imageUrl)}.img")
+        file.writeBytes(data)
+    }
+
+    fun loadMangaImage(bookUrl: String, chapterIndex: Int, imageUrl: String): ByteArray? {
+        val file = File(getMangaDir(bookUrl, chapterIndex), "${md5(imageUrl)}.img")
+        return if (file.exists()) file.readBytes() else null
+    }
+
+    fun isMangaImageCached(bookUrl: String, chapterIndex: Int, imageUrl: String): Boolean {
+        return File(getMangaDir(bookUrl, chapterIndex), "${md5(imageUrl)}.img").exists()
+    }
+
     fun clearCache(bookUrl: String) {
         getBookDir(bookUrl).deleteRecursively()
     }
@@ -69,5 +99,11 @@ class LocalCacheManager(context: Context) {
     fun getCacheSize(bookUrl: String): Long {
         val dir = getBookDir(bookUrl)
         return dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    }
+
+    private fun getMangaDir(bookUrl: String, chapterIndex: Int): File {
+        val dir = File(getBookDir(bookUrl), "manga/$chapterIndex")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
     }
 }

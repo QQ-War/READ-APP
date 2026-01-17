@@ -7,6 +7,9 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import java.io.ByteArrayOutputStream
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
@@ -20,16 +23,20 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import coil.request.ErrorResult
 import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.readapp.data.ApiBackend
 import com.readapp.data.detectApiBackend
 import com.readapp.data.normalizeApiBaseUrl
 import com.readapp.data.stripApiBasePath
+import com.readapp.data.LocalCacheManager
 
 class MangaAdapter(
     var paragraphs: List<String>,
     private val serverUrl: String,
     private val chapterUrl: String?,
-    private val forceProxy: Boolean
+    private val forceProxy: Boolean,
+    private val bookUrl: String?,
+    private val chapterIndex: Int?
 ) : RecyclerView.Adapter<MangaAdapter.MangaViewHolder>() {
 
     class MangaViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView)
@@ -56,6 +63,15 @@ class MangaAdapter(
             val proxyUrl = buildProxyUrl(finalUrl)
             val requestUrl = if (forceProxy && proxyUrl != null) proxyUrl else finalUrl
             val referer = buildReferer()
+            val cacheManager = LocalCacheManager(holder.imageView.context)
+            val cachedBytes = if (!bookUrl.isNullOrBlank() && chapterIndex != null) {
+                cacheManager.loadMangaImage(bookUrl, chapterIndex, finalUrl)
+            } else null
+
+            if (cachedBytes != null) {
+                holder.imageView.load(cachedBytes) { crossfade(false) }
+                return
+            }
 
             holder.imageView.load(requestUrl) {
                 crossfade(true)
@@ -64,6 +80,15 @@ class MangaAdapter(
                 }
                 addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
                 listener(object : coil.request.ImageRequest.Listener {
+                    override fun onSuccess(request: ImageRequest, result: SuccessResult) {
+                        if (!bookUrl.isNullOrBlank() && chapterIndex != null) {
+                            val bytes = drawableToBytes(result.drawable)
+                            if (!bytes.isNullOrEmpty()) {
+                                cacheManager.saveMangaImage(bookUrl, chapterIndex, finalUrl, bytes)
+                            }
+                        }
+                    }
+
                     override fun onError(request: ImageRequest, result: ErrorResult) {
                         if (!forceProxy && proxyUrl != null) {
                             holder.imageView.post {
@@ -112,6 +137,24 @@ class MangaAdapter(
             if (it.contains("kuaikanmanhua.com") && !it.endsWith("/")) "$it/" else it
         }
     }
+
+    private fun drawableToBytes(drawable: android.graphics.drawable.Drawable): ByteArray? {
+        val bitmap = when (drawable) {
+            is BitmapDrawable -> drawable.bitmap
+            else -> {
+                val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: return null
+                val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: return null
+                Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { canvasBitmap ->
+                    val canvas = android.graphics.Canvas(canvasBitmap)
+                    drawable.setBounds(0, 0, canvas.width, canvas.height)
+                    drawable.draw(canvas)
+                }
+            }
+        }
+        val output = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        return output.toByteArray()
+    }
 }
 
 data class EdgeHint(val text: String, val isTop: Boolean)
@@ -121,6 +164,8 @@ fun MangaNativeReader(
     paragraphs: List<String>,
     serverUrl: String,
     chapterUrl: String?,
+    bookUrl: String?,
+    chapterIndex: Int?,
     forceProxy: Boolean,
     pendingScrollIndex: Int?,
     mangaSwitchThreshold: Int,
@@ -150,7 +195,7 @@ fun MangaNativeReader(
                 layoutManager = LinearLayoutManager(context)
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 overScrollMode = View.OVER_SCROLL_ALWAYS
-                adapter = MangaAdapter(paragraphs, serverUrl, chapterUrl, forceProxy)
+                adapter = MangaAdapter(paragraphs, serverUrl, chapterUrl, forceProxy, bookUrl, chapterIndex)
                 
                 addOnScrollListener(object : RecyclerView.OnScrollListener() {
                     override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
