@@ -57,6 +57,11 @@ class APIService: ObservableObject {
         self.cacheManagementService = CacheManagementService(client: client)
         self.chapterCache = ChapterContentCache(maxEntries: 50)
         self.rssService = RssService(client: client)
+        
+        // 核心修复：启动时立即加载本地缓存的书架
+        if let cachedBooks = LocalCacheManager.shared.loadBookshelfCache() {
+            self.books = cachedBooks
+        }
     }
 
     // MARK: - 登录
@@ -70,9 +75,18 @@ class APIService: ObservableObject {
 
     // MARK: - 获取书架列表
     func fetchBookshelf() async throws {
-        let books = try await booksService.fetchBookshelf()
-        await MainActor.run {
-            self.books = books
+        do {
+            let books = try await booksService.fetchBookshelf()
+            await MainActor.run {
+                self.books = books
+                // 成功后保存到本地
+                LocalCacheManager.shared.saveBookshelfCache(books)
+            }
+        } catch {
+            // 如果网络请求失败且本地已经有数据（比如初始化加载的），则保持现状，不抛出异常清空 UI
+            if self.books.isEmpty {
+                throw error
+            }
         }
     }
     
@@ -145,6 +159,9 @@ class APIService: ObservableObject {
                 updatedBook.durChapterTitle = title
                 updatedBook.durChapterTime = Int64(Date().timeIntervalSince1970 * 1000)
                 self.books[idx] = updatedBook
+                
+                // 核心修复：更新进度后，立即持久化书架状态
+                LocalCacheManager.shared.saveBookshelfCache(self.books)
                 
                 // 强制触发出版物更新（如果是 Struct 可能需要重新赋值数组）
                 let currentBooks = self.books
@@ -309,6 +326,8 @@ class APIService: ObservableObject {
     // MARK: - Save Book to Bookshelf
     func saveBook(book: Book, useReplaceRule: Int = 0) async throws {
         try await booksService.saveBook(book: book, useReplaceRule: useReplaceRule)
+        // 成功后保存到本地缓存
+        LocalCacheManager.shared.saveBookshelfCache(self.books)
     }
     
     // MARK: - Change Book Source
@@ -319,6 +338,8 @@ class APIService: ObservableObject {
     // MARK: - Delete Book from Bookshelf
     func deleteBook(bookUrl: String) async throws {
         try await booksService.deleteBook(bookUrl: bookUrl)
+        // 成功后保存到本地缓存
+        LocalCacheManager.shared.saveBookshelfCache(self.books)
     }
     
     // MARK: - Cache Management

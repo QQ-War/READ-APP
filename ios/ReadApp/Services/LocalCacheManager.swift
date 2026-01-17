@@ -94,6 +94,28 @@ class LocalCacheManager {
         return try? JSONDecoder().decode([BookChapter].self, from: data)
     }
     
+    // MARK: - 书架持久化缓存
+    
+    private var bookshelfCacheURL: URL {
+        baseDir.appendingPathComponent("bookshelf_v2.json")
+    }
+    
+    func saveBookshelfCache(_ books: [Book]) {
+        DispatchQueue.global(qos: .background).async {
+            do {
+                let data = try JSONEncoder().encode(books)
+                try data.write(to: self.bookshelfCacheURL, options: .atomic)
+            } catch {
+                print("Failed to save bookshelf cache: \(error)")
+            }
+        }
+    }
+    
+    func loadBookshelfCache() -> [Book]? {
+        guard let data = try? Data(contentsOf: bookshelfCacheURL) else { return nil }
+        return try? JSONDecoder().decode([Book].self, from: data)
+    }
+    
     // MARK: - 缓存管理
     
     func clearCache(for bookUrl: String) {
