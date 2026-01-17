@@ -177,7 +177,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 
                 private let progressLabel = UILabel()
                 private var lastLayoutSignature: String = ""
-                private var loadToken: Int = 0        private let prefetchCoordinator = ReaderPrefetchCoordinator()
+                private var loadToken: Int = 0
+                private let prefetchCoordinator = ReaderPrefetchCoordinator()
         private var pendingTTSPositionSync = false
         private var prefetchedMangaNextIndex: Int?
         private var prefetchedMangaNextContent: String?
