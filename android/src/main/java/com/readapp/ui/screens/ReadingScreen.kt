@@ -90,7 +90,7 @@ private sealed class ReadingListItem {
     data class ParagraphItem(val chapterIndex: Int, val paragraphIndex: Int, val text: String, val isCurrent: Boolean) : ReadingListItem()
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun ReadingScreen(
     readerState: ReaderUiState,

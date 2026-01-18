@@ -87,7 +87,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?
     var onChapterIndexChanged: ((Int) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?; var onLoadingChanged: ((Bool) -> Void)?
     
-    private var safeAreaTop: CGFloat = 47; private var safeAreaBottom: CGFloat = 34
+    var safeAreaTop: CGFloat = 47; var safeAreaBottom: CGFloat = 34
     var currentLayoutSpec: ReaderLayoutSpec {
         return ReaderLayoutSpec(
             topInset: max(safeAreaTop, view.safeAreaInsets.top) + 15,
@@ -98,7 +98,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     
-    private(set) var currentChapterIndex: Int = 0
+    var currentChapterIndex: Int = 0
     var lastReportedChapterIndex: Int = -1
     var verticalThreshold: CGFloat = 80 {
         didSet {
@@ -113,7 +113,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         private var isUserInteracting = false
         private var ttsSyncCoordinator: TTSReadingSyncCoordinator?
         
-        private var chapterBuilder: ReaderChapterBuilder?
+        var chapterBuilder: ReaderChapterBuilder?
         var currentCache: ChapterCache = .empty
         var nextCache: ChapterCache = .empty
         var prevCache: ChapterCache = .empty
@@ -172,18 +172,18 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var latestVisibleFragmentLines: [String] = []
     
             var verticalVC: VerticalTextViewController?; var horizontalVC: UIPageViewController?; var mangaVC: MangaReaderViewController?
-            private var prebuiltNextMangaVC: MangaReaderViewController?
-                private var prebuiltNextIndex: Int?
+            var prebuiltNextMangaVC: MangaReaderViewController?
+                var prebuiltNextIndex: Int?
                 
-                private let progressLabel = UILabel()
+                let progressLabel = UILabel()
                 private var lastLayoutSignature: String = ""
                 var loadToken: Int = 0
-                private let prefetchCoordinator = ReaderPrefetchCoordinator()
+                let prefetchCoordinator = ReaderPrefetchCoordinator()
         private var pendingTTSPositionSync = false
-        private var prefetchedMangaNextIndex: Int?
-        private var prefetchedMangaNextContent: String?
-        private var lastChapterSwitchTime: TimeInterval = 0
-        private let chapterSwitchCooldown: TimeInterval = 1.0
+        var prefetchedMangaNextIndex: Int?
+        var prefetchedMangaNextContent: String?
+        var lastChapterSwitchTime: TimeInterval = 0
+        let chapterSwitchCooldown: TimeInterval = 1.0
         private var suppressTTSFollowUntil: TimeInterval = 0
         private var lastLoggedCacheChapterIndex: Int = -1
         private var lastLoggedNextUrl: String?
@@ -407,7 +407,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
                 
         
-                    private func getCurrentReadingCharOffset() -> Int {
+                    func getCurrentReadingCharOffset() -> Int {
         
                 
         

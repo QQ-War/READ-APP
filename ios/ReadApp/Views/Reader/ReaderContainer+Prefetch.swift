@@ -13,7 +13,7 @@ extension ReaderContainerViewController {
             nextCache: nextCache,
             prevCache: prevCache,
             isMangaMode: isMangaMode,
-            onNextCache: { [weak self] cache in
+            onNextCache: { [weak self] (cache: ChapterCache) in
                 guard let self = self else { return }
                 Task { @MainActor in
                     guard self.currentChapterIndex == index else { return }
@@ -26,7 +26,7 @@ extension ReaderContainerViewController {
                     }
                 }
             },
-            onPrevCache: { [weak self] cache in
+            onPrevCache: { [weak self] (cache: ChapterCache) in
                 guard let self = self else { return }
                 Task { @MainActor in
                     guard self.currentChapterIndex == index else { return }
@@ -56,7 +56,7 @@ extension ReaderContainerViewController {
             builder: builder,
             nextCache: nextCache,
             isMangaMode: isMangaMode,
-            onNextCache: { [weak self] cache in
+            onNextCache: { [weak self] (cache: ChapterCache) in
                 guard let self = self else { return }
                 Task { @MainActor in
                     guard self.currentChapterIndex == index else { return }
@@ -82,7 +82,7 @@ extension ReaderContainerViewController {
             builder: builder,
             prevCache: prevCache,
             isMangaMode: isMangaMode,
-            onPrevCache: { [weak self] cache in
+            onPrevCache: { [weak self] (cache: ChapterCache) in
                 guard let self = self else { return }
                 Task { @MainActor in
                     guard self.currentChapterIndex == index else { return }

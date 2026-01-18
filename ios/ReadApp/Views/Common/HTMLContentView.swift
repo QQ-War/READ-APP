@@ -26,7 +26,7 @@ struct HTMLContentView: UIViewRepresentable {
         let isDarkMode = UITraitCollection.current.userInterfaceStyle == .dark
         let textColor = isDarkMode ? "#FFFFFF" : "#000000"
         let backgroundColor = isDarkMode ? "#000000" : "#FFFFFF"
-        let customFont = fontName.isEmpty ? "" : "'\(fontName.replacingOccurrences(of: \"'\", with: \"\"))', "
+        let customFont = fontName.isEmpty ? "" : "'\(fontName.replacingOccurrences(of: "'", with: ""))', "
         
         return """
         <!DOCTYPE html>
@@ -117,7 +117,7 @@ struct DynamicHeightWebView: UIViewRepresentable {
         let isDarkMode = UITraitCollection.current.userInterfaceStyle == .dark
         let textColor = isDarkMode ? "#FFFFFF" : "#000000"
         let backgroundColor = isDarkMode ? "#000000" : "#FFFFFF"
-        let customFont = fontName.isEmpty ? "" : "'\(fontName.replacingOccurrences(of: \"'\", with: \"\"))', "
+        let customFont = fontName.isEmpty ? "" : "'\(fontName.replacingOccurrences(of: "'", with: ""))', "
         
         return """
         <!DOCTYPE html>

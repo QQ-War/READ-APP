@@ -20,6 +20,14 @@
 		1A000013000000000000001 /* ReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000014000000000000001 /* ReadingView.swift */; };
 		1A000098000000000000001 /* VerticalTextReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000099000000000000001 /* VerticalTextReader.swift */; };
 		1A0000AB000000000000001 /* ReaderContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AA000000000000001 /* ReaderContainer.swift */; };
+		A20000080000000000000001 /* BookshelfStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000001 /* BookshelfStore.swift */; };
+		A20000090000000000000001 /* SourceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000020000000000000001 /* SourceStore.swift */; };
+		A200000A0000000000000001 /* FontManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000030000000000000001 /* FontManager.swift */; };
+		A200000B0000000000000001 /* ReaderFontProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000040000000000000001 /* ReaderFontProvider.swift */; };
+		A200000C0000000000000001 /* ReadingThemeColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000050000000000000001 /* ReadingThemeColors.swift */; };
+		A200000D0000000000000001 /* BookshelfListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000060000000000000001 /* BookshelfListViewModel.swift */; };
+		A200000E0000000000000001 /* CachedRemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000070000000000000001 /* CachedRemoteImage.swift */; };
+		A200000F0000000000000001 /* ImageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000110000000000000001 /* ImageCache.swift */; };
 		1A0000BA000000000000001 /* ReaderContainer+Loading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AC000000000000001 /* ReaderContainer+Loading.swift */; };
 		1A0000BB000000000000001 /* ReaderContainer+Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AD000000000000001 /* ReaderContainer+Navigation.swift */; };
 		1A0000BC000000000000001 /* ReaderContainer+Layout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AE000000000000001 /* ReaderContainer+Layout.swift */; };
@@ -110,6 +118,14 @@
 		1A000014000000000000001 /* ReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingView.swift; sourceTree = "<group>"; };
 		1A000099000000000000001 /* VerticalTextReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerticalTextReader.swift; sourceTree = "<group>"; };
 		1A0000AA000000000000001 /* ReaderContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContainer.swift; sourceTree = "<group>"; };
+		A20000010000000000000001 /* BookshelfStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookshelfStore.swift; sourceTree = "<group>"; };
+		A20000020000000000000001 /* SourceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceStore.swift; sourceTree = "<group>"; };
+		A20000030000000000000001 /* FontManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontManager.swift; sourceTree = "<group>"; };
+		A20000040000000000000001 /* ReaderFontProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderFontProvider.swift; sourceTree = "<group>"; };
+		A20000050000000000000001 /* ReadingThemeColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingThemeColors.swift; sourceTree = "<group>"; };
+		A20000060000000000000001 /* BookshelfListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookshelfListViewModel.swift; sourceTree = "<group>"; };
+		A20000070000000000000001 /* CachedRemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedRemoteImage.swift; sourceTree = "<group>"; };
+		A20000110000000000000001 /* ImageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCache.swift; sourceTree = "<group>"; };
 		1A0000AC000000000000001 /* ReaderContainer+Loading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReaderContainer+Loading.swift"; sourceTree = "<group>"; };
 		1A0000AD000000000000001 /* ReaderContainer+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReaderContainer+Navigation.swift"; sourceTree = "<group>"; };
 		1A0000AE000000000000001 /* ReaderContainer+Layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReaderContainer+Layout.swift"; sourceTree = "<group>"; };
@@ -216,6 +232,7 @@
 				1A000026000000000000001 /* Views */,
 				1A000027000000000000001 /* Services */,
 				1A000030000000000000002 /* ViewModels */,
+				A20000100000000000000001 /* Stores */,
 				1A000028000000000000001 /* Models */,
 				1A000006000000000000001 /* Assets.xcassets */,
 			);
@@ -324,6 +341,7 @@
 				1A000027000000000000003 /* DocumentPicker.swift */,
 				1A000026000000000000002 /* HTMLContentView.swift */,
 				1A000022000000000000002 /* LoginView.swift */,
+				A20000070000000000000001 /* CachedRemoteImage.swift */,
 				7B4B2D6E5A2A4C7AA1F0A001 /* ViewExtensions.swift */,
 			);
 			path = Common;
@@ -335,9 +353,19 @@
 				1A00002F000000000000003 /* ReplaceRuleViewModel.swift */,
 				1A00003B000000000000003 /* SourceListViewModel.swift */,
 				0A79963738344134ACDF2305 /* BookSearchViewModel.swift */,
+				A20000060000000000000001 /* BookshelfListViewModel.swift */,
 				B10000050000000000000001 /* RssSourcesViewModel.swift */,
 			);
 			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		A20000100000000000000001 /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				A20000010000000000000001 /* BookshelfStore.swift */,
+				A20000020000000000000001 /* SourceStore.swift */,
+			);
+			path = Stores;
 			sourceTree = "<group>";
 		};
 		1A000027000000000000001 /* Services */ = {
@@ -349,6 +377,9 @@
 				C10000050000000000000001 /* MangaImageNormalizationRules.swift */,
 				C10000020000000000000001 /* OfflineDownloadManager.swift */,
 				CA1D6F0B56486D3FEE732E99 /* MangaAntiScrapingService.swift */,
+				A20000030000000000000001 /* FontManager.swift */,
+				A20000040000000000000001 /* ReaderFontProvider.swift */,
+				A20000110000000000000001 /* ImageCache.swift */,
 				1A000043000000000000004 /* LocalCacheManager.swift */,
 				1A000008000000000000001 /* APIService.swift */,
 				A10000020000000000000001 /* APIClient.swift */,
@@ -380,6 +411,7 @@
 				1A0000F90000000000000001 /* ReplaceRuleModels.swift */,
 				1A0000FB0000000000000001 /* TtsModels.swift */,
 				1A0000FD0000000000000001 /* ReadingSettingsModels.swift */,
+				A20000050000000000000001 /* ReadingThemeColors.swift */,
 				B10000100000000000000001 /* LocalRssSourceStore.swift */,
 				1A0000FF0000000000000001 /* UserPreferences.swift */,
 				1A0001010000000000000001 /* ReaderSettingsStore.swift */,
@@ -470,6 +502,14 @@
 				1A000013000000000000001 /* ReadingView.swift in Sources */,
 				1A000098000000000000001 /* VerticalTextReader.swift in Sources */,
 				1A0000AB000000000000001 /* ReaderContainer.swift in Sources */,
+				A200000E0000000000000001 /* CachedRemoteImage.swift in Sources */,
+				A200000D0000000000000001 /* BookshelfListViewModel.swift in Sources */,
+				A20000080000000000000001 /* BookshelfStore.swift in Sources */,
+				A20000090000000000000001 /* SourceStore.swift in Sources */,
+				A200000A0000000000000001 /* FontManager.swift in Sources */,
+				A200000B0000000000000001 /* ReaderFontProvider.swift in Sources */,
+				A200000C0000000000000001 /* ReadingThemeColors.swift in Sources */,
+				A200000F0000000000000001 /* ImageCache.swift in Sources */,
 				1A0000BA000000000000001 /* ReaderContainer+Loading.swift in Sources */,
 				1A0000BB000000000000001 /* ReaderContainer+Navigation.swift in Sources */,
 				1A0000BC000000000000001 /* ReaderContainer+Layout.swift in Sources */,
