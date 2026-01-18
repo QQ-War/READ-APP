@@ -29,14 +29,14 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     var readingMode: ReadingMode
     var safeAreaInsets: EdgeInsets 
     
-    private struct ReaderSettingsSnapshot: Equatable {
+    fileprivate struct ReaderSettingsSnapshot: Equatable {
         let fontSize: CGFloat
         let lineSpacing: CGFloat
         let pageHorizontalMargin: CGFloat
         let readingFontName: String
         let readingTheme: ReadingTheme
         let isInfiniteScrollEnabled: Bool
-        let infiniteScrollSwitchThreshold: Int
+        let infiniteScrollSwitchThreshold: CGFloat
         let verticalDampingFactor: CGFloat
         let mangaMaxZoom: CGFloat
         let pageTurningMode: PageTurningMode
@@ -46,8 +46,8 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
 
     class Coordinator {
         var parent: ReaderContainerRepresentable
-        var lastSettingsSnapshot: ReaderSettingsSnapshot?
-        var lastReplaceRules: [ReplaceRule] = []
+        private var lastSettingsSnapshot: ReaderSettingsSnapshot?
+        private var lastReplaceRules: [ReplaceRule] = []
         init(_ parent: ReaderContainerRepresentable) { self.parent = parent }
         func handleChapterChange(_ index: Int) {
             DispatchQueue.main.async { self.parent.currentChapterIndex = index }
