@@ -576,7 +576,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
 
-    private func switchChapterSeamlessly(offset: Int) {
+    func switchChapterSeamlessly(offset: Int) {
         guard offset != 0 else { return }
         let canSwap = (offset > 0 && nextCache.renderStore != nil) || (offset < 0 && prevCache.renderStore != nil)
         if canSwap {
