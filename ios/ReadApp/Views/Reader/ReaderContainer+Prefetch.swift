@@ -15,24 +15,20 @@ extension ReaderContainerViewController {
             isMangaMode: isMangaMode,
             onNextCache: { [weak self] (cache: ChapterCache) in
                 guard let self = self else { return }
-                Task { @MainActor in
-                    guard self.currentChapterIndex == index else { return }
-                    self.nextCache = cache
-                    self.updateVerticalAdjacent()
-                    if self.isMangaMode {
-                        self.prefetchedMangaNextIndex = index + 1
-                        self.prefetchedMangaNextContent = cache.rawContent
-                        self.preparePrebuiltNextMangaVC(index: index + 1, cache: cache)
-                    }
+                guard self.currentChapterIndex == index else { return }
+                self.nextCache = cache
+                self.updateVerticalAdjacent()
+                if self.isMangaMode {
+                    self.prefetchedMangaNextIndex = index + 1
+                    self.prefetchedMangaNextContent = cache.rawContent
+                    self.preparePrebuiltNextMangaVC(index: index + 1, cache: cache)
                 }
             },
             onPrevCache: { [weak self] (cache: ChapterCache) in
                 guard let self = self else { return }
-                Task { @MainActor in
-                    guard self.currentChapterIndex == index else { return }
-                    self.prevCache = cache
-                    self.updateVerticalAdjacent()
-                }
+                guard self.currentChapterIndex == index else { return }
+                self.prevCache = cache
+                self.updateVerticalAdjacent()
             },
             onResetNext: { [weak self] in
                 guard let self = self else { return }
@@ -58,11 +54,9 @@ extension ReaderContainerViewController {
             isMangaMode: isMangaMode,
             onNextCache: { [weak self] (cache: ChapterCache) in
                 guard let self = self else { return }
-                Task { @MainActor in
-                    guard self.currentChapterIndex == index else { return }
-                    self.nextCache = cache
-                    self.updateVerticalAdjacent()
-                }
+                guard self.currentChapterIndex == index else { return }
+                self.nextCache = cache
+                self.updateVerticalAdjacent()
             },
             onResetNext: { [weak self] in
                 guard let self = self else { return }
@@ -84,11 +78,9 @@ extension ReaderContainerViewController {
             isMangaMode: isMangaMode,
             onPrevCache: { [weak self] (cache: ChapterCache) in
                 guard let self = self else { return }
-                Task { @MainActor in
-                    guard self.currentChapterIndex == index else { return }
-                    self.prevCache = cache
-                    self.updateVerticalAdjacent()
-                }
+                guard self.currentChapterIndex == index else { return }
+                self.prevCache = cache
+                self.updateVerticalAdjacent()
             },
             onResetPrev: { [weak self] in
                 guard let self = self else { return }
