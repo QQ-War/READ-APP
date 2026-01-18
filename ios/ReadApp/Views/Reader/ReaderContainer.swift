@@ -29,8 +29,25 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     var readingMode: ReadingMode
     var safeAreaInsets: EdgeInsets 
     
+    private struct ReaderSettingsSnapshot: Equatable {
+        let fontSize: CGFloat
+        let lineSpacing: CGFloat
+        let pageHorizontalMargin: CGFloat
+        let readingFontName: String
+        let readingTheme: ReadingTheme
+        let isInfiniteScrollEnabled: Bool
+        let infiniteScrollSwitchThreshold: Int
+        let verticalDampingFactor: CGFloat
+        let mangaMaxZoom: CGFloat
+        let pageTurningMode: PageTurningMode
+        let ttsFollowCooldown: TimeInterval
+        let verticalThreshold: CGFloat
+    }
+
     class Coordinator {
         var parent: ReaderContainerRepresentable
+        var lastSettingsSnapshot: ReaderSettingsSnapshot?
+        var lastReplaceRules: [ReplaceRule] = []
         init(_ parent: ReaderContainerRepresentable) { self.parent = parent }
         func handleChapterChange(_ index: Int) {
             DispatchQueue.main.async { self.parent.currentChapterIndex = index }
@@ -66,9 +83,31 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: ReaderContainerViewController, context: Context) {
         context.coordinator.parent = self
         vc.updateLayout(safeArea: safeAreaInsets)
-        vc.updateSettings(readerSettings)
-        vc.updateReplaceRules(replaceRuleViewModel.rules)
-        vc.verticalThreshold = readerSettings.verticalThreshold
+
+        let settingsSnapshot = ReaderSettingsSnapshot(
+            fontSize: readerSettings.fontSize,
+            lineSpacing: readerSettings.lineSpacing,
+            pageHorizontalMargin: readerSettings.pageHorizontalMargin,
+            readingFontName: readerSettings.readingFontName,
+            readingTheme: readerSettings.readingTheme,
+            isInfiniteScrollEnabled: readerSettings.isInfiniteScrollEnabled,
+            infiniteScrollSwitchThreshold: readerSettings.infiniteScrollSwitchThreshold,
+            verticalDampingFactor: readerSettings.verticalDampingFactor,
+            mangaMaxZoom: readerSettings.mangaMaxZoom,
+            pageTurningMode: readerSettings.pageTurningMode,
+            ttsFollowCooldown: readerSettings.ttsFollowCooldown,
+            verticalThreshold: readerSettings.verticalThreshold
+        )
+        if context.coordinator.lastSettingsSnapshot != settingsSnapshot {
+            vc.updateSettings(readerSettings)
+            vc.verticalThreshold = readerSettings.verticalThreshold
+            context.coordinator.lastSettingsSnapshot = settingsSnapshot
+        }
+
+        if context.coordinator.lastReplaceRules != replaceRuleViewModel.rules {
+            vc.updateReplaceRules(replaceRuleViewModel.rules)
+            context.coordinator.lastReplaceRules = replaceRuleViewModel.rules
+        }
         
         // 外部跳转检测逻辑优化
         if !vc.isInternalTransitioning && vc.lastReportedChapterIndex != currentChapterIndex {
