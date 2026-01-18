@@ -321,7 +321,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             if lastSettingsSnapshot == snapshot { return }
             lastSettingsSnapshot = snapshot
 
-            let oldSettings = self.readerSettings!
+            guard let oldSettings = self.readerSettings else {
+                self.readerSettings = settings
+                chapterBuilder?.updateSettings(settings)
+                view.backgroundColor = settings.readingTheme.backgroundColor
+                verticalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
+                horizontalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
+                mangaVC?.view.backgroundColor = settings.readingTheme.backgroundColor
+                return
+            }
             self.readerSettings = settings
             chapterBuilder?.updateSettings(settings)
             view.backgroundColor = settings.readingTheme.backgroundColor
@@ -367,6 +375,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         func updateReplaceRules(_ rules: [ReplaceRule]) {
             if lastReplaceRules == rules { return }
             lastReplaceRules = rules
+            guard let ttsManager = ttsManager else {
+                chapterBuilder?.updateReplaceRules(rules)
+                return
+            }
             let oldRules = ttsManager.replaceRules
             chapterBuilder?.updateReplaceRules(rules)
             ttsManager.replaceRules = rules
