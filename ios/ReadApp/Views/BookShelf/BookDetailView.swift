@@ -196,6 +196,10 @@ struct BookDetailView: View {
                         
                         if isLoading {
                             HStack { Spacer(); ProgressView(); Spacer() }.padding()
+                        } else if chapters.isEmpty {
+                            Text("暂无章节")
+                                .foregroundColor(.secondary)
+                                .padding()
                         } else {
                             let startIndex = selectedGroupIndex * 50
                             let endIndex = min(startIndex + 50, chapters.count)
@@ -365,9 +369,13 @@ struct BookDetailView: View {
             if endChapter.isEmpty { endChapter = "\(chapters.count)" }
             // 自动跳转到当前章节所在的分组
             let initialIndex = currentBook.durChapterIndex ?? 0
-            selectedGroupIndex = initialIndex / 50
+            let maxGroupIndex = max(0, chapterGroups.count - 1)
+            selectedGroupIndex = min(initialIndex / 50, maxGroupIndex)
             refreshCachedStatus()
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            errorMessage = error.localizedDescription
+            selectedGroupIndex = 0
+        }
         isLoading = false
     }
     
