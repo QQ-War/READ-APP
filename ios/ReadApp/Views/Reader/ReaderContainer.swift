@@ -870,6 +870,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     func notifyUserInteractionEnded() {
+        guard isUserInteracting || pendingTTSPositionSync else { return }
         isUserInteracting = false
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
         logger.log("TTS follow cooldown reset(end): \(readerSettings.ttsFollowCooldown)", category: "TTS")
