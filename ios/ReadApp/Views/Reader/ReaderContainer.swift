@@ -128,7 +128,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var isInternalTransitioning = false
         var isFirstLoad = true
         private var isUserInteracting = false
-        private var isAutoScrolling = false
+        fileprivate var isAutoScrolling = false
         private var ttsSyncCoordinator: TTSReadingSyncCoordinator?
         
         var chapterBuilder: ReaderChapterBuilder?
