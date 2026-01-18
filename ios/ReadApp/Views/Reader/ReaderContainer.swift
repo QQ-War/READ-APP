@@ -917,7 +917,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             // 垂直模式：直接使用 charOffset 作为 sentenceOffset
             // getCurrentCharOffset() 返回的是当前可见区域顶部的行偏移
             // 不需要通过 paragraphStarts 计算偏移
-            sentenceIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? 0
+            if charOffset < 0 {
+                // 当前视窗落在相邻章节，避免强制回到当前章节起点
+                let fallbackIndex = max(0, verticalVC?.lastReportedIndex ?? 0)
+                sentenceIndex = min(fallbackIndex, starts.count - 1)
+                charOffset = starts[sentenceIndex]
+            } else {
+                sentenceIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? 0
+            }
         }
 
         // 边界检查
