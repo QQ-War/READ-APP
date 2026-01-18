@@ -607,6 +607,9 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                     // 如果偏离巨大，说明是刚换章或者用户跳进度了，用非动画形式先跳过去，再由 sync 维持平滑
                     let shouldAnimate = abs(currentReadingYRelativeToViewport) < vH * 0.5
                     scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: shouldAnimate)
+                    if !shouldAnimate {
+                        isAutoScrolling = false
+                    }
                 }
                 return
             }

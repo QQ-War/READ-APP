@@ -128,6 +128,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var isInternalTransitioning = false
         var isFirstLoad = true
         private var isUserInteracting = false
+        private var isAutoScrolling = false
         private var ttsSyncCoordinator: TTSReadingSyncCoordinator?
         
         var chapterBuilder: ReaderChapterBuilder?
@@ -622,6 +623,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        if isAutoScrolling {
+            isAutoScrolling = false
+            return
+        }
         notifyUserInteractionEnded()
     }
 
@@ -848,7 +853,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func finalizeUserInteraction() {
         isUserInteracting = false
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
-        ttsSyncCoordinator?.scheduleCatchUp(delay: readerSettings.ttsFollowCooldown)
     }
 
     func notifyUserInteractionStarted() {
@@ -864,6 +868,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     func notifyUserInteractionEnded() {
+        isUserInteracting = false
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
         ttsSyncCoordinator?.scheduleCatchUp(delay: readerSettings.ttsFollowCooldown)
     }
@@ -929,6 +934,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         } else if currentReadingMode == .vertical { 
             verticalVC?.scrollToBottom(animated: animated) 
         } else { 
+            isAutoScrolling = animated
             updateHorizontalPage(to: max(0, currentCache.pages.count - 1), animated: animated) 
         } 
     }

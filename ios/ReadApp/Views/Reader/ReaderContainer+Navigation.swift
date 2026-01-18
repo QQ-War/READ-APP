@@ -44,14 +44,21 @@ extension ReaderContainerViewController {
         let targetIndex = max(0, min(i, currentCache.pages.count - 1))
         let direction: UIPageViewController.NavigationDirection = targetIndex >= currentPageIndex ? .forward : .reverse
         currentPageIndex = targetIndex
+        
+        if animated {
+            self.isAutoScrolling = true
+        }
+        
         h.setViewControllers([createPageVC(at: targetIndex, offset: 0)], direction: direction, animated: animated) { [weak self] finished in
             guard let self = self else { return }
             if animated {
                 self.isInternalTransitioning = false
             }
+            self.isAutoScrolling = false
         }
         if !animated {
             self.isInternalTransitioning = false
+            self.isAutoScrolling = false
         }
         updateProgressUI()
         self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
@@ -60,6 +67,7 @@ extension ReaderContainerViewController {
     func animateToAdjacentChapter(offset: Int, targetPage: Int) {
         guard let h = horizontalVC, !isInternalTransitioning else { return }
         isInternalTransitioning = true
+        self.isAutoScrolling = true
         let vc = createPageVC(at: targetPage, offset: offset)
         let direction: UIPageViewController.NavigationDirection = offset > 0 ? .forward : .reverse
 
