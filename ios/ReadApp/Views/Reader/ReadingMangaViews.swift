@@ -104,7 +104,6 @@ struct RemoteImageView: View {
 
         // 如果开启了强制代理，则直接跳过直接请求，进入代理逻辑
         if preferences.forceMangaProxy, let proxyURL = buildProxyURL(for: url) {
-            if preferences.isVerboseLoggingEnabled { logger.log("开启强制代理模式，直接中转...", category: "漫画调试") }
             fetchImage(from: proxyURL, useProxy: true)
         } else {
             fetchImage(from: url, useProxy: false)
@@ -154,7 +153,6 @@ struct RemoteImageView: View {
                     if statusCode == 200, let data = data, !data.isEmpty, let loadedImage = UIImage(data: data) {
                         self.image = loadedImage
                         self.isLoading = false
-                        if preferences.isVerboseLoggingEnabled { logger.log("图片加载成功: \(targetURL.lastPathComponent)", category: "漫画调试") }
                         return
                     }
     
@@ -162,7 +160,6 @@ struct RemoteImageView: View {
                     if !useProxy {
                         if (statusCode == 403 || statusCode == 401) {
                             // 如果因为 Referer 被拒，尝试最简主站 Referer 重试
-                            if preferences.isVerboseLoggingEnabled { logger.log("Referer 受阻(403)，降级重试...", category: "漫画调试") }
                             var retryRequest = request
                             retryRequest.setValue("https://m.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
                             URLSession.shared.dataTask(with: retryRequest) { data, response, _ in
@@ -171,9 +168,7 @@ struct RemoteImageView: View {
                                     if code == 200, let data = data, !data.isEmpty, let loadedImage = UIImage(data: data) {
                                         self.image = loadedImage
                                         self.isLoading = false
-                                        if preferences.isVerboseLoggingEnabled { logger.log("图片重试成功: \(targetURL.lastPathComponent)", category: "漫画调试") }
                                     } else if let proxyURL = buildProxyURL(for: targetURL) {
-                                        if preferences.isVerboseLoggingEnabled { logger.log("重试失败(Code:\(code))，切换代理...", category: "漫画调试") }
                                         self.fetchImage(from: proxyURL, useProxy: true)
                                     } else {
                                         self.isLoading = false
@@ -182,7 +177,6 @@ struct RemoteImageView: View {
                                 }
                             }.resume()
                         } else if let proxyURL = buildProxyURL(for: targetURL) {
-                            if preferences.isVerboseLoggingEnabled { logger.log("直接请求失败(Code:\(statusCode))，尝试代理...", category: "漫画调试") }
                             self.fetchImage(from: proxyURL, useProxy: true)
                         } else {
                             self.isLoading = false
@@ -205,4 +199,3 @@ struct RemoteImageView: View {
         return components?.url
     }
 }
-

@@ -332,7 +332,6 @@ struct MangaImageView: View {
             .onAppear {
                 if preferences.isVerboseLoggingEnabled {
                     let logReferer = referer?.replacingOccurrences(of: "http://", with: "https://") ?? "无"
-                    logger.log("准备加载图片: \(finalURL?.lastPathComponent ?? "无效"), 来源: \(logReferer)", category: "漫画调试")
                 }
             }
     }

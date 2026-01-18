@@ -41,11 +41,6 @@ extension ReaderContainerViewController {
             defer { Task { @MainActor in if self.loadToken == token { self.onLoadingChanged?(false) } } }
 
             let isM = book.type == 2 || readerSettings.manualMangaUrls.contains(book.bookUrl ?? "")
-            if UserPreferences.shared.isVerboseLoggingEnabled {
-                let chapterUrl = chapters.indices.contains(index) ? chapters[index].url : nil
-                let sourceUrl = book.origin ?? "nil"
-                logger.log("章节内容请求: index=\(index) url=\(chapterUrl ?? "nil") source=\(sourceUrl)", category: "漫画调试")
-            }
             if !isM || !allowPrefetch {
                 await MainActor.run { self.resetMangaPrefetchedContent() }
             }

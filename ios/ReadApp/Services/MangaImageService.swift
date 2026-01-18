@@ -21,11 +21,7 @@ final class MangaImageService {
     
     func fetchImageData(for url: URL, referer: String?) async -> Data? {
         let verbose = UserPreferences.shared.isVerboseLoggingEnabled
-        if verbose {
-            logger.log("漫画图片请求: url=\(url.absoluteString)", category: "漫画调试")
-        }
         if UserPreferences.shared.forceMangaProxy, let proxyURL = buildProxyURL(for: url) {
-            if verbose { logger.log("强制代理模式: \(proxyURL.absoluteString)", category: "漫画调试") }
             return await fetchImageData(requestURL: proxyURL, referer: referer)
         }
 
@@ -66,10 +62,6 @@ final class MangaImageService {
                 request.setValue(value, forHTTPHeaderField: key)
             }
         }
-        if verbose {
-            let profileKey = antiScrapingProfile?.key ?? "none"
-            logger.log("反爬匹配: profile=\(profileKey) referer=\(normalizedReferer ?? referer ?? "nil") requestHost=\(requestURL.host ?? "nil")", category: "漫画调试")
-        }
         
         var finalReferer = antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/"
         if antiScrapingProfile?.key == "dm5", var customReferer = normalizedReferer, !customReferer.isEmpty {
@@ -92,30 +84,23 @@ final class MangaImageService {
             finalReferer = "https://\(host)/"
         }
         request.setValue(finalReferer, forHTTPHeaderField: "Referer")
-        if verbose { logger.log("请求头Referer: \(finalReferer)", category: "漫画调试") }
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             if statusCode == 200, !data.isEmpty {
-                if verbose { logger.log("图片请求成功: \(requestURL.lastPathComponent)", category: "漫画调试") }
                 return data
             }
             if statusCode == 403 || statusCode == 401 {
-                if verbose { logger.log("图片被拒绝(Code:\(statusCode))，降级Referer重试", category: "漫画调试") }
                 var retry = request
                 retry.setValue(antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
                 let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
                 let retryCode = (retryResponse as? HTTPURLResponse)?.statusCode ?? 0
                 if retryCode == 200, !retryData.isEmpty {
-                    if verbose { logger.log("重试成功: \(requestURL.lastPathComponent)", category: "漫画调试") }
                     return retryData
                 }
-                if verbose { logger.log("重试失败(Code:\(retryCode))", category: "漫画调试") }
             }
-            if verbose { logger.log("图片请求失败(Code:\(statusCode))", category: "漫画调试") }
         } catch {
-            if verbose { logger.log("图片请求异常: \(error.localizedDescription)", category: "漫画调试") }
             return nil
         }
         return nil
@@ -139,9 +124,7 @@ final class MangaImageService {
             _ = try await URLSession.shared.data(for: request)
             lastKuaikanWarmupReferer = referer
             lastKuaikanWarmupAt = now
-            if verbose { logger.log("kuaikan 预热Cookie: \(referer)", category: "漫画调试") }
         } catch {
-            if verbose { logger.log("kuaikan 预热Cookie失败: \(error.localizedDescription)", category: "漫画调试") }
         }
     }
 
