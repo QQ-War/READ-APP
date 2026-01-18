@@ -853,12 +853,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func finalizeUserInteraction() {
         isUserInteracting = false
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
+        logger.log("TTS follow cooldown reset(finalize): \(readerSettings.ttsFollowCooldown)", category: "TTS")
     }
 
     func notifyUserInteractionStarted() {
         isUserInteracting = true
         pendingTTSPositionSync = true
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
+        logger.log("TTS follow cooldown reset(start): \(readerSettings.ttsFollowCooldown)", category: "TTS")
         ttsSyncCoordinator?.userInteractionStarted()
     }
 
@@ -870,6 +872,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func notifyUserInteractionEnded() {
         isUserInteracting = false
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
+        logger.log("TTS follow cooldown reset(end): \(readerSettings.ttsFollowCooldown)", category: "TTS")
         ttsSyncCoordinator?.scheduleCatchUp(delay: readerSettings.ttsFollowCooldown)
     }
     
