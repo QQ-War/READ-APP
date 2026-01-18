@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct TTSEngineListView: View {
-    @EnvironmentObject var apiService: APIService
     @State private var ttsList: [HttpTTS] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -13,7 +12,7 @@ struct TTSEngineListView: View {
     var body: some View {
         List {
             ForEach(ttsList) { tts in
-                NavigationLink(destination: TTSEngineEditView(ttsToEdit: tts).environmentObject(apiService)) {
+                NavigationLink(destination: TTSEngineEditView(ttsToEdit: tts)) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(tts.name)
                             .font(.headline)
@@ -31,7 +30,7 @@ struct TTSEngineListView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    NavigationLink(destination: TTSEngineEditView(ttsToEdit: nil).environmentObject(apiService)) {
+                    NavigationLink(destination: TTSEngineEditView(ttsToEdit: nil)) {
                         Label("新建引擎", systemImage: "pencil.and.outline")
                     }
                     Button(action: { showingFilePicker = true }) {
@@ -49,7 +48,7 @@ struct TTSEngineListView: View {
             DocumentPicker { url in
                 Task {
                     if let content = try? String(contentsOf: url) {
-                        try? await apiService.saveTTSBatch(jsonContent: content)
+                        try? await APIService.shared.saveTTSBatch(jsonContent: content)
                         await loadTTSList()
                     }
                 }
@@ -83,7 +82,7 @@ struct TTSEngineListView: View {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let content = String(data: data, encoding: .utf8) {
-                try await apiService.saveTTSBatch(jsonContent: content)
+                try await APIService.shared.saveTTSBatch(jsonContent: content)
                 await loadTTSList()
             }
         } catch {
@@ -98,7 +97,7 @@ struct TTSEngineListView: View {
         isLoading = true
         errorMessage = nil
         do {
-            ttsList = try await apiService.fetchTTSList()
+            ttsList = try await APIService.shared.fetchTTSList()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -111,7 +110,7 @@ struct TTSEngineListView: View {
         Task {
             for item in itemsToDelete {
                 do {
-                    try await apiService.deleteTTS(id: item.id)
+                    try await APIService.shared.deleteTTS(id: item.id)
                 } catch {
                     await MainActor.run {
                         errorMessage = "删除 \(item.name) 失败: \(error.localizedDescription)"

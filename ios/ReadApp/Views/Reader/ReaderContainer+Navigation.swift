@@ -1,0 +1,202 @@
+import UIKit
+
+extension ReaderContainerViewController {
+    func pageViewController(_ pvc: UIPageViewController, didFinishAnimating f: Bool, previousViewControllers p: [UIViewController], transitionCompleted completed: Bool) {
+        guard let v = pvc.viewControllers?.first as? PageContentViewController else {
+            isInternalTransitioning = false
+            return
+        }
+        guard completed else {
+            isInternalTransitioning = false
+            return
+        }
+
+        if v.chapterOffset != 0 {
+            completeDataDrift(offset: v.chapterOffset, targetPage: v.pageIndex, currentVC: v)
+        } else {
+            self.currentPageIndex = v.pageIndex
+            self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
+            updateProgressUI()
+            self.isInternalTransitioning = false
+        }
+    }
+
+    func pageViewController(_ pvc: UIPageViewController, viewControllerBefore vc: UIViewController) -> UIViewController? {
+        guard let c = vc as? PageContentViewController, !isInternalTransitioning else { return nil }
+        if c.chapterOffset == 0 {
+            if c.pageIndex > 0 { return createPageVC(at: c.pageIndex - 1, offset: 0) }
+            if !prevCache.pages.isEmpty { return createPageVC(at: prevCache.pages.count - 1, offset: -1) }
+        }
+        return nil
+    }
+
+    func pageViewController(_ pvc: UIPageViewController, viewControllerAfter vc: UIViewController) -> UIViewController? {
+        guard let c = vc as? PageContentViewController, !isInternalTransitioning else { return nil }
+        if c.chapterOffset == 0 {
+            if c.pageIndex < currentCache.pages.count - 1 { return createPageVC(at: c.pageIndex + 1, offset: 0) }
+            if !nextCache.pages.isEmpty { return createPageVC(at: 0, offset: 1) }
+        }
+        return nil
+    }
+
+    func updateHorizontalPage(to i: Int, animated: Bool) {
+        guard let h = horizontalVC, !currentCache.pages.isEmpty else { return }
+        let targetIndex = max(0, min(i, currentCache.pages.count - 1))
+        let direction: UIPageViewController.NavigationDirection = targetIndex >= currentPageIndex ? .forward : .reverse
+        currentPageIndex = targetIndex
+        h.setViewControllers([createPageVC(at: targetIndex, offset: 0)], direction: direction, animated: animated) { [weak self] finished in
+            guard let self = self else { return }
+            if animated {
+                self.isInternalTransitioning = false
+            }
+        }
+        if !animated {
+            self.isInternalTransitioning = false
+        }
+        updateProgressUI()
+        self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
+    }
+
+    func animateToAdjacentChapter(offset: Int, targetPage: Int) {
+        guard let h = horizontalVC, !isInternalTransitioning else { return }
+        isInternalTransitioning = true
+        let vc = createPageVC(at: targetPage, offset: offset)
+        let direction: UIPageViewController.NavigationDirection = offset > 0 ? .forward : .reverse
+
+        h.setViewControllers([vc], direction: direction, animated: true) { [weak self] completed in
+            guard completed, let self = self else { return }
+            Task { @MainActor in
+                let currentVC = h.viewControllers?.first as? PageContentViewController
+                self.completeDataDrift(offset: offset, targetPage: targetPage, currentVC: currentVC)
+            }
+        }
+    }
+
+    func handlePageTap(isNext: Bool) {
+        guard !isInternalTransitioning else {
+            finalizeUserInteraction()
+            return
+        }
+        notifyUserInteractionStarted()
+        let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
+        var didChangeWithinChapter = false
+        if t >= 0 && t < currentCache.pages.count {
+            isInternalTransitioning = true
+            updateHorizontalPage(to: t, animated: true)
+            didChangeWithinChapter = true
+        } else {
+            let targetChapter = isNext ? currentChapterIndex + 1 : currentChapterIndex - 1
+            guard targetChapter >= 0 && targetChapter < chapters.count else {
+                finalizeUserInteraction()
+                return
+            }
+
+            if isNext, !nextCache.pages.isEmpty {
+                animateToAdjacentChapter(offset: 1, targetPage: 0)
+                didChangeWithinChapter = true
+            } else if !isNext, !prevCache.pages.isEmpty {
+                animateToAdjacentChapter(offset: -1, targetPage: prevCache.pages.count - 1)
+                didChangeWithinChapter = true
+            } else {
+                jumpToChapter(targetChapter, startAtEnd: !isNext)
+            }
+        }
+        if didChangeWithinChapter {
+            notifyUserInteractionEnded()
+        }
+    }
+
+    func performChapterTransitionFade(_ updates: @escaping () -> Void) {
+        guard currentReadingMode == .horizontal, !isMangaMode else {
+            updates()
+            return
+        }
+        let overlay = UIView(frame: view.bounds)
+        overlay.backgroundColor = readerSettings.readingTheme.backgroundColor
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        overlay.alpha = 0
+        view.addSubview(overlay)
+        UIView.animate(withDuration: 0.12, animations: {
+            overlay.alpha = 1
+        }, completion: { _ in
+            updates()
+            UIView.animate(withDuration: 0.18, animations: {
+                overlay.alpha = 0
+            }, completion: { _ in
+                overlay.removeFromSuperview()
+            })
+        })
+    }
+}
+
+private extension ReaderContainerViewController {
+    func completeDataDrift(offset: Int, targetPage: Int, currentVC: PageContentViewController?) {
+        self.isInternalTransitioning = true
+        if offset > 0 {
+            prevCache = currentCache
+            currentCache = nextCache
+            nextCache = .empty
+        } else {
+            nextCache = currentCache
+            currentCache = prevCache
+            prevCache = .empty
+        }
+
+        self.currentChapterIndex += offset
+        self.lastReportedChapterIndex = self.currentChapterIndex
+        self.currentPageIndex = targetPage
+        self.onChapterIndexChanged?(self.currentChapterIndex)
+
+        if let v = currentVC {
+            v.chapterOffset = 0
+            if let rv = v.view.subviews.first as? ReadContent2View {
+                rv.renderStore = self.currentCache.renderStore
+                rv.paragraphStarts = self.currentCache.paragraphStarts
+                rv.chapterPrefixLen = self.currentCache.chapterPrefixLen
+            }
+        }
+
+        self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
+        updateProgressUI()
+        prefetchAdjacentChapters(index: currentChapterIndex)
+        self.isInternalTransitioning = false
+    }
+
+    func createPageVC(at i: Int, offset: Int) -> PageContentViewController {
+        let vc = PageContentViewController(pageIndex: i, chapterOffset: offset)
+        let pV = ReadContent2View(frame: .zero)
+        let cache = offset == 0 ? currentCache : (offset > 0 ? nextCache : prevCache)
+        let aS = cache.renderStore
+        let aI = cache.pageInfos ?? []
+        let aPS = offset == 0 ? currentCache.paragraphStarts : []
+
+        pV.renderStore = aS
+        pV.pageIndex = i
+        pV.onVisibleFragments = { [weak self] pageIdx, lines in
+            guard let self = self else { return }
+            let displayPage = self.horizontalPageIndexForDisplay()
+            if pageIdx == displayPage {
+                self.latestVisibleFragmentLines = lines
+            }
+        }
+        if i < aI.count {
+            let info = aI[i]
+            pV.pageInfo = TK2PageInfo(range: info.range, yOffset: info.yOffset, pageHeight: info.pageHeight, actualContentHeight: info.actualContentHeight, startSentenceIndex: info.startSentenceIndex, contentInset: currentLayoutSpec.topInset)
+        }
+        pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.safeToggleMenu() } else { self?.handlePageTap(isNext: loc == .right) } }
+        pV.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }
+        pV.horizontalInset = currentLayoutSpec.sideMargin
+        pV.paragraphStarts = aPS
+        pV.chapterPrefixLen = offset == 0 ? currentCache.chapterPrefixLen : 0
+
+        vc.view.addSubview(pV)
+        pV.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            pV.topAnchor.constraint(equalTo: vc.view.topAnchor),
+            pV.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor),
+            pV.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
+            pV.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor)
+        ])
+        return vc
+    }
+}

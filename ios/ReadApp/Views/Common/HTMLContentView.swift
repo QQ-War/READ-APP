@@ -17,15 +17,16 @@ struct HTMLContentView: UIViewRepresentable {
     }
     
     func updateUIView(_ webView: WKWebView, context: Context) {
-        let htmlContent = generateHTML(content: content, fontSize: fontSize, lineSpacing: lineSpacing)
+        let htmlContent = generateHTML(content: content, fontSize: fontSize, lineSpacing: lineSpacing, fontName: UserPreferences.shared.readingFontName)
         webView.loadHTMLString(htmlContent, baseURL: nil)
     }
     
-    private func generateHTML(content: String, fontSize: CGFloat, lineSpacing: CGFloat) -> String {
+    private func generateHTML(content: String, fontSize: CGFloat, lineSpacing: CGFloat, fontName: String) -> String {
         // 获取当前主题颜色
         let isDarkMode = UITraitCollection.current.userInterfaceStyle == .dark
         let textColor = isDarkMode ? "#FFFFFF" : "#000000"
         let backgroundColor = isDarkMode ? "#000000" : "#FFFFFF"
+        let customFont = fontName.isEmpty ? "" : "'\(fontName.replacingOccurrences(of: \"'\", with: \"\"))', "
         
         return """
         <!DOCTYPE html>
@@ -45,7 +46,7 @@ struct HTMLContentView: UIViewRepresentable {
                     color: \(textColor);
                     background-color: \(backgroundColor);
                     padding: 0;
-                    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    font-family: \(customFont)-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                     word-wrap: break-word;
                     overflow-wrap: break-word;
                 }
@@ -108,14 +109,15 @@ struct DynamicHeightWebView: UIViewRepresentable {
     }
     
     func updateUIView(_ webView: WKWebView, context: Context) {
-        let htmlContent = generateHTML(content: content, fontSize: fontSize, lineSpacing: lineSpacing)
+        let htmlContent = generateHTML(content: content, fontSize: fontSize, lineSpacing: lineSpacing, fontName: UserPreferences.shared.readingFontName)
         webView.loadHTMLString(htmlContent, baseURL: nil)
     }
     
-    private func generateHTML(content: String, fontSize: CGFloat, lineSpacing: CGFloat) -> String {
+    private func generateHTML(content: String, fontSize: CGFloat, lineSpacing: CGFloat, fontName: String) -> String {
         let isDarkMode = UITraitCollection.current.userInterfaceStyle == .dark
         let textColor = isDarkMode ? "#FFFFFF" : "#000000"
         let backgroundColor = isDarkMode ? "#000000" : "#FFFFFF"
+        let customFont = fontName.isEmpty ? "" : "'\(fontName.replacingOccurrences(of: \"'\", with: \"\"))', "
         
         return """
         <!DOCTYPE html>
@@ -135,7 +137,7 @@ struct DynamicHeightWebView: UIViewRepresentable {
                     color: \(textColor);
                     background-color: \(backgroundColor);
                     padding: 0;
-                    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    font-family: \(customFont)-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                     word-wrap: break-word;
                     overflow-wrap: break-word;
                 }
@@ -192,4 +194,3 @@ struct DynamicHeightWebView: UIViewRepresentable {
         }
     }
 }
-

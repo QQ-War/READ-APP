@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Reading Controls
 struct TTSControlBar: View {
@@ -253,6 +254,8 @@ struct ReaderOptionsSheet: View {
     @ObservedObject var preferences: UserPreferences
     let isMangaMode: Bool
     @Environment(\.dismiss) var dismiss
+    @State private var fontOptions: [ReaderFontOption] = FontManager.shared.availableFonts()
+    @State private var showFontImporter = false
 
     private var verticalSettingsVisible: Bool {
         preferences.readingMode == .vertical || isMangaMode
@@ -274,6 +277,19 @@ struct ReaderOptionsSheet: View {
                         }
                         .pickerStyle(.segmented)
                         .padding(.vertical, 4)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("字体")
+                                .font(.subheadline)
+                            Picker("字体", selection: $preferences.readingFontName) {
+                                ForEach(fontOptions, id: \.id) { font in
+                                    Text(font.displayName).tag(font.id)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            Button("导入字体") { showFontImporter = true }
+                                .font(.caption)
+                        }
 
                         VStack(alignment: .leading, spacing: 8) {
                             Text("字体大小: \(String(format: "%.0f", preferences.fontSize))")
@@ -331,6 +347,14 @@ struct ReaderOptionsSheet: View {
                     .padding(.vertical, 4)
                 }
 
+                Section(header: Text("主题")) {
+                    Picker("阅读主题", selection: $preferences.readingTheme) {
+                        ForEach(ReadingTheme.allCases) { theme in
+                            Text(theme.localizedName).tag(theme)
+                        }
+                    }
+                }
+
                 if isMangaMode {
                     Section(header: Text("高级设置")) {
                         Toggle("强制服务器代理", isOn: $preferences.forceMangaProxy)
@@ -343,6 +367,18 @@ struct ReaderOptionsSheet: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("完成") { dismiss() }
                 }
+            }
+        }
+        .onAppear { fontOptions = FontManager.shared.availableFonts() }
+        .fileImporter(isPresented: $showFontImporter, allowedContentTypes: [.font]) { result in
+            switch result {
+            case .success(let url):
+                if let option = FontManager.shared.importFont(from: url) {
+                    fontOptions = FontManager.shared.availableFonts()
+                    preferences.readingFontName = option.id
+                }
+            case .failure:
+                break
             }
         }
     }

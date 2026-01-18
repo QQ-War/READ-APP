@@ -48,6 +48,9 @@ class UserPreferences(private val context: Context) {
         val ReadingMode = stringPreferencesKey("readingMode")
         val PageTurningMode = stringPreferencesKey("pageTurningMode")
         val DarkMode = stringPreferencesKey("darkMode")
+        val ReadingTheme = stringPreferencesKey("readingTheme")
+        val ReadingFontPath = stringPreferencesKey("readingFontPath")
+        val ReadingFontName = stringPreferencesKey("readingFontName")
         val SpeechRate = doublePreferencesKey("speechRate")
         val PreloadCount = floatPreferencesKey("preloadCount")
         val LoggingEnabled = stringPreferencesKey("loggingEnabled")
@@ -114,6 +117,12 @@ class UserPreferences(private val context: Context) {
     val darkMode: Flow<DarkModeConfig> = context.dataStore.data.map {
         DarkModeConfig.valueOf(it[Keys.DarkMode] ?: DarkModeConfig.OFF.name)
     }
+    val readingTheme: Flow<ReaderTheme> = context.dataStore.data.map {
+        runCatching { ReaderTheme.valueOf(it[Keys.ReadingTheme] ?: ReaderTheme.System.name) }
+            .getOrDefault(ReaderTheme.System)
+    }
+    val readingFontPath: Flow<String> = context.dataStore.data.map { it[Keys.ReadingFontPath] ?: "" }
+    val readingFontName: Flow<String> = context.dataStore.data.map { it[Keys.ReadingFontName] ?: "" }
 
     suspend fun saveReadingMode(value: ReadingMode) {
         context.dataStore.edit { prefs: MutablePreferences ->
@@ -130,6 +139,19 @@ class UserPreferences(private val context: Context) {
     suspend fun saveDarkMode(value: DarkModeConfig) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.DarkMode] = value.name
+        }
+    }
+
+    suspend fun saveReadingTheme(value: ReaderTheme) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.ReadingTheme] = value.name
+        }
+    }
+
+    suspend fun saveReadingFont(path: String, name: String) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.ReadingFontPath] = path
+            prefs[Keys.ReadingFontName] = name
         }
     }
 

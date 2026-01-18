@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
     @Environment(\.dismiss) var dismiss
 
@@ -27,19 +26,19 @@ struct SettingsView: View {
             }
 
             Section(header: Text("通用设置")) {
-                NavigationLink(destination: ReadingSettingsView().environmentObject(apiService)) {
+                NavigationLink(destination: ReadingSettingsView()) {
                     Label("阅读设置", systemImage: "book.pages")
                 }
                 
-                NavigationLink(destination: CacheManagementView().environmentObject(apiService)) {
+                NavigationLink(destination: CacheManagementView()) {
                     Label("缓存与下载管理", systemImage: "archivebox")
                 }
 
-                NavigationLink(destination: TTSSettingsView().environmentObject(apiService)) {
+                NavigationLink(destination: TTSSettingsView()) {
                     Label("听书设置", systemImage: "speaker.wave.2")
                 }
                 
-                NavigationLink(destination: ContentSettingsView().environmentObject(apiService)) {
+                NavigationLink(destination: ContentSettingsView()) {
                     Label("内容与净化", systemImage: "shield.checkered")
                 }
                 NavigationLink(destination: RssSourcesView()) {
@@ -48,7 +47,7 @@ struct SettingsView: View {
             }
 
             Section(header: Text("系统")) {
-                NavigationLink(destination: DebugSettingsView().environmentObject(apiService)) {
+                NavigationLink(destination: DebugSettingsView()) {
                     Label("调试与日志", systemImage: "hammer")
                 }
             }

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ReplaceRuleListView: View {
     @StateObject private var viewModel = ReplaceRuleViewModel()
-    @EnvironmentObject var apiService: APIService
     @State private var showEditView = false
     @State private var selectedRule: ReplaceRule?
     @State private var showingURLImportDialog = false
@@ -99,7 +98,7 @@ struct ReplaceRuleListView: View {
             DocumentPicker { url in
                 Task {
                     if let content = try? String(contentsOf: url) {
-                        try? await apiService.saveReplaceRules(jsonContent: content)
+                        try? await APIService.shared.saveReplaceRules(jsonContent: content)
                         await viewModel.fetchRules()
                     }
                 }
@@ -132,7 +131,7 @@ struct ReplaceRuleListView: View {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let content = String(data: data, encoding: .utf8) {
-                try await apiService.saveReplaceRules(jsonContent: content)
+                try await APIService.shared.saveReplaceRules(jsonContent: content)
                 await viewModel.fetchRules()
             }
         } catch {

@@ -164,6 +164,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     internal val _preloadCount = MutableStateFlow(3)
     val preloadCount: StateFlow<Int> = _preloadCount.asStateFlow()
     val readingFontSize: StateFlow<Float> = readerSettings.readingFontSize
+    val readingFontPath: StateFlow<String> = readerSettings.readingFontPath
+    val readingFontName: StateFlow<String> = readerSettings.readingFontName
     val readingHorizontalPadding: StateFlow<Float> = readerSettings.readingHorizontalPadding
     val infiniteScrollEnabled: StateFlow<Boolean> = readerSettings.infiniteScrollEnabled
     private val _loggingEnabled = MutableStateFlow(false)
@@ -186,6 +188,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val ttsSentenceChunkLimit: StateFlow<Int> = readerSettings.ttsSentenceChunkLimit
     val pageTurningMode: StateFlow<com.readapp.data.PageTurningMode> = readerSettings.pageTurningMode
     val darkMode: StateFlow<com.readapp.data.DarkModeConfig> = readerSettings.darkMode
+    val readingTheme: StateFlow<com.readapp.data.ReaderTheme> = readerSettings.readingTheme
     private val _serverAddress = MutableStateFlow("http://127.0.0.1:8080")
     val serverAddress: StateFlow<String> = _serverAddress.asStateFlow()
     private val _apiBackend = MutableStateFlow(ApiBackend.Read)
@@ -214,11 +217,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             errorMessage = errorMessage,
             isContentLoading = isChapterContentLoading,
             readingFontSize = readingFontSize,
+            readingFontPath = readingFontPath,
+            readingFontName = readingFontName,
             readingHorizontalPadding = readingHorizontalPadding,
             readingMode = readingMode,
             lockPageOnTTS = lockPageOnTTS,
             pageTurningMode = pageTurningMode,
             darkMode = darkMode,
+            readingTheme = readingTheme,
             infiniteScrollEnabled = infiniteScrollEnabled,
             forceMangaProxy = forceMangaProxy,
             mangaSwitchThreshold = mangaSwitchThreshold,
@@ -1223,6 +1229,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun updatePreloadCount(count: Int) { _preloadCount.value = count.coerceIn(1, 10); viewModelScope.launch { preferences.savePreloadCount(_preloadCount.value.toFloat()) } }
     fun updateReadingFontSize(size: Float) { readerSettings.updateReadingFontSize(size) }
+    fun updateReadingFont(path: String, name: String) { readerSettings.updateReadingFont(path, name) }
     fun updateReadingHorizontalPadding(padding: Float) { readerSettings.updateReadingHorizontalPadding(padding) }
     fun updateInfiniteScrollEnabled(enabled: Boolean) {
         readerSettings.updateInfiniteScrollEnabled(
@@ -1316,6 +1323,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updateTtsSentenceChunkLimit(limit: Int) { readerSettings.updateTtsSentenceChunkLimit(limit) }
     fun updatePageTurningMode(mode: com.readapp.data.PageTurningMode) { readerSettings.updatePageTurningMode(mode) }
     fun updateDarkModeConfig(config: com.readapp.data.DarkModeConfig) { readerSettings.updateDarkModeConfig(config) }
+    fun updateReadingTheme(theme: com.readapp.data.ReaderTheme) { readerSettings.updateReadingTheme(theme) }
     fun updateSearchSourcesFromBookshelf(enabled: Boolean) { 
         _searchSourcesFromBookshelf.value = enabled
         viewModelScope.launch { 

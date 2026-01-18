@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct TTSEngineEditView: View {
-    @EnvironmentObject var apiService: APIService
     @Environment(\.dismiss) var dismiss
     
     let ttsToEdit: HttpTTS?
@@ -139,7 +138,7 @@ struct TTSEngineEditView: View {
         
         Task {
             do {
-                try await apiService.saveTTS(tts: tts)
+                try await APIService.shared.saveTTS(tts: tts)
                 await MainActor.run {
                     isLoading = false
                     dismiss()
@@ -158,7 +157,7 @@ struct TTSEngineEditView: View {
         isLoading = true
         Task {
             do {
-                try await apiService.deleteTTS(id: id)
+                try await APIService.shared.deleteTTS(id: id)
                 await MainActor.run {
                     isLoading = false
                     dismiss()

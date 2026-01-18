@@ -103,8 +103,8 @@ final class ReaderChapterBuilder {
                 NSAttributedString(
                     string: title + "\n",
                     attributes: [
-                        .font: UIFont.systemFont(ofSize: readerSettings.fontSize + 8, weight: .bold),
-                        .foregroundColor: UIColor.label,
+                        .font: ReaderFontProvider.titleFont(size: readerSettings.fontSize + 8),
+                        .foregroundColor: readerSettings.readingTheme.textColor,
                         .paragraphStyle: titleStyle
                     ]
                 )
@@ -120,8 +120,8 @@ final class ReaderChapterBuilder {
             NSAttributedString(
                 string: indentedText,
                 attributes: [
-                    .font: UIFont.systemFont(ofSize: readerSettings.fontSize),
-                    .foregroundColor: UIColor.label,
+                    .font: ReaderFontProvider.bodyFont(size: readerSettings.fontSize),
+                    .foregroundColor: readerSettings.readingTheme.textColor,
                     .paragraphStyle: bodyStyle
                 ]
             )

@@ -2,7 +2,6 @@ import SwiftUI
 import AVFoundation
 
 struct TTSSelectionView: View {
-    @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
     @Environment(\.dismiss) var dismiss
 
@@ -61,7 +60,7 @@ struct TTSSelectionView: View {
                             await loadTTSList()
                         }
                     }
-                    NavigationLink(destination: TTSEngineListView().environmentObject(apiService)) {
+                    NavigationLink(destination: TTSEngineListView()) {
                         Text("管理")
                     }
                 }
@@ -89,12 +88,12 @@ struct TTSSelectionView: View {
         errorMessage = nil
         
         do {
-            ttsList = try await apiService.fetchTTSList()
+            ttsList = try await APIService.shared.fetchTTSList()
             
             // 如果还没选择 TTS 引擎，尝试获取默认的
             if preferences.selectedTTSId.isEmpty && !ttsList.isEmpty {
                 // 尝试获取后端默认 TTS
-                if let defaultTTS = try? await apiService.fetchDefaultTTS(), !defaultTTS.isEmpty {
+                if let defaultTTS = try? await APIService.shared.fetchDefaultTTS(), !defaultTTS.isEmpty {
                     // 查找匹配的 TTS 引擎
                     if let tts = ttsList.first(where: { $0.url == defaultTTS || $0.name == defaultTTS }) {
                         preferences.selectedTTSId = tts.id

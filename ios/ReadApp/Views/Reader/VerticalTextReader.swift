@@ -304,8 +304,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             p.alignment = .center
             p.paragraphSpacing = fontSize * 1.5
             fullAttr.append(NSAttributedString(string: title + "\n", attributes: [
-                .font: UIFont.systemFont(ofSize: fontSize + 8, weight: .bold),
-                .foregroundColor: UIColor.label,
+                .font: ReaderFontProvider.titleFont(size: fontSize + 8),
+                .foregroundColor: UserPreferences.shared.readingTheme.textColor,
                 .paragraphStyle: p
             ]))
         }
@@ -314,7 +314,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let p = NSMutableParagraphStyle()
         p.lineSpacing = lineSpacing
         p.alignment = .justified
-        fullAttr.append(NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: fontSize), .foregroundColor: UIColor.label, .paragraphStyle: p]))
+        fullAttr.append(NSAttributedString(string: text, attributes: [.font: ReaderFontProvider.bodyFont(size: fontSize), .foregroundColor: UserPreferences.shared.readingTheme.textColor, .paragraphStyle: p]))
         
         return fullAttr
     }
@@ -324,7 +324,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let totalLen = s.attributedString.length
         
         // 方案优化：行高基准直接采用正文字号，彻底避开大标题干扰
-        let bodyFont = UIFont.systemFont(ofSize: lastFontSize)
+        let bodyFont = ReaderFontProvider.bodyFont(size: lastFontSize)
         self.estimatedLineHeight = bodyFont.lineHeight + lastLineSpacing
         
         for start in paragraphStarts { 

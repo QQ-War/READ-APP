@@ -4,7 +4,7 @@ import UIKit
 struct ReadingView: View {
     let book: Book
     @Environment(\.dismiss) var dismiss
-    @EnvironmentObject var apiService: APIService
+    @EnvironmentObject var bookshelfStore: BookshelfStore
     @StateObject var ttsManager = TTSManager.shared
     @StateObject var preferences = UserPreferences.shared
     @StateObject private var readerSettings = ReaderSettingsStore(preferences: UserPreferences.shared)
@@ -69,7 +69,7 @@ struct ReadingView: View {
                                             safeAreaInsets: fullScreenProxy.safeAreaInsets
                                         )                    .ignoresSafeArea()
 
-                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService), isActive: $showDetailFromHeader) {
+                    NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore), isActive: $showDetailFromHeader) {
                         EmptyView()
                     }
                     .hidden()
@@ -138,7 +138,7 @@ struct ReadingView: View {
         }
     }
 
-    private var backgroundView: some View { Color(UIColor.systemBackground) }
+    private var backgroundView: some View { UserPreferences.shared.readingTheme.backgroundSwiftUIColor }
 
     private func topBar(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 0) {
@@ -204,7 +204,7 @@ struct ReadingView: View {
         await MainActor.run { isLoading = true }
         defer { Task { await MainActor.run { isLoading = false } } }
         do {
-            let list = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
+            let list = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             await MainActor.run {
                 chapters = list
                 if currentChapterIndex >= list.count {

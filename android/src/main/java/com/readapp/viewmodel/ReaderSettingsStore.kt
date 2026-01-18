@@ -27,8 +27,17 @@ class ReaderSettingsStore(
     private val _darkMode = MutableStateFlow(DarkModeConfig.OFF)
     val darkMode: StateFlow<DarkModeConfig> = _darkMode.asStateFlow()
 
+    private val _readingTheme = MutableStateFlow(com.readapp.data.ReaderTheme.System)
+    val readingTheme: StateFlow<com.readapp.data.ReaderTheme> = _readingTheme.asStateFlow()
+
     private val _readingFontSize = MutableStateFlow(16f)
     val readingFontSize: StateFlow<Float> = _readingFontSize.asStateFlow()
+
+    private val _readingFontPath = MutableStateFlow("")
+    val readingFontPath: StateFlow<String> = _readingFontPath.asStateFlow()
+
+    private val _readingFontName = MutableStateFlow("")
+    val readingFontName: StateFlow<String> = _readingFontName.asStateFlow()
 
     private val _readingHorizontalPadding = MutableStateFlow(24f)
     val readingHorizontalPadding: StateFlow<Float> = _readingHorizontalPadding.asStateFlow()
@@ -62,8 +71,11 @@ class ReaderSettingsStore(
         _lockPageOnTTS.value = preferences.lockPageOnTTS.first()
         _pageTurningMode.value = preferences.pageTurningMode.first()
         _darkMode.value = preferences.darkMode.first()
+        _readingTheme.value = preferences.readingTheme.first()
         _readingFontSize.value = preferences.readingFontSize.first()
         _readingHorizontalPadding.value = preferences.readingHorizontalPadding.first()
+        _readingFontPath.value = preferences.readingFontPath.first()
+        _readingFontName.value = preferences.readingFontName.first()
         _infiniteScrollEnabled.value = preferences.infiniteScrollEnabled.first()
         _ttsFollowCooldownSeconds.value = preferences.ttsFollowCooldownSeconds.first()
         _ttsSentenceChunkLimit.value = preferences.ttsSentenceChunkLimit.first()
@@ -87,6 +99,12 @@ class ReaderSettingsStore(
     fun updateReadingFontSize(size: Float) {
         _readingFontSize.value = size.coerceIn(12f, 28f)
         scope.launch { preferences.saveReadingFontSize(_readingFontSize.value) }
+    }
+
+    fun updateReadingFont(path: String, name: String) {
+        _readingFontPath.value = path
+        _readingFontName.value = name
+        scope.launch { preferences.saveReadingFont(path, name) }
     }
 
     fun updateReadingHorizontalPadding(padding: Float) {
@@ -144,6 +162,11 @@ class ReaderSettingsStore(
     fun updateDarkModeConfig(config: DarkModeConfig) {
         _darkMode.value = config
         scope.launch { preferences.saveDarkMode(config) }
+    }
+
+    fun updateReadingTheme(theme: com.readapp.data.ReaderTheme) {
+        _readingTheme.value = theme
+        scope.launch { preferences.saveReadingTheme(theme) }
     }
 
     fun toggleManualManga(url: String) {

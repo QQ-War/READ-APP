@@ -1,5 +1,4 @@
 import Foundation
-import Combine
 import UIKit
 
 struct ChapterContentFetchPolicy {
@@ -11,14 +10,9 @@ struct ChapterContentFetchPolicy {
     static let refresh = ChapterContentFetchPolicy(useDiskCache: false, useMemoryCache: false, saveToCache: true)
 }
 
-class APIService: ObservableObject {
+class APIService {
     static let shared = APIService()
     static let apiVersion = 5
-    
-    @Published var books: [Book] = []
-    @Published var availableSources: [BookSource] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
     
     private let client: APIClient
     private var ttsEngineCache: [String: HttpTTS] = [:]
@@ -58,10 +52,6 @@ class APIService: ObservableObject {
         self.chapterCache = ChapterContentCache(maxEntries: 50)
         self.rssService = RssService(client: client)
         
-        // 核心修复：启动时立即加载本地缓存的书架
-        if let cachedBooks = LocalCacheManager.shared.loadBookshelfCache() {
-            self.books = cachedBooks
-        }
     }
 
     // MARK: - 登录
@@ -74,14 +64,10 @@ class APIService: ObservableObject {
     }
 
     // MARK: - 获取书架列表
-    func fetchBookshelf() async throws {
+    func fetchBookshelf() async throws -> [Book] {
         try await withTimeout(seconds: 5) { [weak self] in
-            guard let self = self else { return }
-            let books = try await self.booksService.fetchBookshelf()
-            await MainActor.run {
-                self.books = books
-                LocalCacheManager.shared.saveBookshelfCache(books)
-            }
+            guard let self = self else { return [] }
+            return try await self.booksService.fetchBookshelf()
         }
     }
     
@@ -176,25 +162,6 @@ class APIService: ObservableObject {
     // MARK: - 保存阅读进度
     func saveBookProgress(bookUrl: String, index: Int, pos: Double, title: String?) async throws {
         try await booksService.saveBookProgress(bookUrl: bookUrl, index: index, pos: pos, title: title)
-        
-        // 更新本地书籍列表中的进度，确保 UI 能够立即响应而无需重新请求整个书架
-        await MainActor.run {
-            if let idx = self.books.firstIndex(where: { $0.bookUrl == bookUrl }) {
-                var updatedBook = self.books[idx]
-                updatedBook.durChapterIndex = index
-                updatedBook.durChapterPos = pos
-                updatedBook.durChapterTitle = title
-                updatedBook.durChapterTime = Int64(Date().timeIntervalSince1970 * 1000)
-                self.books[idx] = updatedBook
-                
-                // 核心修复：更新进度后，立即持久化书架状态
-                LocalCacheManager.shared.saveBookshelfCache(self.books)
-                
-                // 强制触发出版物更新（如果是 Struct 可能需要重新赋值数组）
-                let currentBooks = self.books
-                self.books = currentBooks
-            }
-        }
     }
     
     // MARK: - TTS 相关
@@ -313,11 +280,7 @@ class APIService: ObservableObject {
 
     // MARK: - Book Sources
     func fetchBookSources() async throws -> [BookSource] {
-        let sources = try await bookSourceService.fetchBookSources()
-        await MainActor.run {
-            self.availableSources = sources
-        }
-        return sources
+        try await bookSourceService.fetchBookSources()
     }
     
     func saveBookSource(jsonContent: String) async throws {
@@ -353,8 +316,6 @@ class APIService: ObservableObject {
     // MARK: - Save Book to Bookshelf
     func saveBook(book: Book, useReplaceRule: Int = 0) async throws {
         try await booksService.saveBook(book: book, useReplaceRule: useReplaceRule)
-        // 成功后保存到本地缓存
-        LocalCacheManager.shared.saveBookshelfCache(self.books)
     }
     
     // MARK: - Change Book Source
@@ -365,8 +326,6 @@ class APIService: ObservableObject {
     // MARK: - Delete Book from Bookshelf
     func deleteBook(bookUrl: String) async throws {
         try await booksService.deleteBook(bookUrl: bookUrl)
-        // 成功后保存到本地缓存
-        LocalCacheManager.shared.saveBookshelfCache(self.books)
     }
     
     // MARK: - Cache Management

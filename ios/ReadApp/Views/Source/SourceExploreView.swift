@@ -3,8 +3,8 @@ import SwiftUI
 struct SourceExploreView: View {
     let source: BookSource
     let kind: BookSource.ExploreKind
-    
-    @EnvironmentObject var apiService: APIService
+
+    @EnvironmentObject var bookshelfStore: BookshelfStore
     @State private var books: [Book] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -18,7 +18,7 @@ struct SourceExploreView: View {
     var body: some View {
         List {
             ForEach(books) { book in
-                NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                NavigationLink(destination: BookDetailView(book: book)) {
                     BookSearchResultRow(book: book) {
                         Task {
                             await addBookToBookshelf(book: book)
@@ -74,7 +74,7 @@ struct SourceExploreView: View {
         
         isLoading = true
         do {
-            let newBooks = try await apiService.exploreBook(bookSourceUrl: source.bookSourceUrl, ruleFindUrl: kind.url, page: currentPage)
+            let newBooks = try await APIService.shared.exploreBook(bookSourceUrl: source.bookSourceUrl, ruleFindUrl: kind.url, page: currentPage)
             await MainActor.run {
                 if newBooks.isEmpty {
                     canLoadMore = false
@@ -96,7 +96,7 @@ struct SourceExploreView: View {
     
     private func addBookToBookshelf(book: Book) async {
         do {
-            try await apiService.saveBook(book: book)
+            try await bookshelfStore.saveBook(book)
             await MainActor.run {
                 showAddSuccessAlert = true
             }

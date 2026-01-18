@@ -100,7 +100,7 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
 
 struct TextKitPaginator {
     static func createAttributedText(sentences: [String], fontSize: CGFloat, lineSpacing: CGFloat, chapterTitle: String?) -> NSAttributedString {
-        let font = UIFont.systemFont(ofSize: fontSize)
+        let font = ReaderFontProvider.bodyFont(size: fontSize)
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = lineSpacing
         paragraphStyle.paragraphSpacing = fontSize * 0.5
@@ -111,11 +111,11 @@ struct TextKitPaginator {
         if let title = chapterTitle, !title.isEmpty {
             let titleStyle = NSMutableParagraphStyle()
             titleStyle.alignment = .center; titleStyle.paragraphSpacing = fontSize * 2
-            result.append(NSAttributedString(string: title + "\n", attributes: [.font: UIFont.boldSystemFont(ofSize: fontSize + 6), .paragraphStyle: titleStyle, .foregroundColor: UIColor.label]))
+            result.append(NSAttributedString(string: title + "\n", attributes: [.font: ReaderFontProvider.titleFont(size: fontSize + 6), .paragraphStyle: titleStyle, .foregroundColor: UserPreferences.shared.readingTheme.textColor]))
         }
         
         let body = sentences.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.joined(separator: "\n")
-        result.append(NSAttributedString(string: body, attributes: [.font: font, .paragraphStyle: paragraphStyle, .foregroundColor: UIColor.label]))
+        result.append(NSAttributedString(string: body, attributes: [.font: font, .paragraphStyle: paragraphStyle, .foregroundColor: UserPreferences.shared.readingTheme.textColor]))
         return result
     }
     
@@ -322,7 +322,6 @@ struct RichTextView: View {
 struct MangaImageView: View {
     let url: String
     let referer: String?
-    @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
     private let logger = LogManager.shared
     
@@ -342,7 +341,7 @@ struct MangaImageView: View {
         if original.hasPrefix("http") {
             return URL(string: original)
         }
-        let baseURL = ApiBackendResolver.stripApiBasePath(apiService.baseURL)
+        let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
         let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
         return URL(string: resolved)
     }

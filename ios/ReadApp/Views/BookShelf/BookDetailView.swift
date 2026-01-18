@@ -3,10 +3,10 @@ import SwiftUI
 struct BookDetailView: View {
     let book: Book
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var apiService: APIService
+    @EnvironmentObject var bookshelfStore: BookshelfStore
     
     private var currentBook: Book {
-        apiService.books.first { $0.bookUrl == book.bookUrl } ?? book
+        bookshelfStore.books.first { $0.bookUrl == book.bookUrl } ?? book
     }
     @StateObject private var preferences = UserPreferences.shared
     @State private var chapters: [BookChapter] = []
@@ -30,7 +30,7 @@ struct BookDetailView: View {
     @State private var selectedGroupIndex: Int = 0
     
     private var isInBookshelf: Bool {
-        apiService.books.contains { $0.bookUrl == book.bookUrl }
+        bookshelfStore.books.contains { $0.bookUrl == book.bookUrl }
     }
     
     private var chapterGroups: [Int] {
@@ -205,11 +205,8 @@ struct BookDetailView: View {
                                     let chapter = chapters[idx]
                                     Button(action: {
                                         // 更新本地进度并启动阅读
-                                        if let bookUrl = book.bookUrl,
-                                           let bookIdx = apiService.books.firstIndex(where: { $0.bookUrl == bookUrl }) {
-                                            apiService.books[bookIdx].durChapterIndex = idx
-                                            apiService.books[bookIdx].durChapterTitle = chapter.title
-                                            apiService.books[bookIdx].durChapterPos = 0
+                                        if let bookUrl = book.bookUrl {
+                                            bookshelfStore.updateProgress(bookUrl: bookUrl, index: idx, pos: 0, title: chapter.title)
                                         }
                                         isReading = true
                                     }) {
@@ -279,7 +276,7 @@ struct BookDetailView: View {
                         .cornerRadius(8)
                 }
                 .fullScreenCover(isPresented: $isReading) {
-                    ReadingView(book: currentBook).environmentObject(apiService)
+                    ReadingView(book: currentBook).environmentObject(bookshelfStore)
                 }
             }
         }
@@ -364,7 +361,7 @@ struct BookDetailView: View {
     private func loadData() async {
         isLoading = true
         do {
-            chapters = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
+            chapters = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             if endChapter.isEmpty { endChapter = "\(chapters.count)" }
             // 自动跳转到当前章节所在的分组
             let initialIndex = currentBook.durChapterIndex ?? 0
@@ -395,10 +392,10 @@ struct BookDetailView: View {
                 guard let oldUrl = book.bookUrl, let newUrl = newBook.bookUrl, let sourceUrl = newBook.origin else { return }
                 
                 isLoading = true
-                try await apiService.changeBookSource(oldBookUrl: oldUrl, newBookUrl: newUrl, newBookSourceUrl: sourceUrl)
+                try await APIService.shared.changeBookSource(oldBookUrl: oldUrl, newBookUrl: newUrl, newBookSourceUrl: sourceUrl)
                 
                 // 换源成功后，先刷新书架，然后通知父级并返回
-                try await apiService.fetchBookshelf()
+                await bookshelfStore.refreshBookshelf()
                 await MainActor.run {
                     isLoading = false
                     dismiss() // 换源后通常需要重新打开详情页
@@ -415,8 +412,8 @@ struct BookDetailView: View {
     private func addToBookshelf() {
         Task {
             do {
-                try await apiService.saveBook(book: book)
-                try await apiService.fetchBookshelf() // Refresh list
+                try await bookshelfStore.saveBook(book)
+                await bookshelfStore.refreshBookshelf()
                 await MainActor.run {
                     showingAddSuccessAlert = true
                 }
@@ -432,8 +429,7 @@ struct BookDetailView: View {
         guard let bookUrl = book.bookUrl else { return }
         Task {
             do {
-                try await apiService.deleteBook(bookUrl: bookUrl)
-                try await apiService.fetchBookshelf() // Refresh list
+                try await bookshelfStore.deleteBook(bookUrl: bookUrl)
                 await MainActor.run {
                     showingRemoveSuccessAlert = true
                 }
@@ -462,7 +458,6 @@ struct SourceSwitchView: View {
     let currentSource: String
     let onSelect: (Book) -> Void
     @Environment(\.dismiss) var dismiss
-    @EnvironmentObject var apiService: APIService
     @State private var searchResults: [Book] = []
     @State private var isSearching = false
     
@@ -528,7 +523,7 @@ struct SourceSwitchView: View {
     
     private func performSearch() async {
         isSearching = true
-        let sources = (try? await apiService.fetchBookSources()) ?? []
+        let sources = (try? await APIService.shared.fetchBookSources()) ?? []
         let enabledSources = sources.filter { $0.enabled }
         
         var allMatches: [Book] = []
@@ -537,7 +532,7 @@ struct SourceSwitchView: View {
             for source in enabledSources { 
                 group.addTask { 
                     // 仅使用书名搜索，确保搜得到
-                    return try? await apiService.searchBook(keyword: bookName, bookSourceUrl: source.bookSourceUrl) 
+                    return try? await APIService.shared.searchBook(keyword: bookName, bookSourceUrl: source.bookSourceUrl)
                 } 
             }
             for await result in group {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CacheManagementView: View {
-    @EnvironmentObject var apiService: APIService
+    @EnvironmentObject var bookshelfStore: BookshelfStore
     @StateObject private var preferences = UserPreferences.shared
     @State private var cachedBooks: [CachedBookInfo] = []
     @State private var isLoading = false
@@ -96,7 +96,7 @@ struct CacheManagementView: View {
                 Text("暂无离线缓存").foregroundColor(.secondary)
             } else {
                 ForEach(cachedBooks) { info in
-                    CachedBookRow(info: info, apiService: apiService, onDelete: { deleteCache(for: info) })
+                    CachedBookRow(info: info, onDelete: { deleteCache(for: info) })
                 }
             }
         }
@@ -108,7 +108,7 @@ struct CacheManagementView: View {
         isLoading = true
         var infos: [CachedBookInfo] = []
         var total: Int64 = 0
-        for book in apiService.books {
+        for book in bookshelfStore.books {
             if let bookUrl = book.bookUrl {
                 let size = LocalCacheManager.shared.getCacheSize(for: bookUrl)
                 if size > 0 {
@@ -174,16 +174,16 @@ struct DownloadJobRow: View {
 
 struct CachedBookRow: View {
     let info: CacheManagementView.CachedBookInfo
-    let apiService: APIService
+    @EnvironmentObject var bookshelfStore: BookshelfStore
     let onDelete: () -> Void
     
     private var fullBook: Book {
-        apiService.books.first { $0.bookUrl == info.id } ?? 
+        bookshelfStore.books.first { $0.bookUrl == info.id } ??
         Book(name: info.name, author: info.author, bookUrl: info.id)
     }
     
     var body: some View {
-        NavigationLink(destination: BookDetailView(book: fullBook).environmentObject(apiService)) {
+        NavigationLink(destination: BookDetailView(book: fullBook).environmentObject(bookshelfStore)) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(info.name).font(.headline)

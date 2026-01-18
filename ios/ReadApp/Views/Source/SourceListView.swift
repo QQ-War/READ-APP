@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SourceListView: View {
-    @EnvironmentObject var apiService: APIService
+    @EnvironmentObject var bookshelfStore: BookshelfStore
     @StateObject private var viewModel = SourceListViewModel()
     
     // For specific source search via swipe action
@@ -61,13 +61,13 @@ struct SourceListView: View {
             }
             .sheet(isPresented: $showingFilePicker) {
                 DocumentPicker { url in
-                    Task {
-                        if let content = try? String(contentsOf: url) {
-                            try? await apiService.saveBookSource(jsonContent: content)
+                            Task {
+                                if let content = try? String(contentsOf: url) {
+                            try? await APIService.shared.saveBookSource(jsonContent: content)
                             viewModel.fetchSources()
+                                }
+                            }
                         }
-                    }
-                }
             }
             .alert("网络导入", isPresented: $showingURLImportDialog) {
                 TextField("输入书源 URL", text: $importURL)
@@ -87,7 +87,6 @@ struct SourceListView: View {
             .sheet(isPresented: $showingBookSearchView) {
                 if let viewModel = bookSearchViewModel {
                     BookSearchView(viewModel: viewModel)
-                        .environmentObject(apiService)
                 }
             }
     }
@@ -97,7 +96,7 @@ struct SourceListView: View {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let content = String(data: data, encoding: .utf8) {
-                try await apiService.saveBookSource(jsonContent: content)
+                try await APIService.shared.saveBookSource(jsonContent: content)
                 viewModel.fetchSources()
             }
         } catch {
@@ -234,7 +233,7 @@ struct SourceListView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(kinds) { kind in
-                                NavigationLink(destination: SourceExploreView(source: source, kind: kind).environmentObject(apiService)) {
+                                NavigationLink(destination: SourceExploreView(source: source, kind: kind)) {
                                     Text(kind.title)
                                         .font(.caption)
                                         .padding(.horizontal, 12)
@@ -275,7 +274,7 @@ struct SourceListView: View {
     private func openBookSearch(for source: BookSource) {
         if selectedBookSource?.bookSourceUrl != source.bookSourceUrl || bookSearchViewModel == nil {
             selectedBookSource = source
-            bookSearchViewModel = BookSearchViewModel(bookSource: source)
+            bookSearchViewModel = BookSearchViewModel(bookSource: source, bookshelfSaver: bookshelfStore)
         }
         showingBookSearchView = true
     }
@@ -295,7 +294,7 @@ struct SourceListView: View {
         loadingExploreIds.insert(source.id)
         Task {
             do {
-                let kinds = try await apiService.fetchExploreKinds(bookSourceUrl: source.bookSourceUrl)
+                let kinds = try await APIService.shared.fetchExploreKinds(bookSourceUrl: source.bookSourceUrl)
                 _ = await MainActor.run {
                     exploreKinds[source.id] = kinds
                     loadingExploreIds.remove(source.id)
@@ -317,7 +316,7 @@ struct SourceListView: View {
                         // For global search results, directly call APIService to save
                         // or handle errors appropriately
                         do {
-                            try await APIService.shared.saveBook(book: book)
+                            try await bookshelfStore.saveBook(book)
                             addResultMessage = "已加入书架"
                             showAddResultAlert = true
                         } catch {

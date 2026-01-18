@@ -2,6 +2,10 @@ import Foundation
 import Combine
 import SwiftUI
 
+protocol BookshelfSaving {
+    func saveBook(book: Book, useReplaceRule: Int) async throws
+}
+
 class BookSearchViewModel: ObservableObject {
     @Published var searchText: String = ""
     @Published var searchResults: [Book] = []
@@ -12,10 +16,12 @@ class BookSearchViewModel: ObservableObject {
     
     let bookSource: BookSource // The specific source to search within
     private var apiService: APIServiceProtocol // Use protocol for testability
+    private let bookshelfSaver: BookshelfSaving?
     
-    init(bookSource: BookSource, apiService: APIServiceProtocol = APIService.shared) {
+    init(bookSource: BookSource, apiService: APIServiceProtocol = APIService.shared, bookshelfSaver: BookshelfSaving? = nil) {
         self.bookSource = bookSource
         self.apiService = apiService
+        self.bookshelfSaver = bookshelfSaver
     }
     
     @MainActor
@@ -62,7 +68,11 @@ class BookSearchViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         do {
-            try await apiService.saveBook(book: book, useReplaceRule: 0)
+            if let bookshelfSaver {
+                try await bookshelfSaver.saveBook(book: book, useReplaceRule: 0)
+            } else {
+                try await apiService.saveBook(book: book, useReplaceRule: 0)
+            }
             // Optionally, update the book object in searchResults to indicate it's added
             if searchResults.firstIndex(where: { $0.id == book.id }) != nil {
                 // Since Book is a struct, we might need to recreate it if we wanted to change a property directly,

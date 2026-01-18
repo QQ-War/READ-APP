@@ -45,6 +45,12 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    @Published var readingFontName: String {
+        didSet {
+            UserDefaults.standard.set(readingFontName, forKey: "readingFontName")
+        }
+    }
+
     @Published var lineSpacing: CGFloat {
         didSet {
             UserDefaults.standard.set(lineSpacing, forKey: "lineSpacing")
@@ -149,6 +155,12 @@ class UserPreferences: ObservableObject {
     @Published var darkMode: DarkModeConfig {
         didSet {
             UserDefaults.standard.set(darkMode.rawValue, forKey: "darkMode")
+        }
+    }
+
+    @Published var readingTheme: ReadingTheme {
+        didSet {
+            UserDefaults.standard.set(readingTheme.rawValue, forKey: "readingTheme")
         }
     }
 
@@ -327,6 +339,7 @@ class UserPreferences: ObservableObject {
         // 初始化所有属性
         let savedFontSize = CGFloat(UserDefaults.standard.float(forKey: "fontSize"))
         self.fontSize = savedFontSize == 0 ? 18 : savedFontSize
+        self.readingFontName = UserDefaults.standard.string(forKey: "readingFontName") ?? ""
 
         let savedLineSpacing = CGFloat(UserDefaults.standard.float(forKey: "lineSpacing"))
         self.lineSpacing = savedLineSpacing == 0 ? 8 : savedLineSpacing
@@ -423,6 +436,12 @@ class UserPreferences: ObservableObject {
             self.darkMode = savedDarkMode
         } else {
             self.darkMode = .system
+        }
+        if let savedThemeRaw = UserDefaults.standard.string(forKey: "readingTheme"),
+           let savedTheme = ReadingTheme(rawValue: savedThemeRaw) {
+            self.readingTheme = savedTheme
+        } else {
+            self.readingTheme = .system
         }
 
         // 兼容旧版：如果没有单独设置旁白/对话 TTS，则使用原有的 selectedTTSId

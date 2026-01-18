@@ -1,7 +1,11 @@
 // ReadingScreen.kt - 阅读页面集成听书功能（段落高亮与翻页优化）
 package com.readapp.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -50,6 +54,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.readapp.data.ReadingMode
 import com.readapp.data.DarkModeConfig
+import com.readapp.data.ReaderFontManager
+import com.readapp.data.ReaderTheme
 import com.readapp.data.model.Chapter
 import com.readapp.ui.components.EdgeHint
 import com.readapp.ui.components.MangaNativeReader
@@ -59,10 +65,12 @@ import com.readapp.ui.reader.ChapterTransitionPolicy
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 
@@ -104,6 +112,8 @@ fun ReadingScreen(
     onNextParagraph: () -> Unit = {},
     onReadingFontSizeChange: (Float) -> Unit = {},
     onReadingHorizontalPaddingChange: (Float) -> Unit = {},
+    onReadingFontChange: (String, String) -> Unit = { _, _ -> },
+    onReadingThemeChange: (ReaderTheme) -> Unit = {},
     onHeaderClick: () -> Unit = {},
     onExit: () -> Unit = {},
     onReadingModeChange: (ReadingMode) -> Unit = {},
@@ -128,6 +138,9 @@ fun ReadingScreen(
     val currentChapterContent = readerState.currentChapterContent
     val isContentLoading = readerState.isContentLoading
     val readingFontSize = readerState.readingFontSize
+    val readingFontPath = readerState.readingFontPath
+    val readingFontName = readerState.readingFontName
+    val readingTheme = readerState.readingTheme
     val readingHorizontalPadding = readerState.readingHorizontalPadding
     val errorMessage = readerState.errorMessage
     val readingMode = readerState.readingMode
@@ -149,6 +162,8 @@ fun ReadingScreen(
     var showControls by remember { mutableStateOf(false) }
     var showChapterList by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
+    var fontEntries by remember { mutableStateOf(emptyList<com.readapp.data.ReaderFontEntry>()) }
+    val context = LocalContext.current
     
     // 状态机记录翻页意图
     var navIntent by remember { mutableStateOf(ChapterNavIntent.NONE) }
@@ -164,7 +179,31 @@ fun ReadingScreen(
     
     // 强制旋转状态
     var isForceLandscape by remember { mutableStateOf(false) }
-    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    val themeBackground = if (readingTheme.background != Color.Unspecified) readingTheme.background else MaterialTheme.colorScheme.background
+    val themeTextColor = if (readingTheme.text != Color.Unspecified) readingTheme.text else MaterialTheme.colorScheme.onSurface
+    val fontFamily = remember(readingFontPath) {
+        if (readingFontPath.isBlank()) {
+            null
+        } else {
+            ReaderFontManager.loadTypeface(readingFontPath)?.let { FontFamily(it) }
+        }
+    }
+    val fontOptions = remember(fontEntries) {
+        buildList {
+            add("系统默认" to "")
+            fontEntries.forEach { add(it.name to it.path) }
+        }
+    }
+    val fontImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val entry = ReaderFontManager.importFont(context, uri)
+            if (entry != null) {
+                fontEntries = ReaderFontManager.listFonts(context)
+                onReadingFontChange(entry.path, entry.name)
+            }
+        }
+    }
     
     // 处理强制旋转逻辑
     DisposableEffect(isForceLandscape) {
@@ -192,6 +231,12 @@ fun ReadingScreen(
             top = AppDimens.PaddingLarge,
             bottom = AppDimens.PaddingLarge
         )
+    }
+
+    LaunchedEffect(showFontDialog) {
+        if (showFontDialog) {
+            fontEntries = ReaderFontManager.listFonts(context)
+        }
     }
     
     if (errorMessage != null) {
@@ -435,7 +480,7 @@ fun ReadingScreen(
     DisposableEffect(Unit) { onDispose { latestOnExit() } }
     
     Box(
-        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+        modifier = modifier.fillMaxSize().background(themeBackground)
     ) {
         if (isMangaMode) {
             MangaNativeReader(
@@ -491,7 +536,7 @@ fun ReadingScreen(
                                 Text(
                                     text = item.title,
                                     style = if (item.isCurrent) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
-                                    color = if (item.isCurrent) MaterialTheme.colorScheme.onSurface else MaterialTheme.customColors.textSecondary,
+                                    color = if (item.isCurrent) themeTextColor else MaterialTheme.customColors.textSecondary,
                                     modifier = Modifier.padding(bottom = AppDimens.PaddingLarge)
                                 )
                             }
@@ -502,6 +547,8 @@ fun ReadingScreen(
                                     isPlaying = item.isCurrent && isPlaying && item.paragraphIndex == currentPlayingParagraph,
                                     isPreloaded = item.isCurrent && preloadedParagraphs.contains(item.paragraphIndex),
                                     fontSize = readingFontSize,
+                                    fontFamily = fontFamily,
+                                    textColor = themeTextColor,
                                     chapterUrl = chapterUrlForItem,
                                     serverUrl = serverEndpoint,
                                     forceProxy = forceMangaProxy,
@@ -514,80 +561,89 @@ fun ReadingScreen(
             }
         } else {
             // Horizontal Pager 模式
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val style = MaterialTheme.typography.bodyLarge.copy(fontSize = readingFontSize.sp, lineHeight = (readingFontSize * 1.8f).sp)
-                val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title.orEmpty()
-                val headerText = if (chapterTitle.isNotBlank()) chapterTitle + "\n\n" else ""
-                val headerFontSize = (readingFontSize + 6f).sp
-                val lineHeightPx = with(LocalDensity.current) { (readingFontSize * 1.8f).sp.toPx() }
-                val density = LocalDensity.current
-                val availableConstraints = remember(constraints, contentPadding, density) { adjustedConstraints(constraints, contentPadding, density) }
-                val paginatedPages = rememberPaginatedText(currentParagraphs, style, availableConstraints, lineHeightPx, headerText, headerFontSize)
-                
-                key(currentChapterIndex) { // 强行重置 Pager 状态
-                    val pagerState = rememberPagerState(initialPage = 0, pageCount = { paginatedPages.pages.size.coerceAtLeast(1) })
+            AnimatedContent(
+                targetState = currentChapterIndex,
+                transitionSpec = { fadeIn(animationSpec = tween(180)) with fadeOut(animationSpec = tween(120)) }
+            ) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = readingFontSize.sp,
+                        lineHeight = (readingFontSize * 1.8f).sp,
+                        fontFamily = fontFamily
+                    )
+                    val chapterTitle = chapters.getOrNull(currentChapterIndex)?.title.orEmpty()
+                    val headerText = if (chapterTitle.isNotBlank()) chapterTitle + "\n\n" else ""
+                    val headerFontSize = (readingFontSize + 6f).sp
+                    val lineHeightPx = with(LocalDensity.current) { (readingFontSize * 1.8f).sp.toPx() }
+                    val density = LocalDensity.current
+                    val availableConstraints = remember(constraints, contentPadding, density) { adjustedConstraints(constraints, contentPadding, density) }
+                    val paginatedPages = rememberPaginatedText(currentParagraphs, style, availableConstraints, lineHeightPx, headerText, headerFontSize)
                     
-                    LaunchedEffect(paginatedPages, pendingScrollIndex, navIntent) {
-                        if (paginatedPages.pages.isEmpty()) return@LaunchedEffect
-                        if (pendingScrollIndex != null) {
-                            val target = paginatedPages.pages.indexOfFirst { it.startParagraphIndex >= pendingScrollIndex }.coerceAtLeast(0)
-                            pagerState.scrollToPage(target)
-                            onScrollConsumed()
-                            navIntent = ChapterNavIntent.NONE
-                        } else if (navIntent == ChapterNavIntent.LAST) {
-                            pagerState.scrollToPage(paginatedPages.lastIndex)
-                            navIntent = ChapterNavIntent.NONE
-                        } else if (navIntent == ChapterNavIntent.FIRST) {
-                            pagerState.scrollToPage(0)
-                            navIntent = ChapterNavIntent.NONE
-                        }
-                    }
-
-                    val viewConfiguration = LocalViewConfiguration.current
-                    HorizontalPager(
-                        state = pagerState,
-                        userScrollEnabled = !(isPlaying && lockPageOnTTS),
-                        modifier = Modifier.fillMaxSize().pointerInput(showControls, paginatedPages, isPlaying, lockPageOnTTS, viewConfiguration) {
-                            detectTapGesturesWithoutConsuming(viewConfiguration) { offset, size ->
-                                if (isPlaying && lockPageOnTTS) {
-                                    if (offset.x in (size.width / 3f)..(size.width * 2f / 3f)) showControls = !showControls
-                                    return@detectTapGesturesWithoutConsuming
-                                }
-                                handleHorizontalTap(offset, size, showControls, pagerState, paginatedPages.pages, 
-                                    onPreviousChapter = { navIntent = ChapterNavIntent.LAST; onChapterClick(currentChapterIndex - 1) }, 
-                                    onNextChapter = { navIntent = ChapterNavIntent.FIRST; onChapterClick(currentChapterIndex + 1) }, 
-                                    coroutineScope, onToggleControls = { showControls = it })
+                    key(currentChapterIndex) { // 强行重置 Pager 状态
+                        val pagerState = rememberPagerState(initialPage = 0, pageCount = { paginatedPages.pages.size.coerceAtLeast(1) })
+                        
+                        LaunchedEffect(paginatedPages, pendingScrollIndex, navIntent) {
+                            if (paginatedPages.pages.isEmpty()) return@LaunchedEffect
+                            if (pendingScrollIndex != null) {
+                                val target = paginatedPages.pages.indexOfFirst { it.startParagraphIndex >= pendingScrollIndex }.coerceAtLeast(0)
+                                pagerState.scrollToPage(target)
+                                onScrollConsumed()
+                                navIntent = ChapterNavIntent.NONE
+                            } else if (navIntent == ChapterNavIntent.LAST) {
+                                pagerState.scrollToPage(paginatedPages.lastIndex)
+                                navIntent = ChapterNavIntent.NONE
+                            } else if (navIntent == ChapterNavIntent.FIRST) {
+                                pagerState.scrollToPage(0)
+                                navIntent = ChapterNavIntent.NONE
                             }
                         }
-                    ) { page ->
-                        val pi = paginatedPages.getOrNull(page)
-                        val text = pi?.let { 
-                            remember(it, isPlaying, currentPlayingParagraph, paginatedPages.fullText) { // 修正：增加 isPlaying 依赖
-                                val base = paginatedPages.fullText.subSequence(it.start.coerceAtLeast(0), it.end.coerceAtMost(paginatedPages.fullText.text.length))
-                                if (isPlaying && currentPlayingParagraph == it.startParagraphIndex) { // 修正：必须处于播放状态才高亮
-                                    AnnotatedString.Builder(base).apply { addStyle(SpanStyle(background = Color.Blue.copy(alpha = 0.15f)), 0, base.length) }.toAnnotatedString()
-                                } else base
-                            }
-                        } ?: AnnotatedString("")
-                        Box(modifier = Modifier.fillMaxSize().padding(contentPadding)) { 
-                            SelectionContainer { Text(text = text, style = style, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxSize()) } 
-                        }
-                    }
-                    LaunchedEffect(pagerState.currentPage) {
-                        paginatedPages.getOrNull(pagerState.currentPage)?.let {
-                            onScrollUpdate(it.startParagraphIndex)
-                            onVisibleParagraphInfo(it.startParagraphIndex, it.startParagraphOffset, it.endParagraphIndex, it.endParagraphOffset)
-                        }
-                    }
 
-                    LaunchedEffect(pagerState, pendingScrollIndex) {
-                        snapshotFlow { pagerState.isScrollInProgress }
-                            .distinctUntilChanged()
-                            .collect { scrolling ->
-                                if (latestPendingScrollIndex == null) {
-                                    onUserScrollState(scrolling)
+                        val viewConfiguration = LocalViewConfiguration.current
+                        HorizontalPager(
+                            state = pagerState,
+                            userScrollEnabled = !(isPlaying && lockPageOnTTS),
+                            modifier = Modifier.fillMaxSize().pointerInput(showControls, paginatedPages, isPlaying, lockPageOnTTS, viewConfiguration) {
+                                detectTapGesturesWithoutConsuming(viewConfiguration) { offset, size ->
+                                    if (isPlaying && lockPageOnTTS) {
+                                        if (offset.x in (size.width / 3f)..(size.width * 2f / 3f)) showControls = !showControls
+                                        return@detectTapGesturesWithoutConsuming
+                                    }
+                                    handleHorizontalTap(offset, size, showControls, pagerState, paginatedPages.pages,
+                                        onPreviousChapter = { navIntent = ChapterNavIntent.LAST; onChapterClick(currentChapterIndex - 1) },
+                                        onNextChapter = { navIntent = ChapterNavIntent.FIRST; onChapterClick(currentChapterIndex + 1) },
+                                        coroutineScope, onToggleControls = { showControls = it })
                                 }
                             }
+                        ) { page ->
+                            val pi = paginatedPages.getOrNull(page)
+                            val text = pi?.let {
+                                remember(it, isPlaying, currentPlayingParagraph, paginatedPages.fullText) { // 修正：增加 isPlaying 依赖
+                                    val base = paginatedPages.fullText.subSequence(it.start.coerceAtLeast(0), it.end.coerceAtMost(paginatedPages.fullText.text.length))
+                                    if (isPlaying && currentPlayingParagraph == it.startParagraphIndex) { // 修正：必须处于播放状态才高亮
+                                        AnnotatedString.Builder(base).apply { addStyle(SpanStyle(background = Color.Blue.copy(alpha = 0.15f)), 0, base.length) }.toAnnotatedString()
+                                    } else base
+                                }
+                            } ?: AnnotatedString("")
+                            Box(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
+                                SelectionContainer { Text(text = text, style = style, color = themeTextColor, modifier = Modifier.fillMaxSize()) }
+                            }
+                        }
+                        LaunchedEffect(pagerState.currentPage) {
+                            paginatedPages.getOrNull(pagerState.currentPage)?.let {
+                                onScrollUpdate(it.startParagraphIndex)
+                                onVisibleParagraphInfo(it.startParagraphIndex, it.startParagraphOffset, it.endParagraphIndex, it.endParagraphOffset)
+                            }
+                        }
+
+                        LaunchedEffect(pagerState, pendingScrollIndex) {
+                            snapshotFlow { pagerState.isScrollInProgress }
+                                .distinctUntilChanged()
+                                .collect { scrolling ->
+                                    if (latestPendingScrollIndex == null) {
+                                        onUserScrollState(scrolling)
+                                    }
+                                }
+                        }
                     }
                 }
             }
@@ -626,7 +682,38 @@ fun ReadingScreen(
         }
 
         if (showChapterList) ChapterListDialog(chapters, currentChapterIndex, preloadedChapters, book.bookUrl ?: "", onChapter = { onChapterClick(it); showChapterList = false }, onDismiss = { showChapterList = false })
-        if (showFontDialog) FontSizeDialog(readingFontSize, onReadingFontSizeChange, readingHorizontalPadding, onReadingHorizontalPaddingChange, lockPageOnTTS, onLockPageOnTTSChange, pageTurningMode, onPageTurningModeChange, darkModeConfig, onDarkModeChange, forceMangaProxy, onForceMangaProxyChange, readingMode, onReadingModeChange, isInfiniteScrollEnabled, onInfiniteScrollEnabledChange, mangaSwitchThreshold, verticalDampingFactor, mangaMaxZoom, onMangaSwitchThresholdChange, onVerticalDampingFactorChange, onMangaMaxZoomChange, isMangaMode, onDismiss = { showFontDialog = false })
+        if (showFontDialog) FontSizeDialog(
+            readingFontSize,
+            onReadingFontSizeChange,
+            readingHorizontalPadding,
+            onReadingHorizontalPaddingChange,
+            lockPageOnTTS,
+            onLockPageOnTTSChange,
+            pageTurningMode,
+            onPageTurningModeChange,
+            darkModeConfig,
+            onDarkModeChange,
+            readingTheme,
+            onReadingThemeChange,
+            readingFontName,
+            fontOptions,
+            onReadingFontChange,
+            { fontImportLauncher.launch("*/*") },
+            forceMangaProxy,
+            onForceMangaProxyChange,
+            readingMode,
+            onReadingModeChange,
+            isInfiniteScrollEnabled,
+            onInfiniteScrollEnabledChange,
+            mangaSwitchThreshold,
+            verticalDampingFactor,
+            mangaMaxZoom,
+            onMangaSwitchThresholdChange,
+            onVerticalDampingFactorChange,
+            onMangaMaxZoomChange,
+            isMangaMode,
+            onDismiss = { showFontDialog = false }
+        )
     }
 }
 
@@ -743,12 +830,86 @@ private fun handleHorizontalTap(offset: Offset, size: IntSize, show: Boolean, st
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, infiniteScrollEnabled: Boolean, onInfiniteScrollEnabledChange: (Boolean) -> Unit, mangaSwitchThreshold: Int, verticalDampingFactor: Float, mangaMaxZoom: Float, onMangaSwitchThresholdChange: (Int) -> Unit, onVerticalDampingFactorChange: (Float) -> Unit, onMangaMaxZoomChange: (Float) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
+private fun ReaderOptionsDialog(
+    fontSize: Float,
+    onFontSize: (Float) -> Unit,
+    hPadding: Float,
+    onHPadding: (Float) -> Unit,
+    lockTTS: Boolean,
+    onLockTTS: (Boolean) -> Unit,
+    turnMode: com.readapp.data.PageTurningMode,
+    onTurnMode: (com.readapp.data.PageTurningMode) -> Unit,
+    darkConfig: DarkModeConfig,
+    onDark: (DarkModeConfig) -> Unit,
+    readingTheme: ReaderTheme,
+    onReadingThemeChange: (ReaderTheme) -> Unit,
+    readingFontName: String,
+    fontOptions: List<Pair<String, String>>,
+    onReadingFontChange: (String, String) -> Unit,
+    onImportFont: () -> Unit,
+    forceProxy: Boolean,
+    onForceProxy: (Boolean) -> Unit,
+    mode: ReadingMode,
+    onMode: (ReadingMode) -> Unit,
+    infiniteScrollEnabled: Boolean,
+    onInfiniteScrollEnabledChange: (Boolean) -> Unit,
+    mangaSwitchThreshold: Int,
+    verticalDampingFactor: Float,
+    mangaMaxZoom: Float,
+    onMangaSwitchThresholdChange: (Int) -> Unit,
+    onVerticalDampingFactorChange: (Float) -> Unit,
+    onMangaMaxZoomChange: (Float) -> Unit,
+    isManga: Boolean,
+    onDismiss: () -> Unit
+) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("阅读选项") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
             if (!isManga) {
-                Column { Text("阅读模式", style = MaterialTheme.typography.labelMedium); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ReadingMode.values().forEach { m -> FilterChip(selected = mode == m, onClick = { onMode(m) }, label = { Text(if (m == ReadingMode.Vertical) "上下滚动" else "左右翻页") }, modifier = Modifier.weight(1f)) } } }
+                Column {
+                    Text("阅读模式", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReadingMode.values().forEach { m ->
+                            FilterChip(
+                                selected = mode == m,
+                                onClick = { onMode(m) },
+                                label = { Text(if (m == ReadingMode.Vertical) "上下滚动" else "左右翻页") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
                 Divider()
+            }
+            Column {
+                Text("阅读主题", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    ReaderTheme.values().forEach { theme ->
+                        FilterChip(
+                            selected = readingTheme == theme,
+                            onClick = { onReadingThemeChange(theme) },
+                            label = { Text(theme.displayName) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+            Column {
+                Text("字体", style = MaterialTheme.typography.labelMedium)
+                val currentName = if (readingFontName.isNotBlank()) readingFontName else "系统默认"
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(currentName, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = onImportFont) { Text("导入字体") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    fontOptions.forEach { (label, path) ->
+                        FilterChip(
+                            selected = if (path.isBlank()) readingFontName.isBlank() else readingFontName == label,
+                            onClick = { onReadingFontChange(path, if (path.isBlank()) "" else label) },
+                            label = { Text(label) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
             Column { Text("夜间模式", style = MaterialTheme.typography.labelMedium); Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { DarkModeConfig.values().forEach { c -> FilterChip(selected = darkConfig == c, onClick = { onDark(c) }, label = { Text(when(c){ DarkModeConfig.ON->"开启"; DarkModeConfig.OFF->"关闭"; DarkModeConfig.AUTO->"系统"}) }, modifier = Modifier.weight(1f)) } } }
             if (isManga) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onForceProxy(!forceProxy) }) { Column(modifier = Modifier.weight(1f)) { Text("强制服务器代理", style = MaterialTheme.typography.bodyLarge); Text("如果漫画加载失败请开启", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline) }; Switch(checked = forceProxy, onCheckedChange = onForceProxy) }
@@ -784,8 +945,70 @@ private fun ReaderOptionsDialog(fontSize: Float, onFontSize: (Float) -> Unit, hP
 }
 
 @Composable
-private fun FontSizeDialog(fontSize: Float, onFontSize: (Float) -> Unit, hPadding: Float, onHPadding: (Float) -> Unit, lockTTS: Boolean, onLockTTS: (Boolean) -> Unit, turnMode: com.readapp.data.PageTurningMode, onTurnMode: (com.readapp.data.PageTurningMode) -> Unit, darkConfig: DarkModeConfig, onDark: (DarkModeConfig) -> Unit, forceProxy: Boolean, onForceProxy: (Boolean) -> Unit, mode: ReadingMode, onMode: (ReadingMode) -> Unit, infiniteScrollEnabled: Boolean, onInfiniteScrollEnabledChange: (Boolean) -> Unit, mangaSwitchThreshold: Int, verticalDampingFactor: Float, mangaMaxZoom: Float, onMangaSwitchThresholdChange: (Int) -> Unit, onVerticalDampingFactorChange: (Float) -> Unit, onMangaMaxZoomChange: (Float) -> Unit, isManga: Boolean, onDismiss: () -> Unit) {
-    ReaderOptionsDialog(fontSize, onFontSize, hPadding, onHPadding, lockTTS, onLockTTS, turnMode, onTurnMode, darkConfig, onDark, forceProxy, onForceProxy, mode, onMode, infiniteScrollEnabled, onInfiniteScrollEnabledChange, mangaSwitchThreshold, verticalDampingFactor, mangaMaxZoom, onMangaSwitchThresholdChange, onVerticalDampingFactorChange, onMangaMaxZoomChange, isManga, onDismiss)
+private fun FontSizeDialog(
+    fontSize: Float,
+    onFontSize: (Float) -> Unit,
+    hPadding: Float,
+    onHPadding: (Float) -> Unit,
+    lockTTS: Boolean,
+    onLockTTS: (Boolean) -> Unit,
+    turnMode: com.readapp.data.PageTurningMode,
+    onTurnMode: (com.readapp.data.PageTurningMode) -> Unit,
+    darkConfig: DarkModeConfig,
+    onDark: (DarkModeConfig) -> Unit,
+    readingTheme: ReaderTheme,
+    onReadingThemeChange: (ReaderTheme) -> Unit,
+    readingFontName: String,
+    fontOptions: List<Pair<String, String>>,
+    onReadingFontChange: (String, String) -> Unit,
+    onImportFont: () -> Unit,
+    forceProxy: Boolean,
+    onForceProxy: (Boolean) -> Unit,
+    mode: ReadingMode,
+    onMode: (ReadingMode) -> Unit,
+    infiniteScrollEnabled: Boolean,
+    onInfiniteScrollEnabledChange: (Boolean) -> Unit,
+    mangaSwitchThreshold: Int,
+    verticalDampingFactor: Float,
+    mangaMaxZoom: Float,
+    onMangaSwitchThresholdChange: (Int) -> Unit,
+    onVerticalDampingFactorChange: (Float) -> Unit,
+    onMangaMaxZoomChange: (Float) -> Unit,
+    isManga: Boolean,
+    onDismiss: () -> Unit
+) {
+    ReaderOptionsDialog(
+        fontSize,
+        onFontSize,
+        hPadding,
+        onHPadding,
+        lockTTS,
+        onLockTTS,
+        turnMode,
+        onTurnMode,
+        darkConfig,
+        onDark,
+        readingTheme,
+        onReadingThemeChange,
+        readingFontName,
+        fontOptions,
+        onReadingFontChange,
+        onImportFont,
+        forceProxy,
+        onForceProxy,
+        mode,
+        onMode,
+        infiniteScrollEnabled,
+        onInfiniteScrollEnabledChange,
+        mangaSwitchThreshold,
+        verticalDampingFactor,
+        mangaMaxZoom,
+        onMangaSwitchThresholdChange,
+        onVerticalDampingFactorChange,
+        onMangaMaxZoomChange,
+        isManga,
+        onDismiss
+    )
 }
 
 @Composable

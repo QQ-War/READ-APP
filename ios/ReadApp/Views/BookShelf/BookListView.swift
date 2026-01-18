@@ -1,50 +1,18 @@
 import SwiftUI
 
 struct BookListView: View {
-    @EnvironmentObject var apiService: APIService
+    @EnvironmentObject var bookshelfStore: BookshelfStore
+    @EnvironmentObject var sourceStore: SourceStore
     @StateObject private var preferences = UserPreferences.shared
-    @State private var isRefreshing = false
-    @State private var searchText = ""
-    @State private var isReversed = false
     @State private var showingDocumentPicker = false
     @State private var selectedBook: Book?
     @State private var showingDeleteBookAlert = false
     @State private var bookToDelete: Book?
     @State private var selectedBookForDetail: Book?
-    
-    // Online Search State
-    @State private var onlineResults: [Book] = []
-    @State private var isSearchingOnline = false
-    @State private var searchTask: Task<Void, Never>? = nil
-    @State private var selectedOnlineBook: Book?
-    @State private var showAddSuccessAlert = false
-    
+    @StateObject private var listViewModel = BookshelfListViewModel()
     // 过滤和排序后的书籍列表
     var filteredAndSortedBooks: [Book] {
-        let filtered: [Book]
-        if searchText.isEmpty {
-            filtered = apiService.books
-        } else {
-            filtered = apiService.books.filter { book in
-                (book.name?.localizedCaseInsensitiveContains(searchText) ?? false) ||
-                (book.author?.localizedCaseInsensitiveContains(searchText) ?? false)
-            }
-        }
-        
-        let sorted: [Book]
-        if preferences.bookshelfSortByRecent {
-            sorted = filtered.sorted { book1, book2 in
-                let time1 = book1.durChapterTime ?? 0
-                let time2 = book2.durChapterTime ?? 0
-                if time1 == 0 && time2 == 0 { return false }
-                if time1 == 0 { return false }
-                if time2 == 0 { return true }
-                return time1 > time2
-            }
-        } else {
-            sorted = filtered
-        }
-        return isReversed ? sorted.reversed() : sorted
+        listViewModel.filteredAndSortedBooks
     }
     
     var body: some View {
@@ -52,7 +20,7 @@ struct BookListView: View {
             // 隐式导航触发器：必须放在这里
             if let book = selectedBookForDetail {
                 NavigationLink(
-                    destination: BookDetailView(book: book).environmentObject(apiService),
+                    destination: BookDetailView(book: book).environmentObject(bookshelfStore),
                     isActive: Binding(
                         get: { selectedBookForDetail != nil },
                         set: { if !$0 { selectedBookForDetail = nil } }
@@ -62,7 +30,7 @@ struct BookListView: View {
 
             List {
                 // ... rest of list content ...
-                if !searchText.isEmpty {
+                if !listViewModel.searchText.isEmpty {
                     if !filteredAndSortedBooks.isEmpty {
                         Section(header: Text("书架书籍")) {
                             ForEach(filteredAndSortedBooks) { book in
@@ -73,17 +41,17 @@ struct BookListView: View {
                     
                     if preferences.searchSourcesFromBookshelf {
                         Section(header: Text("全网搜索")) {
-                            if isSearchingOnline {
+                            if listViewModel.isSearchingOnline {
                                 HStack {
                                     Spacer()
                                     ProgressView()
                                     Spacer()
                                 }
-                            } else if onlineResults.isEmpty {
+                            } else if listViewModel.onlineResults.isEmpty {
                                 Text("未找到相关书籍").foregroundColor(.secondary).font(.caption)
                             } else {
-                                ForEach(onlineResults) { book in
-                                    NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                                ForEach(listViewModel.onlineResults) { book in
+                                    NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore)) {
                                         BookSearchResultRow(book: book) {
                                             Task {
                                                 await addBookToBookshelf(book: book)
@@ -100,33 +68,34 @@ struct BookListView: View {
                     }
                 }
             }
-            .animation(.easeInOut(duration: 0.3), value: isReversed)
+            .animation(.easeInOut(duration: 0.3), value: listViewModel.isReversed)
             .navigationTitle("书架")
             .navigationBarTitleDisplayMode(.large)
             .toolbar(content: listToolbarContent)
-            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索书名或作者")
+            .searchable(text: $listViewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索书名或作者")
         }
-        .onChange(of: searchText) { newValue in
-            handleSearchChange(newValue)
+        .onChange(of: listViewModel.searchText) { _ in
+            listViewModel.handleSearchChange()
         }
         .onChange(of: preferences.searchSourcesFromBookshelf) { _ in
-            handleSearchChange(searchText)
+            listViewModel.handleSearchChange()
         }
-        .refreshable { await loadBooks() }
+        .refreshable { await listViewModel.loadBooks() }
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker { url in Task { await importBook(from: url) } }
         }
         .fullScreenCover(item: $selectedBook) { book in
-            ReadingView(book: book).environmentObject(apiService)
+            ReadingView(book: book).environmentObject(bookshelfStore)
         }
         .task { 
-            await loadBooks()
-            if apiService.availableSources.isEmpty { _ = try? await apiService.fetchBookSources() }
+            listViewModel.configure(bookshelfStore: bookshelfStore, sourceStore: sourceStore, preferences: preferences)
+            await listViewModel.loadBooks()
+            if sourceStore.availableSources.isEmpty { await sourceStore.refreshSources() }
         }
         .overlay {
-            if isRefreshing && apiService.books.isEmpty {
+            if listViewModel.isRefreshing && bookshelfStore.books.isEmpty {
                 ProgressView("加载中...")
-            } else if !isRefreshing && searchText.isEmpty && apiService.books.isEmpty {
+            } else if !listViewModel.isRefreshing && listViewModel.searchText.isEmpty && bookshelfStore.books.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "book.closed")
                         .font(.largeTitle)
@@ -136,13 +105,15 @@ struct BookListView: View {
                 .foregroundColor(.secondary)
             }
         }
-        .alert("错误", isPresented: .constant(apiService.errorMessage != nil)) {
-            Button("确定") { apiService.errorMessage = nil }
+        .alert("错误", isPresented: .constant(bookshelfStore.errorMessage != nil)) {
+            Button("确定") { bookshelfStore.errorMessage = nil }
         } message: {
-            if let error = apiService.errorMessage { Text(error) }
+            if let error = bookshelfStore.errorMessage { Text(error) }
         }
-        .alert("已加入书架", isPresented: $showAddSuccessAlert) {
+        .alert("操作结果", isPresented: $listViewModel.showAddResultAlert) {
             Button("确定", role: .cancel) { }
+        } message: {
+            Text(listViewModel.addResultMessage)
         }
         .alert("移出书架", isPresented: $showingDeleteBookAlert) {
             Button("取消", role: .cancel) { bookToDelete = nil }
@@ -155,73 +126,15 @@ struct BookListView: View {
         }
     }
 
-    private func handleSearchChange(_ query: String) {
-        searchTask?.cancel()
-        
-        guard !query.isEmpty && preferences.searchSourcesFromBookshelf else {
-            onlineResults = []
-            return
-        }
-        
-        searchTask = Task {
-            try? await Task.sleep(nanoseconds: 800_000_000) // 800ms debounce
-            if Task.isCancelled { return }
-            
-            await performOnlineSearch(query: query)
-        }
-    }
-    
-    private func performOnlineSearch(query: String) async {
-        await MainActor.run { isSearchingOnline = true }
-        
-        do {
-            let sources = apiService.availableSources.isEmpty ? try await apiService.fetchBookSources() : apiService.availableSources
-            let enabledSources = sources.filter { $0.enabled }
-            
-            // Filter by preferred sources if any are selected
-            let targetSources = preferences.preferredSearchSourceUrls.isEmpty ? 
-                enabledSources : 
-                enabledSources.filter { preferences.preferredSearchSourceUrls.contains($0.bookSourceUrl) }
-            
-            var allResults: [Book] = []
-            await withTaskGroup(of: [Book]?.self) { group in
-                for source in targetSources {
-                    group.addTask {
-                        try? await apiService.searchBook(keyword: query, bookSourceUrl: source.bookSourceUrl)
-                    }
-                }
-                
-                for await result in group {
-                    if let books = result {
-                        allResults.append(contentsOf: books)
-                    }
-                }
-            }
-            
-            await MainActor.run {
-                self.onlineResults = allResults
-                self.isSearchingOnline = false
-            }
-        } catch {
-            await MainActor.run { self.isSearchingOnline = false }
-        }
-    }
-    
     private func addBookToBookshelf(book: Book) async {
-        do {
-            try await apiService.saveBook(book: book)
-            await MainActor.run { showAddSuccessAlert = true }
-            await loadBooks()
-        } catch {
-            await MainActor.run { apiService.errorMessage = error.localizedDescription }
-        }
+        await listViewModel.addBookToBookshelf(book)
     }
 
     @ViewBuilder
     private func bookRowView(for book: Book) -> some View {
         HStack(spacing: 0) {
             // 左侧封面：点击进入详情页
-            NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+            NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore)) {
                 BookCoverImage(url: book.displayCoverUrl)
             }
             .frame(width: 60, height: 80)
@@ -262,10 +175,10 @@ struct BookListView: View {
 
     @ViewBuilder
     private var listToolbarLeadingItems: some View {
-        Button(action: { withAnimation { isReversed.toggle() } }) {
+        Button(action: { withAnimation { listViewModel.isReversed.toggle() } }) {
             HStack(spacing: 4) {
-                Image(systemName: isReversed ? "arrow.up" : "arrow.down")
-                Text(isReversed ? "倒序" : "正序")
+                Image(systemName: listViewModel.isReversed ? "arrow.up" : "arrow.down")
+                Text(listViewModel.isReversed ? "倒序" : "正序")
             }.font(.caption)
         }
     }
@@ -274,7 +187,7 @@ struct BookListView: View {
     private var listToolbarTrailingItems: some View {
         HStack(spacing: 16) {
             // 搜索配置按钮：始终可见
-            NavigationLink(destination: PreferredSourcesView().environmentObject(apiService)) {
+            NavigationLink(destination: PreferredSourcesView().environmentObject(sourceStore)) {
                 Image(systemName: "line.3.horizontal.decrease.circle")
                     .foregroundColor(preferences.searchSourcesFromBookshelf ? .blue : .secondary)
             }
@@ -304,54 +217,42 @@ struct BookListView: View {
     }
     
     private func loadBooks() async {
-        isRefreshing = true
-        do {
-            try await apiService.fetchBookshelf()
-        } catch {
-            // 只有当书架为空时才显示错误信息，否则静默失败以保证已加载数据的阅读体验
-            if apiService.books.isEmpty {
-                apiService.errorMessage = error.localizedDescription
-            }
-        }
-        isRefreshing = false
+        await listViewModel.loadBooks()
     }
     
     private func importBook(from url: URL) async {
-        isRefreshing = true
+        listViewModel.isRefreshing = true
         do {
-            try await apiService.importBook(from: url)
-            await loadBooks()
+            try await bookshelfStore.importBook(from: url)
+            await listViewModel.loadBooks()
         } catch {
-            apiService.errorMessage = "导入失败: \(error.localizedDescription)"
+            bookshelfStore.errorMessage = "导入失败: \(error.localizedDescription)"
         }
-        isRefreshing = false
+        listViewModel.isRefreshing = false
     }
     
     private func clearAllRemoteCache() {
         Task {
             do {
-                try await apiService.clearAllRemoteCache()
+                try await APIService.shared.clearAllRemoteCache()
                 // 清除成功后刷新书架
                 await loadBooks()
             } catch {
-                apiService.errorMessage = "清除缓存失败: \(error.localizedDescription)"
+                bookshelfStore.errorMessage = "清除缓存失败: \(error.localizedDescription)"
             }
         }
     }
 
     private func deleteBookFromShelf(_ book: Book) {
         guard let bookUrl = book.bookUrl, !bookUrl.isEmpty else {
-            apiService.errorMessage = "删除失败: 书籍地址为空"
+            bookshelfStore.errorMessage = "删除失败: 书籍地址为空"
             return
         }
         Task {
             do {
-                try await apiService.deleteBook(bookUrl: bookUrl)
-                await MainActor.run {
-                    apiService.books.removeAll { $0.bookUrl == bookUrl }
-                }
+                try await bookshelfStore.deleteBook(bookUrl: bookUrl)
             } catch {
-                apiService.errorMessage = "删除失败: \(error.localizedDescription)"
+                bookshelfStore.errorMessage = "删除失败: \(error.localizedDescription)"
             }
         }
     }

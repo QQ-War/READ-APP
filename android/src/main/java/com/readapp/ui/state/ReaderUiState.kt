@@ -4,6 +4,7 @@ import com.readapp.data.DarkModeConfig
 import com.readapp.data.PageTurningMode
 import com.readapp.data.ReadingMode
 import com.readapp.data.ApiBackend
+import com.readapp.data.ReaderTheme
 import com.readapp.data.model.Book
 import com.readapp.data.model.Chapter
 
@@ -15,11 +16,14 @@ data class ReaderUiState(
     val isContentLoading: Boolean,
     val errorMessage: String?,
     val readingFontSize: Float,
+    val readingFontPath: String,
+    val readingFontName: String,
     val readingHorizontalPadding: Float,
     val readingMode: ReadingMode,
     val lockPageOnTTS: Boolean,
     val pageTurningMode: PageTurningMode,
     val darkModeConfig: DarkModeConfig,
+    val readingTheme: ReaderTheme,
     val infiniteScrollEnabled: Boolean,
     val prevChapterContent: String?,
     val nextChapterContent: String?,

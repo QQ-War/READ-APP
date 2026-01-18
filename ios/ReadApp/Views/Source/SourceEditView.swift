@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SourceEditView: View {
     @Environment(\.dismiss) var dismiss
-    @EnvironmentObject var apiService: APIService
     
     // If provided, we are editing an existing source
     var sourceId: String?
@@ -190,7 +189,7 @@ struct SourceEditView: View {
         isLoading = true
         Task {
             do {
-                try await apiService.deleteBookSource(id: id)
+                try await APIService.shared.deleteBookSource(id: id)
                 await MainActor.run {
                     isLoading = false
                     dismiss()

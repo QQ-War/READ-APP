@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +45,8 @@ internal fun ParagraphItem(
     isPlaying: Boolean,
     isPreloaded: Boolean,
     fontSize: Float,
+    fontFamily: FontFamily?,
+    textColor: Color,
     chapterUrl: String?,
     serverUrl: String,
     forceProxy: Boolean,
@@ -73,8 +76,8 @@ internal fun ParagraphItem(
         } else {
             Text(
                 text,
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp),
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize.sp, fontFamily = fontFamily),
+                color = textColor,
                 lineHeight = (fontSize * 1.8f).sp,
                 modifier = Modifier.padding(
                     horizontal = if (isPlaying || isPreloaded) 12.dp else 0.dp,

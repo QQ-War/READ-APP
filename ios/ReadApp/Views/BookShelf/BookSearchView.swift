@@ -3,7 +3,6 @@ import SwiftUI
 struct BookSearchView: View {
     @ObservedObject var viewModel: BookSearchViewModel
     @Environment(\.presentationMode) var presentationMode // For dismissing the view
-    @EnvironmentObject var apiService: APIService
     
     @State private var showingAddSuccessAlert = false
     @State private var showingAddFailureAlert = false
@@ -24,7 +23,7 @@ struct BookSearchView: View {
                         .padding()
                 } else {
                     ForEach(viewModel.searchResults) { book in
-                        NavigationLink(destination: BookDetailView(book: book).environmentObject(apiService)) {
+                        NavigationLink(destination: BookDetailView(book: book)) {
                             BookSearchResultRow(book: book) {
                                 // Add button is removed from row, this callback is no-op
                             }

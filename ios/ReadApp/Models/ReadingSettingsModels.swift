@@ -41,3 +41,21 @@ enum DarkModeConfig: String, CaseIterable, Identifiable {
         }
     }
 }
+
+enum ReadingTheme: String, CaseIterable, Identifiable {
+    case system = "System"
+    case paper = "Paper"
+    case eyeCare = "EyeCare"
+    case dim = "Dim"
+
+    var id: String { self.rawValue }
+
+    var localizedName: String {
+        switch self {
+        case .system: return "系统默认"
+        case .paper: return "牛皮纸"
+        case .eyeCare: return "护眼绿"
+        case .dim: return "深色微调"
+        }
+    }
+}

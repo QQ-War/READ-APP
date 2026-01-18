@@ -2,7 +2,6 @@ import SwiftUI
 
 struct AccountSettingsView: View {
     @StateObject private var preferences = UserPreferences.shared
-    @EnvironmentObject var apiService: APIService
     @Environment(\.dismiss) var dismiss
     @State private var showLogoutAlert = false
     @State private var showChangePasswordSheet = false
@@ -66,7 +65,7 @@ struct AccountSettingsView: View {
         .navigationTitle("账号管理")
         .ifAvailableHideTabBar()
         .sheet(isPresented: $showChangePasswordSheet) {
-            ChangePasswordView().environmentObject(apiService)
+            ChangePasswordView()
         }
         .alert("退出登录", isPresented: $showLogoutAlert) {
             Button("取消", role: .cancel) { }
@@ -80,7 +79,6 @@ struct AccountSettingsView: View {
 }
 
 struct ReadingSettingsView: View {
-    @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
 
     var body: some View {
@@ -195,7 +193,6 @@ struct ReadingSettingsView: View {
 
 // MARK: - Change Password View
 struct ChangePasswordView: View {
-    @EnvironmentObject var apiService: APIService
     @Environment(\.dismiss) var dismiss
     @State private var oldPassword = ""
     @State private var newPassword = ""
@@ -251,7 +248,7 @@ struct ChangePasswordView: View {
         isLoading = true
         Task {
             do {
-                try await apiService.changePassword(oldPassword: oldPassword, newPassword: newPassword)
+                try await APIService.shared.changePassword(oldPassword: oldPassword, newPassword: newPassword)
                 await MainActor.run {
                     isLoading = false
                     showSuccess = true
@@ -267,18 +264,17 @@ struct ChangePasswordView: View {
 }
 
 struct TTSSettingsView: View {
-    @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
     @State private var ttsSummary = ""
 
     var body: some View {
         Form {
             Section(header: Text("引擎管理")) {
-                NavigationLink(destination: TTSEngineListView().environmentObject(apiService)) {
+                NavigationLink(destination: TTSEngineListView()) {
                     Label("TTS 引擎管理", systemImage: "waveform.path.ecg")
                 }
                 
-                NavigationLink(destination: TTSSelectionView().environmentObject(apiService)) {
+                NavigationLink(destination: TTSSelectionView()) {
                     Label {
                         HStack {
                             Text("当前使用引擎")
@@ -390,7 +386,7 @@ struct TTSSettingsView: View {
         }
 
         do {
-            let ttsList = try await apiService.fetchTTSList()
+            let ttsList = try await APIService.shared.fetchTTSList()
 
             func name(for id: String) -> String? {
                 ttsList.first(where: { $0.id == id })?.name
@@ -418,7 +414,6 @@ struct TTSSettingsView: View {
 }
 
 struct ContentSettingsView: View {
-    @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
 
     var body: some View {
@@ -427,7 +422,7 @@ struct ContentSettingsView: View {
                 Toggle("书架搜索包含书源", isOn: $preferences.searchSourcesFromBookshelf)
                 
                 if preferences.searchSourcesFromBookshelf {
-                    NavigationLink(destination: PreferredSourcesView().environmentObject(apiService)) {
+                    NavigationLink(destination: PreferredSourcesView()) {
                         Label {
                             HStack {
                                 Text("指定搜索源")
@@ -533,7 +528,6 @@ struct URLIdentifier: Identifiable {
 }
 
 struct DebugSettingsView: View {
-    @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
     @State private var logURLToShare: URLIdentifier? = nil
     @State private var showClearLogsAlert = false
@@ -610,7 +604,7 @@ struct DebugSettingsView: View {
         }
         .alert("清除缓存", isPresented: $showClearCacheAlert) {
             Button("取消", role: .cancel) { }
-            Button("清除", role: .destructive) { apiService.clearLocalCache() }
+            Button("清除", role: .destructive) { APIService.shared.clearLocalCache() }
         }
     }
 
@@ -622,12 +616,12 @@ struct DebugSettingsView: View {
 }
 
 struct PreferredSourcesView: View {
-    @EnvironmentObject var apiService: APIService
+    @EnvironmentObject var sourceStore: SourceStore
     @StateObject private var preferences = UserPreferences.shared
     @State private var filterText = ""
     
     var filteredSources: [BookSource] {
-        let enabled = apiService.availableSources.filter { $0.enabled }
+        let enabled = sourceStore.availableSources.filter { $0.enabled }
         if filterText.isEmpty {
             return enabled
         } else {
@@ -675,8 +669,8 @@ struct PreferredSourcesView: View {
         }
         .ifAvailableHideTabBar()
         .task {
-            if apiService.availableSources.isEmpty {
-                _ = try? await apiService.fetchBookSources()
+            if sourceStore.availableSources.isEmpty {
+                await sourceStore.refreshSources()
             }
         }
     }

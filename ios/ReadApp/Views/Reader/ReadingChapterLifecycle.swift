@@ -16,7 +16,7 @@ extension ReadingView {
     }
     func loadChapters() async {
         do {
-            let list = try await apiService.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
+            let list = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             await MainActor.run { self.chapters = list }
         } catch { print("Main view load chapters failed") }
     }

@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct LoginView: View {
-    @EnvironmentObject var apiService: APIService
     @StateObject private var preferences = UserPreferences.shared
     @State private var username = ""
     @State private var password = ""
@@ -113,7 +112,7 @@ struct LoginView: View {
         
         Task {
             do {
-                let accessToken = try await apiService.login(username: username, password: password)
+                let accessToken = try await APIService.shared.login(username: username, password: password)
                 
                 await MainActor.run {
                     preferences.accessToken = accessToken
@@ -365,5 +364,4 @@ struct ServerSettingsView: View {
         }
     }
 }
-
 

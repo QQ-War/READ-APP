@@ -244,6 +244,12 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                         onReadingHorizontalPaddingChange = { padding ->
                             bookViewModel.updateReadingHorizontalPadding(padding)
                         },
+                        onReadingFontChange = { path, name ->
+                            bookViewModel.updateReadingFont(path, name)
+                        },
+                        onReadingThemeChange = { theme ->
+                            bookViewModel.updateReadingTheme(theme)
+                        },
                         onHeaderClick = {
                             navController.navigate(Screen.BookDetail.route)
                         },

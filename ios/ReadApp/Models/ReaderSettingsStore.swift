@@ -21,6 +21,11 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.fontSize = newValue }
     }
 
+    var readingFontName: String {
+        get { preferences.readingFontName }
+        set { preferences.readingFontName = newValue }
+    }
+
     var lineSpacing: CGFloat {
         get { preferences.lineSpacing }
         set { preferences.lineSpacing = newValue }
@@ -49,6 +54,11 @@ final class ReaderSettingsStore: ObservableObject {
     var darkMode: DarkModeConfig {
         get { preferences.darkMode }
         set { preferences.darkMode = newValue }
+    }
+
+    var readingTheme: ReadingTheme {
+        get { preferences.readingTheme }
+        set { preferences.readingTheme = newValue }
     }
 
     var lockPageOnTTS: Bool {

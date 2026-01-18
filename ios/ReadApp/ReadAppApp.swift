@@ -2,13 +2,19 @@ import SwiftUI
 
 @main
 struct ReadAppApp: App {
-    @StateObject private var apiService = APIService.shared
+    @StateObject private var bookshelfStore = BookshelfStore()
+    @StateObject private var sourceStore = SourceStore()
     @StateObject private var preferences = UserPreferences.shared
+
+    init() {
+        FontManager.shared.registerCachedFonts()
+    }
     
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(apiService)
+                .environmentObject(bookshelfStore)
+                .environmentObject(sourceStore)
                 .preferredColorScheme(colorScheme)
         }
     }
@@ -23,4 +29,3 @@ struct ReadAppApp: App {
 }
 
 import AVFoundation
-

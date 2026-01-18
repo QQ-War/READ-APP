@@ -20,6 +20,10 @@
 		1A000013000000000000001 /* ReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000014000000000000001 /* ReadingView.swift */; };
 		1A000098000000000000001 /* VerticalTextReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000099000000000000001 /* VerticalTextReader.swift */; };
 		1A0000AB000000000000001 /* ReaderContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AA000000000000001 /* ReaderContainer.swift */; };
+		1A0000BA000000000000001 /* ReaderContainer+Loading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AC000000000000001 /* ReaderContainer+Loading.swift */; };
+		1A0000BB000000000000001 /* ReaderContainer+Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AD000000000000001 /* ReaderContainer+Navigation.swift */; };
+		1A0000BC000000000000001 /* ReaderContainer+Layout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AE000000000000001 /* ReaderContainer+Layout.swift */; };
+		1A0000BD000000000000001 /* ReaderContainer+Prefetch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AF000000000000001 /* ReaderContainer+Prefetch.swift */; };
 		1A0000F20000000000000001 /* ReaderPrefetchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F10000000000000001 /* ReaderPrefetchCoordinator.swift */; };
 		1A0000F40000000000000001 /* TTSReadingSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F30000000000000001 /* TTSReadingSyncCoordinator.swift */; };
 		1A0000C1000000000000001 /* MangaNativeReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B1000000000000001 /* MangaNativeReader.swift */; };
@@ -106,6 +110,10 @@
 		1A000014000000000000001 /* ReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingView.swift; sourceTree = "<group>"; };
 		1A000099000000000000001 /* VerticalTextReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerticalTextReader.swift; sourceTree = "<group>"; };
 		1A0000AA000000000000001 /* ReaderContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderContainer.swift; sourceTree = "<group>"; };
+		1A0000AC000000000000001 /* ReaderContainer+Loading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReaderContainer+Loading.swift"; sourceTree = "<group>"; };
+		1A0000AD000000000000001 /* ReaderContainer+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReaderContainer+Navigation.swift"; sourceTree = "<group>"; };
+		1A0000AE000000000000001 /* ReaderContainer+Layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReaderContainer+Layout.swift"; sourceTree = "<group>"; };
+		1A0000AF000000000000001 /* ReaderContainer+Prefetch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReaderContainer+Prefetch.swift"; sourceTree = "<group>"; };
 		1A0000F10000000000000001 /* ReaderPrefetchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPrefetchCoordinator.swift; sourceTree = "<group>"; };
 		1A0000F30000000000000001 /* TTSReadingSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSReadingSyncCoordinator.swift; sourceTree = "<group>"; };
 		1A0000B1000000000000001 /* MangaNativeReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaNativeReader.swift; sourceTree = "<group>"; };
@@ -241,6 +249,10 @@
 				1A000014000000000000001 /* ReadingView.swift */,
 				1A000099000000000000001 /* VerticalTextReader.swift */,
 				1A0000AA000000000000001 /* ReaderContainer.swift */,
+				1A0000AC000000000000001 /* ReaderContainer+Loading.swift */,
+				1A0000AD000000000000001 /* ReaderContainer+Navigation.swift */,
+				1A0000AE000000000000001 /* ReaderContainer+Layout.swift */,
+				1A0000AF000000000000001 /* ReaderContainer+Prefetch.swift */,
 				1A0000F10000000000000001 /* ReaderPrefetchCoordinator.swift */,
 				1A0000B1000000000000001 /* MangaNativeReader.swift */,
 				1A0000B2000000000000001 /* ReadingControls.swift */,
@@ -458,6 +470,10 @@
 				1A000013000000000000001 /* ReadingView.swift in Sources */,
 				1A000098000000000000001 /* VerticalTextReader.swift in Sources */,
 				1A0000AB000000000000001 /* ReaderContainer.swift in Sources */,
+				1A0000BA000000000000001 /* ReaderContainer+Loading.swift in Sources */,
+				1A0000BB000000000000001 /* ReaderContainer+Navigation.swift in Sources */,
+				1A0000BC000000000000001 /* ReaderContainer+Layout.swift in Sources */,
+				1A0000BD000000000000001 /* ReaderContainer+Prefetch.swift in Sources */,
 				1A0000F20000000000000001 /* ReaderPrefetchCoordinator.swift in Sources */,
 				1A0000F40000000000000001 /* TTSReadingSyncCoordinator.swift in Sources */,
 				1A0000C1000000000000001 /* MangaNativeReader.swift in Sources */,
