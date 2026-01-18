@@ -196,6 +196,22 @@ struct BookDetailView: View {
                         
                         if isLoading {
                             HStack { Spacer(); ProgressView(); Spacer() }.padding()
+                        } else if let error = errorMessage {
+                            VStack(spacing: 12) {
+                                Text("章节加载失败")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
+                                Button("重试") {
+                                    Task { await loadData() }
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
                         } else if chapters.isEmpty {
                             Text("暂无章节")
                                 .foregroundColor(.secondary)
