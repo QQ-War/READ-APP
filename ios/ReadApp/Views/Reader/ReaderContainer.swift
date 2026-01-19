@@ -347,9 +347,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                                 oldSettings.pageHorizontalMargin != settings.pageHorizontalMargin ||
                                 oldSettings.readingFontName != settings.readingFontName ||
                                 oldSettings.readingTheme != settings.readingTheme
+            let turningModeChanged = oldSettings.pageTurningMode != settings.pageTurningMode
 
             // 如果正在进行模式切换跳转，不在此处重新捕获进度，防止捕获到临时的 Offset 0
             let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
+
+            if turningModeChanged && currentReadingMode == .horizontal && !isMangaMode {
+                rebuildHorizontalControllerForTurningModeChange()
+            }
 
             if let v = verticalVC, v.isInfiniteScrollEnabled != settings.isInfiniteScrollEnabled {
                 v.isInfiniteScrollEnabled = settings.isInfiniteScrollEnabled
@@ -673,6 +678,19 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         onChapterIndexChanged?(currentChapterIndex)
         updateVerticalAdjacent()
         prefetchAdjacentChapters(index: currentChapterIndex)
+    }
+
+    private func rebuildHorizontalControllerForTurningModeChange() {
+        guard currentReadingMode == .horizontal, !isMangaMode else { return }
+        isInternalTransitioning = true
+        performChapterTransitionFade { [weak self] in
+            guard let self = self else { return }
+            self.horizontalVC?.view.removeFromSuperview()
+            self.horizontalVC?.removeFromParent()
+            self.horizontalVC = nil
+            self.setupHorizontalMode()
+            self.isInternalTransitioning = false
+        }
     }
 
 

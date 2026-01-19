@@ -228,7 +228,8 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     
     override init(frame: CGRect) {
         super.init(frame: frame)
-        self.backgroundColor = .clear
+        self.backgroundColor = UserPreferences.shared.readingTheme.backgroundColor
+        self.isOpaque = true
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tap.delegate = self
@@ -341,4 +342,3 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         return String(trimmed[..<endIndex]) + "…"
     }
 }
-

@@ -181,6 +181,8 @@ private extension ReaderContainerViewController {
 
     func createPageVC(at i: Int, offset: Int) -> PageContentViewController {
         let vc = PageContentViewController(pageIndex: i, chapterOffset: offset)
+        vc.view.backgroundColor = readerSettings.readingTheme.backgroundColor
+        vc.view.isOpaque = true
         let pV = ReadContent2View(frame: .zero)
         let cache = offset == 0 ? currentCache : (offset > 0 ? nextCache : prevCache)
         let aS = cache.renderStore
