@@ -323,6 +323,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 verticalThreshold: settings.verticalThreshold
             )
             if lastSettingsSnapshot == snapshot { return }
+            let previousSnapshot = lastSettingsSnapshot
             lastSettingsSnapshot = snapshot
 
             guard let oldSettings = self.readerSettings else {
@@ -347,7 +348,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                                 oldSettings.pageHorizontalMargin != settings.pageHorizontalMargin ||
                                 oldSettings.readingFontName != settings.readingFontName ||
                                 oldSettings.readingTheme != settings.readingTheme
-            let turningModeChanged = oldSettings.pageTurningMode != settings.pageTurningMode
+            let turningModeChanged = previousSnapshot?.pageTurningMode != snapshot.pageTurningMode
 
             // 如果正在进行模式切换跳转，不在此处重新捕获进度，防止捕获到临时的 Offset 0
             let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
