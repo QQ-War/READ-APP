@@ -223,6 +223,9 @@ struct ChapterListView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
+                            Button("关闭") { dismiss() }
+                        }
+                        ToolbarItemGroup(placement: .navigationBarTrailing) {
                             Button(action: {
                                 withAnimation { isReversed.toggle() }
                             }) {
@@ -231,8 +234,6 @@ struct ChapterListView: View {
                                     Text(isReversed ? "倒序" : "正序")
                                 }.font(.caption)
                             }
-                        }
-                        ToolbarItem(placement: .navigationBarTrailing) {
                             Button(action: {
                                 guard !isRebuilding else { return }
                                 isRebuilding = true
@@ -249,9 +250,6 @@ struct ChapterListView: View {
                                 }
                                 .font(.caption)
                             }
-                        }
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("关闭") { dismiss() }
                         }
                     }
                 }
