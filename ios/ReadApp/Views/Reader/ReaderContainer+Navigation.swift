@@ -1,13 +1,21 @@
 import UIKit
 
 extension ReaderContainerViewController {
+    func pageViewController(_ pvc: UIPageViewController, willTransitionTo pendingViewControllers: [UIViewController]) {
+        if !isInternalTransitioning {
+            notifyUserInteractionStarted()
+        }
+    }
+
     func pageViewController(_ pvc: UIPageViewController, didFinishAnimating f: Bool, previousViewControllers p: [UIViewController], transitionCompleted completed: Bool) {
         guard let v = pvc.viewControllers?.first as? PageContentViewController else {
             isInternalTransitioning = false
+            notifyUserInteractionEnded()
             return
         }
         guard completed else {
             isInternalTransitioning = false
+            notifyUserInteractionEnded()
             return
         }
 
@@ -18,6 +26,7 @@ extension ReaderContainerViewController {
             self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
             updateProgressUI()
             self.isInternalTransitioning = false
+            notifyUserInteractionEnded()
         }
     }
 

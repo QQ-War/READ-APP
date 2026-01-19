@@ -119,6 +119,14 @@ struct ReadingSettingsView: View {
                         Text(mode.localizedName).tag(mode)
                     }
                 }
+
+                if preferences.readingMode == .horizontal {
+                    Picker("翻页方式", selection: $preferences.pageTurningMode) {
+                        ForEach(PageTurningMode.allCases) { mode in
+                            Text(mode.localizedName).tag(mode)
+                        }
+                    }
+                }
                 
                 if preferences.readingMode == .vertical {
                     Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)

@@ -72,6 +72,7 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
         
         // 外部跳转检测逻辑优化
         if !vc.isInternalTransitioning && vc.lastReportedChapterIndex != currentChapterIndex {
+            vc.markUserNavigation()
             vc.jumpToChapter(currentChapterIndex)
         }
         
@@ -887,6 +888,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func resetTTSFollowCooldown() {
+        suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
+    }
+
+    func markUserNavigation() {
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
     }
     
