@@ -278,6 +278,14 @@ struct ReaderOptionsSheet: View {
                         .pickerStyle(.segmented)
                         .padding(.vertical, 4)
 
+                        if preferences.readingMode == .horizontal {
+                            Picker("翻页方式", selection: $preferences.pageTurningMode) {
+                                ForEach(PageTurningMode.allCases) { mode in
+                                    Text(mode.localizedName).tag(mode)
+                                }
+                            }
+                        }
+
                         VStack(alignment: .leading, spacing: 8) {
                             Text("字体")
                                 .font(.subheadline)

@@ -17,11 +17,11 @@ extension ReadingTheme {
     var textColor: UIColor {
         switch self {
         case .dim:
-            return UIColor(white: 0.9, alpha: 1.0)
+            return UIColor(white: 1.0, alpha: 1.0)
         case .system:
             return .label
         case .paper, .eyeCare:
-            return UIColor(red: 0.18, green: 0.18, blue: 0.2, alpha: 1.0)
+            return .black
         }
     }
 
