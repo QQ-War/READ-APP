@@ -143,18 +143,10 @@ extension ReaderContainerViewController {
         }
         v.onChapterSwitched = { [weak self] offset in
             guard let self = self else { return }
-            if !self.readerSettings.isInfiniteScrollEnabled {
-                let target = self.currentChapterIndex + offset
-                guard target >= 0 && target < self.chapters.count else { return }
-                self.jumpToChapter(target, startAtEnd: offset < 0)
-                return
-            }
             let now = Date().timeIntervalSince1970
             guard now - self.lastChapterSwitchTime > self.chapterSwitchCooldown else { return }
-            let target = self.currentChapterIndex + offset
-            guard target >= 0 && target < self.chapters.count else { return }
             self.lastChapterSwitchTime = now
-            self.switchChapterSeamlessly(offset: offset)
+            self.requestChapterSwitch(offset: offset, preferSeamless: self.readerSettings.isInfiniteScrollEnabled, startAtEnd: offset < 0)
         }
         v.onInteractionChanged = { [weak self] interacting in
             guard let self = self else { return }
@@ -185,10 +177,11 @@ extension ReaderContainerViewController {
             mangaVC?.removeFromParent()
 
             mangaVC = prebuilt
-            addChild(mangaVC!)
-            view.insertSubview(mangaVC!.view, at: 0)
-            mangaVC!.view.frame = view.bounds
-            mangaVC!.didMove(toParent: self)
+            guard let mangaVC = mangaVC else { return }
+            addChild(mangaVC)
+            view.insertSubview(mangaVC.view, at: 0)
+            mangaVC.view.frame = view.bounds
+            mangaVC.didMove(toParent: self)
 
             // 清空预制标记
             prebuiltNextMangaVC = nil
@@ -217,10 +210,8 @@ extension ReaderContainerViewController {
                 guard let self = self else { return }
                 let now = Date().timeIntervalSince1970
                 guard now - self.lastChapterSwitchTime > self.chapterSwitchCooldown else { return }
-                let target = self.currentChapterIndex + offset
-                guard target >= 0 && target < self.chapters.count else { return }
                 self.lastChapterSwitchTime = now
-                self.jumpToChapter(target, startAtEnd: offset < 0)
+                self.requestChapterSwitch(offset: offset, preferSeamless: false, startAtEnd: offset < 0)
             }
             vc.threshold = verticalThreshold
             vc.dampingFactor = readerSettings.verticalDampingFactor

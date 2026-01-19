@@ -106,7 +106,7 @@ extension ReaderContainerViewController {
                 animateToAdjacentChapter(offset: -1, targetPage: prevCache.pages.count - 1)
                 didChangeWithinChapter = true
             } else {
-                jumpToChapter(targetChapter, startAtEnd: !isNext)
+                requestChapterSwitch(to: targetChapter, startAtEnd: !isNext)
             }
         }
         if didChangeWithinChapter {

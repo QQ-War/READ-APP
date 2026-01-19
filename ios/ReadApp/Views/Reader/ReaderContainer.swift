@@ -202,7 +202,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var prefetchedMangaNextContent: String?
         var lastChapterSwitchTime: TimeInterval = 0
         let chapterSwitchCooldown: TimeInterval = 1.0
-        private var suppressTTSFollowUntil: TimeInterval = 0
+    private var suppressTTSFollowUntil: TimeInterval = 0
         private var lastLoggedCacheChapterIndex: Int = -1
         private var lastLoggedNextUrl: String?
         private var lastLoggedPrevUrl: String?
@@ -231,6 +231,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
+            prefetchCoordinator.cancel()
+            ttsSyncCoordinator?.stop()
             // 退出阅读器时强制保存进度
             Task {
                 let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
@@ -399,14 +401,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 
         
                 func jumpToChapter(_ index: Int, startAtEnd: Bool = false) {
-        
-                    activePaginationAnchor = 0 
-        
-                    currentChapterIndex = index; lastReportedChapterIndex = index; onChapterIndexChanged?(index)
-                    performChapterTransitionFade { [weak self] in
-                        self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
-                    }
-        
+                    requestChapterSwitch(to: index, startAtEnd: startAtEnd)
                 }
         
             
@@ -588,9 +583,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                             // 垂直无限流平滑换章
                             let offset = newIndex - self.currentChapterIndex
                             self.suppressTTSFollowUntil = Date().timeIntervalSince1970 + 0.5
-                            self.switchChapterSeamlessly(offset: offset)
+                            self.requestChapterSwitch(offset: offset, preferSeamless: true)
                         } else {
-                            self.jumpToChapter(newIndex)
+                            self.requestChapterSwitch(to: newIndex)
                         }
                     }
                 },
@@ -628,28 +623,61 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         notifyUserInteractionEnded()
     }
 
+    func requestChapterSwitch(to index: Int, startAtEnd: Bool = false) {
+        guard index >= 0 && index < chapters.count else { return }
+        performJumpToChapter(index, startAtEnd: startAtEnd)
+    }
+
+    func requestChapterSwitch(offset: Int, preferSeamless: Bool, startAtEnd: Bool? = nil) {
+        guard offset != 0 else { return }
+        let targetIndex = currentChapterIndex + offset
+        guard targetIndex >= 0 && targetIndex < chapters.count else { return }
+        if preferSeamless, attemptSeamlessSwitch(offset: offset) { return }
+        let shouldStartAtEnd = startAtEnd ?? (offset < 0)
+        performJumpToChapter(targetIndex, startAtEnd: shouldStartAtEnd)
+    }
+
+    private func performJumpToChapter(_ index: Int, startAtEnd: Bool) {
+        activePaginationAnchor = 0
+        currentChapterIndex = index
+        lastReportedChapterIndex = index
+        onChapterIndexChanged?(index)
+        performChapterTransitionFade { [weak self] in
+            self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
+        }
+    }
+
+    private func attemptSeamlessSwitch(offset: Int) -> Bool {
+        guard offset != 0 else { return false }
+        let canSwap = (offset > 0 && nextCache.renderStore != nil) || (offset < 0 && prevCache.renderStore != nil)
+        guard canSwap else { return false }
+
+        if offset > 0 {
+            prevCache = currentCache
+            currentCache = nextCache
+            nextCache = .empty
+        } else {
+            nextCache = currentCache
+            currentCache = prevCache
+            prevCache = .empty
+        }
+
+        applyChapterState(afterSeamlessOffset: offset)
+        return true
+    }
+
+    private func applyChapterState(afterSeamlessOffset offset: Int) {
+        currentChapterIndex += offset
+        lastReportedChapterIndex = currentChapterIndex
+        onChapterIndexChanged?(currentChapterIndex)
+        updateVerticalAdjacent()
+        prefetchAdjacentChapters(index: currentChapterIndex)
+    }
+
 
     func switchChapterSeamlessly(offset: Int) {
-        guard offset != 0 else { return }
-        let canSwap = (offset > 0 && nextCache.renderStore != nil) || (offset < 0 && prevCache.renderStore != nil)
-        if canSwap {
-            if offset > 0 {
-                prevCache = currentCache
-                currentCache = nextCache
-                nextCache = .empty
-            } else {
-                nextCache = currentCache
-                currentCache = prevCache
-                prevCache = .empty
-            }
-            self.currentChapterIndex += offset
-            self.lastReportedChapterIndex = self.currentChapterIndex
-            self.onChapterIndexChanged?(self.currentChapterIndex)
-            updateVerticalAdjacent()
-            prefetchAdjacentChapters(index: currentChapterIndex)
-        } else {
-            jumpToChapter(currentChapterIndex + offset, startAtEnd: offset < 0)
-        }
+        if attemptSeamlessSwitch(offset: offset) { return }
+        requestChapterSwitch(offset: offset, preferSeamless: false)
     }
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
@@ -664,7 +692,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 let now = Date().timeIntervalSince1970
                 if now >= suppressTTSFollowUntil {
                     suppressTTSFollowUntil = now + 0.5
-                    switchChapterSeamlessly(offset: 1)
+                    requestChapterSwitch(offset: 1, preferSeamless: true)
                     return
                 }
             }
@@ -792,9 +820,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                         // 垂直无限流平滑换章
                         let offset = newIndex - self.currentChapterIndex
                         self.suppressTTSFollowUntil = Date().timeIntervalSince1970 + 0.5
-                        self.switchChapterSeamlessly(offset: offset)
+                        self.requestChapterSwitch(offset: offset, preferSeamless: true)
                     } else {
-                        self.jumpToChapter(newIndex)
+                        self.requestChapterSwitch(to: newIndex)
                     }
                 }
             },
@@ -836,13 +864,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     func finalizeUserInteraction() {
         isUserInteracting = false
-        suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
+        resetTTSFollowCooldown()
     }
 
     func notifyUserInteractionStarted() {
         isUserInteracting = true
         pendingTTSPositionSync = true
-        suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
+        resetTTSFollowCooldown()
         ttsSyncCoordinator?.userInteractionStarted()
     }
 
@@ -854,8 +882,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func notifyUserInteractionEnded() {
         guard isUserInteracting || pendingTTSPositionSync else { return }
         isUserInteracting = false
-        suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
+        resetTTSFollowCooldown()
         ttsSyncCoordinator?.scheduleCatchUp(delay: readerSettings.ttsFollowCooldown)
+    }
+
+    private func resetTTSFollowCooldown() {
+        suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
     }
     
     func syncTTSReadingPositionIfNeeded() {

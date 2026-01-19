@@ -7,6 +7,7 @@ final class TTSReadingSyncCoordinator {
     private let ttsManager: TTSManager
     private var cancellables: Set<AnyCancellable> = []
     private var interactionWorkItem: DispatchWorkItem?
+    private let syncTrigger = PassthroughSubject<Void, Never>()
 
     init(reader: ReaderContainerViewController, ttsManager: TTSManager) {
         self.reader = reader
@@ -14,17 +15,24 @@ final class TTSReadingSyncCoordinator {
     }
 
     func start() {
+        syncTrigger
+            .debounce(for: .milliseconds(120), scheduler: RunLoop.main)
+            .sink { [weak self] in
+                self?.reader?.syncTTSState()
+            }
+            .store(in: &cancellables)
+
         ttsManager.$currentSentenceIndex
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.reader?.syncTTSState()
+                self?.syncTrigger.send(())
             }
             .store(in: &cancellables)
 
         ttsManager.$isPlaying
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.reader?.syncTTSState()
+                self?.syncTrigger.send(())
             }
             .store(in: &cancellables)
 
@@ -32,14 +40,14 @@ final class TTSReadingSyncCoordinator {
             .removeDuplicates()
             .throttle(for: .milliseconds(100), scheduler: RunLoop.main, latest: true)
             .sink { [weak self] _ in
-                self?.reader?.syncTTSState()
+                self?.syncTrigger.send(())
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.reader?.syncTTSState()
+                self?.syncTrigger.send(())
             }
             .store(in: &cancellables)
     }

@@ -129,10 +129,8 @@ extension ReaderContainerViewController {
             guard let self = self else { return }
             let now = Date().timeIntervalSince1970
             guard now - self.lastChapterSwitchTime > self.chapterSwitchCooldown else { return }
-            let target = self.currentChapterIndex + offset
-            guard target >= 0 && target < self.chapters.count else { return }
             self.lastChapterSwitchTime = now
-            self.jumpToChapter(target, startAtEnd: offset < 0)
+            self.requestChapterSwitch(offset: offset, preferSeamless: false, startAtEnd: offset < 0)
         }
         vc.threshold = verticalThreshold
         vc.dampingFactor = readerSettings.verticalDampingFactor

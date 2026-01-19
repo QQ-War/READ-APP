@@ -49,7 +49,8 @@ struct MangaNativeReader: UIViewRepresentable {
         if context.coordinator.lastChapterUrl != chapterUrl || context.coordinator.lastContentHash != currentHash {
             context.coordinator.lastChapterUrl = chapterUrl
             context.coordinator.lastContentHash = currentHash
-            context.coordinator.loadImages(from: sentences, into: context.coordinator.stackView!)
+            guard let stackView = context.coordinator.stackView else { return }
+            context.coordinator.loadImages(from: sentences, into: stackView)
         }
         
         if let scrollIndex = pendingScrollIndex {
