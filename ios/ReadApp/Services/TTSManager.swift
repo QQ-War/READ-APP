@@ -543,13 +543,42 @@ class TTSManager: NSObject, ObservableObject {
     private func speakWithSystemTTS(text: String) {
         isLoading = false
         stopKeepAlive()
+        stopHTTPPlaybackIfNeeded()
         let utterance = AVSpeechUtterance(string: text)
-        if !UserPreferences.shared.systemVoiceId.isEmpty {
-            utterance.voice = AVSpeechSynthesisVoice(identifier: UserPreferences.shared.systemVoiceId)
-        }
+        utterance.voice = preferredSystemVoice(for: text)
         let rate = Float(UserPreferences.shared.speechRate / 200.0)
         utterance.rate = max(AVSpeechUtteranceMinimumSpeechRate, min(AVSpeechUtteranceMaximumSpeechRate, rate))
         speechSynthesizer.speak(utterance)
+    }
+
+    private func stopHTTPPlaybackIfNeeded() {
+        if let player = audioPlayer, player.isPlaying {
+            player.stop()
+        }
+        audioPlayer = nil
+    }
+
+    private func preferredSystemVoice(for text: String) -> AVSpeechSynthesisVoice? {
+        let selectedId = UserPreferences.shared.systemVoiceId
+        if !selectedId.isEmpty, let selected = AVSpeechSynthesisVoice(identifier: selectedId) {
+            if textHasChinese(text), !selected.language.contains("zh") {
+                return fallbackChineseVoice() ?? selected
+            }
+            return selected
+        }
+        if textHasChinese(text) {
+            return fallbackChineseVoice()
+        }
+        return nil
+    }
+
+    private func fallbackChineseVoice() -> AVSpeechSynthesisVoice? {
+        if let voice = AVSpeechSynthesisVoice(language: "zh-CN") { return voice }
+        return AVSpeechSynthesisVoice.speechVoices().first { $0.language.contains("zh") }
+    }
+
+    private func textHasChinese(_ text: String) -> Bool {
+        return text.range(of: "[\\u4e00-\\u9fff]", options: .regularExpression) != nil
     }
     
     private func startPreloading() {
