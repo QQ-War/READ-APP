@@ -208,8 +208,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         private var lastLoggedPrevUrl: String?
         private var lastLoggedNextCount: Int = -1
         private var lastLoggedPrevCount: Int = -1
-        private var lastTTSSyncBlockReason: String = ""
-        private var lastTTSSyncBlockTime: TimeInterval = 0
     
         override func viewDidLoad() {
             super.viewDidLoad()
@@ -656,8 +654,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { return nil }
     func syncTTSState() {
-        if isMangaMode { logTTSSyncSkip("manga_mode"); return }
-        guard ttsManager.isReady else { logTTSSyncSkip("tts_not_ready"); return }
+        if isMangaMode { return }
+        guard ttsManager.isReady else { return }
         
         // 跨章预判：如果 TTS 已经进入下一章，且我们处于垂直无限流模式
         if currentReadingMode == .vertical && readerSettings.isInfiniteScrollEnabled {
@@ -674,14 +672,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
         // 确保阅读器记录的章节索引与 TTS 一致
         guard ttsManager.currentChapterIndex == currentChapterIndex else {
-            logTTSSyncSkip("chapter_mismatch tts=\(ttsManager.currentChapterIndex) reader=\(currentChapterIndex)")
             return
         }
         if chapters.indices.contains(currentChapterIndex) {
             guard currentCache.chapterUrl == chapters[currentChapterIndex].url else {
-                let cacheUrl = currentCache.chapterUrl ?? "nil"
-                let chapterUrl = chapters[currentChapterIndex].url ?? "nil"
-                logTTSSyncSkip("cache_url_mismatch cache=\(cacheUrl) chapter=\(chapterUrl)")
                 return
             }
         }
@@ -708,8 +702,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         // 2. 视口跟随逻辑 (只有在非交互状态下执行)
         let now = Date().timeIntervalSince1970
         guard !isUserInteracting, ttsManager.isPlaying, now >= suppressTTSFollowUntil else {
-            let cooldown = max(0, suppressTTSFollowUntil - now)
-            logTTSSyncSkip("blocked interacting=\(isUserInteracting) playing=\(ttsManager.isPlaying) cooldown=\(String(format: "%.2f", cooldown))")
             return
         }
 
@@ -756,14 +748,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 }
             }
         }
-    }
-
-    private func logTTSSyncSkip(_ reason: String) {
-        let now = Date().timeIntervalSince1970
-        if reason == lastTTSSyncBlockReason && now - lastTTSSyncBlockTime < 1.0 { return }
-        lastTTSSyncBlockReason = reason
-        lastTTSSyncBlockTime = now
-        logger.log("TTS sync skipped: \(reason)", category: "TTS")
     }
 
     func completePendingTTSPositionSync() {
@@ -853,14 +837,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func finalizeUserInteraction() {
         isUserInteracting = false
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
-        logger.log("TTS follow cooldown reset(finalize): \(readerSettings.ttsFollowCooldown)", category: "TTS")
     }
 
     func notifyUserInteractionStarted() {
         isUserInteracting = true
         pendingTTSPositionSync = true
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
-        logger.log("TTS follow cooldown reset(start): \(readerSettings.ttsFollowCooldown)", category: "TTS")
         ttsSyncCoordinator?.userInteractionStarted()
     }
 
@@ -873,7 +855,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard isUserInteracting || pendingTTSPositionSync else { return }
         isUserInteracting = false
         suppressTTSFollowUntil = Date().timeIntervalSince1970 + readerSettings.ttsFollowCooldown
-        logger.log("TTS follow cooldown reset(end): \(readerSettings.ttsFollowCooldown)", category: "TTS")
         ttsSyncCoordinator?.scheduleCatchUp(delay: readerSettings.ttsFollowCooldown)
     }
     

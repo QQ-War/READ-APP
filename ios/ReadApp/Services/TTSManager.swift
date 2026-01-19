@@ -42,10 +42,12 @@ class TTSManager: NSObject, ObservableObject {
     private let maxPreloadRetries = 3
     private let maxConcurrentDownloads = 6
     private let preloadStateQueue = DispatchQueue(label: "com.readapp.tts.preloadStateQueue")
+    private var fallbackIndices: Set<Int> = []
     
     // Next Chapter Preload
     private var nextChapterSentences: [String] = []
     private var nextChapterCache: [Int: Data] = [: ]
+    private var nextChapterFallbackIndices: Set<Int> = []
     
     private var allowChapterTitlePlayback = true
     private var offsetTimer: Timer?
@@ -122,6 +124,37 @@ class TTSManager: NSObject, ObservableObject {
 
     private func getIsPreloading() -> Bool {
         preloadStateQueue.sync { isPreloading }
+    }
+
+    private func isFallbackIndex(_ index: Int) -> Bool {
+        preloadStateQueue.sync { fallbackIndices.contains(index) }
+    }
+
+    private func markFallbackIndex(_ index: Int) {
+        preloadStateQueue.sync { fallbackIndices.insert(index) }
+    }
+
+    private func clearFallbackIndices() {
+        preloadStateQueue.sync { fallbackIndices.removeAll() }
+    }
+
+    private func isNextChapterFallbackIndex(_ index: Int) -> Bool {
+        preloadStateQueue.sync { nextChapterFallbackIndices.contains(index) }
+    }
+
+    private func markNextChapterFallbackIndex(_ index: Int) {
+        preloadStateQueue.sync { nextChapterFallbackIndices.insert(index) }
+    }
+
+    private func clearNextChapterFallbackIndices() {
+        preloadStateQueue.sync { nextChapterFallbackIndices.removeAll() }
+    }
+
+    private func moveNextChapterFallbackToCurrent() {
+        preloadStateQueue.sync {
+            fallbackIndices = nextChapterFallbackIndices
+            nextChapterFallbackIndices.removeAll()
+        }
     }
 
     private func validateAudioData(_ data: Data, response: URLResponse) -> Bool {
@@ -279,9 +312,11 @@ class TTSManager: NSObject, ObservableObject {
         preloadedIndices.removeAll()
         updatePreloadQueue([])
         setIsPreloading(false)
+        clearFallbackIndices()
         isReady = false
         clearNextChapterCache()
         nextChapterSentences.removeAll()
+        clearNextChapterFallbackIndices()
         
         if let ps = processedSentences {
             sentences = ps
@@ -483,19 +518,24 @@ class TTSManager: NSObject, ObservableObject {
         if let cachedData = cachedAudio(for: targetIdx) {
             playAudioWithData(data: cachedData); return
         }
+        if isFallbackIndex(targetIdx) {
+            speakWithSystemTTS(text: sentenceToSpeak)
+            return
+        }
 
         Task {
-                if let data = await fetchAudioData(for: sentenceToSpeak, isChapterTitle: isReadingChapterTitle) {
-                    await MainActor.run {
-                        cacheAudio(data, for: targetIdx)
-                        playAudioWithData(data: data)
-                        startPreloading()
-                        if currentChapterIndex < chapters.count {
-                            updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
-                        }
+            if let data = await fetchAudioData(for: sentenceToSpeak, isChapterTitle: isReadingChapterTitle) {
+                await MainActor.run {
+                    cacheAudio(data, for: targetIdx)
+                    playAudioWithData(data: data)
+                    startPreloading()
+                    if currentChapterIndex < chapters.count {
+                        updateNowPlayingInfo(chapterTitle: chapters[currentChapterIndex].title)
                     }
+                }
             } else {
-                await MainActor.run { stop() }
+                markFallbackIndex(targetIdx)
+                await MainActor.run { speakWithSystemTTS(text: sentenceToSpeak) }
             }
         }
     }
@@ -515,7 +555,7 @@ class TTSManager: NSObject, ObservableObject {
     private func startPreloading() {
         let count = UserPreferences.shared.ttsPreloadCount
         if count > 0 {
-            let needed = (currentSentenceIndex+1..<min(currentSentenceIndex+1+count, sentences.count)).filter { cachedAudio(for: $0) == nil }
+            let needed = (currentSentenceIndex+1..<min(currentSentenceIndex+1+count, sentences.count)).filter { cachedAudio(for: $0) == nil && !isFallbackIndex($0) }
             if !needed.isEmpty { updatePreloadQueue(needed); processPreloadQueue() } else { checkAndPreloadNextChapter() }
         } else { checkAndPreloadNextChapter() }
     }
@@ -533,7 +573,7 @@ class TTSManager: NSObject, ObservableObject {
                     if !self.getIsPreloading() { group.cancelAll(); break }
                     while active < self.maxConcurrentDownloads && idx < queue.count {
                         let i = queue[idx]; idx += 1
-                        if self.cachedAudio(for: i) != nil { continue }
+                        if self.cachedAudio(for: i) != nil || self.isFallbackIndex(i) { continue }
                         active += 1
                         group.addTask { await self.downloadAudioWithRetry(at: i) }
                     }
@@ -551,6 +591,7 @@ class TTSManager: NSObject, ObservableObject {
             if await downloadAudio(at: index) { return }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
+        markFallbackIndex(index)
     }
     
     private func downloadAudio(at index: Int) async -> Bool {
@@ -697,11 +738,13 @@ class TTSManager: NSObject, ObservableObject {
     }
     
     private func preloadNextChapterAudio(at index: Int) {
-        if UserPreferences.shared.useSystemTTS || index >= nextChapterSentences.count || cachedNextChapterAudio(for: index) != nil { return }
+        if UserPreferences.shared.useSystemTTS || index >= nextChapterSentences.count || cachedNextChapterAudio(for: index) != nil || isNextChapterFallbackIndex(index) { return }
         let sentence = nextChapterSentences[index]
         Task {
             if let data = await fetchAudioData(for: sentence, isChapterTitle: false) {
                 await MainActor.run { cacheNextChapterAudio(data, for: index) }
+            } else {
+                markNextChapterFallbackIndex(index)
             }
         }
     }
@@ -715,6 +758,7 @@ class TTSManager: NSObject, ObservableObject {
         isPlaying = false; isPaused = false; isReady = false; currentSentenceIndex = 0; currentBaseSentenceIndex = 0; sentences = []
         currentSentenceOffset = 0
         isLoading = false; clearAudioCache(); updatePreloadQueue([]); setIsPreloading(false); clearNextChapterCache(); nextChapterSentences.removeAll()
+        clearFallbackIndices(); clearNextChapterFallbackIndices()
         coverArtwork = nil; endBackgroundTask()
         deactivateAudioSession()
         logger.log("TTS 停止", category: "TTS")
@@ -775,6 +819,7 @@ class TTSManager: NSObject, ObservableObject {
         
         let processChapterContent: (String) -> Void = { [weak self] content in
             guard let self = self else { return }
+            self.clearFallbackIndices()
             self.sentences = self.splitTextIntoSentences(content)
             self.currentSentenceIndex = 0
             self.currentSentenceOffset = 0
@@ -801,6 +846,7 @@ class TTSManager: NSObject, ObservableObject {
         if !nextChapterSentences.isEmpty {
             let s = nextChapterSentences
             preloadedIndices = moveNextChapterCacheToCurrent()
+            moveNextChapterFallbackToCurrent()
             nextChapterSentences.removeAll()
             
             self.sentences = s
