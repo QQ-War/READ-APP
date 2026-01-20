@@ -120,6 +120,12 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
             delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
         }
     }
+    
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        let page = Int(scrollView.contentOffset.x / scrollView.bounds.width)
+        currentPageIndex = page
+        delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
+    }
 }
 
 class ReaderPageCell: UICollectionViewCell {

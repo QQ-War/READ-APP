@@ -50,7 +50,11 @@ extension ReaderContainerViewController {
 
     func updateHorizontalPage(to i: Int, animated: Bool) {
         if currentReadingMode == .newHorizontal {
+            self.currentPageIndex = i
             newHorizontalVC?.scrollToPageIndex(i, animated: animated)
+            if !animated {
+                self.isInternalTransitioning = false
+            }
             self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
             updateProgressUI()
             return
@@ -84,7 +88,9 @@ extension ReaderContainerViewController {
             // CollectionView 模式下先进行数据切换，再定位
             // 暂时使用简单切换，后续可以增加自定义转场
             isInternalTransitioning = true
-            self.completeDataDrift(offset: offset, targetPage: targetPage, currentVC: nil)
+            performChapterTransitionFade { [weak self] in
+                self?.completeDataDrift(offset: offset, targetPage: targetPage, currentVC: nil)
+            }
             return
         }
         guard let h = horizontalVC, !isInternalTransitioning else { return }
@@ -137,7 +143,7 @@ extension ReaderContainerViewController {
     }
 
     func performChapterTransitionFade(_ updates: @escaping () -> Void) {
-        guard currentReadingMode == .horizontal, !isMangaMode else {
+        guard (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal), !isMangaMode else {
             updates()
             return
         }

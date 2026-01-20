@@ -95,7 +95,7 @@ extension ReaderContainerViewController {
                 initialOffset = Int(durPos * Double(rawContent.count))
             }
             // 首次加载且是水平模式，使用锚点分页
-            reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: currentReadingMode == .horizontal ? initialOffset : 0)
+            reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) ? initialOffset : 0)
         } else if startAtEnd && !isManga {
             // 翻回上一章，锚点设为末尾
             reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: rawContent.count)
@@ -110,14 +110,14 @@ extension ReaderContainerViewController {
             if !isManga {
                 if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
                     let sentenceIdx = self.ttsManager.currentSentenceIndex
-                    if self.currentReadingMode == .horizontal {
+                    if self.currentReadingMode == .horizontal || self.currentReadingMode == .newHorizontal {
                         // 已经通过锚点分页了，直接跳到 anchorPageIndex
                         self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
                     } else {
                         self.verticalVC?.scrollToSentence(index: sentenceIdx, animated: false)
                     }
                 } else {
-                    if self.currentReadingMode == .horizontal {
+                    if self.currentReadingMode == .horizontal || self.currentReadingMode == .newHorizontal {
                         self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
                     } else {
                         let pos = self.book.durChapterPos ?? 0
@@ -141,7 +141,9 @@ extension ReaderContainerViewController {
             self.scrollToChapterEnd(animated: false)
         } else {
             if !isManga {
-                self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
+                if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
+                    self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
+                }
                 self.verticalVC?.scrollToTop(animated: false)
             } else {
                 self.mangaVC?.scrollToIndex(0, animated: false)

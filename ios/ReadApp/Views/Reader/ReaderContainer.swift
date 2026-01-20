@@ -1042,6 +1042,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     // MARK: - HorizontalCollectionViewDelegate
     func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, didUpdatePageIndex index: Int) {
         self.currentPageIndex = index
+        self.isInternalTransitioning = false
         self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
         updateProgressUI()
     }

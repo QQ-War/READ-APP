@@ -38,7 +38,7 @@ extension ReaderContainerViewController {
         if isMangaMode || currentCache.pages.isEmpty { progressLabel.text = ""; return }
         let total = currentCache.pages.count
         let current = max(1, min(total, currentPageIndex + 1))
-        progressLabel.text = currentReadingMode == .horizontal ? "\(current)/\(total)" : ""
+        progressLabel.text = (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) ? "\(current)/\(total)" : ""
     }
 
     func updateVerticalAdjacent(secondaryIndices: Set<Int> = []) {
