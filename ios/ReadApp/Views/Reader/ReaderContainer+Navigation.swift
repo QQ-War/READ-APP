@@ -85,10 +85,7 @@ extension ReaderContainerViewController {
 
     func animateToAdjacentChapter(offset: Int, targetPage: Int) {
         if currentReadingMode == .newHorizontal {
-            // CollectionView 模式下先进行数据切换，再定位
-            // 暂时使用简单切换，后续可以增加自定义转场
-            isInternalTransitioning = true
-            performChapterTransitionFade { [weak self] in
+            performChapterTransitionSlide(isNext: offset > 0) { [weak self] in
                 self?.completeDataDrift(offset: offset, targetPage: targetPage, currentVC: nil)
             }
             return
@@ -127,6 +124,7 @@ extension ReaderContainerViewController {
                 return
             }
 
+            isInternalTransitioning = true // 锁定，防止重复点击导致跳章
             if isNext, !nextCache.pages.isEmpty {
                 animateToAdjacentChapter(offset: 1, targetPage: 0)
                 didChangeWithinChapter = true
@@ -142,11 +140,45 @@ extension ReaderContainerViewController {
         }
     }
 
+    func performChapterTransitionSlide(isNext: Bool, updates: @escaping () -> Void) {
+        guard currentReadingMode == .newHorizontal, let horizontalView = newHorizontalVC?.view else {
+            updates()
+            return
+        }
+        
+        isInternalTransitioning = true
+        
+        // 1. 截取当前视图快照
+        let snapshot = horizontalView.snapshotView(afterScreenUpdates: false)
+        snapshot?.frame = horizontalView.frame
+        if let snap = snapshot {
+            view.insertSubview(snap, aboveSubview: horizontalView)
+        }
+        
+        // 2. 更新内容（静默 reloadData 并重置位置）
+        updates()
+        
+        // 3. 准备新视图动画初始位置
+        let width = horizontalView.bounds.width
+        horizontalView.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
+        
+        // 4. 执行平滑滑动动画
+        UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
+            snapshot?.transform = CGAffineTransform(translationX: isNext ? -width : width, y: 0)
+            horizontalView.transform = .identity
+        }, completion: { _ in
+            snapshot?.removeFromSuperview()
+            self.isInternalTransitioning = false
+            self.notifyUserInteractionEnded()
+        })
+    }
+
     func performChapterTransitionFade(_ updates: @escaping () -> Void) {
         guard (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal), !isMangaMode else {
             updates()
             return
         }
+        isInternalTransitioning = true
         let overlay = UIView(frame: view.bounds)
         overlay.backgroundColor = readerSettings.readingTheme.backgroundColor
         overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]

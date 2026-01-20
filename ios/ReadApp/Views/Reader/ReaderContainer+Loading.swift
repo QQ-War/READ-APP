@@ -76,6 +76,8 @@ extension ReaderContainerViewController {
 
     func processLoadedChapterContent(index: Int, rawContent: String, isManga: Bool, startAtEnd: Bool, token: Int) {
         guard loadToken == token else { return }
+        defer { self.isInternalTransitioning = false }
+        
         self.isMangaMode = isManga
         self.onModeDetected?(isManga)
 

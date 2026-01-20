@@ -658,11 +658,19 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func performJumpToChapter(_ index: Int, startAtEnd: Bool) {
         activePaginationAnchor = 0
+        let isNext = index > currentChapterIndex
         currentChapterIndex = index
         lastReportedChapterIndex = index
         onChapterIndexChanged?(index)
-        performChapterTransitionFade { [weak self] in
-            self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
+        
+        if currentReadingMode == .newHorizontal {
+            performChapterTransitionSlide(isNext: isNext) { [weak self] in
+                self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
+            }
+        } else {
+            performChapterTransitionFade { [weak self] in
+                self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
+            }
         }
     }
 
