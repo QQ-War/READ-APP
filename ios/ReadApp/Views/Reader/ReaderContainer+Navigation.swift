@@ -49,6 +49,12 @@ extension ReaderContainerViewController {
     }
 
     func updateHorizontalPage(to i: Int, animated: Bool) {
+        if currentReadingMode == .newHorizontal {
+            newHorizontalVC?.scrollToPageIndex(i, animated: animated)
+            self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
+            updateProgressUI()
+            return
+        }
         guard let h = horizontalVC, !currentCache.pages.isEmpty else { return }
         let targetIndex = max(0, min(i, currentCache.pages.count - 1))
         let direction: UIPageViewController.NavigationDirection = targetIndex >= currentPageIndex ? .forward : .reverse
@@ -74,6 +80,13 @@ extension ReaderContainerViewController {
     }
 
     func animateToAdjacentChapter(offset: Int, targetPage: Int) {
+        if currentReadingMode == .newHorizontal {
+            // CollectionView 模式下先进行数据切换，再定位
+            // 暂时使用简单切换，后续可以增加自定义转场
+            isInternalTransitioning = true
+            self.completeDataDrift(offset: offset, targetPage: targetPage, currentVC: nil)
+            return
+        }
         guard let h = horizontalVC, !isInternalTransitioning else { return }
         isInternalTransitioning = true
         self.isAutoScrolling = true
@@ -164,7 +177,9 @@ private extension ReaderContainerViewController {
         self.currentPageIndex = targetPage
         self.onChapterIndexChanged?(self.currentChapterIndex)
 
-        if let v = currentVC {
+        if currentReadingMode == .newHorizontal {
+            updateNewHorizontalContent()
+        } else if let v = currentVC {
             v.chapterOffset = 0
             if let rv = v.view.subviews.first as? ReadContent2View {
                 rv.renderStore = self.currentCache.renderStore

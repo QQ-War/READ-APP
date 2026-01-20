@@ -20,7 +20,7 @@ extension ReaderContainerViewController {
         }
 
         // 核心同步：渲染后立即更新当前页码为锚点页码
-        if currentReadingMode == .horizontal {
+        if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
             self.currentPageIndex = currentCache.anchorPageIndex
         }
 
@@ -75,6 +75,7 @@ extension ReaderContainerViewController {
         if isMangaMode {
             verticalVC?.view.removeFromSuperview(); verticalVC = nil
             horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
+            newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
             setupMangaMode()
             return
         }
@@ -84,21 +85,53 @@ extension ReaderContainerViewController {
         if currentReadingMode == .vertical {
             if verticalVC == nil {
                 horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
-                mangaVC?.view.removeFromSuperview(); mangaVC?.removeFromParent(); mangaVC = nil
+                newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
                 setupVerticalMode()
             } else {
                 // 如果已经存在，仅更新状态
                 updateVerticalAdjacent()
             }
+        } else if currentReadingMode == .newHorizontal {
+            if newHorizontalVC == nil {
+                verticalVC?.view.removeFromSuperview(); verticalVC = nil
+                horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
+                setupNewHorizontalMode()
+            } else {
+                updateNewHorizontalContent()
+            }
         } else {
             if horizontalVC == nil {
                 verticalVC?.view.removeFromSuperview(); verticalVC = nil
-                mangaVC?.view.removeFromSuperview(); mangaVC?.removeFromParent(); mangaVC = nil
+                newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
                 setupHorizontalMode()
             } else {
                 // 水平模式下的状态同步（如果需要）
             }
         }
+    }
+
+    func setupNewHorizontalMode() {
+        let vc = HorizontalCollectionViewController()
+        vc.delegate = self
+        addChild(vc)
+        view.insertSubview(vc.view, at: 0)
+        vc.view.frame = view.bounds
+        vc.didMove(toParent: self)
+        self.newHorizontalVC = vc
+        updateNewHorizontalContent()
+    }
+
+    func updateNewHorizontalContent() {
+        newHorizontalVC?.update(
+            pages: currentCache.pages,
+            pageInfos: currentCache.pageInfos ?? [],
+            renderStore: currentCache.renderStore,
+            paragraphStarts: currentCache.paragraphStarts,
+            prefixLen: currentCache.chapterPrefixLen,
+            sideMargin: currentLayoutSpec.sideMargin,
+            topInset: currentLayoutSpec.topInset,
+            anchorPageIndex: currentPageIndex
+        )
     }
 
     func setupHorizontalMode() {

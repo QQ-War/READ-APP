@@ -4,12 +4,14 @@ import Foundation
 enum ReadingMode: String, CaseIterable, Identifiable {
     case vertical = "Vertical"
     case horizontal = "Horizontal"
+    case newHorizontal = "NewHorizontal"
 
     var id: String { self.rawValue }
     var localizedName: String {
         switch self {
         case .vertical: return "上下滚动"
         case .horizontal: return "左右翻页"
+        case .newHorizontal: return "新左右翻页"
         }
     }
 }

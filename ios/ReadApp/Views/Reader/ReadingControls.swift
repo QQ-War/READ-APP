@@ -278,7 +278,7 @@ struct ReaderOptionsSheet: View {
                         .pickerStyle(.segmented)
                         .padding(.vertical, 4)
 
-                        if preferences.readingMode == .horizontal {
+                        if preferences.readingMode == .horizontal || preferences.readingMode == .newHorizontal {
                             Picker("翻页方式", selection: $preferences.pageTurningMode) {
                                 ForEach(PageTurningMode.allCases) { mode in
                                     Text(mode.localizedName).tag(mode)
