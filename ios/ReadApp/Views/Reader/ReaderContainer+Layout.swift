@@ -130,7 +130,8 @@ extension ReaderContainerViewController {
             prefixLen: currentCache.chapterPrefixLen,
             sideMargin: currentLayoutSpec.sideMargin,
             topInset: currentLayoutSpec.topInset,
-            anchorPageIndex: currentPageIndex
+            anchorPageIndex: currentPageIndex,
+            backgroundColor: readerSettings.readingTheme.backgroundColor
         )
     }
 

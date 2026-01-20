@@ -19,6 +19,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     var chapterPrefixLen: Int = 0
     var sideMargin: CGFloat = 20
     var topInset: CGFloat = 0
+    var themeBackgroundColor: UIColor = .white
     
     var currentPageIndex: Int = 0
     
@@ -50,7 +51,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         ])
     }
     
-    func update(pages: [PaginatedPage], pageInfos: [TK2PageInfo], renderStore: TextKit2RenderStore?, paragraphStarts: [Int], prefixLen: Int, sideMargin: CGFloat, topInset: CGFloat, anchorPageIndex: Int) {
+    func update(pages: [PaginatedPage], pageInfos: [TK2PageInfo], renderStore: TextKit2RenderStore?, paragraphStarts: [Int], prefixLen: Int, sideMargin: CGFloat, topInset: CGFloat, anchorPageIndex: Int, backgroundColor: UIColor) {
         self.pages = pages
         self.pageInfos = pageInfos
         self.renderStore = renderStore
@@ -59,7 +60,9 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         self.sideMargin = sideMargin
         self.topInset = topInset
         self.currentPageIndex = anchorPageIndex
+        self.themeBackgroundColor = backgroundColor
         
+        collectionView.backgroundColor = backgroundColor
         collectionView.reloadData()
         
         DispatchQueue.main.async { [weak self] in
@@ -92,7 +95,8 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
                 paragraphStarts: paragraphStarts,
                 prefixLen: chapterPrefixLen,
                 sideMargin: sideMargin,
-                topInset: topInset
+                topInset: topInset,
+                backgroundColor: themeBackgroundColor
             )
         }
         
@@ -168,7 +172,8 @@ class ReaderPageCell: UICollectionViewCell {
         fatalError("init(coder:) has not been implemented")
     }
     
-    func update(renderStore: TextKit2RenderStore?, pageIndex: Int, pageInfo: TK2PageInfo, paragraphStarts: [Int], prefixLen: Int, sideMargin: CGFloat, topInset: CGFloat) {
+    func update(renderStore: TextKit2RenderStore?, pageIndex: Int, pageInfo: TK2PageInfo, paragraphStarts: [Int], prefixLen: Int, sideMargin: CGFloat, topInset: CGFloat, backgroundColor: UIColor) {
+        contentView2.backgroundColor = backgroundColor
         contentView2.renderStore = renderStore
         contentView2.pageIndex = pageIndex
         contentView2.pageInfo = pageInfo
