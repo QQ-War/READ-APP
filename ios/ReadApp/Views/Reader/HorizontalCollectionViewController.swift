@@ -126,6 +126,21 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         currentPageIndex = page
         delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
     }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        let offsetX = scrollView.contentOffset.x
+        let width = scrollView.bounds.width
+        let contentWidth = scrollView.contentSize.width
+        
+        // 检测向后翻页（超出末尾）
+        if offsetX > contentWidth - width + 60 {
+            delegate?.horizontalCollectionView(self, requestChapterSwitch: 1)
+        }
+        // 检测向前翻页（超出开头）
+        else if offsetX < -60 {
+            delegate?.horizontalCollectionView(self, requestChapterSwitch: -1)
+        }
+    }
 }
 
 class ReaderPageCell: UICollectionViewCell {

@@ -1068,6 +1068,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, requestChapterSwitch offset: Int) {
-        self.requestChapterSwitch(offset: offset, preferSeamless: false)
+        if offset > 0 && !nextCache.pages.isEmpty {
+            animateToAdjacentChapter(offset: 1, targetPage: 0)
+        } else if offset < 0 && !prevCache.pages.isEmpty {
+            animateToAdjacentChapter(offset: -1, targetPage: prevCache.pages.count - 1)
+        } else {
+            self.requestChapterSwitch(offset: offset, preferSeamless: true)
+        }
     }
 }
