@@ -1188,7 +1188,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
 class ReaderPageCell: UICollectionViewCell {
     private let contentView2 = ReadContent2View(frame: .zero)
     
-    var onTapLocation: ((ReadContent2View.TapLocation) -> Void)?
+    var onTapLocation: ((ReaderTapLocation) -> Void)?
     
     override init(frame: CGRect) {
         super.init(frame: frame)
