@@ -20,6 +20,8 @@ enum PageTurningMode: String, CaseIterable, Identifiable {
     case scroll = "Scroll"
     case simulation = "Simulation"
     case cover = "Cover"
+    case fade = "Fade"
+    case flip = "Flip"
     case none = "None"
 
     var id: String { self.rawValue }
@@ -28,6 +30,8 @@ enum PageTurningMode: String, CaseIterable, Identifiable {
         case .scroll: return "平滑滑动"
         case .simulation: return "仿真翻页"
         case .cover: return "覆盖翻页"
+        case .fade: return "淡入淡出"
+        case .flip: return "旋转翻页"
         case .none: return "无动画"
         }
     }

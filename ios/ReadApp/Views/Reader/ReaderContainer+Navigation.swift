@@ -63,32 +63,55 @@ extension ReaderContainerViewController {
             }
             
             if mode == .cover, let horizontalView = newHorizontalVC?.view {
-                // 覆盖动画实现
+                // ... (原有 cover 代码保持不变)
                 isInternalTransitioning = true
                 let width = horizontalView.bounds.width
                 let isNext = i > oldIndex
-                
-                // 1. 截取当前页快照
                 let snapshot = horizontalView.snapshotView(afterScreenUpdates: false)
                 snapshot?.frame = horizontalView.frame
-                if let snap = snapshot {
-                    view.insertSubview(snap, aboveSubview: horizontalView)
-                }
-                
-                // 2. 静默跳转到新页
+                if let snap = snapshot { view.insertSubview(snap, aboveSubview: horizontalView) }
                 newHorizontalVC?.scrollToPageIndex(i, animated: false)
-                
-                // 3. 准备新页动画初始位置（如果是下一页，从右侧滑入；如果是上一页，从左侧滑入）
                 horizontalView.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
-                
-                // 4. 执行覆盖动画
                 UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut, animations: {
                     horizontalView.transform = .identity
-                    // 当前页快照稍微往相反方向移动一点，增加层级感
                     snapshot?.transform = CGAffineTransform(translationX: isNext ? -width * 0.2 : width * 0.2, y: 0)
                     snapshot?.alpha = 0.8
                 }, completion: { _ in
                     snapshot?.removeFromSuperview()
+                    self.isInternalTransitioning = false
+                    self.onProgressChanged?(self.currentChapterIndex, Double(self.currentPageIndex) / Double(max(1, self.currentCache.pages.count)))
+                    self.updateProgressUI()
+                })
+                return
+            }
+            
+            if mode == .fade, let horizontalView = newHorizontalVC?.view {
+                isInternalTransitioning = true
+                let snapshot = horizontalView.snapshotView(afterScreenUpdates: false)
+                snapshot?.frame = horizontalView.frame
+                if let snap = snapshot { view.insertSubview(snap, aboveSubview: horizontalView) }
+                
+                newHorizontalVC?.scrollToPageIndex(i, animated: false)
+                horizontalView.alpha = 0
+                
+                UIView.animate(withDuration: 0.35, animations: {
+                    snapshot?.alpha = 0
+                    horizontalView.alpha = 1
+                }, completion: { _ in
+                    snapshot?.removeFromSuperview()
+                    self.isInternalTransitioning = false
+                    self.onProgressChanged?(self.currentChapterIndex, Double(self.currentPageIndex) / Double(max(1, self.currentCache.pages.count)))
+                    self.updateProgressUI()
+                })
+                return
+            }
+            
+            if mode == .flip, let horizontalView = newHorizontalVC?.view {
+                isInternalTransitioning = true
+                let isNext = i > oldIndex
+                UIView.transition(with: horizontalView, duration: 0.5, options: isNext ? .transitionFlipFromRight : .transitionFlipFromLeft, animations: {
+                    self.newHorizontalVC?.scrollToPageIndex(i, animated: false)
+                }, completion: { _ in
                     self.isInternalTransitioning = false
                     self.onProgressChanged?(self.currentChapterIndex, Double(self.currentPageIndex) / Double(max(1, self.currentCache.pages.count)))
                     self.updateProgressUI()
