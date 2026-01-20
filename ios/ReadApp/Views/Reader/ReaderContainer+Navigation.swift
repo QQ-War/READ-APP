@@ -50,11 +50,54 @@ extension ReaderContainerViewController {
 
     func updateHorizontalPage(to i: Int, animated: Bool) {
         if currentReadingMode == .newHorizontal {
+            let oldIndex = self.currentPageIndex
             self.currentPageIndex = i
-            newHorizontalVC?.scrollToPageIndex(i, animated: animated)
-            if !animated {
+            
+            let mode = readerSettings.pageTurningMode
+            if !animated || mode == .none {
+                newHorizontalVC?.scrollToPageIndex(i, animated: false)
                 self.isInternalTransitioning = false
+                self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
+                updateProgressUI()
+                return
             }
+            
+            if mode == .cover, let horizontalView = newHorizontalVC?.view {
+                // 覆盖动画实现
+                isInternalTransitioning = true
+                let width = horizontalView.bounds.width
+                let isNext = i > oldIndex
+                
+                // 1. 截取当前页快照
+                let snapshot = horizontalView.snapshotView(afterScreenUpdates: false)
+                snapshot?.frame = horizontalView.frame
+                if let snap = snapshot {
+                    view.insertSubview(snap, aboveSubview: horizontalView)
+                }
+                
+                // 2. 静默跳转到新页
+                newHorizontalVC?.scrollToPageIndex(i, animated: false)
+                
+                // 3. 准备新页动画初始位置（如果是下一页，从右侧滑入；如果是上一页，从左侧滑入）
+                horizontalView.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
+                
+                // 4. 执行覆盖动画
+                UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut, animations: {
+                    horizontalView.transform = .identity
+                    // 当前页快照稍微往相反方向移动一点，增加层级感
+                    snapshot?.transform = CGAffineTransform(translationX: isNext ? -width * 0.2 : width * 0.2, y: 0)
+                    snapshot?.alpha = 0.8
+                }, completion: { _ in
+                    snapshot?.removeFromSuperview()
+                    self.isInternalTransitioning = false
+                    self.onProgressChanged?(self.currentChapterIndex, Double(self.currentPageIndex) / Double(max(1, self.currentCache.pages.count)))
+                    self.updateProgressUI()
+                })
+                return
+            }
+            
+            // 默认滑动动画
+            newHorizontalVC?.scrollToPageIndex(i, animated: animated)
             self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
             updateProgressUI()
             return

@@ -19,12 +19,16 @@ enum ReadingMode: String, CaseIterable, Identifiable {
 enum PageTurningMode: String, CaseIterable, Identifiable {
     case scroll = "Scroll"
     case simulation = "Simulation"
+    case cover = "Cover"
+    case none = "None"
 
     var id: String { self.rawValue }
     var localizedName: String {
         switch self {
         case .scroll: return "平滑滑动"
         case .simulation: return "仿真翻页"
+        case .cover: return "覆盖翻页"
+        case .none: return "无动画"
         }
     }
 }
