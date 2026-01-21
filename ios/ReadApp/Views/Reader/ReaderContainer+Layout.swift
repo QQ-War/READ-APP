@@ -37,14 +37,9 @@ extension ReaderContainerViewController {
     func updateProgressUI() {
         view.bringSubviewToFront(progressLabel)
         
-        // 动态调整颜色：漫画模式通常是黑色背景，强制使用白色
-        if isMangaMode {
-            progressLabel.textColor = .white.withAlphaComponent(0.7)
-        } else if let theme = readerSettings?.readingTheme {
-            progressLabel.textColor = theme.textColor.withAlphaComponent(0.6)
-        } else {
-            progressLabel.textColor = .secondaryLabel
-        }
+        // 进度标签现在使用 exclusionFilter 滤镜，会自动根据背景反转颜色
+        // 因此不再需要根据主题或模式手动设置 textColor
+        progressLabel.textColor = .white
 
         if isMangaMode {
             let total = max(1, currentCache.contentSentences.count)

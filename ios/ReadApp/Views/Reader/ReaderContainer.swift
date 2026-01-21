@@ -262,9 +262,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func setupProgressLabel() {
-        progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular); progressLabel.textColor = .secondaryLabel
-        view.addSubview(progressLabel); progressLabel.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12), progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4)])
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        progressLabel.textColor = .white // 必须设为白色，配合排除滤镜实现反转
+        progressLabel.layer.compositingFilter = "exclusionFilter"
+        
+        view.addSubview(progressLabel)
+        progressLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4)
+        ])
     }
 
     private var lastKnownSize: CGSize = .zero
