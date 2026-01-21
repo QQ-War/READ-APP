@@ -987,11 +987,11 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var bookUrl: String?
     var chapterIndex: Int = 0
     var chapterUrl: String?
-    private var imageUrls: [String] = []
-    
     private lazy var progressOverlayView: UIView = {
         let view = UIView()
         view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        // 关键：回归到您认为有效的 exclusionBlendMode
         view.layer.compositingFilter = "exclusionBlendMode"
         return view
     }()
@@ -1023,7 +1023,6 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         ])
         
         setupSwitchHint()
-        
         setupProgressLabel()
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
