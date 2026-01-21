@@ -154,12 +154,36 @@ extension ReaderContainerViewController {
     }
 
     func performChapterTransition(isNext: Bool, updates: @escaping () -> Void) {
-        guard currentReadingMode == .newHorizontal, let horizontalView = newHorizontalVC?.view else {
+        let mode = readerSettings.pageTurningMode
+        
+        // 只有新模式支持多样化动画，旧模式统一使用平滑淡入淡出
+        if currentReadingMode != .newHorizontal {
+            isInternalTransitioning = true
+            let overlay = UIView(frame: view.bounds)
+            overlay.backgroundColor = readerSettings.readingTheme.backgroundColor
+            overlay.alpha = 0
+            view.addSubview(overlay)
+            
+            UIView.animate(withDuration: 0.15, animations: {
+                overlay.alpha = 1
+            }, completion: { _ in
+                updates()
+                UIView.animate(withDuration: 0.25, animations: {
+                    overlay.alpha = 0
+                }, completion: { _ in
+                    overlay.removeFromSuperview()
+                    self.isInternalTransitioning = false
+                    self.notifyUserInteractionEnded()
+                })
+            })
+            return
+        }
+
+        guard let horizontalView = newHorizontalVC?.view else {
             updates()
             return
         }
         
-        let mode = readerSettings.pageTurningMode
         if mode == .none {
             updates()
             self.isInternalTransitioning = false

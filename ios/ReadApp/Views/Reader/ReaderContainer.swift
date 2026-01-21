@@ -673,14 +673,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         lastReportedChapterIndex = index
         onChapterIndexChanged?(index)
         
-        if currentReadingMode == .newHorizontal {
+        if currentReadingMode == .newHorizontal || currentReadingMode == .horizontal {
             performChapterTransition(isNext: isNext) { [weak self] in
                 self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
             }
         } else {
-            performChapterTransitionFade { [weak self] in
-                self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
-            }
+            // 垂直模式等其他模式保持原有逻辑
+            self.loadChapterContent(at: index, startAtEnd: startAtEnd)
         }
     }
 
