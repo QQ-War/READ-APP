@@ -261,14 +261,6 @@ extension ReaderContainerViewController {
             view.insertSubview(mangaVC.view, at: 0)
             mangaVC.view.frame = view.bounds
             mangaVC.didMove(toParent: self)
-            
-            // 将 progressLabel 添加到漫画视图上，确保滤镜与漫画内容正确合成
-            mangaVC.view.addSubview(progressLabel)
-            progressLabel.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                progressLabel.trailingAnchor.constraint(equalTo: mangaVC.view.trailingAnchor, constant: -12),
-                progressLabel.bottomAnchor.constraint(equalTo: mangaVC.view.safeAreaLayoutGuide.bottomAnchor, constant: -4)
-            ])
 
             // 清空预制标记
             prebuiltNextMangaVC = nil
@@ -307,14 +299,6 @@ extension ReaderContainerViewController {
             vc.maxZoomScale = readerSettings.mangaMaxZoom
             addChild(vc); view.insertSubview(vc.view, at: 0); vc.view.frame = view.bounds; vc.didMove(toParent: self)
             self.mangaVC = vc
-            
-            // 将 progressLabel 添加到漫画视图上，确保滤镜与漫画内容正确合成
-            vc.view.addSubview(progressLabel)
-            progressLabel.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                progressLabel.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor, constant: -12),
-                progressLabel.bottomAnchor.constraint(equalTo: vc.view.safeAreaLayoutGuide.bottomAnchor, constant: -4)
-            ])
         }
         mangaVC?.bookUrl = book.bookUrl
         mangaVC?.chapterIndex = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].index : currentChapterIndex

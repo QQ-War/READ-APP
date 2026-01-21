@@ -206,6 +206,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     var prebuiltNextIndex: Int?
 
     let progressLabel = UILabel()
+    private var progressLabelContainer: UIView?
     private var lastLayoutSignature: String = ""
     var loadToken: Int = 0
     let prefetchCoordinator = ReaderPrefetchCoordinator()
@@ -262,23 +263,32 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func setupProgressLabel() {
+        // 创建一个应用 exclusionFilter 的背景层
+        let filterView = UIView()
+        filterView.backgroundColor = UIColor(white: 0.5, alpha: 1.0)
+        filterView.layer.compositingFilter = "exclusionBlendMode"
+        view.addSubview(filterView)
+        filterView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            filterView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            filterView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4),
+            filterView.widthAnchor.constraint(greaterThanOrEqualToConstant: 40),
+            filterView.heightAnchor.constraint(equalToConstant: 20)
+        ])
+        
         progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
         progressLabel.textColor = .white
         progressLabel.backgroundColor = .clear
-        
-        // 使用 exclusionFilter 实现反色效果
-        progressLabel.layer.compositingFilter = "exclusionFilter"
-        
-        // 不使用 shouldRasterize，因为会干扰滤镜的实时像素采样
-        
         view.addSubview(progressLabel)
         progressLabel.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
             progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4)
         ])
+        
+        progressLabelContainer = filterView
     }
-
+    
     private var lastKnownSize: CGSize = .zero
     private var pendingRelocationOffset: Int? // 记录正在进行的跳转目标
 
