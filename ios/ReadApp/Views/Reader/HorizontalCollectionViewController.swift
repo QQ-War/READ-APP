@@ -119,35 +119,56 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     }
     
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        let page = Int(scrollView.contentOffset.x / scrollView.bounds.width)
-        currentPageIndex = page
-        delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
+        let width = scrollView.bounds.width
+        guard width > 0 else { return }
+        let page = Int(round(scrollView.contentOffset.x / width))
+        if page >= 0 && page < pages.count {
+            currentPageIndex = page
+            delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
+        }
     }
     
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-        let page = Int(scrollView.contentOffset.x / scrollView.bounds.width)
-        currentPageIndex = page
-        delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
+        let width = scrollView.bounds.width
+        guard width > 0 else { return }
+        let page = Int(round(scrollView.contentOffset.x / width))
+        if page >= 0 && page < pages.count {
+            currentPageIndex = page
+            delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
+        }
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
-            let page = Int(scrollView.contentOffset.x / scrollView.bounds.width)
-            delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
+            let width = scrollView.bounds.width
+            guard width > 0 else { return }
+            let page = Int(round(scrollView.contentOffset.x / width))
+            if page >= 0 && page < pages.count {
+                currentPageIndex = page
+                delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
+            }
         }
     }
+
+    private var lastSwitchRequestTime: TimeInterval = 0
+    private let switchRequestCooldown: TimeInterval = 1.0
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         let offsetX = scrollView.contentOffset.x
         let width = scrollView.bounds.width
         let contentWidth = scrollView.contentSize.width
         
+        let now = Date().timeIntervalSince1970
+        guard now - lastSwitchRequestTime > switchRequestCooldown else { return }
+
         // 检测向后翻页（超出末尾）
         if offsetX > contentWidth - width + 80 {
+            lastSwitchRequestTime = now
             delegate?.horizontalCollectionView(self, requestChapterSwitch: 1)
         }
         // 检测向前翻页（超出开头）
         else if offsetX < -80 {
+            lastSwitchRequestTime = now
             delegate?.horizontalCollectionView(self, requestChapterSwitch: -1)
         }
     }

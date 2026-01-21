@@ -35,10 +35,44 @@ extension ReaderContainerViewController {
     }
 
     func updateProgressUI() {
-        if isMangaMode || currentCache.pages.isEmpty { progressLabel.text = ""; return }
-        let total = currentCache.pages.count
-        let current = max(1, min(total, currentPageIndex + 1))
-        progressLabel.text = (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) ? "\(current)/\(total)" : ""
+        view.bringSubviewToFront(progressLabel)
+        
+        // 同步颜色：确保在不同背景下可见
+        if let theme = readerSettings?.readingTheme {
+            progressLabel.textColor = theme.textColor.withAlphaComponent(0.6)
+        } else {
+            progressLabel.textColor = .secondaryLabel
+        }
+
+        if isMangaMode {
+            let total = max(1, currentCache.contentSentences.count)
+            let current = (mangaVC?.currentVisibleIndex ?? 0) + 1
+            let percent = Int(round(Double(current) / Double(total) * 100))
+            progressLabel.text = "\(percent)%"
+            progressLabel.isHidden = false
+            return
+        }
+        
+        if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
+            let pagesCount = currentCache.pages.count
+            if pagesCount == 0 { 
+                progressLabel.text = ""
+                progressLabel.isHidden = true
+                return 
+            }
+            let current = max(1, min(pagesCount, currentPageIndex + 1))
+            progressLabel.text = "\(current)/\(pagesCount)"
+            progressLabel.isHidden = false
+        } else if currentReadingMode == .vertical {
+            let count = max(1, currentCache.contentSentences.count)
+            let idx = verticalVC?.lastReportedIndex ?? 0
+            let percent = Int(round(Double(idx + 1) / Double(count) * 100))
+            progressLabel.text = "\(min(100, percent))%"
+            progressLabel.isHidden = false
+        } else {
+            progressLabel.text = ""
+            progressLabel.isHidden = true
+        }
     }
 
     func updateVerticalAdjacent(secondaryIndices: Set<Int> = []) {
@@ -69,6 +103,7 @@ extension ReaderContainerViewController {
         // 统一边距：使用与水平模式一致的 currentLayoutSpec.sideMargin
         let unifiedMargin = currentLayoutSpec.sideMargin
         v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: readerSettings.fontSize, lineSpacing: readerSettings.lineSpacing, margin: unifiedMargin, highlightIndex: highlightIdx, secondaryIndices: finalSecondaryIndices, isPlaying: ttsManager.isPlaying)
+        updateProgressUI()
     }
 
     func setupReaderMode() {
@@ -104,10 +139,11 @@ extension ReaderContainerViewController {
                 verticalVC?.view.removeFromSuperview(); verticalVC = nil
                 newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
                 setupHorizontalMode()
-            } else {
-                // 水平模式下的状态同步（如果需要）
             }
+        } else {
+            // 水平模式下的状态同步（如果需要）
         }
+        updateProgressUI()
     }
 
     func setupNewHorizontalMode() {
@@ -119,6 +155,7 @@ extension ReaderContainerViewController {
         vc.didMove(toParent: self)
         self.newHorizontalVC = vc
         updateNewHorizontalContent()
+        updateProgressUI()
     }
 
     func updateNewHorizontalContent() {
@@ -133,6 +170,7 @@ extension ReaderContainerViewController {
             anchorPageIndex: currentPageIndex,
             backgroundColor: readerSettings.readingTheme.backgroundColor
         )
+        updateProgressUI()
     }
 
     func setupHorizontalMode() {
@@ -150,6 +188,7 @@ extension ReaderContainerViewController {
             recognizer.isEnabled = false
         }
         self.horizontalVC = h; updateHorizontalPage(to: currentPageIndex, animated: false)
+        updateProgressUI()
     }
 
     func setupVerticalMode() {
@@ -164,6 +203,7 @@ extension ReaderContainerViewController {
             guard let self = self else { return }
             let count = max(1, self.currentCache.contentSentences.count)
             self.onProgressChanged?(self.currentChapterIndex, Double(idx) / Double(count))
+            self.updateProgressUI()
         }
         v.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }; v.onTapMenu = { [weak self] in self?.safeToggleMenu() }
         v.isInfiniteScrollEnabled = readerSettings.isInfiniteScrollEnabled
@@ -202,6 +242,7 @@ extension ReaderContainerViewController {
         let nextSentences = readerSettings.isInfiniteScrollEnabled ? (nextCache.contentSentences.isEmpty ? nil : nextCache.contentSentences) : nil
         let prevSentences = readerSettings.isInfiniteScrollEnabled ? (prevCache.contentSentences.isEmpty ? nil : prevCache.contentSentences) : nil
         v.update(sentences: currentCache.contentSentences, nextSentences: nextSentences, prevSentences: prevSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: readerSettings.fontSize, lineSpacing: readerSettings.lineSpacing, margin: currentLayoutSpec.sideMargin, highlightIndex: ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil, secondaryIndices: [], isPlaying: ttsManager.isPlaying)
+        updateProgressUI()
     }
 
     func setupMangaMode() {
@@ -220,6 +261,7 @@ extension ReaderContainerViewController {
             // 清空预制标记
             prebuiltNextMangaVC = nil
             prebuiltNextIndex = nil
+            updateProgressUI()
             return
         }
 
@@ -239,6 +281,7 @@ extension ReaderContainerViewController {
                 guard let self = self else { return }
                 let total = Double(max(1, self.currentCache.contentSentences.count))
                 self.onProgressChanged?(self.currentChapterIndex, Double(idx) / total)
+                self.updateProgressUI()
             }
             vc.onChapterSwitched = { [weak self] offset in
                 guard let self = self else { return }
@@ -257,5 +300,6 @@ extension ReaderContainerViewController {
         mangaVC?.chapterIndex = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].index : currentChapterIndex
         mangaVC?.chapterUrl = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].url : nil
         mangaVC?.update(urls: currentCache.contentSentences)
+        updateProgressUI()
     }
 }

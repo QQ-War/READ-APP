@@ -371,6 +371,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 // 如果布局没变，仅更新相邻章节状态，不再强制滚动
                 updateVerticalAdjacent()
             }
+            
+            // 确保进度 UI 随主题等设置更新
+            updateProgressUI()
         }
         
                 
