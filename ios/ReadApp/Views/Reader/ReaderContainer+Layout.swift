@@ -36,12 +36,18 @@ extension ReaderContainerViewController {
 
     func updateProgressUI() {
         if isMangaMode {
-            mangaVC?.progressLabel.textColor = .white
-            let total = max(1, currentCache.contentSentences.count)
-            let current = (mangaVC?.currentVisibleIndex ?? 0) + 1
-            let percent = Int(round(Double(current) / Double(total) * 100))
-            mangaVC?.progressLabel.text = "\(min(100, percent))%"
-            mangaVC?.progressLabel.isHidden = false
+            if let m = mangaVC {
+                let s = m.scrollView
+                let offset = s.contentOffset.y + s.contentInset.top
+                let maxOffset = s.contentSize.height - s.bounds.height + s.contentInset.top
+                if maxOffset > 0 {
+                    let percent = Int(round(min(1.0, max(0.0, offset / maxOffset)) * 100))
+                    progressLabel.text = "\(min(100, percent))%"
+                } else {
+                    progressLabel.text = "0%"
+                }
+            }
+            progressLabel.isHidden = false
             return
         }
         
