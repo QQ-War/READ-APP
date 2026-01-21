@@ -989,6 +989,8 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var chapterUrl: String?
     private var imageUrls: [String] = []
     
+    let progressLabel = UILabel()
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
@@ -1014,11 +1016,28 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         ])
         
         setupSwitchHint()
-        
-        // 已移除内部进度标签，统一使用 ReaderContainer 的反色标签
+        setupProgressLabel()
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         scrollView.addGestureRecognizer(tap)
+    }
+
+    private func setupProgressLabel() {
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        progressLabel.textColor = .white
+        progressLabel.backgroundColor = .clear
+        
+        // 关键：在 MangaReaderViewController 内部设置反色滤镜
+        progressLabel.layer.compositingFilter = "differenceFilter"
+        progressLabel.layer.shouldRasterize = true
+        progressLabel.layer.rasterizationScale = UIScreen.main.scale
+        
+        view.addSubview(progressLabel)
+        progressLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4)
+        ])
     }
     
     override func viewDidLayoutSubviews() {
@@ -1131,8 +1150,18 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         let rawOffset = s.contentOffset.y
         handleHoldSwitchIfNeeded(rawOffset: rawOffset)
         
-        let actualMaxScrollY = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height)
+        let actualMaxScrollY = max(-safeAreaTop, stackView.frame.height - scrollView.bounds.height)
         let currentScale = s.zoomScale
+        
+        // 更新进度百分比
+        let offset = rawOffset + safeAreaTop
+        let maxOffset = stackView.frame.height - s.bounds.height
+        if maxOffset > 0 {
+            let percent = Int(round(min(1.0, max(0.0, offset / maxOffset)) * 100))
+            progressLabel.text = "\(min(100, percent))%"
+        } else {
+            progressLabel.text = "0%"
+        }
         
         if rawOffset < -safeAreaTop {
             let diff = -safeAreaTop - rawOffset

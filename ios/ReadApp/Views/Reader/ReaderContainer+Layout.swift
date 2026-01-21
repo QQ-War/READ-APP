@@ -35,24 +35,17 @@ extension ReaderContainerViewController {
     }
 
     func updateProgressUI() {
+        view.bringSubviewToFront(progressLabel)
+        
+        // 进度标签现在使用 exclusionFilter 滤镜，会自动根据背景反转颜色
+        // 因此不再需要根据主题或模式手动设置 textColor
+        progressLabel.textColor = .white
+
         if isMangaMode {
-            if let m = mangaVC {
-                let s = m.scrollView
-                let offset = s.contentOffset.y + s.contentInset.top
-                let maxOffset = s.contentSize.height - s.bounds.height + s.contentInset.top
-                if maxOffset > 0 {
-                    let percent = Int(round(min(1.0, max(0.0, offset / maxOffset)) * 100))
-                    progressLabel.text = "\(min(100, percent))%"
-                } else {
-                    progressLabel.text = "0%"
-                }
-            }
-            progressLabel.isHidden = false
+            // 漫画模式下隐藏全局标签，由 MangaReaderViewController 内部处理带反色效果的标签
+            progressLabel.isHidden = true
             return
         }
-        
-        view.bringSubviewToFront(progressLabel)
-        progressLabel.textColor = .white
         
         if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
             let pagesCount = currentCache.pages.count
