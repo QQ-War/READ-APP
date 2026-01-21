@@ -85,7 +85,7 @@
 		1A00003A000000000000003 /* BookSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000039000000000000003 /* BookSource.swift */; };
 		1A00003C000000000000003 /* SourceListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00003B000000000000003 /* SourceListViewModel.swift */; };
 		1A00003E000000000000003 /* SourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00003D000000000000003 /* SourceListView.swift */; };
-		A10000010000000000000002 /* SourceExploreContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000010000000000000001 /* SourceExploreContainerView.swift */; };
+		F10000010000000000000002 /* SourceExploreContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000010000000000000001 /* SourceExploreContainerView.swift */; };
 		1A000040000000000000003 /* SourceEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00003F000000000000003 /* SourceEditView.swift */; };
 		1A000042000000000000004 /* BookDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000041000000000000004 /* BookDetailView.swift */; };
 		1A000044000000000000004 /* LocalCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000043000000000000004 /* LocalCacheManager.swift */; };
@@ -185,7 +185,7 @@
 		1A000039000000000000003 /* BookSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSource.swift; sourceTree = "<group>"; };
 		1A00003B000000000000003 /* SourceListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceListViewModel.swift; sourceTree = "<group>"; };
 		1A00003D000000000000003 /* SourceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceListView.swift; sourceTree = "<group>"; };
-		A10000010000000000000001 /* SourceExploreContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceExploreContainerView.swift; sourceTree = "<group>"; };
+		F10000010000000000000001 /* SourceExploreContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceExploreContainerView.swift; sourceTree = "<group>"; };
 		1A00003F000000000000003 /* SourceEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceEditView.swift; sourceTree = "<group>"; };
 		1A000041000000000000004 /* BookDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailView.swift; sourceTree = "<group>"; };
 		1A000043000000000000004 /* LocalCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCacheManager.swift; sourceTree = "<group>"; };
@@ -319,7 +319,7 @@
 			isa = PBXGroup;
 			children = (
 				1A00003D000000000000003 /* SourceListView.swift */,
-				A10000010000000000000001 /* SourceExploreContainerView.swift */,
+				F10000010000000000000001 /* SourceExploreContainerView.swift */,
 				1A00003F000000000000003 /* SourceEditView.swift */,
 				7B4B2D6E5A2A4C7AA1F0A005 /* SourceExploreView.swift */,
 				B10000070000000000000001 /* RssSourcesView.swift */,
@@ -560,7 +560,7 @@
 				1A00003A000000000000003 /* BookSource.swift in Sources */,
 				1A000011000000000000001 /* BookListView.swift in Sources */,
 				1A00003E000000000000003 /* SourceListView.swift in Sources */,
-				A10000010000000000000002 /* SourceExploreContainerView.swift in Sources */,
+				F10000010000000000000002 /* SourceExploreContainerView.swift in Sources */,
 				1A000040000000000000003 /* SourceEditView.swift in Sources */,
 				1A000015000000000000001 /* TTSManager.swift in Sources */,
 				1A000017000000000000001 /* SettingsView.swift in Sources */,
