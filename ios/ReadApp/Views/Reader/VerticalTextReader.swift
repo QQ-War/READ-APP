@@ -987,6 +987,8 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var bookUrl: String?
     var chapterIndex: Int = 0
     var chapterUrl: String?
+    private var imageUrls: [String] = []
+    
     private lazy var progressOverlayView: UIView = {
         let view = UIView()
         view.backgroundColor = .clear
