@@ -139,9 +139,9 @@ extension ReaderContainerViewController {
                 verticalVC?.view.removeFromSuperview(); verticalVC = nil
                 newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
                 setupHorizontalMode()
+            } else {
+                // 水平模式下的状态同步（如果需要）
             }
-        } else {
-            // 水平模式下的状态同步（如果需要）
         }
         updateProgressUI()
     }
