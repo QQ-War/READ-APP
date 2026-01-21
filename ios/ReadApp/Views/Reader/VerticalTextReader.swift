@@ -989,6 +989,13 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var chapterUrl: String?
     private var imageUrls: [String] = []
     
+    private lazy var progressOverlayView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.layer.compositingFilter = "exclusionBlendMode"
+        return view
+    }()
+    
     let progressLabel = UILabel()
 
     override func viewDidLoad() {
@@ -1016,29 +1023,31 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         ])
         
         setupSwitchHint()
+        
         setupProgressLabel()
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         scrollView.addGestureRecognizer(tap)
     }
-
+    
     private func setupProgressLabel() {
+        view.addSubview(progressOverlayView)
+        progressOverlayView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            progressOverlayView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            progressOverlayView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4),
+            progressOverlayView.widthAnchor.constraint(greaterThanOrEqualToConstant: 40),
+            progressOverlayView.heightAnchor.constraint(equalToConstant: 20)
+        ])
+        
         progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
         progressLabel.textColor = .white
         progressLabel.backgroundColor = .clear
-        
-        // 关键：直接在 Label 图层设置滤镜，不再使用中间容器
-        progressLabel.layer.compositingFilter = "differenceFilter"
-        
-        // 强制光栅化，使 UILabel 变为像素位图，以便 GPU 执行差值运算
-        progressLabel.layer.shouldRasterize = true
-        progressLabel.layer.rasterizationScale = UIScreen.main.scale
-        
-        view.addSubview(progressLabel)
+        progressOverlayView.addSubview(progressLabel)
         progressLabel.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-            progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4)
+            progressLabel.trailingAnchor.constraint(equalTo: progressOverlayView.trailingAnchor),
+            progressLabel.bottomAnchor.constraint(equalTo: progressOverlayView.bottomAnchor)
         ])
     }
     
@@ -1155,7 +1164,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         let actualMaxScrollY = max(-safeAreaTop, stackView.frame.height - scrollView.bounds.height)
         let currentScale = s.zoomScale
         
-        // 更新进度百分比
+        // 按 Y 轴比例计算平滑进度
         let offset = rawOffset + safeAreaTop
         let maxOffset = stackView.frame.height - s.bounds.height
         if maxOffset > 0 {
