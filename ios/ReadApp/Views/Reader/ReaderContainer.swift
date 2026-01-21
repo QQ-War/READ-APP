@@ -263,15 +263,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func setupProgressLabel() {
         progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
-        progressLabel.textColor = .white // 纯白文字在差值滤镜下效果最好
+        progressLabel.textColor = .white
         progressLabel.backgroundColor = .clear
         
-        // 使用 differenceFilter 实现反色
-        progressLabel.layer.compositingFilter = "differenceFilter"
+        // 使用 exclusionFilter 实现反色效果
+        progressLabel.layer.compositingFilter = "exclusionFilter"
         
-        // 强制光栅化，这是确保 UILabel 滤镜生效的关键技巧
-        progressLabel.layer.shouldRasterize = true
-        progressLabel.layer.rasterizationScale = UIScreen.main.scale
+        // 不使用 shouldRasterize，因为会干扰滤镜的实时像素采样
         
         view.addSubview(progressLabel)
         progressLabel.translatesAutoresizingMaskIntoConstraints = false
