@@ -35,17 +35,8 @@ extension ReaderContainerViewController {
     }
 
     func updateProgressUI() {
-        if isMangaMode { progressLabel.text = ""; return }
+        if isMangaMode || currentCache.pages.isEmpty { progressLabel.text = ""; return }
         let total = currentCache.pages.count
-        if total == 0 {
-            // 加载中或无数据时，保持章节文字或显示占位，不直接置空
-            if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
-                progressLabel.text = "- / -"
-            } else {
-                progressLabel.text = ""
-            }
-            return
-        }
         let current = max(1, min(total, currentPageIndex + 1))
         progressLabel.text = (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) ? "\(current)/\(total)" : ""
     }

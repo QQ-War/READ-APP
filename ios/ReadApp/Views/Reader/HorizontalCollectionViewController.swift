@@ -62,6 +62,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         self.currentPageIndex = anchorPageIndex
         self.themeBackgroundColor = backgroundColor
         
+        view.backgroundColor = backgroundColor
         collectionView.backgroundColor = backgroundColor
         collectionView.reloadData()
         
@@ -119,10 +120,8 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         let page = Int(scrollView.contentOffset.x / scrollView.bounds.width)
-        if page != currentPageIndex {
-            currentPageIndex = page
-            delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
-        }
+        currentPageIndex = page
+        delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
     }
     
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
@@ -132,16 +131,23 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            let page = Int(scrollView.contentOffset.x / scrollView.bounds.width)
+            delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
+        }
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
         let offsetX = scrollView.contentOffset.x
         let width = scrollView.bounds.width
         let contentWidth = scrollView.contentSize.width
         
         // 检测向后翻页（超出末尾）
-        if offsetX > contentWidth - width + 60 {
+        if offsetX > contentWidth - width + 80 {
             delegate?.horizontalCollectionView(self, requestChapterSwitch: 1)
         }
         // 检测向前翻页（超出开头）
-        else if offsetX < -60 {
+        else if offsetX < -80 {
             delegate?.horizontalCollectionView(self, requestChapterSwitch: -1)
         }
     }

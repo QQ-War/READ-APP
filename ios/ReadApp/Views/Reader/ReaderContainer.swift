@@ -124,188 +124,171 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             mangaVC?.threshold = verticalThreshold
         }
     }
-        var currentReadingMode: ReadingMode = .vertical
-        private var activePaginationAnchor: Int = 0 // 分页锚点
-        var isInternalTransitioning = false
-        var isFirstLoad = true
-        private var isUserInteracting = false
-        var isAutoScrolling = false
-        private var ttsSyncCoordinator: TTSReadingSyncCoordinator?
-        
-        var chapterBuilder: ReaderChapterBuilder?
-        var currentCache: ChapterCache = .empty
-        var nextCache: ChapterCache = .empty
-        var prevCache: ChapterCache = .empty
-        var currentPageIndex: Int = 0
-        private var visibleHorizontalPageIndex: Int? {
-            guard let pageVC = horizontalVC?.viewControllers?.first as? PageContentViewController else { return nil }
-            guard pageVC.chapterOffset == 0 else { return nil }
-            return pageVC.pageIndex
-        }
-        func horizontalPageIndexForDisplay() -> Int {
-            if let visible = visibleHorizontalPageIndex, visible >= 0, visible < currentCache.pages.count {
-                return visible
-            }
-            return currentPageIndex
-        }
-        private func previewSentences(from startIndex: Int, limit: Int) -> [String] {
-            guard !currentCache.contentSentences.isEmpty else { return [] }
-            var lines: [String] = []
-            for idx in startIndex..<min(startIndex + limit, currentCache.contentSentences.count) {
-                lines.append(sanitizedPreviewText(currentCache.contentSentences[idx]))
-            }
-            return lines
-        }
-        private func sanitizedPreviewText(_ text: String) -> String {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
-            guard trimmed.count > 120 else { return trimmed }
-            let endIndex = trimmed.index(trimmed.startIndex, offsetBy: 120)
-            return String(trimmed[..<endIndex]) + "…"
-        }
-        private func visibleTopSentenceInfo() -> (index: Int, sentences: [String]) {
-            guard !currentCache.contentSentences.isEmpty else { return (0, []) }
-            let startIndex: Int
-            if currentReadingMode == .vertical {
-                startIndex = verticalVC?.getCurrentSentenceIndex() ?? 0
-            } else {
-                let pageIndex = horizontalPageIndexForDisplay()
-                if let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count {
-                    startIndex = pageInfos[pageIndex].startSentenceIndex
-                } else {
-                    startIndex = 0
-                }
-            }
-            let sentences = previewSentences(from: startIndex, limit: 2)
-            return (startIndex, sentences)
-        }
-        private func horizontalPageStartSnippet(for pageIndex: Int, limit: Int) -> String {
-            guard let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count else { return "" }
-            let range = pageInfos[pageIndex].range
-            let attributed = currentCache.attributedText.string as NSString
-            let validLen = max(0, min(limit, attributed.length - range.location))
-            guard validLen > 0 else { return "" }
-            let fragment = attributed.substring(with: NSRange(location: range.location, length: validLen))
-            return sanitizedPreviewText(fragment)
-        }
-        var isMangaMode = false
-        var latestVisibleFragmentLines: [String] = []
-    
-            var verticalVC: VerticalTextViewController?; var horizontalVC: UIPageViewController?; var mangaVC: MangaReaderViewController?; var newHorizontalVC: HorizontalCollectionViewController?
-            var prebuiltNextMangaVC: MangaReaderViewController?
-                var prebuiltNextIndex: Int?
-                
-                let progressLabel = UILabel()
-                private var lastLayoutSignature: String = ""
-                var loadToken: Int = 0
-                let prefetchCoordinator = ReaderPrefetchCoordinator()
-        private var pendingTTSPositionSync = false
-        var prefetchedMangaNextIndex: Int?
-        var prefetchedMangaNextContent: String?
-        var lastChapterSwitchTime: TimeInterval = 0
-        let chapterSwitchCooldown: TimeInterval = 1.0
-    private var suppressTTSFollowUntil: TimeInterval = 0
-        private var lastLoggedCacheChapterIndex: Int = -1
-        private var lastLoggedNextUrl: String?
-        private var lastLoggedPrevUrl: String?
-        private var lastLoggedNextCount: Int = -1
-        private var lastLoggedPrevCount: Int = -1
-    
-        override func viewDidLoad() {
-            super.viewDidLoad()
-            view.backgroundColor = readerSettings.readingTheme.backgroundColor
-            setupProgressLabel()
-            currentChapterIndex = book.durChapterIndex ?? 0
-            lastReportedChapterIndex = currentChapterIndex
-            currentReadingMode = readerSettings.readingMode
-            
-            // 初始加载设锚点为书籍保存的进度
-            if currentReadingMode == .horizontal {
-                // 注意：如果是首次进入且为水平模式，由于此时排版未完成，
-                // 锚点将稍后在 processLoadedChapterContent 中应用
-            }
-            
-            chapterBuilder = ReaderChapterBuilder(readerSettings: readerSettings, replaceRules: replaceRuleViewModel?.rules)
-            loadChapters()
-            ttsSyncCoordinator = TTSReadingSyncCoordinator(reader: self, ttsManager: ttsManager)
-            ttsSyncCoordinator?.start()
-        }
 
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            prefetchCoordinator.cancel()
-            ttsSyncCoordinator?.stop()
-            // 退出阅读器时强制保存进度
-            Task {
-                let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
-                var pos: Double = 0.0
-                if currentReadingMode == .vertical {
-                    if isMangaMode {
-                        pos = Double(mangaVC?.currentVisibleIndex ?? 0)
-                    } else {
-                        let count = max(1, currentCache.contentSentences.count)
-                        let idx = verticalVC?.lastReportedIndex ?? 0
-                        pos = Double(idx) / Double(count)
-                    }
-                } else if !currentCache.pages.isEmpty {
-                    // 水平模式
-                    pos = Double(currentPageIndex) / Double(currentCache.pages.count)
-                }
-                
-                // 本地和远程同步
-                UserDefaults.standard.set(currentChapterIndex, forKey: "lastChapter_\(book.bookUrl ?? "")")
-                try? await APIService.shared.saveBookProgress(bookUrl: book.bookUrl ?? "", index: currentChapterIndex, pos: pos, title: title)
+    var currentReadingMode: ReadingMode = .vertical
+    private var activePaginationAnchor: Int = 0 // 分页锚点
+    var isInternalTransitioning = false
+    var isFirstLoad = true
+    private var isUserInteracting = false
+    var isAutoScrolling = false
+    private var ttsSyncCoordinator: TTSReadingSyncCoordinator?
+
+    var chapterBuilder: ReaderChapterBuilder?
+    var currentCache: ChapterCache = .empty
+    var nextCache: ChapterCache = .empty
+    var prevCache: ChapterCache = .empty
+    var currentPageIndex: Int = 0
+    
+    private var visibleHorizontalPageIndex: Int? {
+        guard let pageVC = horizontalVC?.viewControllers?.first as? PageContentViewController else { return nil }
+        guard pageVC.chapterOffset == 0 else { return nil }
+        return pageVC.pageIndex
+    }
+    
+    func horizontalPageIndexForDisplay() -> Int {
+        if let visible = visibleHorizontalPageIndex, visible >= 0, visible < currentCache.pages.count {
+            return visible
+        }
+        return currentPageIndex
+    }
+    
+    private func previewSentences(from startIndex: Int, limit: Int) -> [String] {
+        guard !currentCache.contentSentences.isEmpty else { return [] }
+        var lines: [String] = []
+        for idx in startIndex..<min(startIndex + limit, currentCache.contentSentences.count) {
+            lines.append(sanitizedPreviewText(currentCache.contentSentences[idx]))
+        }
+        return lines
+    }
+    
+    private func sanitizedPreviewText(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
+        guard trimmed.count > 120 else { return trimmed }
+        let endIndex = trimmed.index(trimmed.startIndex, offsetBy: 120)
+        return String(trimmed[..<endIndex]) + "…"
+    }
+    
+    private func visibleTopSentenceInfo() -> (index: Int, sentences: [String]) {
+        guard !currentCache.contentSentences.isEmpty else { return (0, []) }
+        let startIndex: Int
+        if currentReadingMode == .vertical {
+            startIndex = verticalVC?.getCurrentSentenceIndex() ?? 0
+        } else {
+            let pageIndex = horizontalPageIndexForDisplay()
+            if let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count {
+                startIndex = pageInfos[pageIndex].startSentenceIndex
+            } else {
+                startIndex = 0
             }
         }
+        let sentences = previewSentences(from: startIndex, limit: 2)
+        return (startIndex, sentences)
+    }
+    
+    private func horizontalPageStartSnippet(for pageIndex: Int, limit: Int) -> String {
+        guard let pageInfos = currentCache.pageInfos, pageIndex < pageInfos.count else { return "" }
+        let range = pageInfos[pageIndex].range
+        let attributed = currentCache.attributedText.string as NSString
+        let validLen = max(0, min(limit, attributed.length - range.location))
+        guard validLen > 0 else { return "" }
+        let fragment = attributed.substring(with: NSRange(location: range.location, length: validLen))
+        return sanitizedPreviewText(fragment)
+    }
+    
+    var isMangaMode = false
+    var latestVisibleFragmentLines: [String] = []
+
+    var verticalVC: VerticalTextViewController?
+    var horizontalVC: UIPageViewController?
+    var mangaVC: MangaReaderViewController?
+    var newHorizontalVC: HorizontalCollectionViewController?
+    var prebuiltNextMangaVC: MangaReaderViewController?
+    var prebuiltNextIndex: Int?
+
+    let progressLabel = UILabel()
+    private var lastLayoutSignature: String = ""
+    var loadToken: Int = 0
+    let prefetchCoordinator = ReaderPrefetchCoordinator()
+    
+    private var pendingTTSPositionSync = false
+    var prefetchedMangaNextIndex: Int?
+    var prefetchedMangaNextContent: String?
+    var lastChapterSwitchTime: TimeInterval = 0
+    let chapterSwitchCooldown: TimeInterval = 1.0
+    private var suppressTTSFollowUntil: TimeInterval = 0
+    private var lastLoggedCacheChapterIndex: Int = -1
+    private var lastLoggedNextUrl: String?
+    private var lastLoggedPrevUrl: String?
+    private var lastLoggedNextCount: Int = -1
+    private var lastLoggedPrevCount: Int = -1
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = readerSettings.readingTheme.backgroundColor
+        setupProgressLabel()
+        currentChapterIndex = book.durChapterIndex ?? 0
+        lastReportedChapterIndex = currentChapterIndex
+        currentReadingMode = readerSettings.readingMode
         
-        private func setupProgressLabel() {
-            progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular); progressLabel.textColor = .secondaryLabel
-            view.addSubview(progressLabel); progressLabel.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12), progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4)])
-        }
+        chapterBuilder = ReaderChapterBuilder(readerSettings: readerSettings, replaceRules: replaceRuleViewModel?.rules)
+        loadChapters()
+        ttsSyncCoordinator = TTSReadingSyncCoordinator(reader: self, ttsManager: ttsManager)
+        ttsSyncCoordinator?.start()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        prefetchCoordinator.cancel()
+        ttsSyncCoordinator?.stop()
         
-                private var lastKnownSize: CGSize = .zero
-        
-                private var pendingRelocationOffset: Int? // 记录正在进行的跳转目标
-        
-                
-        
-                override func viewDidLayoutSubviews() {
-        
-                    super.viewDidLayoutSubviews()
-        
-                    guard !isInternalTransitioning else { return }
-        
-                    let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaVC?.view.frame = b; newHorizontalVC?.view.frame = b
-        
-                    
-        
-                    if b.size != lastKnownSize {
-        
-                        let spec = currentLayoutSpec
-        
-                        let signature = "\(Int(spec.pageSize.width))x\(Int(spec.pageSize.height))|\(Int(spec.topInset))"
-        
-                        if signature != lastLayoutSignature {
-        
-                            lastLayoutSignature = signature
-        
-                            lastKnownSize = b.size
-        
-                            if !isMangaMode, currentCache.renderStore != nil, (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) {
-        
-                                rebuildPaginationForLayout()
-        
-                            }
-        
-                        }
-        
-                    }
-        
+        Task {
+            let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
+            var pos: Double = 0.0
+            if currentReadingMode == .vertical {
+                if isMangaMode {
+                    pos = Double(mangaVC?.currentVisibleIndex ?? 0)
+                } else {
+                    let count = max(1, currentCache.contentSentences.count)
+                    let idx = verticalVC?.lastReportedIndex ?? 0
+                    pos = Double(idx) / Double(count)
                 }
-        
+            } else if !currentCache.pages.isEmpty {
+                pos = Double(currentPageIndex) / Double(currentCache.pages.count)
+            }
             
+            UserDefaults.standard.set(currentChapterIndex, forKey: "lastChapter_\(book.bookUrl ?? "")")
+            try? await APIService.shared.saveBookProgress(bookUrl: book.bookUrl ?? "", index: currentChapterIndex, pos: pos, title: title)
+        }
+    }
+
+    private func setupProgressLabel() {
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular); progressLabel.textColor = .secondaryLabel
+        view.addSubview(progressLabel); progressLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12), progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4)])
+    }
+
+    private var lastKnownSize: CGSize = .zero
+    private var pendingRelocationOffset: Int? // 记录正在进行的跳转目标
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard !isInternalTransitioning else { return }
+        let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaVC?.view.frame = b; newHorizontalVC?.view.frame = b
         
-                func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
+        if b.size != lastKnownSize {
+            let spec = currentLayoutSpec
+            let signature = "\(Int(spec.pageSize.width))x\(Int(spec.pageSize.height))|\(Int(spec.topInset))"
+            if signature != lastLayoutSignature {
+                lastLayoutSignature = signature
+                lastKnownSize = b.size
+                if !isMangaMode, currentCache.renderStore != nil, (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) {
+                    rebuildPaginationForLayout()
+                }
+            }
+        }
+    }
+
+    func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
         
         func updateSettings(_ settings: ReaderSettingsStore) {
             let snapshot = ReaderSettingsSnapshot(
@@ -673,13 +656,14 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         lastReportedChapterIndex = index
         onChapterIndexChanged?(index)
         
-        if currentReadingMode == .newHorizontal || currentReadingMode == .horizontal {
-            performChapterTransition(isNext: isNext) { [weak self] in
+        if currentReadingMode == .newHorizontal {
+            performChapterTransitionSlide(isNext: isNext) { [weak self] in
                 self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
             }
         } else {
-            // 垂直模式等其他模式保持原有逻辑
-            self.loadChapterContent(at: index, startAtEnd: startAtEnd)
+            performChapterTransitionFade { [weak self] in
+                self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
+            }
         }
     }
 

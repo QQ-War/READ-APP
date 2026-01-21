@@ -49,14 +49,15 @@ extension ReaderContainerViewController {
     }
 
     func updateHorizontalPage(to i: Int, animated: Bool) {
+        let oldIndex = self.currentPageIndex
+        let isNext = i > oldIndex
+        let targetIndex = max(0, min(i, currentCache.pages.count - 1))
+
         if currentReadingMode == .newHorizontal {
-            let oldIndex = self.currentPageIndex
-            let isNext = i > oldIndex
-            
             let mode = readerSettings.pageTurningMode
             if !animated || mode == .none {
-                self.currentPageIndex = i
-                newHorizontalVC?.scrollToPageIndex(i, animated: false)
+                self.currentPageIndex = targetIndex
+                newHorizontalVC?.scrollToPageIndex(targetIndex, animated: false)
                 self.isInternalTransitioning = false
                 self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
                 updateProgressUI()
@@ -65,52 +66,63 @@ extension ReaderContainerViewController {
             
             performChapterTransition(isNext: isNext) { [weak self] in
                 guard let self = self else { return }
-                self.currentPageIndex = i
-                self.newHorizontalVC?.scrollToPageIndex(i, animated: false)
+                self.currentPageIndex = targetIndex
+                self.newHorizontalVC?.scrollToPageIndex(targetIndex, animated: false)
                 self.onProgressChanged?(self.currentChapterIndex, Double(self.currentPageIndex) / Double(max(1, self.currentCache.pages.count)))
                 self.updateProgressUI()
             }
             return
         }
+        
         guard let h = horizontalVC, !currentCache.pages.isEmpty else { return }
-        let targetIndex = max(0, min(i, currentCache.pages.count - 1))
-        let direction: UIPageViewController.NavigationDirection = targetIndex >= currentPageIndex ? .forward : .reverse
-        currentPageIndex = targetIndex
+        let direction: UIPageViewController.NavigationDirection = isNext ? .forward : .reverse
         
-        if animated {
-            self.isAutoScrolling = true
-        }
-        
-        h.setViewControllers([createPageVC(at: targetIndex, offset: 0)], direction: direction, animated: animated) { [weak self] finished in
-            guard let self = self else { return }
-            if animated {
-                self.isInternalTransitioning = false
+        if animated && readerSettings.pageTurningMode != .simulation {
+            // 如果不是仿真模式且需要动画，统一走自研转场引擎以支持 Cover/Fade 等效果
+            performChapterTransition(isNext: isNext) { [weak self] in
+                guard let self = self else { return }
+                self.currentPageIndex = targetIndex
+                h.setViewControllers([self.createPageVC(at: targetIndex, offset: 0)], direction: direction, animated: false, completion: nil)
+                self.onProgressChanged?(self.currentChapterIndex, Double(self.currentPageIndex) / Double(max(1, self.currentCache.pages.count)))
+                self.updateProgressUI()
             }
-            self.isAutoScrolling = false
+        } else {
+            // 仿真模式或无动画，走原生路径
+            currentPageIndex = targetIndex
+            if animated { self.isAutoScrolling = true }
+            h.setViewControllers([createPageVC(at: targetIndex, offset: 0)], direction: direction, animated: animated) { [weak self] finished in
+                guard let self = self else { return }
+                self.isInternalTransitioning = false
+                self.isAutoScrolling = false
+            }
+            if !animated {
+                self.isInternalTransitioning = false
+                self.isAutoScrolling = false
+            }
+            updateProgressUI()
+            self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
         }
-        if !animated {
-            self.isInternalTransitioning = false
-            self.isAutoScrolling = false
-        }
-        updateProgressUI()
-        self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
     }
 
     func animateToAdjacentChapter(offset: Int, targetPage: Int) {
-        if currentReadingMode == .newHorizontal {
-            performChapterTransition(isNext: offset > 0) { [weak self] in
+        let isNext = offset > 0
+        if currentReadingMode == .newHorizontal || (currentReadingMode == .horizontal && readerSettings.pageTurningMode != .simulation) {
+            performChapterTransition(isNext: isNext) { [weak self] in
                 self?.completeDataDrift(offset: offset, targetPage: targetPage, currentVC: nil)
             }
             return
         }
+        
+        // 仿真模式的原生跨章
         guard let h = horizontalVC, !isInternalTransitioning else { return }
         isInternalTransitioning = true
         self.isAutoScrolling = true
         let vc = createPageVC(at: targetPage, offset: offset)
-        let direction: UIPageViewController.NavigationDirection = offset > 0 ? .forward : .reverse
+        let direction: UIPageViewController.NavigationDirection = isNext ? .forward : .reverse
 
         h.setViewControllers([vc], direction: direction, animated: true) { [weak self] completed in
-            guard completed, let self = self else { return }
+            guard let self = self else { return }
+            // 无论动画是否完全 completed（有时会被中断），只要视图已经切换，就执行数据漂移
             Task { @MainActor in
                 let currentVC = h.viewControllers?.first as? PageContentViewController
                 self.completeDataDrift(offset: offset, targetPage: targetPage, currentVC: currentVC)
@@ -127,7 +139,6 @@ extension ReaderContainerViewController {
         let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
         var didChangeWithinChapter = false
         if t >= 0 && t < currentCache.pages.count {
-            isInternalTransitioning = true
             updateHorizontalPage(to: t, animated: true)
             didChangeWithinChapter = true
         } else {
@@ -137,7 +148,6 @@ extension ReaderContainerViewController {
                 return
             }
 
-            isInternalTransitioning = true // 锁定，防止重复点击导致跳章
             if isNext, !nextCache.pages.isEmpty {
                 animateToAdjacentChapter(offset: 1, targetPage: 0)
                 didChangeWithinChapter = true
@@ -145,6 +155,7 @@ extension ReaderContainerViewController {
                 animateToAdjacentChapter(offset: -1, targetPage: prevCache.pages.count - 1)
                 didChangeWithinChapter = true
             } else {
+                isInternalTransitioning = true 
                 requestChapterSwitch(to: targetChapter, startAtEnd: !isNext)
             }
         }
@@ -156,51 +167,47 @@ extension ReaderContainerViewController {
     func performChapterTransition(isNext: Bool, updates: @escaping () -> Void) {
         let mode = readerSettings.pageTurningMode
         
-        // 只有新模式支持多样化动画，旧模式统一使用平滑淡入淡出
-        if currentReadingMode != .newHorizontal {
-            isInternalTransitioning = true
-            let overlay = UIView(frame: view.bounds)
-            overlay.backgroundColor = readerSettings.readingTheme.backgroundColor
-            overlay.alpha = 0
-            view.addSubview(overlay)
-            
-            UIView.animate(withDuration: 0.15, animations: {
-                overlay.alpha = 1
-            }, completion: { _ in
-                updates()
-                UIView.animate(withDuration: 0.25, animations: {
-                    overlay.alpha = 0
-                }, completion: { _ in
-                    overlay.removeFromSuperview()
-                    self.isInternalTransitioning = false
-                    self.notifyUserInteractionEnded()
-                })
-            })
-            return
-        }
-
-        guard let horizontalView = newHorizontalVC?.view else {
-            updates()
-            return
+        guard !isInternalTransitioning else { return }
+        isInternalTransitioning = true
+        
+        let containerView = view!
+        let themeColor = readerSettings.readingTheme.backgroundColor
+        
+        let activeView: UIView?
+        if currentReadingMode == .newHorizontal {
+            activeView = newHorizontalVC?.view
+        } else if currentReadingMode == .horizontal {
+            activeView = horizontalVC?.view
+        } else if currentReadingMode == .vertical {
+            activeView = verticalVC?.view
+        } else {
+            activeView = mangaVC?.view
         }
         
-        if mode == .none {
+        guard let horizontalView = activeView else {
             updates()
             self.isInternalTransitioning = false
             return
         }
         
-        isInternalTransitioning = true
-        
         // 1. 截取当前视图快照
         let snapshot = horizontalView.snapshotView(afterScreenUpdates: false)
         snapshot?.frame = horizontalView.frame
+        snapshot?.backgroundColor = themeColor
         
-        // 2. 根据模式执行动画
+        // 2. 执行内容更新
+        updates()
+        
+        if mode == .none {
+            self.isInternalTransitioning = false
+            self.notifyUserInteractionEnded()
+            return
+        }
+        
+        // 3. 执行动画
         switch mode {
         case .scroll:
-            if let snap = snapshot { view.insertSubview(snap, aboveSubview: horizontalView) }
-            updates()
+            if let snap = snapshot { containerView.insertSubview(snap, aboveSubview: horizontalView) }
             let width = horizontalView.bounds.width
             horizontalView.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
             UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
@@ -213,20 +220,22 @@ extension ReaderContainerViewController {
             })
             
         case .cover:
-            // 覆盖模式：新页面在快照上方滑入
-            if let snap = snapshot { view.insertSubview(snap, belowSubview: horizontalView) }
-            updates()
+            // 覆盖翻页：旧快照在下，新视图在上。新视图强设背景色消除重影
+            if let snap = snapshot { containerView.insertSubview(snap, belowSubview: horizontalView) }
             let width = horizontalView.bounds.width
             horizontalView.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
-            // 增加阴影效果增强层级感
-            horizontalView.layer.shadowColor = UIColor.black.cgColor
-            horizontalView.layer.shadowOpacity = 0.2
-            horizontalView.layer.shadowOffset = CGSize(width: isNext ? -3 : 3, height: 0)
-            horizontalView.layer.shadowRadius = 5
+            horizontalView.alpha = 1.0 
+            horizontalView.backgroundColor = themeColor 
             
-            UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseOut, animations: {
+            horizontalView.layer.shadowColor = UIColor.black.cgColor
+            horizontalView.layer.shadowOpacity = 0.4 // 增加阴影深度，提升层级感
+            horizontalView.layer.shadowOffset = CGSize(width: isNext ? -4 : 4, height: 0)
+            horizontalView.layer.shadowRadius = 10
+            
+            UIView.animate(withDuration: 0.45, delay: 0, options: .curveEaseOut, animations: {
                 horizontalView.transform = .identity
-                snapshot?.transform = CGAffineTransform(translationX: isNext ? -width * 0.2 : width * 0.2, y: 0)
+                snapshot?.transform = CGAffineTransform(translationX: isNext ? -width * 0.3 : width * 0.3, y: 0)
+                snapshot?.alpha = 0.7 // 旧页面适当变暗
             }, completion: { _ in
                 snapshot?.removeFromSuperview()
                 horizontalView.layer.shadowOpacity = 0
@@ -234,11 +243,10 @@ extension ReaderContainerViewController {
                 self.notifyUserInteractionEnded()
             })
             
-        case .fade:
-            if let snap = snapshot { view.insertSubview(snap, aboveSubview: horizontalView) }
-            updates()
+        case .fade, .simulation: 
+            if let snap = snapshot { containerView.insertSubview(snap, aboveSubview: horizontalView) }
             horizontalView.alpha = 0
-            UIView.animate(withDuration: 0.4, animations: {
+            UIView.animate(withDuration: 0.35, animations: {
                 snapshot?.alpha = 0
                 horizontalView.alpha = 1
             }, completion: { _ in
@@ -248,38 +256,19 @@ extension ReaderContainerViewController {
             })
             
         case .flip:
-            updates()
             UIView.transition(with: horizontalView, duration: 0.5, options: isNext ? .transitionFlipFromRight : .transitionFlipFromLeft, animations: nil) { _ in
                 self.isInternalTransitioning = false
                 self.notifyUserInteractionEnded()
             }
             
         default:
-            updates()
             self.isInternalTransitioning = false
             self.notifyUserInteractionEnded()
         }
     }
 
     func performChapterTransitionFade(_ updates: @escaping () -> Void) {
-        // 该方法已集成进 performChapterTransition，保留作为旧模式兼容或彻底重构
         performChapterTransition(isNext: true, updates: updates)
-    }
-}
-        overlay.backgroundColor = readerSettings.readingTheme.backgroundColor
-        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        overlay.alpha = 0
-        view.addSubview(overlay)
-        UIView.animate(withDuration: 0.12, animations: {
-            overlay.alpha = 1
-        }, completion: { _ in
-            updates()
-            UIView.animate(withDuration: 0.18, animations: {
-                overlay.alpha = 0
-            }, completion: { _ in
-                overlay.removeFromSuperview()
-            })
-        })
     }
 }
 
