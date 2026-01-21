@@ -431,8 +431,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if s.contentOffset.y < s.bounds.height * 0.6 { onReachedTop?() }
         }
         
+        // 实时同步进度 UI：通知外部容器刷新进度标签
         let idx = sentenceYOffsets.lastIndex(where: { $0 <= y + verticalDetectionOffset }) ?? 0
-        if idx != lastReportedIndex { lastReportedIndex = idx; onVisibleIndexChanged?(idx) }
+        if idx != lastReportedIndex { 
+            lastReportedIndex = idx
+            onVisibleIndexChanged?(idx) 
+        } else {
+            // 即使索引没变，如果是垂直模式，我们为了百分比准确，也需要触发 UI 刷新
+            // 这里我们通过调用回调来触发容器的 updateProgressUI
+            onVisibleIndexChanged?(idx)
+        }
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {

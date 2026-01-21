@@ -37,8 +37,10 @@ extension ReaderContainerViewController {
     func updateProgressUI() {
         view.bringSubviewToFront(progressLabel)
         
-        // 同步颜色：确保在不同背景下可见
-        if let theme = readerSettings?.readingTheme {
+        // 动态调整颜色：漫画模式通常是黑色背景，强制使用白色
+        if isMangaMode {
+            progressLabel.textColor = .white.withAlphaComponent(0.7)
+        } else if let theme = readerSettings?.readingTheme {
             progressLabel.textColor = theme.textColor.withAlphaComponent(0.6)
         } else {
             progressLabel.textColor = .secondaryLabel
@@ -48,7 +50,7 @@ extension ReaderContainerViewController {
             let total = max(1, currentCache.contentSentences.count)
             let current = (mangaVC?.currentVisibleIndex ?? 0) + 1
             let percent = Int(round(Double(current) / Double(total) * 100))
-            progressLabel.text = "\(percent)%"
+            progressLabel.text = "\(min(100, percent))%"
             progressLabel.isHidden = false
             return
         }
@@ -64,10 +66,17 @@ extension ReaderContainerViewController {
             progressLabel.text = "\(current)/\(pagesCount)"
             progressLabel.isHidden = false
         } else if currentReadingMode == .vertical {
-            let count = max(1, currentCache.contentSentences.count)
-            let idx = verticalVC?.lastReportedIndex ?? 0
-            let percent = Int(round(Double(idx + 1) / Double(count) * 100))
-            progressLabel.text = "\(min(100, percent))%"
+            // 优化垂直模式：使用滚动偏移量计算百分比，比句子索引更准确
+            if let v = verticalVC {
+                let offset = v.scrollView.contentOffset.y + v.scrollView.contentInset.top
+                let maxOffset = v.scrollView.contentSize.height - v.scrollView.bounds.height + v.scrollView.contentInset.top
+                if maxOffset > 0 {
+                    let percent = Int(round(min(1.0, max(0.0, offset / maxOffset)) * 100))
+                    progressLabel.text = "\(percent)%"
+                } else {
+                    progressLabel.text = "0%"
+                }
+            }
             progressLabel.isHidden = false
         } else {
             progressLabel.text = ""
