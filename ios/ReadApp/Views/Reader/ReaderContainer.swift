@@ -674,7 +674,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         onChapterIndexChanged?(index)
         
         if currentReadingMode == .newHorizontal {
-            performChapterTransitionSlide(isNext: isNext) { [weak self] in
+            performChapterTransition(isNext: isNext) { [weak self] in
                 self?.loadChapterContent(at: index, startAtEnd: startAtEnd)
             }
         } else {
