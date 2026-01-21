@@ -989,14 +989,6 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var chapterUrl: String?
     private var imageUrls: [String] = []
     
-    private lazy var progressOverlayView: UIView = {
-        let view = UIView()
-        view.backgroundColor = .clear
-        // 使用 differenceFilter 实现反色效果
-        view.layer.compositingFilter = "differenceFilter"
-        return view
-    }()
-    
     let progressLabel = UILabel()
 
     override func viewDidLoad() {
@@ -1024,38 +1016,29 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         ])
         
         setupSwitchHint()
-        setupProgressUI()
+        setupProgressLabel()
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         scrollView.addGestureRecognizer(tap)
     }
 
-    private func setupProgressUI() {
-        // 1. 添加 Overlay Container (兄弟视图层级)
-        view.addSubview(progressOverlayView)
-        progressOverlayView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            progressOverlayView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-            progressOverlayView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4),
-            // 给容器一个合理的占位大小
-            progressOverlayView.widthAnchor.constraint(greaterThanOrEqualToConstant: 40),
-            progressOverlayView.heightAnchor.constraint(equalToConstant: 20)
-        ])
-
-        // 2. 将标签放入 Overlay 中
+    private func setupProgressLabel() {
         progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
         progressLabel.textColor = .white
         progressLabel.backgroundColor = .clear
         
-        // 开启光栅化以优化滤镜渲染
+        // 关键：直接在 Label 图层设置滤镜，不再使用中间容器
+        progressLabel.layer.compositingFilter = "differenceFilter"
+        
+        // 强制光栅化，使 UILabel 变为像素位图，以便 GPU 执行差值运算
         progressLabel.layer.shouldRasterize = true
         progressLabel.layer.rasterizationScale = UIScreen.main.scale
         
-        progressOverlayView.addSubview(progressLabel)
+        view.addSubview(progressLabel)
         progressLabel.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            progressLabel.trailingAnchor.constraint(equalTo: progressOverlayView.trailingAnchor),
-            progressLabel.bottomAnchor.constraint(equalTo: progressOverlayView.bottomAnchor)
+            progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4)
         ])
     }
     
