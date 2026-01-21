@@ -988,6 +988,15 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var chapterIndex: Int = 0
     var chapterUrl: String?
     private var imageUrls: [String] = []
+    
+    private lazy var progressOverlayView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.layer.compositingFilter = "exclusionBlendMode"
+        return view
+    }()
+    
+    let progressLabel = UILabel()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -1014,8 +1023,32 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         ])
         
         setupSwitchHint()
+        
+        setupProgressLabel()
+        
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         scrollView.addGestureRecognizer(tap)
+    }
+    
+    private func setupProgressLabel() {
+        view.addSubview(progressOverlayView)
+        progressOverlayView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            progressOverlayView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            progressOverlayView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -4),
+            progressOverlayView.widthAnchor.constraint(greaterThanOrEqualToConstant: 40),
+            progressOverlayView.heightAnchor.constraint(equalToConstant: 20)
+        ])
+        
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        progressLabel.textColor = .white
+        progressLabel.backgroundColor = .clear
+        progressOverlayView.addSubview(progressLabel)
+        progressLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            progressLabel.trailingAnchor.constraint(equalTo: progressOverlayView.trailingAnchor),
+            progressLabel.bottomAnchor.constraint(equalTo: progressOverlayView.bottomAnchor)
+        ])
     }
     
     override func viewDidLayoutSubviews() {
