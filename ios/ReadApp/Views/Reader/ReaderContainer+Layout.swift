@@ -136,8 +136,12 @@ extension ReaderContainerViewController {
         } else if readerSettings.pageTurningMode == .simulation {
             modeToUse = .horizontal
         } else {
-            // 所有其他动画（覆盖、淡入、旋转、平滑、无）统统使用自研 CollectionView 引擎
             modeToUse = .newHorizontal
+        }
+        
+        // 关键修复：同步状态变量，否则 handlePageTap 会找不到 VC
+        if currentReadingMode != .vertical {
+            self.currentReadingMode = modeToUse
         }
 
         if modeToUse == .vertical {

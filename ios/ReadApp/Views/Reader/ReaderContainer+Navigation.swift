@@ -73,6 +73,7 @@ extension ReaderContainerViewController {
                 self.currentPageIndex = targetIndex
                 newHorizontalVC?.scrollToPageIndex(targetIndex, animated: false)
                 self.isInternalTransitioning = false
+                self.notifyUserInteractionEnded() // 确保重置
                 self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
                 updateProgressUI()
                 return

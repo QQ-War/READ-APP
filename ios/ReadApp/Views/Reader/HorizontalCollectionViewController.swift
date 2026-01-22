@@ -33,35 +33,43 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
             switch turningMode {
             case .fade:
                 attr.alpha = 1.0 - absProgress
-                attr.transform = .identity
-                attr.zIndex = progress < 0 ? 1 : 0
+                attr.zIndex = progress < 0 ? 10 : 5
+                // 抵消平移，让页面重叠在一起进行淡入淡出
+                attr.transform = CGAffineTransform(translationX: -diff, y: 0)
+                
             case .cover:
                 if progress <= 0 {
-                    // 当前页或已离开页：在上层，正常跟随手指位移
-                    attr.zIndex = 10
+                    // 当前页（向左滑出）：保持在上层，随手指移动（不需要抵消）
+                    attr.zIndex = 100
                     attr.alpha = 1.0
                     attr.transform = .identity
                 } else if progress < 1.0 {
-                    // 准备进入的下一页：在下层，强制固定在原点，直到上一页完全滑开
+                    // 下一页（准备进入）：在下层，必须完全抵消位移，使其静止在屏幕中心
                     attr.zIndex = 0
                     attr.alpha = 1.0
-                    let tx = -diff // 完美抵消位移
+                    let tx = -diff // 抵消 CollectionView 的强制平移
                     attr.transform = CGAffineTransform(translationX: tx, y: 0)
                 } else {
-                    attr.alpha = 0 // 远端页面隐藏
+                    attr.alpha = 0
                 }
+                
             case .flip:
                 attr.alpha = 1.0 - (absProgress * 0.6)
                 attr.zIndex = progress < 0 ? 10 : 5
+                // 3D 旋转时也需要部分抵消位移，使其绕中心旋转
                 var transform = CATransform3DIdentity
                 transform.m34 = -1.0 / 1000.0
                 let angle = progress * (.pi / 2)
                 transform = CATransform3DRotate(transform, angle, 0, 1, 0)
+                let tx = -diff 
+                transform = CATransform3DTranslate(transform, tx, 0, 0)
                 attr.transform3D = transform
+                
             case .none:
                 attr.alpha = absProgress < 0.5 ? 1.0 : 0
                 attr.transform = CGAffineTransform(translationX: -diff, y: 0)
-            default:
+                
+            default: // .scroll
                 attr.alpha = 1.0
                 attr.transform = .identity
                 attr.zIndex = 0
