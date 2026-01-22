@@ -364,7 +364,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             // 如果正在进行模式切换跳转，不在此处重新捕获进度，防止捕获到临时的 Offset 0
             let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
 
-            if turningModeChanged && (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) && !isMangaMode {
+            // 确保正在切换模式时状态锁能正确管理
+            if turningModeChanged || layoutChanged {
+                self.isInternalTransitioning = false 
+            }
+
+            if turningModeChanged && !isMangaMode {
                 rebuildHorizontalControllerForTurningModeChange()
             }
 

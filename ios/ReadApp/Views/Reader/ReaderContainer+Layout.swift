@@ -129,22 +129,31 @@ extension ReaderContainerViewController {
 
         mangaVC?.view.removeFromSuperview(); mangaVC?.removeFromParent(); mangaVC = nil
 
+        // 核心引擎路由：只有仿真翻页允许使用旧版 UIPageViewController
+        let modeToUse: ReadingMode
         if currentReadingMode == .vertical {
+            modeToUse = .vertical
+        } else if readerSettings.pageTurningMode == .simulation {
+            modeToUse = .horizontal
+        } else {
+            // 所有其他动画（覆盖、淡入、旋转、平滑、无）统统使用自研 CollectionView 引擎
+            modeToUse = .newHorizontal
+        }
+
+        if modeToUse == .vertical {
             if verticalVC == nil {
                 horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
                 newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
                 setupVerticalMode()
             } else {
-                // 如果已经存在，仅更新状态
                 updateVerticalAdjacent()
             }
-        } else if currentReadingMode == .newHorizontal {
+        } else if modeToUse == .newHorizontal {
             if newHorizontalVC == nil {
                 verticalVC?.view.removeFromSuperview(); verticalVC = nil
                 horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
                 setupNewHorizontalMode()
             } else {
-                // 确保旧的 horizontalVC 被移除（如果存在）
                 horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
                 updateNewHorizontalContent()
             }
@@ -154,7 +163,6 @@ extension ReaderContainerViewController {
                 newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
                 setupHorizontalMode()
             } else {
-                // 确保旧的 newHorizontalVC 被移除（如果存在）
                 newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
             }
         }

@@ -12,20 +12,20 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
     var turningMode: PageTurningMode = .scroll
 
     override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
-        return turningMode != .scroll && turningMode != .none
+        return true // 必须始终允许重绘，以捕捉滑动中的每一帧
     }
 
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
-        // 关键：扩大探测范围，确保邻近页面参与动画计算，即使它们在逻辑位置上不在当前 rect 内
-        let expandedRect = rect.insetBy(dx: -rect.width, dy: 0)
-        let attributes = super.layoutAttributesForElements(in: expandedRect)
-        guard let cv = collectionView, turningMode != .scroll && turningMode != .none else { return attributes }
+        // 关键：为了防止滑动时页面闪现或过早消失，我们需要获取比当前 rect 更广范围的属性
+        let expandedRect = CGRect(x: rect.minX - rect.width, y: rect.minY, width: rect.width * 3, height: rect.height)
+        guard let attributes = super.layoutAttributesForElements(in: expandedRect),
+              let cv = collectionView else { return nil }
 
         let contentOffset = cv.contentOffset.x
         let width = cv.bounds.width
         guard width > 0 else { return attributes }
 
-        attributes?.forEach { attr in
+        return attributes.compactMap { $0.copy() as? UICollectionViewLayoutAttributes }.map { attr in
             let diff = attr.center.x - contentOffset - width / 2
             let progress = diff / width
             let absProgress = min(1.0, abs(progress))
@@ -36,32 +36,38 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
                 attr.transform = .identity
                 attr.zIndex = progress < 0 ? 1 : 0
             case .cover:
-                if progress < 0 {
-                    // 正在向左滑出的旧页面：保持在最上层，随手指滑动
-                    attr.zIndex = 1
+                if progress <= 0 {
+                    // 当前页或已离开页：在上层，正常跟随手指位移
+                    attr.zIndex = 10
                     attr.alpha = 1.0
                     attr.transform = .identity
-                } else {
-                    // 准备从右侧露出的新页面：在下层，固定在视口原点不动
+                } else if progress < 1.0 {
+                    // 准备进入的下一页：在下层，强制固定在原点，直到上一页完全滑开
                     attr.zIndex = 0
                     attr.alpha = 1.0
-                    let tx = -diff // 抵消 CollectionView 的位移，使其静止在下方
+                    let tx = -diff // 完美抵消位移
                     attr.transform = CGAffineTransform(translationX: tx, y: 0)
+                } else {
+                    attr.alpha = 0 // 远端页面隐藏
                 }
             case .flip:
-                attr.alpha = 1.0 - (absProgress * 0.5)
-                attr.zIndex = progress < 0 ? 1 : 0
+                attr.alpha = 1.0 - (absProgress * 0.6)
+                attr.zIndex = progress < 0 ? 10 : 5
                 var transform = CATransform3DIdentity
                 transform.m34 = -1.0 / 1000.0
                 let angle = progress * (.pi / 2)
                 transform = CATransform3DRotate(transform, angle, 0, 1, 0)
                 attr.transform3D = transform
+            case .none:
+                attr.alpha = absProgress < 0.5 ? 1.0 : 0
+                attr.transform = CGAffineTransform(translationX: -diff, y: 0)
             default:
                 attr.alpha = 1.0
                 attr.transform = .identity
+                attr.zIndex = 0
             }
+            return attr
         }
-        return attributes
     }
 }
 
