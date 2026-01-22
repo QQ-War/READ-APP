@@ -16,7 +16,9 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
     }
 
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
-        let attributes = super.layoutAttributesForElements(in: rect)
+        // 关键：扩大探测范围，确保邻近页面参与动画计算，即使它们在逻辑位置上不在当前 rect 内
+        let expandedRect = rect.insetBy(dx: -rect.width, dy: 0)
+        let attributes = super.layoutAttributesForElements(in: expandedRect)
         guard let cv = collectionView, turningMode != .scroll && turningMode != .none else { return attributes }
 
         let contentOffset = cv.contentOffset.x
@@ -25,30 +27,32 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
 
         attributes?.forEach { attr in
             let diff = attr.center.x - contentOffset - width / 2
-            let progress = diff / width // -1 (左侧完全滑出), 0 (正中心), 1 (右侧完全滑入)
-            let absProgress = abs(progress)
+            let progress = diff / width
+            let absProgress = min(1.0, abs(progress))
 
             switch turningMode {
             case .fade:
                 attr.alpha = 1.0 - absProgress
                 attr.transform = .identity
+                attr.zIndex = progress < 0 ? 1 : 0
             case .cover:
                 if progress < 0 {
-                    // 正在向左滑出的页面：保持在上层，随手指移动
+                    // 正在向左滑出的旧页面：保持在最上层，随手指滑动
                     attr.zIndex = 1
                     attr.alpha = 1.0
                     attr.transform = .identity
                 } else {
-                    // 正在从右侧进入或待命的页面：在下层，位置保持不动
+                    // 准备从右侧露出的新页面：在下层，固定在视口原点不动
                     attr.zIndex = 0
                     attr.alpha = 1.0
-                    let tx = -diff // 抵消掉默认的排队位移，让它看起来像是叠在下面
+                    let tx = -diff // 抵消 CollectionView 的位移，使其静止在下方
                     attr.transform = CGAffineTransform(translationX: tx, y: 0)
                 }
             case .flip:
-                attr.alpha = 1.0
+                attr.alpha = 1.0 - (absProgress * 0.5)
+                attr.zIndex = progress < 0 ? 1 : 0
                 var transform = CATransform3DIdentity
-                transform.m34 = -1.0 / 500.0
+                transform.m34 = -1.0 / 1000.0
                 let angle = progress * (.pi / 2)
                 transform = CATransform3DRotate(transform, angle, 0, 1, 0)
                 attr.transform3D = transform

@@ -144,6 +144,8 @@ extension ReaderContainerViewController {
                 horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
                 setupNewHorizontalMode()
             } else {
+                // 确保旧的 horizontalVC 被移除（如果存在）
+                horizontalVC?.view.removeFromSuperview(); horizontalVC = nil
                 updateNewHorizontalContent()
             }
         } else {
@@ -152,7 +154,8 @@ extension ReaderContainerViewController {
                 newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
                 setupHorizontalMode()
             } else {
-                // 水平模式下的状态同步（如果需要）
+                // 确保旧的 newHorizontalVC 被移除（如果存在）
+                newHorizontalVC?.view.removeFromSuperview(); newHorizontalVC = nil
             }
         }
         updateProgressUI()

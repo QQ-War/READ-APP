@@ -716,6 +716,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func rebuildHorizontalControllerForTurningModeChange() {
+        if currentReadingMode == .newHorizontal {
+            // 新版模式不需要重建控制器，只需要刷新内容以应用新的 Layout 设置
+            updateNewHorizontalContent()
+            return
+        }
         guard currentReadingMode == .horizontal, !isMangaMode else { return }
         isInternalTransitioning = true
         performChapterTransitionFade { [weak self] in
