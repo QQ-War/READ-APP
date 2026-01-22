@@ -52,7 +52,11 @@ extension ReaderContainerViewController {
         }
         
         view.bringSubviewToFront(progressLabel)
-        progressLabel.textColor = .white
+        if let theme = readerSettings?.readingTheme {
+            progressLabel.textColor = theme.textColor
+        } else {
+            progressLabel.textColor = .white
+        }
         
         if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
             let pagesCount = currentCache.pages.count
@@ -301,6 +305,7 @@ extension ReaderContainerViewController {
             vc.threshold = verticalThreshold
             vc.dampingFactor = readerSettings.verticalDampingFactor
             vc.maxZoomScale = readerSettings.mangaMaxZoom
+            vc.progressFontSize = readerSettings.progressFontSize
             addChild(vc); view.insertSubview(vc.view, at: 0); vc.view.frame = view.bounds; vc.didMove(toParent: self)
             self.mangaVC = vc
         }

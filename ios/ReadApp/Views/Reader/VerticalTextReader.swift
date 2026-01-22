@@ -982,6 +982,11 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var safeAreaTop: CGFloat = 0
     var threshold: CGFloat = 80
     var maxZoomScale: CGFloat = 3.0
+    var progressFontSize: CGFloat = 12 {
+        didSet {
+            progressLabel.font = .monospacedDigitSystemFont(ofSize: progressFontSize, weight: .regular)
+        }
+    }
     var currentVisibleIndex: Int = 0
     var pendingScrollIndex: Int?
     var bookUrl: String?
@@ -995,6 +1000,8 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         view.isUserInteractionEnabled = false
         // 关键：回归到您认为有效的 exclusionBlendMode
         view.layer.compositingFilter = "exclusionBlendMode"
+        view.layer.shouldRasterize = true
+        view.layer.rasterizationScale = UIScreen.main.scale
         return view
     }()
     
@@ -1041,7 +1048,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             progressOverlayView.heightAnchor.constraint(equalToConstant: 20)
         ])
         
-        progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: progressFontSize, weight: .regular)
         progressLabel.textColor = .white
         progressLabel.backgroundColor = .clear
         progressOverlayView.addSubview(progressLabel)

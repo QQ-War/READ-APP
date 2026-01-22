@@ -113,6 +113,13 @@ struct ReadingSettingsView: View {
                     Text("\(Int(preferences.pageHorizontalMargin))")
                 }
                 Slider(value: $preferences.pageHorizontalMargin, in: 0...30, step: 2)
+
+                HStack {
+                    Text("进度文字大小")
+                    Spacer()
+                    Text("\(Int(preferences.progressFontSize))")
+                }
+                Slider(value: $preferences.progressFontSize, in: 8...20, step: 1)
                 
                 Picker("阅读模式", selection: $preferences.readingMode) {
                     ForEach(ReadingMode.allCases) { mode in

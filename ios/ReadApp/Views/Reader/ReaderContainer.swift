@@ -101,6 +101,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let pageTurningMode: PageTurningMode
         let ttsFollowCooldown: TimeInterval
         let verticalThreshold: CGFloat
+        let progressFontSize: CGFloat
     }
     private var lastSettingsSnapshot: ReaderSettingsSnapshot?
     private var lastReplaceRules: [ReplaceRule]?
@@ -262,8 +263,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     private func setupProgressLabel() {
-        progressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
-        progressLabel.textColor = .white
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: readerSettings?.progressFontSize ?? 12, weight: .regular)
+        progressLabel.textColor = readerSettings?.readingTheme.textColor ?? .white
         progressLabel.backgroundColor = .clear
         view.addSubview(progressLabel)
         progressLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -309,11 +310,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 mangaMaxZoom: settings.mangaMaxZoom,
                 pageTurningMode: settings.pageTurningMode,
                 ttsFollowCooldown: settings.ttsFollowCooldown,
-                verticalThreshold: settings.verticalThreshold
+                verticalThreshold: settings.verticalThreshold,
+                progressFontSize: settings.progressFontSize
             )
             if lastSettingsSnapshot == snapshot { return }
             let previousSnapshot = lastSettingsSnapshot
             lastSettingsSnapshot = snapshot
+            
+            // 更新进度标签字体大小
+            progressLabel.font = .monospacedDigitSystemFont(ofSize: settings.progressFontSize, weight: .regular)
+            mangaVC?.progressLabel.font = .monospacedDigitSystemFont(ofSize: settings.progressFontSize, weight: .regular)
 
             guard let oldSettings = self.readerSettings else {
                 self.readerSettings = settings

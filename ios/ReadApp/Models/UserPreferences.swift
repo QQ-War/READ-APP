@@ -45,6 +45,12 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    @Published var progressFontSize: CGFloat {
+        didSet {
+            UserDefaults.standard.set(progressFontSize, forKey: "progressFontSize")
+        }
+    }
+
     @Published var readingFontName: String {
         didSet {
             UserDefaults.standard.set(readingFontName, forKey: "readingFontName")
@@ -339,6 +345,10 @@ class UserPreferences: ObservableObject {
         // 初始化所有属性
         let savedFontSize = CGFloat(UserDefaults.standard.float(forKey: "fontSize"))
         self.fontSize = savedFontSize == 0 ? 18 : savedFontSize
+
+        let savedProgressFontSize = CGFloat(UserDefaults.standard.float(forKey: "progressFontSize"))
+        self.progressFontSize = savedProgressFontSize == 0 ? 12 : savedProgressFontSize
+
         self.readingFontName = UserDefaults.standard.string(forKey: "readingFontName") ?? ""
 
         let savedLineSpacing = CGFloat(UserDefaults.standard.float(forKey: "lineSpacing"))
