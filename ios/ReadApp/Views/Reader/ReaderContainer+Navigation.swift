@@ -35,6 +35,13 @@ extension ReaderContainerViewController {
         if c.chapterOffset == 0 {
             if c.pageIndex > 0 { return createPageVC(at: c.pageIndex - 1, offset: 0) }
             if !prevCache.pages.isEmpty { return createPageVC(at: prevCache.pages.count - 1, offset: -1) }
+            
+            // 仿真模式：如果上一章缓存未就绪，但在开头向左滑，主动触发跳转
+            if currentChapterIndex > 0 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.handlePageTap(isNext: false)
+                }
+            }
         }
         return nil
     }
@@ -44,6 +51,13 @@ extension ReaderContainerViewController {
         if c.chapterOffset == 0 {
             if c.pageIndex < currentCache.pages.count - 1 { return createPageVC(at: c.pageIndex + 1, offset: 0) }
             if !nextCache.pages.isEmpty { return createPageVC(at: 0, offset: 1) }
+            
+            // 仿真模式：如果下一章缓存未就绪，但在末尾向右滑，主动触发跳转
+            if currentChapterIndex < chapters.count - 1 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.handlePageTap(isNext: true)
+                }
+            }
         }
         return nil
     }

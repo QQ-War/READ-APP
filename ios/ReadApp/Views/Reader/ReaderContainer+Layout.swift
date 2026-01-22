@@ -180,7 +180,8 @@ extension ReaderContainerViewController {
             sideMargin: currentLayoutSpec.sideMargin,
             topInset: currentLayoutSpec.topInset,
             anchorPageIndex: currentPageIndex,
-            backgroundColor: readerSettings.readingTheme.backgroundColor
+            backgroundColor: readerSettings.readingTheme.backgroundColor,
+            turningMode: readerSettings.pageTurningMode
         )
         updateProgressUI()
     }

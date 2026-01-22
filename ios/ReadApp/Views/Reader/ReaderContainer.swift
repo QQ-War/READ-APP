@@ -347,12 +347,18 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                                 oldSettings.readingTheme != settings.readingTheme
             let turningModeChanged = previousSnapshot?.pageTurningMode != snapshot.pageTurningMode
 
-            // 如果选择了仿真翻页，但当前是新分页模式，强制切换回旧分页模式以支持仿真动画
-            if snapshot.pageTurningMode == .simulation && currentReadingMode == .newHorizontal {
-                self.currentReadingMode = .horizontal
-                self.onModeDetected?(false) // 通知外部同步状态，虽然这里主要是切 UI
-                // 强制重设模式
-                setupReaderMode()
+            // 自动路由：只有仿真翻页使用旧版 horizontal，其他非滚动模式使用 newHorizontal
+            if (snapshot.pageTurningMode == .simulation) {
+                if currentReadingMode != .horizontal && currentReadingMode != .vertical {
+                    self.currentReadingMode = .horizontal
+                    setupReaderMode()
+                }
+            } else if snapshot.pageTurningMode != .none && snapshot.pageTurningMode != .scroll {
+                // 覆盖、淡入、旋转等使用新版
+                if currentReadingMode != .newHorizontal && currentReadingMode != .vertical {
+                    self.currentReadingMode = .newHorizontal
+                    setupReaderMode()
+                }
             }
 
             // 如果正在进行模式切换跳转，不在此处重新捕获进度，防止捕获到临时的 Offset 0

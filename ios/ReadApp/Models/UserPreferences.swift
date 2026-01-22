@@ -427,18 +427,23 @@ class UserPreferences: ObservableObject {
         let savedPreloadCount = UserDefaults.standard.integer(forKey: "ttsPreloadCount")
         self.ttsPreloadCount = savedPreloadCount == 0 ? 10 : savedPreloadCount
 
-        if let savedReadingModeString = UserDefaults.standard.string(forKey: "readingMode"),
-           let savedReadingMode = ReadingMode(rawValue: savedReadingModeString) {
-            self.readingMode = savedReadingMode
-        } else {
-            self.readingMode = .vertical
-        }
-
         if let savedTurningModeString = UserDefaults.standard.string(forKey: "pageTurningMode"),
            let savedTurningMode = PageTurningMode(rawValue: savedTurningModeString) {
             self.pageTurningMode = savedTurningMode
         } else {
             self.pageTurningMode = .simulation
+        }
+
+        if let savedReadingModeString = UserDefaults.standard.string(forKey: "readingMode"),
+           let savedReadingMode = ReadingMode(rawValue: savedReadingModeString) {
+            // 路由修正：如果当前是仿真翻页，强制使用旧版水平模式
+            if self.pageTurningMode == .simulation && savedReadingMode == .newHorizontal {
+                self.readingMode = .horizontal
+            } else {
+                self.readingMode = savedReadingMode
+            }
+        } else {
+            self.readingMode = .vertical
         }
 
         if let savedDarkModeString = UserDefaults.standard.string(forKey: "darkMode"),

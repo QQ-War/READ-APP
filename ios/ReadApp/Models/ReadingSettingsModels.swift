@@ -11,7 +11,7 @@ enum ReadingMode: String, CaseIterable, Identifiable {
         switch self {
         case .vertical: return "上下滚动"
         case .horizontal: return "左右翻页"
-        case .newHorizontal: return "新左右翻页"
+        case .newHorizontal: return "新左右翻页(调试)"
         }
     }
 }

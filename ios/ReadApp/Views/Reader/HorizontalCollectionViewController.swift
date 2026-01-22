@@ -8,6 +8,59 @@ protocol HorizontalCollectionViewDelegate: AnyObject {
     func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, requestChapterSwitch offset: Int)
 }
 
+class AnimatedPageLayout: UICollectionViewFlowLayout {
+    var turningMode: PageTurningMode = .scroll
+
+    override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
+        return turningMode != .scroll && turningMode != .none
+    }
+
+    override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
+        let attributes = super.layoutAttributesForElements(in: rect)
+        guard let cv = collectionView, turningMode != .scroll && turningMode != .none else { return attributes }
+
+        let contentOffset = cv.contentOffset.x
+        let width = cv.bounds.width
+        guard width > 0 else { return attributes }
+
+        attributes?.forEach { attr in
+            let diff = attr.center.x - contentOffset - width / 2
+            let progress = diff / width // -1 (左侧完全滑出), 0 (正中心), 1 (右侧完全滑入)
+            let absProgress = abs(progress)
+
+            switch turningMode {
+            case .fade:
+                attr.alpha = 1.0 - absProgress
+                attr.transform = .identity
+            case .cover:
+                if progress < 0 {
+                    // 正在向左滑出的页面：保持在上层，随手指移动
+                    attr.zIndex = 1
+                    attr.alpha = 1.0
+                    attr.transform = .identity
+                } else {
+                    // 正在从右侧进入或待命的页面：在下层，位置保持不动
+                    attr.zIndex = 0
+                    attr.alpha = 1.0
+                    let tx = -diff // 抵消掉默认的排队位移，让它看起来像是叠在下面
+                    attr.transform = CGAffineTransform(translationX: tx, y: 0)
+                }
+            case .flip:
+                attr.alpha = 1.0
+                var transform = CATransform3DIdentity
+                transform.m34 = -1.0 / 500.0
+                let angle = progress * (.pi / 2)
+                transform = CATransform3DRotate(transform, angle, 0, 1, 0)
+                attr.transform3D = transform
+            default:
+                attr.alpha = 1.0
+                attr.transform = .identity
+            }
+        }
+        return attributes
+    }
+}
+
 class HorizontalCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     
     weak var delegate: HorizontalCollectionViewDelegate?
@@ -20,14 +73,16 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     var sideMargin: CGFloat = 20
     var topInset: CGFloat = 0
     var themeBackgroundColor: UIColor = .white
+    var turningMode: PageTurningMode = .scroll
     
     var currentPageIndex: Int = 0
     
     private(set) lazy var collectionView: UICollectionView = {
-        let layout = UICollectionViewFlowLayout()
+        let layout = AnimatedPageLayout()
         layout.scrollDirection = .horizontal
         layout.minimumLineSpacing = 0
         layout.minimumInteritemSpacing = 0
+        layout.turningMode = self.turningMode
         
         let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
         cv.isPagingEnabled = true
@@ -51,7 +106,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         ])
     }
     
-    func update(pages: [PaginatedPage], pageInfos: [TK2PageInfo], renderStore: TextKit2RenderStore?, paragraphStarts: [Int], prefixLen: Int, sideMargin: CGFloat, topInset: CGFloat, anchorPageIndex: Int, backgroundColor: UIColor) {
+    func update(pages: [PaginatedPage], pageInfos: [TK2PageInfo], renderStore: TextKit2RenderStore?, paragraphStarts: [Int], prefixLen: Int, sideMargin: CGFloat, topInset: CGFloat, anchorPageIndex: Int, backgroundColor: UIColor, turningMode: PageTurningMode) {
         self.pages = pages
         self.pageInfos = pageInfos
         self.renderStore = renderStore
@@ -61,6 +116,11 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         self.topInset = topInset
         self.currentPageIndex = anchorPageIndex
         self.themeBackgroundColor = backgroundColor
+        self.turningMode = turningMode
+        
+        if let layout = collectionView.collectionViewLayout as? AnimatedPageLayout {
+            layout.turningMode = turningMode
+        }
         
         view.backgroundColor = backgroundColor
         collectionView.backgroundColor = backgroundColor
@@ -162,12 +222,12 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         guard now - lastSwitchRequestTime > switchRequestCooldown else { return }
 
         // 检测向后翻页（超出末尾）
-        if offsetX > contentWidth - width + 80 {
+        if offsetX > contentWidth - width + 50 {
             lastSwitchRequestTime = now
             delegate?.horizontalCollectionView(self, requestChapterSwitch: 1)
         }
         // 检测向前翻页（超出开头）
-        else if offsetX < -80 {
+        else if offsetX < -50 {
             lastSwitchRequestTime = now
             delegate?.horizontalCollectionView(self, requestChapterSwitch: -1)
         }

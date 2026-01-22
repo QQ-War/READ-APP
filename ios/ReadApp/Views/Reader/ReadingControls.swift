@@ -271,7 +271,7 @@ struct ReaderOptionsSheet: View {
                 if !isMangaMode {
                     Section(header: Text("显示设置")) {
                         Picker("阅读模式", selection: $preferences.readingMode) {
-                            ForEach(ReadingMode.allCases) { mode in
+                            ForEach(ReadingMode.allCases.filter { $0 != .newHorizontal }) { mode in
                                 Text(mode.localizedName).tag(mode)
                             }
                         }
