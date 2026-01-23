@@ -205,7 +205,6 @@ extension ReaderContainerViewController {
                 self.notifyUserInteractionEnded()
             }
         }
-        }
         
         let containerView = view!
         let themeColor = readerSettings.readingTheme.backgroundColor
