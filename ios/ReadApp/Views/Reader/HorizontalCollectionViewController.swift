@@ -152,6 +152,10 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
             layout.turningMode = turningMode
         }
         
+        // 优化：非平滑滚动模式下关闭系统分页，改用自定义吸附，以支持更精细的动画控制
+        collectionView.isPagingEnabled = (turningMode == .scroll)
+        collectionView.decelerationRate = (turningMode == .scroll) ? .normal : .fast
+        
         view.backgroundColor = backgroundColor
         collectionView.backgroundColor = backgroundColor
         collectionView.reloadData()
@@ -238,6 +242,27 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
                 delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
             }
         }
+    }
+
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        // 只有在关闭系统分页时才手动计算吸附位置
+        guard !collectionView.isPagingEnabled else { return }
+        
+        let width = scrollView.bounds.width
+        guard width > 0 else { return }
+        
+        let currentX = scrollView.contentOffset.x
+        let estimatedPage = currentX / width
+        
+        var targetPage: Int
+        if abs(velocity.x) > 0.2 {
+            targetPage = velocity.x > 0 ? Int(ceil(estimatedPage)) : Int(floor(estimatedPage))
+        } else {
+            targetPage = Int(round(estimatedPage))
+        }
+        
+        targetPage = max(0, min(pages.count - 1, targetPage))
+        targetContentOffset.pointee = CGPoint(x: CGFloat(targetPage) * width, y: 0)
     }
 
     private var lastSwitchRequestTime: TimeInterval = 0

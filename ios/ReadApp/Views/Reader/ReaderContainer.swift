@@ -583,11 +583,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if currentReadingMode == .vertical {
             verticalVC?.scrollToCharOffset(offset, animated: animated)
         } else if currentReadingMode == .newHorizontal {
-            if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(offset, $0.globalRange) }) {
+            if let targetPage = currentCache.pages.firstIndex(where: { page in
+                offset >= page.globalRange.location && offset < (page.globalRange.location + page.globalRange.length)
+            }) {
                 newHorizontalVC?.scrollToPageIndex(targetPage, animated: animated)
             }
         } else {
-            if let targetPage = currentCache.pages.firstIndex(where: { NSLocationInRange(offset, $0.globalRange) }) {
+            if let targetPage = currentCache.pages.firstIndex(where: { page in
+                offset >= page.globalRange.location && offset < (page.globalRange.location + page.globalRange.length)
+            }) {
                 updateHorizontalPage(to: targetPage, animated: animated)
             } else {
             }
@@ -1043,8 +1047,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             if pageIndex < pageInfos.count {
                 let pageInfo = pageInfos[pageIndex]
                 charOffset = pageInfo.range.location
-                // 直接信任 pageInfo.range.location 作为 charOffset
-                // 并用这个值找到对应的 sentenceIndex
+                // 查找满足：page.start <= charOffset < page.end 的句索引
                 sentenceIndex = starts.lastIndex(where: { $0 <= charOffset }) ?? 0
             }
         } else if currentReadingMode == .vertical {

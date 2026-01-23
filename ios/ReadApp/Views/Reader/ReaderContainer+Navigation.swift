@@ -74,9 +74,6 @@ extension ReaderContainerViewController {
             self.currentPageIndex = targetIndex
             newHorizontalVC?.scrollToPageIndex(targetIndex, animated: shouldAnimate)
             
-            // 状态维护
-            self.isInternalTransitioning = false
-            self.notifyUserInteractionEnded()
             self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
             updateProgressUI()
             return
@@ -179,6 +176,12 @@ extension ReaderContainerViewController {
         guard !isInternalTransitioning else { return }
         isInternalTransitioning = true
         
+        // 安全锁：1.0s 后强制释放，防止动画回调丢失导致的逻辑死锁
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.isInternalTransitioning = false
+            self?.notifyUserInteractionEnded()
+        }
+        
         let containerView = view!
         let themeColor = readerSettings.readingTheme.backgroundColor
         
@@ -195,84 +198,85 @@ extension ReaderContainerViewController {
         
         guard let horizontalView = activeView else {
             updates()
-            self.isInternalTransitioning = false
             return
         }
         
-        // 1. 截取当前视图快照
-        let snapshot = horizontalView.snapshotView(afterScreenUpdates: false)
-        snapshot?.frame = horizontalView.frame
-        snapshot?.backgroundColor = themeColor
+        // 1. 截取旧视图快照 (Old Snapshot)
+        let oldSnapshot = horizontalView.snapshotView(afterScreenUpdates: false)
+        oldSnapshot?.frame = horizontalView.frame
+        oldSnapshot?.backgroundColor = themeColor
         
-        // 2. 执行内容更新
+        if let snap = oldSnapshot { containerView.insertSubview(snap, aboveSubview: horizontalView) }
+        
+        // 2. 执行内容更新，并强制触发布局
         updates()
+        horizontalView.setNeedsLayout()
+        horizontalView.layoutIfNeeded()
         
         if mode == .none {
-            self.isInternalTransitioning = false
-            self.notifyUserInteractionEnded()
+            oldSnapshot?.removeFromSuperview()
             return
         }
+
+        // 3. 截取新视图快照 (New Snapshot)，用于实现平滑转场，避免 CollectionView 异步重绘闪烁
+        let newSnapshot = horizontalView.snapshotView(afterScreenUpdates: true)
+        newSnapshot?.frame = horizontalView.frame
+        newSnapshot?.backgroundColor = themeColor
+        if let newSnap = newSnapshot { containerView.insertSubview(newSnap, aboveSubview: oldSnapshot!) }
         
-        // 3. 执行动画
+        // 4. 执行动画 (在快照之间进行)
+        let width = horizontalView.bounds.width
         switch mode {
         case .scroll:
-            if let snap = snapshot { containerView.insertSubview(snap, aboveSubview: horizontalView) }
-            let width = horizontalView.bounds.width
-            horizontalView.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
+            newSnapshot?.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
             UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
-                snapshot?.transform = CGAffineTransform(translationX: isNext ? -width : width, y: 0)
-                horizontalView.transform = .identity
+                oldSnapshot?.transform = CGAffineTransform(translationX: isNext ? -width : width, y: 0)
+                newSnapshot?.transform = .identity
             }, completion: { _ in
-                snapshot?.removeFromSuperview()
-                self.isInternalTransitioning = false
-                self.notifyUserInteractionEnded()
+                oldSnapshot?.removeFromSuperview()
+                newSnapshot?.removeFromSuperview()
             })
             
         case .cover:
-            // 覆盖翻页：旧快照在下，新视图在上。新视图强设背景色消除重影
-            if let snap = snapshot { containerView.insertSubview(snap, belowSubview: horizontalView) }
-            let width = horizontalView.bounds.width
-            horizontalView.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
-            horizontalView.alpha = 1.0 
-            horizontalView.backgroundColor = themeColor 
-            
-            horizontalView.layer.shadowColor = UIColor.black.cgColor
-            horizontalView.layer.shadowOpacity = 0.4 // 增加阴影深度，提升层级感
-            horizontalView.layer.shadowOffset = CGSize(width: isNext ? -4 : 4, height: 0)
-            horizontalView.layer.shadowRadius = 10
+            // 覆盖模式：新快照从侧边滑入覆盖旧快照
+            newSnapshot?.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
+            newSnapshot?.layer.shadowColor = UIColor.black.cgColor
+            newSnapshot?.layer.shadowOpacity = 0.4
+            newSnapshot?.layer.shadowOffset = CGSize(width: isNext ? -4 : 4, height: 0)
+            newSnapshot?.layer.shadowRadius = 10
             
             UIView.animate(withDuration: 0.45, delay: 0, options: .curveEaseOut, animations: {
-                horizontalView.transform = .identity
-                snapshot?.transform = CGAffineTransform(translationX: isNext ? -width * 0.3 : width * 0.3, y: 0)
-                snapshot?.alpha = 0.7 // 旧页面适当变暗
+                newSnapshot?.transform = .identity
+                oldSnapshot?.transform = CGAffineTransform(translationX: isNext ? -width * 0.3 : width * 0.3, y: 0)
+                oldSnapshot?.alpha = 0.7
             }, completion: { _ in
-                snapshot?.removeFromSuperview()
-                horizontalView.layer.shadowOpacity = 0
-                self.isInternalTransitioning = false
-                self.notifyUserInteractionEnded()
+                oldSnapshot?.removeFromSuperview()
+                newSnapshot?.removeFromSuperview()
             })
             
         case .fade, .simulation: 
-            if let snap = snapshot { containerView.insertSubview(snap, aboveSubview: horizontalView) }
-            horizontalView.alpha = 0
+            newSnapshot?.alpha = 0
             UIView.animate(withDuration: 0.35, animations: {
-                snapshot?.alpha = 0
-                horizontalView.alpha = 1
+                oldSnapshot?.alpha = 0
+                newSnapshot?.alpha = 1
             }, completion: { _ in
-                snapshot?.removeFromSuperview()
-                self.isInternalTransitioning = false
-                self.notifyUserInteractionEnded()
+                oldSnapshot?.removeFromSuperview()
+                newSnapshot?.removeFromSuperview()
             })
             
         case .flip:
-            UIView.transition(with: horizontalView, duration: 0.5, options: isNext ? .transitionFlipFromRight : .transitionFlipFromLeft, animations: nil) { _ in
-                self.isInternalTransitioning = false
-                self.notifyUserInteractionEnded()
+            newSnapshot?.isHidden = true
+            UIView.transition(with: containerView, duration: 0.5, options: isNext ? .transitionFlipFromRight : .transitionFlipFromLeft, animations: {
+                oldSnapshot?.isHidden = true
+                newSnapshot?.isHidden = false
+            }) { _ in
+                oldSnapshot?.removeFromSuperview()
+                newSnapshot?.removeFromSuperview()
             }
             
         default:
-            self.isInternalTransitioning = false
-            self.notifyUserInteractionEnded()
+            oldSnapshot?.removeFromSuperview()
+            newSnapshot?.removeFromSuperview()
         }
     }
 
