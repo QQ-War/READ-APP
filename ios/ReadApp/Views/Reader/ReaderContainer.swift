@@ -76,7 +76,15 @@ struct ReaderContainerRepresentable: UIViewControllerRepresentable {
             vc.jumpToChapter(currentChapterIndex)
         }
         
-        if vc.currentReadingMode != readingMode { vc.switchReadingMode(to: readingMode) }
+        let desiredMode: ReadingMode
+        if readingMode == .vertical {
+            desiredMode = .vertical
+        } else if readerSettings.pageTurningMode == .simulation {
+            desiredMode = .horizontal
+        } else {
+            desiredMode = .newHorizontal
+        }
+        if vc.currentReadingMode != desiredMode { vc.switchReadingMode(to: desiredMode) }
         vc.syncTTSState()
     }
 }
@@ -314,7 +322,22 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
     }
 
-    func updateLayout(safeArea: EdgeInsets) { self.safeAreaTop = safeArea.top; self.safeAreaBottom = safeArea.bottom }
+    private var lastSafeAreaTop: CGFloat?
+    private var lastSafeAreaBottom: CGFloat?
+
+    func updateLayout(safeArea: EdgeInsets) {
+        let top = safeArea.top
+        let bottom = safeArea.bottom
+        if let lastTop = lastSafeAreaTop, let lastBottom = lastSafeAreaBottom {
+            if abs(lastTop - top) < 0.5 && abs(lastBottom - bottom) < 0.5 {
+                return
+            }
+        }
+        lastSafeAreaTop = top
+        lastSafeAreaBottom = bottom
+        self.safeAreaTop = top
+        self.safeAreaBottom = bottom
+    }
         
         func updateSettings(_ settings: ReaderSettingsStore) {
             let snapshot = ReaderSettingsSnapshot(
@@ -365,20 +388,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                                 oldSettings.readingFontName != settings.readingFontName ||
                                 oldSettings.readingTheme != settings.readingTheme
             let turningModeChanged = previousSnapshot?.pageTurningMode != snapshot.pageTurningMode
-
-            // 自动路由：只有仿真翻页使用旧版 horizontal，其他非滚动模式使用 newHorizontal
-            if (snapshot.pageTurningMode == .simulation) {
-                if currentReadingMode != .horizontal && currentReadingMode != .vertical {
-                    self.currentReadingMode = .horizontal
-                    setupReaderMode()
-                }
-            } else if snapshot.pageTurningMode != .none && snapshot.pageTurningMode != .scroll {
-                // 覆盖、淡入、旋转等使用新版
-                if currentReadingMode != .newHorizontal && currentReadingMode != .vertical {
-                    self.currentReadingMode = .newHorizontal
-                    setupReaderMode()
-                }
-            }
 
             // 如果正在进行模式切换跳转，不在此处重新捕获进度，防止捕获到临时的 Offset 0
             let currentOffset = pendingRelocationOffset ?? getCurrentReadingCharOffset()
@@ -771,11 +780,17 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     private func rebuildHorizontalControllerForTurningModeChange() {
         if currentReadingMode == .newHorizontal {
+            if readerSettings.pageTurningMode == .simulation {
+                return
+            }
             // 新版模式不需要重建控制器，只需要刷新内容以应用新的 Layout 设置
             updateNewHorizontalContent()
             return
         }
         guard currentReadingMode == .horizontal, !isMangaMode else { return }
+        if readerSettings.pageTurningMode != .simulation {
+            return
+        }
         if readerSettings.pageTurningMode == .simulation {
             isInternalTransitioning = true
             horizontalVC?.view.removeFromSuperview()

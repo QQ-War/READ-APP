@@ -67,7 +67,9 @@ struct ReadingView: View {
                                             onRefreshChapter: { action in self.refreshChapterAction = action },
                                             readingMode: readerSettings.readingMode,
                                             safeAreaInsets: fullScreenProxy.safeAreaInsets
-                                        )                    .ignoresSafeArea()
+                                        )
+                    .ignoresSafeArea()
+                    .animation(nil, value: showUIControls)
 
                     NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore), isActive: $showDetailFromHeader) {
                         EmptyView()
