@@ -846,22 +846,25 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         
         let sentenceIndex = ttsManager.currentSentenceIndex
-        
-        // 1. 垂直模式：局部高亮更新，避免全局刷新
-        if currentReadingMode == .vertical { 
-            var finalIdx: Int? = sentenceIndex
-            var secondaryIdxs = Set(ttsManager.preloadedIndices)
-            
-            if ttsManager.hasChapterTitleInSentences {
-                if ttsManager.isReadingChapterTitle {
-                    finalIdx = nil
-                } else {
-                    finalIdx = sentenceIndex - 1
-                }
+        var highlightIdx: Int? = sentenceIndex
+        var secondaryIdxs = Set(ttsManager.preloadedIndices)
+        if ttsManager.hasChapterTitleInSentences {
+            if ttsManager.isReadingChapterTitle {
+                highlightIdx = nil
+                secondaryIdxs = []
+            } else {
+                highlightIdx = sentenceIndex - 1
                 secondaryIdxs = Set(ttsManager.preloadedIndices.compactMap { $0 > 0 ? ($0 - 1) : nil })
             }
-            
-            verticalVC?.setHighlight(index: finalIdx, secondaryIndices: secondaryIdxs, isPlaying: ttsManager.isPlaying)
+        }
+
+        // 1. 垂直模式：局部高亮更新，避免全局刷新
+        if currentReadingMode == .vertical { 
+            verticalVC?.setHighlight(index: highlightIdx, secondaryIndices: secondaryIdxs, isPlaying: ttsManager.isPlaying)
+        } else if currentReadingMode == .newHorizontal {
+            newHorizontalVC?.updateHighlight(index: highlightIdx, secondary: secondaryIdxs, isPlaying: ttsManager.isPlaying)
+        } else if currentReadingMode == .horizontal {
+            updateHorizontalHighlight(index: highlightIdx, secondary: secondaryIdxs, isPlaying: ttsManager.isPlaying)
         }
 
         // 2. 视口跟随逻辑 (只有在非交互状态下执行)
@@ -927,6 +930,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 }
             }
         }
+    }
+
+    private func updateHorizontalHighlight(index: Int?, secondary: Set<Int>, isPlaying: Bool) {
+        guard let h = horizontalVC,
+              let pageVC = h.viewControllers?.first as? PageContentViewController,
+              let contentView = pageVC.view.subviews.first as? ReadContent2View else { return }
+        contentView.highlightIndex = index
+        contentView.secondaryIndices = secondary
+        contentView.isPlayingHighlight = isPlaying
     }
 
     func completePendingTTSPositionSync() {
