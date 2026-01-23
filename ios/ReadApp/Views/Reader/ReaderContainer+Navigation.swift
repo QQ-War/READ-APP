@@ -109,7 +109,7 @@ extension ReaderContainerViewController {
         }
     }
 
-    func animateToAdjacentChapter(offset: Int, targetPage: Int) {
+    func animateToAdjacentChapter(offset: Int, targetPage: Int, animated: Bool = true) {
         let isNext = offset > 0
         if currentReadingMode == .newHorizontal || (currentReadingMode == .horizontal && readerSettings.pageTurningMode != .simulation) {
             performChapterTransition(isNext: isNext) { [weak self] in
@@ -141,32 +141,50 @@ extension ReaderContainerViewController {
             return
         }
         notifyUserInteractionStarted()
+        
         let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
-        var didChangeWithinChapter = false
-        if t >= 0 && t < currentCache.pages.count {
+        
+        // 统一检测是否需要跨章
+        let targetChapterOffset = detectTargetChapterOffset(currentPage: currentPageIndex, targetPage: t, isNext: isNext)
+        
+        if targetChapterOffset == 0 {
+            // 同章内翻页
             let shouldAnimate = readerSettings.pageTurningMode != .none
             updateHorizontalPage(to: t, animated: shouldAnimate)
-            didChangeWithinChapter = true
-        } else {
-            let targetChapter = isNext ? currentChapterIndex + 1 : currentChapterIndex - 1
-            guard targetChapter >= 0 && targetChapter < chapters.count else {
-                finalizeUserInteraction()
-                return
-            }
-
-            if isNext, !nextCache.pages.isEmpty {
-                animateToAdjacentChapter(offset: 1, targetPage: 0)
-                didChangeWithinChapter = true
-            } else if !isNext, !prevCache.pages.isEmpty {
-                animateToAdjacentChapter(offset: -1, targetPage: prevCache.pages.count - 1)
-                didChangeWithinChapter = true
-            } else {
-                isInternalTransitioning = true 
-                requestChapterSwitch(to: targetChapter, startAtEnd: !isNext)
-            }
-        }
-        if didChangeWithinChapter {
             notifyUserInteractionEnded()
+        } else {
+            // 跨章
+            handleCrossChapter(offset: targetChapterOffset, animated: true)
+        }
+    }
+    
+    private func detectTargetChapterOffset(currentPage: Int, targetPage: Int, isNext: Bool) -> Int {
+        if targetPage >= 0 && targetPage < currentCache.pages.count {
+            return 0
+        }
+        
+        if isNext && currentChapterIndex < chapters.count - 1 {
+            return 1
+        } else if !isNext && currentChapterIndex > 0 {
+            return -1
+        }
+        return 0
+    }
+    
+    private func handleCrossChapter(offset: Int, animated: Bool) {
+        let targetChapter = currentChapterIndex + offset
+        guard targetChapter >= 0 && targetChapter < chapters.count else {
+            finalizeUserInteraction()
+            return
+        }
+        
+        if offset > 0 && !nextCache.pages.isEmpty {
+            animateToAdjacentChapter(offset: 1, targetPage: 0, animated: animated)
+        } else if offset < 0 && !prevCache.pages.isEmpty {
+            animateToAdjacentChapter(offset: -1, targetPage: prevCache.pages.count - 1, animated: animated)
+        } else {
+            isInternalTransitioning = true
+            requestChapterSwitch(to: targetChapter, startAtEnd: offset < 0)
         }
     }
 
@@ -176,10 +194,17 @@ extension ReaderContainerViewController {
         guard !isInternalTransitioning else { return }
         isInternalTransitioning = true
         
-        // 安全锁：1.0s 后强制释放，防止动画回调丢失导致的逻辑死锁
+        let transitionStartTime = transitionState.timestamp
+        
+        // 安全锁：使用动态超时，基于 transitionState.timestamp 检测回调是否丢失
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.isInternalTransitioning = false
-            self?.notifyUserInteractionEnded()
+            guard let self = self else { return }
+            // 只有当状态未被正常恢复时才强制释放
+            if self.transitionState.isTransitioning && self.transitionState.timestamp == transitionStartTime {
+                self.isInternalTransitioning = false
+                self.notifyUserInteractionEnded()
+            }
+        }
         }
         
         let containerView = view!

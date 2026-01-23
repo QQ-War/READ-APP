@@ -245,7 +245,6 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     }
 
     func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-        // 只有在关闭系统分页时才手动计算吸附位置
         guard !collectionView.isPagingEnabled else { return }
         
         let width = scrollView.bounds.width
@@ -261,8 +260,14 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
             targetPage = Int(round(estimatedPage))
         }
         
+        // 边界保护：限制在当前章节范围内
         targetPage = max(0, min(pages.count - 1, targetPage))
-        targetContentOffset.pointee = CGPoint(x: CGFloat(targetPage) * width, y: 0)
+        
+        // 统一使用 scrollToPageIndex 触发动画，确保点击和滑动动画一致
+        scrollToPageIndex(targetPage, animated: true)
+        
+        // 阻止系统自动吸附，让我们的动画控制位置
+        targetContentOffset.pointee = scrollView.contentOffset
     }
 
     private var lastSwitchRequestTime: TimeInterval = 0
@@ -278,17 +283,23 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         
         let now = Date().timeIntervalSince1970
         guard now - lastSwitchRequestTime > switchRequestCooldown else { return }
-
-        // 检测向后翻页（超出末尾）
-        if offsetX > contentWidth - width + 50 {
+        
+        // 统一检测跨章边界
+        let switchOffset = detectChapterSwitchOffset(offsetX: offsetX, width: width, contentWidth: contentWidth)
+        if switchOffset != 0 {
             lastSwitchRequestTime = now
-            delegate?.horizontalCollectionView(self, requestChapterSwitch: 1)
+            delegate?.horizontalCollectionView(self, requestChapterSwitch: switchOffset)
         }
-        // 检测向前翻页（超出开头）
-        else if offsetX < -50 {
-            lastSwitchRequestTime = now
-            delegate?.horizontalCollectionView(self, requestChapterSwitch: -1)
+    }
+    
+    private func detectChapterSwitchOffset(offsetX: CGFloat, width: CGFloat, contentWidth: CGFloat) -> Int {
+        let threshold = 50.0
+        if offsetX > contentWidth - width + threshold {
+            return 1
+        } else if offsetX < -threshold {
+            return -1
         }
+        return 0
     }
 }
 
