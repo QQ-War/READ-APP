@@ -128,7 +128,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     var currentReadingMode: ReadingMode = .vertical
     private var activePaginationAnchor: Int = 0 // 分页锚点
-    private struct TransitionState {
+    fileprivate struct TransitionState {
         var isTransitioning: Bool = false
         var timestamp: TimeInterval = 0
     }
