@@ -69,23 +69,15 @@ extension ReaderContainerViewController {
 
         if currentReadingMode == .newHorizontal {
             let mode = readerSettings.pageTurningMode
-            if !animated || mode == .none {
-                self.currentPageIndex = targetIndex
-                newHorizontalVC?.scrollToPageIndex(targetIndex, animated: false)
-                self.isInternalTransitioning = false
-                self.notifyUserInteractionEnded() // 确保重置
-                self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
-                updateProgressUI()
-                return
-            }
+            // 关键：统一使用 CollectionView 的滚动来触发动画
+            self.currentPageIndex = targetIndex
+            newHorizontalVC?.scrollToPageIndex(targetIndex, animated: animated)
             
-            performChapterTransition(isNext: isNext) { [weak self] in
-                guard let self = self else { return }
-                self.currentPageIndex = targetIndex
-                self.newHorizontalVC?.scrollToPageIndex(targetIndex, animated: false)
-                self.onProgressChanged?(self.currentChapterIndex, Double(self.currentPageIndex) / Double(max(1, self.currentCache.pages.count)))
-                self.updateProgressUI()
-            }
+            // 状态维护
+            self.isInternalTransitioning = false
+            self.notifyUserInteractionEnded()
+            self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
+            updateProgressUI()
             return
         }
         

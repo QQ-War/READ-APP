@@ -12,11 +12,10 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
     var turningMode: PageTurningMode = .scroll
 
     override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
-        return true // 必须始终允许重绘，以捕捉滑动中的每一帧
+        return true 
     }
 
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
-        // 关键：为了防止滑动时页面闪现或过早消失，我们需要获取比当前 rect 更广范围的属性
         let expandedRect = CGRect(x: rect.minX - rect.width, y: rect.minY, width: rect.width * 3, height: rect.height)
         guard let attributes = super.layoutAttributesForElements(in: expandedRect),
               let cv = collectionView else { return nil }
@@ -34,21 +33,17 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
             case .fade:
                 attr.alpha = 1.0 - absProgress
                 attr.zIndex = progress < 0 ? 10 : 5
-                // 抵消平移，让页面重叠在一起进行淡入淡出
                 attr.transform = CGAffineTransform(translationX: -diff, y: 0)
                 
             case .cover:
                 if progress <= 0 {
-                    // 当前页（向左滑出）：保持在上层，随手指移动（不需要抵消）
                     attr.zIndex = 100
                     attr.alpha = 1.0
                     attr.transform = .identity
                 } else if progress < 1.0 {
-                    // 下一页（准备进入）：在下层，必须完全抵消位移，使其静止在屏幕中心
                     attr.zIndex = 0
                     attr.alpha = 1.0
-                    let tx = -diff // 抵消 CollectionView 的强制平移
-                    attr.transform = CGAffineTransform(translationX: tx, y: 0)
+                    attr.transform = CGAffineTransform(translationX: -diff, y: 0)
                 } else {
                     attr.alpha = 0
                 }
@@ -56,17 +51,19 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
             case .flip:
                 attr.alpha = 1.0 - (absProgress * 0.6)
                 attr.zIndex = progress < 0 ? 10 : 5
-                // 3D 旋转时也需要部分抵消位移，使其绕中心旋转
+                
                 var transform = CATransform3DIdentity
                 transform.m34 = -1.0 / 1000.0
                 let angle = progress * (.pi / 2)
+                
+                // 核心修复：必须先平移(Translate)抵消位移，再旋转(Rotate)
+                // 否则旋转后的轴向改变会导致 tx 作用于 Z 轴，产生无穷大坐标导致崩溃
+                transform = CATransform3DTranslate(transform, -diff, 0, 0)
                 transform = CATransform3DRotate(transform, angle, 0, 1, 0)
-                let tx = -diff 
-                transform = CATransform3DTranslate(transform, tx, 0, 0)
                 attr.transform3D = transform
                 
             case .none:
-                attr.alpha = absProgress < 0.5 ? 1.0 : 0
+                attr.alpha = absProgress < 0.1 ? 1.0 : 0
                 attr.transform = CGAffineTransform(translationX: -diff, y: 0)
                 
             default: // .scroll
