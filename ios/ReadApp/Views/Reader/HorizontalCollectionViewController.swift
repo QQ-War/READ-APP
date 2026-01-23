@@ -49,7 +49,7 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
                 }
                 
             case .flip:
-                if absProgress > 1.0 {
+                if absProgress > 0.6 {
                     attr.alpha = 0
                     return attr
                 }
@@ -242,6 +242,9 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         let offsetX = scrollView.contentOffset.x
         let width = scrollView.bounds.width
         let contentWidth = scrollView.contentSize.width
+        if turningMode == .flip, let layout = collectionView.collectionViewLayout as? AnimatedPageLayout {
+            layout.invalidateLayout()
+        }
         
         let now = Date().timeIntervalSince1970
         guard now - lastSwitchRequestTime > switchRequestCooldown else { return }

@@ -290,6 +290,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 lastKnownSize = b.size
                 if !isMangaMode, currentCache.renderStore != nil, (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) {
                     rebuildPaginationForLayout()
+                    if currentReadingMode == .newHorizontal {
+                        newHorizontalVC?.collectionView.collectionViewLayout.invalidateLayout()
+                        newHorizontalVC?.scrollToPageIndex(currentPageIndex, animated: false)
+                    }
                 }
             }
         }
@@ -720,13 +724,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
         onChapterIndexChanged?(currentChapterIndex)
         updateVerticalAdjacent()
+        if currentReadingMode == .newHorizontal {
+            updateNewHorizontalContent()
+        } else if currentReadingMode == .horizontal {
+            updateHorizontalPage(to: currentPageIndex, animated: false)
+        }
         prefetchAdjacentChapters(index: currentChapterIndex)
     }
 
     private func rebuildHorizontalControllerForTurningModeChange() {
-        if readerSettings.pageTurningMode == .simulation {
-            return
-        }
         if currentReadingMode == .newHorizontal {
             // 新版模式不需要重建控制器，只需要刷新内容以应用新的 Layout 设置
             updateNewHorizontalContent()
