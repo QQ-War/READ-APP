@@ -75,8 +75,9 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
                 attr.transform3D = transform
                 
             case .none:
-                attr.alpha = absProgress < 0.1 ? 1.0 : 0
-                attr.transform = CGAffineTransform(translationX: -diff, y: 0)
+                attr.alpha = 1.0
+                attr.transform = .identity
+                attr.zIndex = 0
                 
             default: // .scroll
                 attr.alpha = 1.0
@@ -153,24 +154,31 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         }
         
         // 优化：非平滑滚动模式下关闭系统分页，改用自定义吸附，以支持更精细的动画控制
-        collectionView.isPagingEnabled = (turningMode == .scroll)
-        collectionView.decelerationRate = (turningMode == .scroll) ? .normal : .fast
+        collectionView.isPagingEnabled = (turningMode == .scroll || turningMode == .none)
+        collectionView.decelerationRate = (turningMode == .scroll || turningMode == .none) ? .normal : .fast
         
         view.backgroundColor = backgroundColor
         collectionView.backgroundColor = backgroundColor
         collectionView.reloadData()
-        
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.scrollToPageIndex(anchorPageIndex, animated: false)
-        }
+        collectionView.layoutIfNeeded()
+        scrollToPageIndex(anchorPageIndex, animated: false)
     }
     
     func scrollToPageIndex(_ index: Int, animated: Bool) {
         guard index >= 0 && index < pages.count else { return }
         currentPageIndex = index
-        let indexPath = IndexPath(item: index, section: 0)
-        collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
+        let width = collectionView.bounds.width
+        if width > 0 {
+            let targetX = CGFloat(index) * width
+            collectionView.setContentOffset(CGPoint(x: targetX, y: 0), animated: animated)
+        } else {
+            let indexPath = IndexPath(item: index, section: 0)
+            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
+        }
+        if !animated {
+            collectionView.collectionViewLayout.invalidateLayout()
+            collectionView.layoutIfNeeded()
+        }
     }
     
     // MARK: - UICollectionViewDataSource

@@ -21,7 +21,8 @@ extension ReaderContainerViewController {
 
         // 核心同步：渲染后立即更新当前页码为锚点页码
         if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
-            self.currentPageIndex = currentCache.anchorPageIndex
+            let maxIndex = max(0, currentCache.pages.count - 1)
+            self.currentPageIndex = min(max(0, currentCache.anchorPageIndex), maxIndex)
         }
 
         setupReaderMode()

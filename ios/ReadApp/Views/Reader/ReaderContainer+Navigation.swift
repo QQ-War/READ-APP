@@ -222,6 +222,8 @@ extension ReaderContainerViewController {
         
         guard let horizontalView = activeView else {
             updates()
+            isInternalTransitioning = false
+            notifyUserInteractionEnded()
             return
         }
         
@@ -239,6 +241,8 @@ extension ReaderContainerViewController {
         
         if mode == .none {
             oldSnapshot?.removeFromSuperview()
+            isInternalTransitioning = false
+            notifyUserInteractionEnded()
             return
         }
 

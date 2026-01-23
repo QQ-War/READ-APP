@@ -108,9 +108,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     var safeAreaTop: CGFloat = 47; var safeAreaBottom: CGFloat = 34
     var currentLayoutSpec: ReaderLayoutSpec {
+        let topInsetValue = safeAreaTop > 0 ? safeAreaTop : view.safeAreaInsets.top
+        let bottomInsetValue = safeAreaBottom > 0 ? safeAreaBottom : view.safeAreaInsets.bottom
         return ReaderLayoutSpec(
-            topInset: max(safeAreaTop, view.safeAreaInsets.top) + 15,
-            bottomInset: max(safeAreaBottom, view.safeAreaInsets.bottom) + 40,
+            topInset: topInsetValue + 15,
+            bottomInset: bottomInsetValue + 40,
             sideMargin: readerSettings.pageHorizontalMargin + 8,
             pageSize: view.bounds.size
         )
@@ -297,7 +299,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         
         if b.size != lastKnownSize {
             let spec = currentLayoutSpec
-            let signature = "\(Int(spec.pageSize.width))x\(Int(spec.pageSize.height))|\(Int(spec.topInset))"
+            let signature = "\(Int(spec.pageSize.width))x\(Int(spec.pageSize.height))"
             if signature != lastLayoutSignature {
                 lastLayoutSignature = signature
                 lastKnownSize = b.size
@@ -774,6 +776,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             return
         }
         guard currentReadingMode == .horizontal, !isMangaMode else { return }
+        if readerSettings.pageTurningMode == .simulation {
+            isInternalTransitioning = true
+            horizontalVC?.view.removeFromSuperview()
+            horizontalVC?.removeFromParent()
+            horizontalVC = nil
+            setupHorizontalMode()
+            isInternalTransitioning = false
+            return
+        }
         isInternalTransitioning = true
         performChapterTransitionFade { [weak self] in
             guard let self = self else { return }
@@ -1096,7 +1107,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         } else if currentReadingMode == .vertical { 
             verticalVC?.scrollToBottom(animated: animated) 
         } else if currentReadingMode == .newHorizontal {
-            newHorizontalVC?.scrollToPageIndex(max(0, currentCache.pages.count - 1), animated: animated)
+            let target = max(0, currentCache.pages.count - 1)
+            currentPageIndex = target
+            newHorizontalVC?.scrollToPageIndex(target, animated: animated)
         } else { 
             isAutoScrolling = animated
             updateHorizontalPage(to: max(0, currentCache.pages.count - 1), animated: animated) 

@@ -57,6 +57,9 @@ struct TextKit2Paginator {
         
         // 1. 定位锚点行
         var effectiveAnchorOffset = max(0, min(anchorOffset, totalTextLen))
+        if totalTextLen > 0 && effectiveAnchorOffset == totalTextLen {
+            effectiveAnchorOffset = totalTextLen - 1
+        }
         var anchorY: CGFloat = 0
         if let loc = storage.location(storage.documentRange.location, offsetBy: effectiveAnchorOffset),
            let f = lm.textLayoutFragment(for: loc) {
