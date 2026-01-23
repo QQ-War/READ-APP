@@ -53,6 +53,11 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
                     attr.alpha = 0
                     return attr
                 }
+                let current = Int(round(contentOffset / width))
+                if abs(attr.indexPath.item - current) > 1 {
+                    attr.alpha = 0
+                    return attr
+                }
                 attr.alpha = 1.0 - (absProgress * 0.6)
                 attr.zIndex = Int((1.0 - absProgress) * 1000.0)
                 

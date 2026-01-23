@@ -674,7 +674,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard offset != 0 else { return }
         let targetIndex = currentChapterIndex + offset
         guard targetIndex >= 0 && targetIndex < chapters.count else { return }
-        if preferSeamless, attemptSeamlessSwitch(offset: offset) { return }
+        if preferSeamless, attemptSeamlessSwitch(offset: offset) {
+            applyChapterLandingPage(offset: offset)
+            return
+        }
         let shouldStartAtEnd = startAtEnd ?? (offset < 0)
         performJumpToChapter(targetIndex, startAtEnd: shouldStartAtEnd)
     }
@@ -730,6 +733,21 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             updateHorizontalPage(to: currentPageIndex, animated: false)
         }
         prefetchAdjacentChapters(index: currentChapterIndex)
+    }
+
+    private func applyChapterLandingPage(offset: Int) {
+        if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
+            let target = offset > 0 ? 0 : max(0, currentCache.pages.count - 1)
+            currentPageIndex = target
+            if currentReadingMode == .newHorizontal {
+                updateNewHorizontalContent()
+            } else {
+                updateHorizontalPage(to: target, animated: false)
+            }
+        } else if currentReadingMode == .vertical {
+            if offset > 0 { verticalVC?.scrollToTop(animated: false) }
+            else { verticalVC?.scrollToBottom(animated: false) }
+        }
     }
 
     private func rebuildHorizontalControllerForTurningModeChange() {
