@@ -132,7 +132,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         var isTransitioning: Bool = false
         var timestamp: TimeInterval = 0
     }
-    private var transitionState = TransitionState()
+    fileprivate var transitionState = TransitionState()
     var isInternalTransitioning: Bool {
         get { transitionState.isTransitioning }
         set {
