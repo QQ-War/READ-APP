@@ -210,7 +210,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) } 
             else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
             calculateSentenceOffsets(); isUpdatingLayout = false
-            currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
+            currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, highlightRange: nil, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
             layoutNeeded = true
         }
         
@@ -223,7 +223,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
                 if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
                 else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
+                nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, highlightRange: nil, paragraphStarts: [], margin: margin, forceRedraw: true)
             }
             layoutNeeded = true
         }
@@ -237,7 +237,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
                 if let s = prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
                 else { prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                prevContentView.update(renderStore: prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, paragraphStarts: [], margin: margin, forceRedraw: true)
+                prevContentView.update(renderStore: prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, highlightRange: nil, paragraphStarts: [], margin: margin, forceRedraw: true)
             }
             layoutNeeded = true
         }
@@ -288,7 +288,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
         if lastHighlightIndex != highlightIndex || lastSecondaryIndices != secondaryIndices {
             lastHighlightIndex = highlightIndex; lastSecondaryIndices = secondaryIndices
-            currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
+            currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, highlightRange: nil, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
         }
         
         applyScrollBehaviorIfNeeded()
@@ -739,11 +739,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
     }
 
-    func setHighlight(index: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) {
+    func setHighlight(index: Int?, secondaryIndices: Set<Int>, isPlaying: Bool, highlightRange: NSRange?) {
         if lastHighlightIndex == index && lastSecondaryIndices == secondaryIndices && isPlaying == isPlayingHighlight { return }
         lastHighlightIndex = index
         lastSecondaryIndices = secondaryIndices
-        currentContentView.update(renderStore: renderStore, highlightIndex: index, secondaryIndices: secondaryIndices, isPlaying: isPlaying, paragraphStarts: paragraphStarts, margin: lastMargin, forceRedraw: true)
+        currentContentView.update(renderStore: renderStore, highlightIndex: index, secondaryIndices: secondaryIndices, isPlaying: isPlaying, highlightRange: highlightRange, paragraphStarts: paragraphStarts, margin: lastMargin, forceRedraw: true)
     }
     
     private var isPlayingHighlight: Bool {
@@ -921,32 +921,27 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 }
 
 class VerticalTextContentView: UIView {
-    private var renderStore: TextKit2RenderStore?; private var highlightIndex: Int?; private var secondaryIndices: Set<Int> = []; private(set) var isPlayingHighlight: Bool = false; private var paragraphStarts: [Int] = []; private var margin: CGFloat = 20
+    private var renderStore: TextKit2RenderStore?; private var highlightIndex: Int?; private var secondaryIndices: Set<Int> = []; private(set) var isPlayingHighlight: Bool = false; private var highlightRange: NSRange?; private var paragraphStarts: [Int] = []; private var margin: CGFloat = 20
     override init(frame: CGRect) { super.init(frame: frame); self.backgroundColor = .clear }
     required init?(coder: NSCoder) { fatalError() }
-    func update(renderStore: TextKit2RenderStore?, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool, paragraphStarts: [Int], margin: CGFloat, forceRedraw: Bool) {
-        self.renderStore = renderStore; self.highlightIndex = highlightIndex; self.secondaryIndices = secondaryIndices; self.isPlayingHighlight = isPlaying; self.paragraphStarts = paragraphStarts; self.margin = margin
+    func update(renderStore: TextKit2RenderStore?, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool, highlightRange: NSRange?, paragraphStarts: [Int], margin: CGFloat, forceRedraw: Bool) {
+        self.renderStore = renderStore; self.highlightIndex = highlightIndex; self.secondaryIndices = secondaryIndices; self.isPlayingHighlight = isPlaying; self.highlightRange = highlightRange; self.paragraphStarts = paragraphStarts; self.margin = margin
         if forceRedraw { setNeedsDisplay() }
     }
     override func draw(_ rect: CGRect) {
         guard let s = renderStore else { return }; let ctx = UIGraphicsGetCurrentContext()
         if isPlayingHighlight {
             ctx?.saveGState()
-            for i in ([highlightIndex].compactMap{$0} + Array(secondaryIndices)) {
-                guard i < paragraphStarts.count else { continue }
-                let start = paragraphStarts[i], end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length, r = NSRange(location: start, length: max(0, end - start))
-                ctx?.setFillColor(((i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)).cgColor)
-                
-                if let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: r.location) {
-                    s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { f in
-                        if s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(r) { return false }
-                        for line in f.textLineFragments { 
-                            let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y)
-                            ctx?.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath)
-                            ctx?.fillPath() 
-                        }
-                        return true
-                    }
+            if let range = highlightRange {
+                drawHighlight(range: range, store: s, context: ctx, color: UIColor.systemBlue.withAlphaComponent(0.12))
+            } else {
+                for i in ([highlightIndex].compactMap{$0} + Array(secondaryIndices)) {
+                    guard i < paragraphStarts.count else { continue }
+                    let start = paragraphStarts[i]
+                    let end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length
+                    let r = NSRange(location: start, length: max(0, end - start))
+                    let color = (i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)
+                    drawHighlight(range: r, store: s, context: ctx, color: color)
                 }
             }
             ctx?.restoreGState()
@@ -960,6 +955,22 @@ class VerticalTextContentView: UIView {
             return true
         }
         ctx?.restoreGState()
+    }
+
+    private func drawHighlight(range: NSRange, store: TextKit2RenderStore, context: CGContext?, color: UIColor) {
+        guard let ctx = context else { return }
+        ctx.setFillColor(color.cgColor)
+        if let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: range.location) {
+            store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { f in
+                if store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(range) { return false }
+                for line in f.textLineFragments {
+                    let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y)
+                    ctx.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath)
+                    ctx.fillPath()
+                }
+                return true
+            }
+        }
     }
 }
 

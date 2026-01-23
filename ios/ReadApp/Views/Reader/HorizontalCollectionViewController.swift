@@ -107,6 +107,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     private var highlightIndex: Int?
     private var secondaryIndices: Set<Int> = []
     private var isPlayingHighlight: Bool = false
+    private var highlightRange: NSRange?
     
     private(set) lazy var collectionView: UICollectionView = {
         let layout = AnimatedPageLayout()
@@ -167,16 +168,17 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         scrollToPageIndex(anchorPageIndex, animated: false)
     }
 
-    func updateHighlight(index: Int?, secondary: Set<Int>, isPlaying: Bool) {
-        if highlightIndex == index && secondaryIndices == secondary && isPlayingHighlight == isPlaying {
+    func updateHighlight(index: Int?, secondary: Set<Int>, isPlaying: Bool, highlightRange: NSRange?) {
+        if highlightIndex == index && secondaryIndices == secondary && isPlayingHighlight == isPlaying && self.highlightRange == highlightRange {
             return
         }
         highlightIndex = index
         secondaryIndices = secondary
         isPlayingHighlight = isPlaying
+        self.highlightRange = highlightRange
         for cell in collectionView.visibleCells {
             guard let readerCell = cell as? ReaderPageCell else { continue }
-            readerCell.updateHighlight(index: index, secondary: secondary, isPlaying: isPlaying)
+            readerCell.updateHighlight(index: index, secondary: secondary, isPlaying: isPlaying, highlightRange: highlightRange)
         }
     }
     
@@ -218,7 +220,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
                 backgroundColor: themeBackgroundColor
             )
         }
-        cell.updateHighlight(index: highlightIndex, secondary: secondaryIndices, isPlaying: isPlayingHighlight)
+        cell.updateHighlight(index: highlightIndex, secondary: secondaryIndices, isPlaying: isPlayingHighlight, highlightRange: highlightRange)
         
         cell.onTapLocation = { [weak self] location in
             guard let self = self else { return }
@@ -367,10 +369,11 @@ class ReaderPageCell: UICollectionViewCell {
         contentView2.setNeedsDisplay()
     }
 
-    func updateHighlight(index: Int?, secondary: Set<Int>, isPlaying: Bool) {
+    func updateHighlight(index: Int?, secondary: Set<Int>, isPlaying: Bool, highlightRange: NSRange?) {
         contentView2.highlightIndex = index
         contentView2.secondaryIndices = secondary
         contentView2.isPlayingHighlight = isPlaying
+        contentView2.highlightRange = highlightRange
     }
 }
 

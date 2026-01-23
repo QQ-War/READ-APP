@@ -226,6 +226,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     var highlightIndex: Int? { didSet { setNeedsDisplay() } }
     var secondaryIndices: Set<Int> = [] { didSet { setNeedsDisplay() } }
     var isPlayingHighlight: Bool = false { didSet { setNeedsDisplay() } }
+    var highlightRange: NSRange? { didSet { setNeedsDisplay() } }
     var paragraphStarts: [Int] = []
     var chapterPrefixLen: Int = 0
     
@@ -285,29 +286,17 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         
         if isPlayingHighlight {
             ctx.saveGState()
-            let allIndices = ([highlightIndex].compactMap { $0 } + Array(secondaryIndices))
-            for i in allIndices {
-                guard i < paragraphStarts.count else { continue }
-                let start = paragraphStarts[i]
-                let end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length
-                let range = NSRange(location: start, length: max(0, end - start))
-                
-                if NSIntersectionRange(range, info.range).length > 0 {
+            if let range = highlightRange {
+                drawHighlight(range: range, store: s, info: info, context: ctx, color: UIColor.systemBlue.withAlphaComponent(0.12))
+            } else {
+                let allIndices = ([highlightIndex].compactMap { $0 } + Array(secondaryIndices))
+                for i in allIndices {
+                    guard i < paragraphStarts.count else { continue }
+                    let start = paragraphStarts[i]
+                    let end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length
+                    let range = NSRange(location: start, length: max(0, end - start))
                     let color = (i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)
-                    ctx.setFillColor(color.cgColor)
-                    
-                    if let startLoc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: range.location) {
-                        s.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { f in
-                            let fRangeStart = s.contentStorage.offset(from: s.contentStorage.documentRange.location, to: f.rangeInElement.location)
-                            if fRangeStart >= range.location + range.length { return false }
-                            
-                            let frame = f.layoutFragmentFrame
-                            if frame.maxY > info.yOffset && frame.minY < info.yOffset + info.actualContentHeight {
-                                ctx.fill(frame.insetBy(dx: -2, dy: -1))
-                            }
-                            return true
-                        }
-                    }
+                    drawHighlight(range: range, store: s, info: info, context: ctx, color: color)
                 }
             }
             ctx.restoreGState()
@@ -336,6 +325,22 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         let cleaned = sanitizedPreviewText(raw, limit: 120)
         
         onVisibleFragments?(pageIdx, [cleaned])
+    }
+
+    private func drawHighlight(range: NSRange, store: TextKit2RenderStore, info: TK2PageInfo, context: CGContext, color: UIColor) {
+        guard NSIntersectionRange(range, info.range).length > 0 else { return }
+        context.setFillColor(color.cgColor)
+        if let startLoc = store.contentStorage.location(store.contentStorage.documentRange.location, offsetBy: range.location) {
+            store.layoutManager.enumerateTextLayoutFragments(from: startLoc, options: [.ensuresLayout]) { f in
+                let fRangeStart = store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: f.rangeInElement.location)
+                if fRangeStart >= range.location + range.length { return false }
+                let frame = f.layoutFragmentFrame
+                if frame.maxY > info.yOffset && frame.minY < info.yOffset + info.actualContentHeight {
+                    context.fill(frame.insetBy(dx: -2, dy: -1))
+                }
+                return true
+            }
+        }
     }
 
     private func sanitizedPreviewText(_ text: String, limit: Int) -> String {

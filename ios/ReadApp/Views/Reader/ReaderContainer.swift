@@ -859,12 +859,25 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
 
         // 1. 垂直模式：局部高亮更新，避免全局刷新
+        if let hi = highlightIdx {
+            secondaryIdxs = Set(secondaryIdxs.filter { $0 > hi })
+        } else {
+            secondaryIdxs = []
+        }
+
+        let highlightRange: NSRange?
+        if let hi = highlightIdx, hi >= 0, !ttsManager.isReadingChapterTitle {
+            highlightRange = highlightRangeFor(sentenceIndex: hi, sentenceOffset: ttsManager.currentSentenceOffset)
+        } else {
+            highlightRange = nil
+        }
+
         if currentReadingMode == .vertical { 
-            verticalVC?.setHighlight(index: highlightIdx, secondaryIndices: secondaryIdxs, isPlaying: ttsManager.isPlaying)
+            verticalVC?.setHighlight(index: highlightIdx, secondaryIndices: secondaryIdxs, isPlaying: ttsManager.isPlaying, highlightRange: highlightRange)
         } else if currentReadingMode == .newHorizontal {
-            newHorizontalVC?.updateHighlight(index: highlightIdx, secondary: secondaryIdxs, isPlaying: ttsManager.isPlaying)
+            newHorizontalVC?.updateHighlight(index: highlightIdx, secondary: secondaryIdxs, isPlaying: ttsManager.isPlaying, highlightRange: highlightRange)
         } else if currentReadingMode == .horizontal {
-            updateHorizontalHighlight(index: highlightIdx, secondary: secondaryIdxs, isPlaying: ttsManager.isPlaying)
+            updateHorizontalHighlight(index: highlightIdx, secondary: secondaryIdxs, isPlaying: ttsManager.isPlaying, highlightRange: highlightRange)
         }
 
         // 2. 视口跟随逻辑 (只有在非交互状态下执行)
@@ -932,13 +945,63 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         }
     }
 
-    private func updateHorizontalHighlight(index: Int?, secondary: Set<Int>, isPlaying: Bool) {
+    private func updateHorizontalHighlight(index: Int?, secondary: Set<Int>, isPlaying: Bool, highlightRange: NSRange?) {
         guard let h = horizontalVC,
               let pageVC = h.viewControllers?.first as? PageContentViewController,
               let contentView = pageVC.view.subviews.first as? ReadContent2View else { return }
         contentView.highlightIndex = index
         contentView.secondaryIndices = secondary
         contentView.isPlayingHighlight = isPlaying
+        contentView.highlightRange = highlightRange
+    }
+
+    private func highlightRangeFor(sentenceIndex: Int, sentenceOffset: Int) -> NSRange? {
+        guard sentenceIndex >= 0, sentenceIndex < currentCache.contentSentences.count else { return nil }
+        let sentence = currentCache.contentSentences[sentenceIndex]
+        let ns = sentence as NSString
+        let len = ns.length
+        if len == 0 { return nil }
+        let offset = max(0, min(sentenceOffset, len - 1))
+
+        func isDelimiter(_ c: unichar) -> Bool {
+            switch c {
+            case 0x3002, 0xFF01, 0xFF1F, 0xFF1B, 0x2026, 0x0021, 0x003F, 0x003B, 0x002E, 0x3001, 0xFF0C:
+                return true
+            default:
+                return false
+            }
+        }
+
+        var startInSentence = 0
+        if offset > 0 {
+            for i in stride(from: offset - 1, through: 0, by: -1) {
+                if isDelimiter(ns.character(at: i)) {
+                    startInSentence = i + 1
+                    break
+                }
+            }
+        }
+        var endInSentence = len
+        for i in offset..<len {
+            if isDelimiter(ns.character(at: i)) {
+                endInSentence = i + 1
+                break
+            }
+        }
+
+        if endInSentence <= startInSentence {
+            startInSentence = 0
+            endInSentence = len
+        }
+
+        guard sentenceIndex < currentCache.paragraphStarts.count else { return nil }
+        let sentenceStart = currentCache.paragraphStarts[sentenceIndex] + paragraphIndentLength
+        let absoluteStart = sentenceStart + startInSentence
+        let absoluteLen = endInSentence - startInSentence
+        let totalLen = currentCache.attributedText.length
+        guard absoluteStart < totalLen else { return nil }
+        let clampedLen = min(absoluteLen, totalLen - absoluteStart)
+        return NSRange(location: absoluteStart, length: max(1, clampedLen))
     }
 
     func completePendingTTSPositionSync() {
