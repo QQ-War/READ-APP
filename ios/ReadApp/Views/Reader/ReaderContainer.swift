@@ -715,12 +715,18 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private func applyChapterState(afterSeamlessOffset offset: Int) {
         currentChapterIndex += offset
         lastReportedChapterIndex = currentChapterIndex
+        if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
+            currentPageIndex = offset > 0 ? 0 : max(0, currentCache.pages.count - 1)
+        }
         onChapterIndexChanged?(currentChapterIndex)
         updateVerticalAdjacent()
         prefetchAdjacentChapters(index: currentChapterIndex)
     }
 
     private func rebuildHorizontalControllerForTurningModeChange() {
+        if readerSettings.pageTurningMode == .simulation {
+            return
+        }
         if currentReadingMode == .newHorizontal {
             // 新版模式不需要重建控制器，只需要刷新内容以应用新的 Layout 设置
             updateNewHorizontalContent()

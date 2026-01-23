@@ -49,6 +49,10 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
                 }
                 
             case .flip:
+                if absProgress > 1.0 {
+                    attr.alpha = 0
+                    return attr
+                }
                 attr.alpha = 1.0 - (absProgress * 0.6)
                 attr.zIndex = Int((1.0 - absProgress) * 1000.0)
                 
@@ -56,10 +60,13 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
                 transform.m34 = -1.0 / 1000.0
                 let angle = progress * (.pi / 2)
                 
-                // 核心修复：必须先平移(Translate)抵消位移，再旋转(Rotate)
-                // 否则旋转后的轴向改变会导致 tx 作用于 Z 轴，产生无穷大坐标导致崩溃
+                // 先平移抵消位移，再以左右边缘作为旋转轴进行翻页
+                let w = attr.size.width
+                let pivot = progress > 0 ? -w / 2 : w / 2
                 transform = CATransform3DTranslate(transform, -diff, 0, 0)
+                transform = CATransform3DTranslate(transform, pivot, 0, 0)
                 transform = CATransform3DRotate(transform, angle, 0, 1, 0)
+                transform = CATransform3DTranslate(transform, -pivot, 0, 0)
                 attr.transform3D = transform
                 
             case .none:
@@ -112,6 +119,9 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     override func viewDidLoad() {
         super.viewDidLoad()
         view.addSubview(collectionView)
+        var perspective = CATransform3DIdentity
+        perspective.m34 = -1.0 / 1000.0
+        collectionView.layer.sublayerTransform = perspective
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             collectionView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -258,6 +268,7 @@ class ReaderPageCell: UICollectionViewCell {
         super.init(frame: frame)
         layer.isDoubleSided = false
         contentView.layer.isDoubleSided = false
+        contentView.clipsToBounds = true
         contentView.addSubview(contentView2)
         contentView2.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
