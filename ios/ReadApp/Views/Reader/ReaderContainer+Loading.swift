@@ -144,7 +144,7 @@ extension ReaderContainerViewController {
         } else {
             if !isManga {
                 if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
-                    self.updateHorizontalPage(to: self.currentCache.anchorPageIndex, animated: false)
+                    self.updateHorizontalPage(to: 0, animated: false)
                 }
                 self.verticalVC?.scrollToTop(animated: false)
             } else {

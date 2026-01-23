@@ -50,7 +50,7 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
                 
             case .flip:
                 attr.alpha = 1.0 - (absProgress * 0.6)
-                attr.zIndex = progress < 0 ? 10 : 5
+                attr.zIndex = Int((1.0 - absProgress) * 1000.0)
                 
                 var transform = CATransform3DIdentity
                 transform.m34 = -1.0 / 1000.0
@@ -256,6 +256,8 @@ class ReaderPageCell: UICollectionViewCell {
     
     override init(frame: CGRect) {
         super.init(frame: frame)
+        layer.isDoubleSided = false
+        contentView.layer.isDoubleSided = false
         contentView.addSubview(contentView2)
         contentView2.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
