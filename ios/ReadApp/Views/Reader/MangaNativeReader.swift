@@ -114,7 +114,7 @@ struct MangaNativeReader: UIViewRepresentable {
                         heightConstraint
                     ])
                     
-                    if let url = URL(string: urlString) {
+                    if let url = MangaImageService.shared.resolveImageURL(urlString) {
                         let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 30)
                         URLSession.shared.dataTask(with: request) { [weak imageView, weak heightConstraint] data, _, _ in
                             guard let data = data, let image = UIImage(data: data),
