@@ -117,6 +117,7 @@ enum MangaImageExtractor {
 
     private static func isLikelyImageUrl(_ url: String) -> Bool {
         let lower = url.lowercased()
+        if lower.contains("/pdfimage") { return true }
         if lower.contains("sign=") { return true }
         let suffixes = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]
         return suffixes.contains { lower.contains($0) }
