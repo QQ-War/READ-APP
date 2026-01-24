@@ -270,10 +270,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                     let newOffset = oldOffset + newPrevHeightPlusGap
                     scrollView.contentOffset.y = newOffset
                 } else if prevChanged && !isChapterSwapToPrev {
-                    let displacement = currentContentView.frame.minY - oldCurrY
-                    if displacement != 0 { 
-                        let newOffset = oldOffset + displacement
-                        scrollView.contentOffset.y = newOffset 
+                    if contentChanged || modeChanged {
+                        let displacement = currentContentView.frame.minY - oldCurrY
+                        if displacement != 0 { 
+                            let newOffset = oldOffset + displacement
+                            scrollView.contentOffset.y = newOffset 
+                        }
                     }
                 } else if modeChanged {
                     // 仅由于模式切换（非无限->无限）导致的布局变化，强制刷新当前 contentOffset 触发一次校验
