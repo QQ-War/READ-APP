@@ -59,7 +59,6 @@ enum MangaImageExtractor {
         if results.isEmpty || results.count < minExpectedImageCount || MangaImageNormalizer.shouldPreferSignedUrls(results: results, text: fallbackText) {
             let patterns = [
                 #"https?://[^\s"'<>]+/pdfimage\?[^\s"'<>]+"#,
-                #"/api/v\d+/pdfimage\?[^\s"'<>]+"#,
                 #"https?://[^\s"'<>]+(?:\?|&)(?:sign|t)=[^\s"'<>]+"#,
                 #"https?://[^\s"'<>]+(?:\.(?:jpg|jpeg|png|webp|gif|bmp))(?:\?[^\"'\s<>]*)?"#
             ]
