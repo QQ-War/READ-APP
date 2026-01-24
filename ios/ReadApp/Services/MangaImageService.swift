@@ -12,11 +12,23 @@ final class MangaImageService {
     func resolveImageURL(_ original: String) -> URL? {
         let cleaned = MangaImageNormalizer.sanitizeUrlString(original)
         if cleaned.hasPrefix("http") {
-            return URL(string: cleaned).map { MangaImageNormalizer.normalizeHost($0) }
+            return URL(string: cleaned).map { normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost($0)) }
         }
         let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
         let resolved = cleaned.hasPrefix("/") ? (baseURL + cleaned) : (baseURL + "/" + cleaned)
-        return URL(string: resolved).map { MangaImageNormalizer.normalizeHost($0) }
+        return URL(string: resolved).map { normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost($0)) }
+    }
+
+    private func normalizeSchemeIfNeeded(_ url: URL) -> URL {
+        guard url.scheme?.lowercased() == "http" else { return url }
+        guard let base = URL(string: APIService.shared.baseURL),
+              let baseHost = base.host?.lowercased(),
+              let host = url.host?.lowercased(),
+              host == baseHost
+        else { return url }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.scheme = "https"
+        return components?.url ?? url
     }
     
     func fetchImageData(for url: URL, referer: String?) async -> Data? {
