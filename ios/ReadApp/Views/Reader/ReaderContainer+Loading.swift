@@ -77,9 +77,15 @@ extension ReaderContainerViewController {
     func processLoadedChapterContent(index: Int, rawContent: String, isManga: Bool, startAtEnd: Bool, token: Int) {
         guard loadToken == token else { return }
         defer { self.isInternalTransitioning = false }
-        
-        self.isMangaMode = isManga
-        self.onModeDetected?(isManga)
+        var resolvedManga = isManga
+        if !resolvedManga {
+            let detected = MangaImageExtractor.extractImageUrls(from: rawContent)
+            if !detected.isEmpty {
+                resolvedManga = true
+            }
+        }
+        self.isMangaMode = resolvedManga
+        self.onModeDetected?(resolvedManga)
 
         // 核心修复：如果目录还没加载成功（chapters 为空），仅渲染文字内容（错误提示），跳过后续逻辑
         if chapters.isEmpty {
@@ -87,7 +93,7 @@ extension ReaderContainerViewController {
             return
         }
 
-        if self.isFirstLoad && !isManga {
+        if self.isFirstLoad && !resolvedManga {
             let initialOffset: Int
             if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
                 initialOffset = self.ttsManager.currentCharOffset
@@ -98,7 +104,7 @@ extension ReaderContainerViewController {
             }
             // 首次加载且是水平模式，使用锚点分页
             reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) ? initialOffset : 0)
-        } else if startAtEnd && !isManga {
+        } else if startAtEnd && !resolvedManga {
             // 翻回上一章，锚点设为末尾
             reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: rawContent.count)
         } else {
@@ -109,7 +115,7 @@ extension ReaderContainerViewController {
 
         if self.isFirstLoad {
             self.isFirstLoad = false
-            if !isManga {
+            if !resolvedManga {
                 if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
                     let sentenceIdx = self.ttsManager.currentSentenceIndex
                     if self.currentReadingMode == .horizontal || self.currentReadingMode == .newHorizontal {
