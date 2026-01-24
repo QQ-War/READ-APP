@@ -243,6 +243,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         if layoutNeeded {
+            LogManager.shared.log(
+                "垂直拼接布局: modeChanged=\(modeChanged) contentChanged=\(contentChanged) nextChanged=\(nextChanged) prevChanged=\(prevChanged) chapterSwap=\(isChapterSwap) swapPrev=\(isChapterSwapToPrev)",
+                category: "阅读调试"
+            )
             let oldOffset = scrollView.contentOffset.y
             let oldCurrY = currentContentView.frame.minY
             let wasPrevVisible = lastPrevHasContent
