@@ -15,6 +15,34 @@ struct HttpTTS: Codable, Identifiable {
     let loginCheckJs: String?
     let lastUpdateTime: Int64?
 
+    init(
+        id: String,
+        userid: String? = nil,
+        name: String,
+        url: String,
+        contentType: String? = nil,
+        concurrentRate: String? = nil,
+        loginUrl: String? = nil,
+        loginUi: String? = nil,
+        header: String? = nil,
+        enabledCookieJar: Bool? = nil,
+        loginCheckJs: String? = nil,
+        lastUpdateTime: Int64? = nil
+    ) {
+        self.id = id
+        self.userid = userid
+        self.name = name
+        self.url = url
+        self.contentType = contentType
+        self.concurrentRate = concurrentRate
+        self.loginUrl = loginUrl
+        self.loginUi = loginUi
+        self.header = header
+        self.enabledCookieJar = enabledCookieJar
+        self.loginCheckJs = loginCheckJs
+        self.lastUpdateTime = lastUpdateTime
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let stringId = try? container.decode(String.self, forKey: .id) {
