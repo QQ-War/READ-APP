@@ -27,5 +27,7 @@ enum ApiEndpointsReader {
     static let saveRssSource = "saveRssSource"
     static let deleteRssSource = "deleteRssSource"
     static let httpTtsList = "httpTTS/list"
+    static let httpTtsSave = "httpTTS/save"
+    static let httpTtsDelete = "httpTTS/delete"
     static let bookTts = "book/tts"
 }

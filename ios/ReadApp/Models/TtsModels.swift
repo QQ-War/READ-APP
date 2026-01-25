@@ -62,7 +62,15 @@ struct HttpTTS: Codable, Identifiable {
         loginUrl = try? container.decode(String.self, forKey: .loginUrl)
         loginUi = try? container.decode(String.self, forKey: .loginUi)
         header = try? container.decode(String.self, forKey: .header)
-        enabledCookieJar = try? container.decode(Bool.self, forKey: .enabledCookieJar)
+        if let boolValue = try? container.decode(Bool.self, forKey: .enabledCookieJar) {
+            enabledCookieJar = boolValue
+        } else if let intValue = try? container.decode(Int.self, forKey: .enabledCookieJar) {
+            enabledCookieJar = intValue != 0
+        } else if let stringValue = try? container.decode(String.self, forKey: .enabledCookieJar) {
+            enabledCookieJar = (stringValue as NSString).boolValue
+        } else {
+            enabledCookieJar = nil
+        }
         loginCheckJs = try? container.decode(String.self, forKey: .loginCheckJs)
         lastUpdateTime = try? container.decode(Int64.self, forKey: .lastUpdateTime)
     }

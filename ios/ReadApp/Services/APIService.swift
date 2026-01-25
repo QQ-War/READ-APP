@@ -150,24 +150,53 @@ class APIService {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return content }
         if trimmed.contains("<") { return content }
-        if trimmed.contains("://") { return content }
         if !trimmed.contains("/book-assets/") { return content }
 
         let base = ApiBackendResolver.stripApiBasePath(client.baseURL)
+        let publicBase = client.publicBaseURL.map { ApiBackendResolver.stripApiBasePath($0) }
         let path = trimmed.hasPrefix("/") ? trimmed : "/\(trimmed)"
-        let urlString = base + path
-        let url = try client.buildURL(urlString: urlString)
+
+        var candidates: [String] = []
+        if trimmed.contains("://") {
+            candidates.append(trimmed)
+            if let publicBase = publicBase, trimmed.hasPrefix(base) {
+                let replaced = trimmed.replacingOccurrences(of: base, with: publicBase)
+                candidates.append(replaced)
+            }
+        } else {
+            candidates.append(base + path)
+            if let publicBase = publicBase {
+                candidates.append(publicBase + path)
+            }
+        }
+
+        for urlString in candidates {
+            if let text = await fetchTextContent(urlString: urlString) {
+                return text
+            }
+        }
+        return content
+    }
+
+    private func fetchTextContent(urlString: String) async -> String? {
+        let url: URL?
+        if let direct = URL(string: urlString) {
+            url = direct
+        } else if let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) {
+            url = URL(string: encoded)
+        } else {
+            url = nil
+        }
+        guard let url = url else { return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 15
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            return content
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            return nil
         }
-        if let text = String(data: data, encoding: .utf8) {
-            return text
-        }
-        return content
+        return String(data: data, encoding: .utf8)
     }
 
     private func withTimeout<T>(seconds: TimeInterval, operation: @escaping @Sendable () async throws -> T) async throws -> T {
