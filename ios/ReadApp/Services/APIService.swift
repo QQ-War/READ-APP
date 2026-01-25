@@ -123,24 +123,51 @@ class APIService {
                 queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
             }
             
-            let (data, httpResponse) = try await self.client.requestWithFailback(endpoint: ApiEndpoints.getBookContent, queryItems: queryItems)
+            let endpoint = self.client.backend == .reader ? ApiEndpointsReader.getBookContent : ApiEndpoints.getBookContent
+            let (data, httpResponse) = try await self.client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)
             guard httpResponse.statusCode == 200 else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
             }
             let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
             if apiResponse.isSuccess, let content = apiResponse.data {
+                let resolvedContent = try await resolveReaderLocalContentIfNeeded(content)
                 if cachePolicy.saveToCache {
-                    await self.chapterCache.insert(content, for: cacheKey)
+                    await self.chapterCache.insert(resolvedContent, for: cacheKey)
                     let shouldCache = (contentType == 2) ? UserPreferences.shared.isMangaAutoCacheEnabled : UserPreferences.shared.isTextAutoCacheEnabled
                     if shouldCache {
-                        LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: content)
+                        LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: resolvedContent)
                     }
                 }
-                return content
+                return resolvedContent
             } else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节内容失败"])
             }
         }
+    }
+
+    private func resolveReaderLocalContentIfNeeded(_ content: String) async throws -> String {
+        guard client.backend == .reader else { return content }
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return content }
+        if trimmed.contains("<") { return content }
+        if trimmed.contains("://") { return content }
+        if !trimmed.contains("/book-assets/") { return content }
+
+        let base = ApiBackendResolver.stripApiBasePath(client.baseURL)
+        let path = trimmed.hasPrefix("/") ? trimmed : "/\(trimmed)"
+        let urlString = base + path
+        let url = try client.buildURL(urlString: urlString)
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            return content
+        }
+        if let text = String(data: data, encoding: .utf8) {
+            return text
+        }
+        return content
     }
 
     private func withTimeout<T>(seconds: TimeInterval, operation: @escaping @Sendable () async throws -> T) async throws -> T {
@@ -206,7 +233,9 @@ class APIService {
             voice: engine.name,
             pitch: "1",
             rate: formatReaderSpeechRate(speechRate),
-            accessToken: accessToken
+            accessToken: accessToken,
+            type: "httpTTS",
+            base64: "1"
         )
         let timestamp = Int(Date().timeIntervalSince1970 * 1000)
         let queryItems = [

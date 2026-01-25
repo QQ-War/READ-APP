@@ -14,6 +14,30 @@ struct HttpTTS: Codable, Identifiable {
     let enabledCookieJar: Bool?
     let loginCheckJs: String?
     let lastUpdateTime: Int64?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let stringId = try? container.decode(String.self, forKey: .id) {
+            id = stringId
+        } else if let intId = try? container.decode(Int64.self, forKey: .id) {
+            id = String(intId)
+        } else if let doubleId = try? container.decode(Double.self, forKey: .id) {
+            id = String(Int64(doubleId))
+        } else {
+            id = UUID().uuidString
+        }
+        userid = try? container.decode(String.self, forKey: .userid)
+        name = (try? container.decode(String.self, forKey: .name)) ?? ""
+        url = (try? container.decode(String.self, forKey: .url)) ?? ""
+        contentType = try? container.decode(String.self, forKey: .contentType)
+        concurrentRate = try? container.decode(String.self, forKey: .concurrentRate)
+        loginUrl = try? container.decode(String.self, forKey: .loginUrl)
+        loginUi = try? container.decode(String.self, forKey: .loginUi)
+        header = try? container.decode(String.self, forKey: .header)
+        enabledCookieJar = try? container.decode(Bool.self, forKey: .enabledCookieJar)
+        loginCheckJs = try? container.decode(String.self, forKey: .loginCheckJs)
+        lastUpdateTime = try? container.decode(Int64.self, forKey: .lastUpdateTime)
+    }
 }
 
 struct ReaderTtsRequest: Encodable {
@@ -22,4 +46,6 @@ struct ReaderTtsRequest: Encodable {
     let pitch: String
     let rate: String
     let accessToken: String
+    let type: String
+    let base64: String
 }
