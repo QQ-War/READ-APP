@@ -380,6 +380,7 @@ struct BookDetailView: View {
     
     private func loadData() async {
         isLoading = true
+        defer { isLoading = false }
         do {
             chapters = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             if endChapter.isEmpty { endChapter = "\(chapters.count)" }
@@ -389,10 +390,12 @@ struct BookDetailView: View {
             selectedGroupIndex = min(initialIndex / 50, maxGroupIndex)
             refreshCachedStatus()
         } catch {
+            if Task.isCancelled || error is CancellationError {
+                return
+            }
             errorMessage = error.localizedDescription
             selectedGroupIndex = 0
         }
-        isLoading = false
     }
     
     private func refreshCachedStatus() {
