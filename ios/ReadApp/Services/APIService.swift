@@ -102,6 +102,7 @@ class APIService {
     func fetchChapterContent(bookUrl: String, bookSourceUrl: String?, index: Int, contentType: Int = 0, cachePolicy: ChapterContentFetchPolicy = .standard) async throws -> String {
         // 1. 优先尝试从本地磁盘缓存读取
         if cachePolicy.useDiskCache, let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
+            LogManager.shared.log("章节缓存命中(磁盘): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
             return cachedContent
         }
         
@@ -110,9 +111,11 @@ class APIService {
             
             let cacheKey = "\(bookUrl)_\(index)_\(contentType)"
             if cachePolicy.useMemoryCache, let cachedContent = await self.chapterCache.value(for: cacheKey) {
+                LogManager.shared.log("章节缓存命中(内存): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
                 return cachedContent
             }
-            
+
+            LogManager.shared.log("章节请求开始: index=\(index) type=\(contentType) cache=\(cachePolicy.useDiskCache ? "disk" : "-")/\(cachePolicy.useMemoryCache ? "mem" : "-")", category: "阅读诊断")
             var queryItems = [
                 URLQueryItem(name: "accessToken", value: self.accessToken),
                 URLQueryItem(name: "url", value: bookUrl),
@@ -130,7 +133,13 @@ class APIService {
             }
             let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
             if apiResponse.isSuccess, let content = apiResponse.data {
+                LogManager.shared.log("章节请求成功: index=\(index) rawLen=\(content.count)", category: "阅读诊断")
                 let resolvedContent = try await resolveReaderLocalContentIfNeeded(content)
+                if resolvedContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    LogManager.shared.log("章节内容为空(解析后): index=\(index)", category: "阅读诊断")
+                } else if resolvedContent.count != content.count {
+                    LogManager.shared.log("章节内容解析完成: index=\(index) resolvedLen=\(resolvedContent.count)", category: "阅读诊断")
+                }
                 if cachePolicy.saveToCache {
                     await self.chapterCache.insert(resolvedContent, for: cacheKey)
                     let shouldCache = (contentType == 2) ? UserPreferences.shared.isMangaAutoCacheEnabled : UserPreferences.shared.isTextAutoCacheEnabled

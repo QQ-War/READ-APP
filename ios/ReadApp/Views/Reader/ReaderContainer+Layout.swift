@@ -100,11 +100,6 @@ extension ReaderContainerViewController {
         let nextSentences = nextCache.contentSentences.isEmpty ? nil : nextCache.contentSentences
         let prevSentences = prevCache.contentSentences.isEmpty ? nil : prevCache.contentSentences
 
-        logger.log(
-            "垂直拼接更新: mode=\(currentReadingMode) infinite=\(readerSettings.isInfiniteScrollEnabled) chapter=\(currentChapterIndex) next=\(nextSentences?.count ?? 0) prev=\(prevSentences?.count ?? 0)",
-            category: "阅读调试"
-        )
-
         var highlightIdx = ttsManager.isPlaying ? ttsManager.currentSentenceIndex : nil
         var finalSecondaryIndices = secondaryIndices
 

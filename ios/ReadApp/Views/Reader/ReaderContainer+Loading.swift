@@ -47,6 +47,7 @@ extension ReaderContainerViewController {
             if allowPrefetch, isM {
                 let cached = await MainActor.run { self.consumePrefetchedMangaContent(for: index) }
                 if let cached = cached {
+                LogManager.shared.log("章节内容命中(预取漫画): index=\(index) len=\(cached.count)", category: "阅读诊断")
                 await MainActor.run {
                     self.processLoadedChapterContent(index: index, rawContent: cached, isManga: isM, startAtEnd: startAtEnd, token: token)
                 }
@@ -62,6 +63,7 @@ extension ReaderContainerViewController {
                     contentType: isM ? 2 : 0,
                     cachePolicy: cachePolicy
                 )
+                LogManager.shared.log("章节内容获取完成: listIndex=\(index) apiIndex=\(realIndex) len=\(content.count)", category: "阅读诊断")
                 await MainActor.run {
                     self.processLoadedChapterContent(index: index, rawContent: content, isManga: isM, startAtEnd: startAtEnd, token: token)
                 }
@@ -77,6 +79,11 @@ extension ReaderContainerViewController {
     func processLoadedChapterContent(index: Int, rawContent: String, isManga: Bool, startAtEnd: Bool, token: Int) {
         guard loadToken == token else { return }
         defer { self.isInternalTransitioning = false }
+        let trimmed = rawContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        LogManager.shared.log(
+            "章节渲染准备: index=\(index) manga=\(isManga) rawLen=\(rawContent.count) empty=\(trimmed.isEmpty)",
+            category: "阅读诊断"
+        )
         var resolvedManga = isManga
         if !resolvedManga {
             let detected = MangaImageExtractor.extractImageUrls(from: rawContent)
@@ -89,6 +96,7 @@ extension ReaderContainerViewController {
 
         // 核心修复：如果目录还没加载成功（chapters 为空），仅渲染文字内容（错误提示），跳过后续逻辑
         if chapters.isEmpty {
+            LogManager.shared.log("章节渲染跳过(目录为空): index=\(index)", category: "阅读诊断")
             reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: 0)
             return
         }
