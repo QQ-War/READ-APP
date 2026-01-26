@@ -1408,6 +1408,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _books.value = sorted
     }
     internal fun isPunctuationOnly(sentence: String): Boolean {
+        if (sentence.contains("__IMG__")) return true
         val punctuation = "，。！？；、\"“”‘’…—·"
         return sentence.trim().all { it in punctuation }
     }

@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
@@ -63,8 +64,11 @@ import com.readapp.ui.state.ReaderUiState
 import com.readapp.ui.reader.SectionOffsets
 import com.readapp.ui.reader.ChapterTransitionPolicy
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.InlineTextContent
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -73,6 +77,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
+import coil.compose.AsyncImage
 
 private enum class ChapterNavIntent {
     NONE, FIRST, LAST
@@ -262,9 +267,7 @@ fun ReadingScreen(
     }
 
     val isMangaMode = remember(currentParagraphs, book.type, manualMangaUrls) {
-        if (manualMangaUrls.contains(book.bookUrl)) return@remember true
-        val imageCount = currentParagraphs.count { it.contains("__IMG__") }
-        book.type == 2 || (currentParagraphs.isNotEmpty() && imageCount.toFloat() / currentParagraphs.size > 0.1f)
+        manualMangaUrls.contains(book.bookUrl) || book.type == 2
     }
 
     val prevParagraphs = remember(prevChapterContent) {
@@ -577,7 +580,7 @@ fun ReadingScreen(
                     val lineHeightPx = with(LocalDensity.current) { (readingFontSize * 1.8f).sp.toPx() }
                     val density = LocalDensity.current
                     val availableConstraints = remember(constraints, contentPadding, density) { adjustedConstraints(constraints, contentPadding, density) }
-                    val paginatedPages = rememberPaginatedText(currentParagraphs, style, availableConstraints, lineHeightPx, headerText, headerFontSize)
+                    val paginatedPages = rememberPaginatedText(currentParagraphs, style, availableConstraints, lineHeightPx, headerText, headerFontSize, density)
                     
                     key(currentChapterIndex) { // 强行重置 Pager 状态
                         val pagerState = rememberPagerState(initialPage = 0, pageCount = { paginatedPages.pages.size.coerceAtLeast(1) })
@@ -625,7 +628,15 @@ fun ReadingScreen(
                                 }
                             } ?: AnnotatedString("")
                             Box(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
-                                SelectionContainer { Text(text = text, style = style, color = themeTextColor, modifier = Modifier.fillMaxSize()) }
+                                SelectionContainer {
+                                    Text(
+                                        text = text,
+                                        style = style,
+                                        color = themeTextColor,
+                                        inlineContent = paginatedPages.inlineContent,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
                             }
                         }
                         LaunchedEffect(pagerState.currentPage) {
@@ -723,13 +734,22 @@ private fun parseDisplayParagraphs(content: String): List<String> {
 }
 
 @Composable
-private fun rememberPaginatedText(paragraphs: List<String>, style: TextStyle, constraints: Constraints, lineHeightPx: Float, headerText: String, headerFontSize: TextUnit): PaginationResult {
+private fun rememberPaginatedText(
+    paragraphs: List<String>,
+    style: TextStyle,
+    constraints: Constraints,
+    lineHeightPx: Float,
+    headerText: String,
+    headerFontSize: TextUnit,
+    density: Density
+): PaginationResult {
     val textMeasurer = rememberTextMeasurer()
-    return remember(paragraphs, style, constraints, lineHeightPx, headerText, headerFontSize) {
+    return remember(paragraphs, style, constraints, lineHeightPx, headerText, headerFontSize, density) {
         if (paragraphs.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) return@remember PaginationResult(emptyList(), AnnotatedString(""))
-        val paragraphStartIndices = paragraphStartIndices(paragraphs, headerText.length)
-        val fullText = fullContent(paragraphs, headerText, headerFontSize)
-        val layout = textMeasurer.measure(fullText, style, constraints = Constraints(maxWidth = constraints.maxWidth))
+        val inlineResult = buildInlineContent(paragraphs, headerText, headerFontSize, constraints.maxWidth.toFloat(), density)
+        val paragraphStartIndices = inlineResult.paragraphStarts
+        val fullText = inlineResult.text
+        val layout = textMeasurer.measure(fullText, style, constraints = Constraints(maxWidth = constraints.maxWidth), inlineContent = inlineResult.inlineContent)
         if (layout.lineCount == 0) return@remember PaginationResult(emptyList(), fullText)
         val pages = mutableListOf<PaginatedPage>()
         var startLine = 0
@@ -755,7 +775,7 @@ private fun rememberPaginatedText(paragraphs: List<String>, style: TextStyle, co
             )
             startLine = endLine + 1
         }
-        PaginationResult(pages, fullText)
+        PaginationResult(pages, fullText, inlineResult.inlineContent)
     }
 }
 
@@ -767,23 +787,87 @@ private data class PaginatedPage(
     val endParagraphIndex: Int,
     val endParagraphOffset: Int
 )
-private data class PaginationResult(val pages: List<PaginatedPage>, val fullText: AnnotatedString) {
+private data class PaginationResult(
+    val pages: List<PaginatedPage>,
+    val fullText: AnnotatedString,
+    val inlineContent: Map<String, InlineTextContent> = emptyMap()
+) {
     val indices: IntRange get() = pages.indices
     val lastIndex: Int get() = pages.size - 1
     fun isEmpty(): Boolean = pages.isEmpty()
     fun getOrNull(index: Int): PaginatedPage? = pages.getOrNull(index)
 }
 
-private fun fullContent(paragraphs: List<String>, headerText: String, headerFontSize: TextUnit): AnnotatedString {
-    val body = paragraphs.joinToString(separator = "\n\n") { it.trim() }
-    return AnnotatedString.Builder().apply { if (headerText.isNotBlank()) { pushStyle(SpanStyle(fontSize = headerFontSize, fontWeight = FontWeight.Bold)); append(headerText); pop() }; append(body) }.toAnnotatedString()
+private data class InlineContentResult(
+    val text: AnnotatedString,
+    val inlineContent: Map<String, InlineTextContent>,
+    val paragraphStarts: List<Int>
+)
+
+private fun buildInlineContent(
+    paragraphs: List<String>,
+    headerText: String,
+    headerFontSize: TextUnit,
+    maxWidthPx: Float,
+    density: Density
+): InlineContentResult {
+    val inlineContent = mutableMapOf<String, InlineTextContent>()
+    val paragraphStarts = mutableListOf<Int>()
+    val builder = AnnotatedString.Builder()
+    var current = 0
+
+    if (headerText.isNotBlank()) {
+        builder.pushStyle(SpanStyle(fontSize = headerFontSize, fontWeight = FontWeight.Bold))
+        builder.append(headerText)
+        builder.pop()
+        current += headerText.length
+    }
+
+    paragraphs.forEachIndexed { index, paragraph ->
+        if (index > 0) {
+            builder.append("\n\n")
+            current += 2
+        }
+        paragraphStarts.add(current)
+        val imageUrl = extractImageUrlFromParagraph(paragraph)
+        if (imageUrl != null) {
+            val id = "inline_img_$index"
+            builder.appendInlineContent(id, alternateText = "\uFFFC")
+            current += 1
+            val width = maxWidthPx.coerceAtLeast(120f)
+            val height = width * 0.75f
+            val widthDp = with(density) { width.toDp() }
+            val heightDp = with(density) { height.toDp() }
+            inlineContent[id] = InlineTextContent(
+                placeholder = Placeholder(width = widthDp, height = heightDp, placeholderVerticalAlign = PlaceholderVerticalAlign.AboveBaseline)
+            ) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.FillWidth
+                )
+            }
+        } else {
+            val trimmed = paragraph.trim()
+            builder.append(trimmed)
+            current += trimmed.length
+        }
+    }
+    return InlineContentResult(builder.toAnnotatedString(), inlineContent, paragraphStarts)
 }
 
-private fun paragraphStartIndices(paragraphs: List<String>, prefixLength: Int): List<Int> {
-    val starts = mutableListOf<Int>()
-    var current = prefixLength
-    paragraphs.forEachIndexed { i, p -> starts.add(current); current += p.trim().length + if (i < paragraphs.size - 1) 2 else 0 }
-    return starts
+private fun extractImageUrlFromParagraph(text: String): String? {
+    if (text.contains("__IMG__")) {
+        val parts = text.split("__IMG__")
+        val url = parts.getOrNull(1)?.trim()?.split(" ", limit = 2)?.firstOrNull()?.trim()
+        if (!url.isNullOrBlank()) return url
+    }
+    val match = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""".toRegex()
+        .find(text)
+        ?.groupValues
+        ?.get(1)
+    return match?.takeIf { it.isNotBlank() }
 }
 
 private fun paragraphIndexForOffset(offset: Int, starts: List<Int>): Int = starts.indexOfLast { it <= offset }.coerceAtLeast(0)
