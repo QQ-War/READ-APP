@@ -64,7 +64,7 @@ final class BookUploadService: NSObject {
         let reader = try FileHandle(forReadingFrom: fileURL)
         defer { try? reader.close() }
         while autoreleasepool(invoking: {
-            if let chunk = try? reader.read(upToCount: 1024 * 1024), let chunk, !chunk.isEmpty {
+            if let chunk = try? reader.read(upToCount: 1024 * 1024), !chunk.isEmpty {
                 try? writer.write(contentsOf: chunk)
                 return true
             }
