@@ -60,19 +60,6 @@ struct Book: Codable, Identifiable {
             }
             return url
         }
-        if let bookUrl = bookUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !bookUrl.isEmpty,
-           bookUrl.lowercased().hasSuffix(".pdf"),
-           UserPreferences.shared.apiBackend == .read {
-            let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
-            let decodedPath = bookUrl.removingPercentEncoding ?? bookUrl
-            var components = URLComponents(string: "\(baseURL)/api/v\(APIService.apiVersion)/pdfImage")
-            components?.queryItems = [
-                URLQueryItem(name: "path", value: decodedPath),
-                URLQueryItem(name: "page", value: "0")
-            ]
-            return components?.url?.absoluteString
-        }
         return nil
     }
 }
