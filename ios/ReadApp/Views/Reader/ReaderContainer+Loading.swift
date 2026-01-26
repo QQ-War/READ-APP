@@ -79,12 +79,6 @@ extension ReaderContainerViewController {
         defer { self.isInternalTransitioning = false }
         let trimmed = rawContent.trimmingCharacters(in: .whitespacesAndNewlines)
         var resolvedManga = isManga
-        if !resolvedManga {
-            let detected = MangaImageExtractor.extractImageUrls(from: rawContent)
-            if !detected.isEmpty {
-                resolvedManga = true
-            }
-        }
         self.isMangaMode = resolvedManga
         self.onModeDetected?(resolvedManga)
 

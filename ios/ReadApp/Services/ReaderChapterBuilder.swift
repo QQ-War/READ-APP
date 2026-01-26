@@ -26,8 +26,10 @@ final class ReaderChapterBuilder {
         anchorOffset: Int = 0 // 新增锚点支持
     ) -> ChapterCache {
         let chunkLimit = UserPreferences.shared.ttsSentenceChunkLimit
-        let sentences = ReadingTextProcessor.splitSentences(rawContent, rules: replaceRules, chunkLimit: chunkLimit)
-        let attr = buildAttributedText(sentences: sentences, title: title)
+        let segments = ReadingTextProcessor.splitSegments(rawContent, rules: replaceRules, chunkLimit: chunkLimit)
+        let built = buildAttributedText(segments: segments, title: title, layoutWidth: layoutSpec.pageSize.width - layoutSpec.sideMargin * 2)
+        let sentences = built.sentences
+        let attr = built.attributedText
         let width = max(100, layoutSpec.pageSize.width - layoutSpec.sideMargin * 2)
         let store: TextKit2RenderStore
         if let reuseStore = reuseStore {
@@ -37,8 +39,8 @@ final class ReaderChapterBuilder {
             store = TextKit2RenderStore(attributedString: attr, layoutWidth: width)
         }
 
-        let prefixLen = title.isEmpty ? 0 : (title + "\n").utf16.count
-        let paragraphStarts = paragraphStarts(for: sentences, prefixLen: prefixLen)
+        let prefixLen = built.prefixLen
+        let paragraphStarts = built.paragraphStarts
         
         // 使用新增的锚点分页方法
         let result = TextKit2Paginator.paginateFromAnchor(
@@ -94,7 +96,24 @@ final class ReaderChapterBuilder {
     }
 
     private func buildAttributedText(sentences: [String], title: String) -> NSAttributedString {
+        buildAttributedText(segments: sentences.map { .text($0) }, title: title, layoutWidth: 0).attributedText
+    }
+
+    private func buildAttributedText(segments: [ReadingTextProcessor.Segment], title: String, layoutWidth: CGFloat) -> (attributedText: NSAttributedString, paragraphStarts: [Int], sentences: [String], prefixLen: Int) {
         let fullAttr = NSMutableAttributedString()
+        var paragraphStarts: [Int] = []
+        var sentences: [String] = []
+
+        let bodyStyle = NSMutableParagraphStyle()
+        bodyStyle.lineSpacing = readerSettings.lineSpacing
+        bodyStyle.alignment = .justified
+
+        let bodyAttributes: [NSAttributedString.Key: Any] = [
+            .font: ReaderFontProvider.bodyFont(size: readerSettings.fontSize),
+            .foregroundColor: readerSettings.readingTheme.textColor,
+            .paragraphStyle: bodyStyle
+        ]
+
         if !title.isEmpty {
             let titleStyle = NSMutableParagraphStyle()
             titleStyle.alignment = .center
@@ -110,36 +129,35 @@ final class ReaderChapterBuilder {
                 )
             )
         }
+        let prefixLen = fullAttr.length
 
-        let bodyStyle = NSMutableParagraphStyle()
-        bodyStyle.lineSpacing = readerSettings.lineSpacing
-        bodyStyle.alignment = .justified
-
-        let indentedText = sentences.map { String(repeating: "　", count: paragraphIndentLength) + $0 }.joined(separator: "\n")
-        fullAttr.append(
-            NSAttributedString(
-                string: indentedText,
-                attributes: [
-                    .font: ReaderFontProvider.bodyFont(size: readerSettings.fontSize),
-                    .foregroundColor: readerSettings.readingTheme.textColor,
-                    .paragraphStyle: bodyStyle
-                ]
-            )
-        )
-        return fullAttr
-    }
-
-    private func paragraphStarts(for sentences: [String], prefixLen: Int) -> [Int] {
-        var starts: [Int] = []
-        var current = prefixLen
-        for (idx, sentence) in sentences.enumerated() {
-            starts.append(current)
-            current += (sentence.utf16.count + paragraphIndentLength)
-            if idx < sentences.count - 1 {
-                current += 1
+        var currentOffset = prefixLen
+        let indent = String(repeating: "　", count: paragraphIndentLength)
+        for segment in segments {
+            paragraphStarts.append(currentOffset)
+            switch segment {
+            case .text(let value):
+                sentences.append(value)
+                let paragraph = indent + value
+                fullAttr.append(NSAttributedString(string: paragraph, attributes: bodyAttributes))
+                currentOffset += paragraph.utf16.count
+            case .image(let urlString):
+                sentences.append(ReadingTextProcessor.imagePlaceholder)
+                fullAttr.append(NSAttributedString(string: indent, attributes: bodyAttributes))
+                currentOffset += indent.utf16.count
+                if let url = URL(string: urlString) {
+                    let attachment = InlineImageAttachment(imageURL: url, maxWidth: max(100, layoutWidth))
+                    fullAttr.append(NSAttributedString(attachment: attachment))
+                } else {
+                    fullAttr.append(NSAttributedString(string: ReadingTextProcessor.imagePlaceholder, attributes: bodyAttributes))
+                }
+                currentOffset += 1
             }
+            fullAttr.append(NSAttributedString(string: "\n", attributes: bodyAttributes))
+            currentOffset += 1
         }
-        return starts
+
+        return (fullAttr, paragraphStarts, sentences, prefixLen)
     }
 
     private func stripHTMLAndSVG(_ text: String) -> String {

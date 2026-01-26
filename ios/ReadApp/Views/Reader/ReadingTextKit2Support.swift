@@ -29,6 +29,19 @@ class TextKit2RenderStore {
         contentStorage.attributedString = attributedString
         textContainer.size = CGSize(width: layoutWidth, height: .greatestFiniteMagnitude)
         layoutManager.ensureLayout(for: contentStorage.documentRange)
+        attachInlineImageHandlers()
+    }
+
+    private func attachInlineImageHandlers() {
+        let range = NSRange(location: 0, length: attributedString.length)
+        attributedString.enumerateAttribute(.attachment, in: range, options: []) { value, _, _ in
+            if let attachment = value as? InlineImageAttachment {
+                attachment.onImageLoaded = { [weak self] in
+                    guard let self else { return }
+                    self.layoutManager.invalidateDisplay(for: self.contentStorage.documentRange)
+                }
+            }
+        }
     }
 }
 

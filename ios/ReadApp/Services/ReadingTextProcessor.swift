@@ -1,17 +1,51 @@
 import Foundation
 
 struct ReadingTextProcessor {
+    enum Segment {
+        case text(String)
+        case image(String)
+    }
+
+    static let imagePlaceholder = "\u{FFFC}"
+
     static func prepareText(_ text: String, rules: [ReplaceRule]?) -> String {
         let stripped = stripHTMLAndSVG(text)
         return applyReplaceRules(to: stripped, rules: rules)
     }
 
     static func splitSentences(_ text: String, rules: [ReplaceRule]?, chunkLimit: Int) -> [String] {
-        let processed = prepareText(text, rules: rules)
+        let segments = splitSegments(text, rules: rules, chunkLimit: chunkLimit)
+        return segments.map { segment in
+            switch segment {
+            case .text(let value): return value
+            case .image: return imagePlaceholder
+            }
+        }
+    }
+
+    static func splitSegments(_ text: String, rules: [ReplaceRule]?, chunkLimit: Int) -> [Segment] {
+        let processed = stripHTMLAndSVG(replaceImgTagsWithTokens(text))
         let lines = processed.components(separatedBy: "\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        return lines.flatMap { splitIntoChunks($0, limit: chunkLimit) }
+
+        var segments: [Segment] = []
+        for line in lines {
+            if line.hasPrefix("__IMG__") {
+                let url = String(line.dropFirst("__IMG__".count))
+                if !url.isEmpty {
+                    segments.append(.image(url))
+                }
+                continue
+            }
+
+            let applied = applyReplaceRules(to: line, rules: rules)
+            let chunks = splitIntoChunks(applied, limit: chunkLimit)
+            for chunk in chunks where !chunk.isEmpty {
+                segments.append(.text(chunk))
+            }
+        }
+        return segments
     }
 
     private static func splitIntoChunks(_ text: String, limit: Int) -> [String] {
@@ -65,6 +99,60 @@ struct ReadingTextProcessor {
             }
         }
         return result
+    }
+
+    private static func replaceImgTagsWithTokens(_ text: String) -> String {
+        let imgTagPattern = #"<img\s+[^>]*>"#
+        guard let regex = try? NSRegularExpression(pattern: imgTagPattern, options: [.caseInsensitive]) else {
+            return text
+        }
+
+        let nsText = text as NSString
+        let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
+        guard !matches.isEmpty else { return text }
+
+        var result = ""
+        var lastIndex = 0
+        for match in matches {
+            let range = match.range(at: 0)
+            if range.location > lastIndex {
+                result += nsText.substring(with: NSRange(location: lastIndex, length: range.location - lastIndex))
+            }
+            let tag = nsText.substring(with: range)
+            if let url = extractFirstImageUrl(fromImgTag: tag) {
+                result += "\n__IMG__\(url)\n"
+            }
+            lastIndex = range.location + range.length
+        }
+        if lastIndex < nsText.length {
+            result += nsText.substring(from: lastIndex)
+        }
+        return result
+    }
+
+    private static func extractFirstImageUrl(fromImgTag tag: String) -> String? {
+        let attrPatterns = [
+            #"data-original=["']([^"']+)["']"#,
+            #"data-src=["']([^"']+)["']"#,
+            #"data-lazy=["']([^"']+)["']"#,
+            #"data-echo=["']([^"']+)["']"#,
+            #"data-img=["']([^"']+)["']"#,
+            #"data-url=["']([^"']+)["']"#,
+            #"src=["']([^"']+)["']"#
+        ]
+        for pattern in attrPatterns {
+            if let attrRegex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                let nsText = tag as NSString
+                if let match = attrRegex.firstMatch(in: tag, options: [], range: NSRange(location: 0, length: nsText.length)),
+                   match.numberOfRanges > 1 {
+                    let url = nsText.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !url.isEmpty {
+                        return url.replacingOccurrences(of: "&amp;", with: "&")
+                    }
+                }
+            }
+        }
+        return nil
     }
 
     private static func stripHTMLAndSVG(_ text: String) -> String {

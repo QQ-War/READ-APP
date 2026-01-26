@@ -391,6 +391,7 @@ class TTSManager: NSObject, ObservableObject {
     
     private func isPunctuationOnly(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed == ReadingTextProcessor.imagePlaceholder { return true }
         if trimmed.isEmpty { return true }
         let punctuationSet = CharacterSet.punctuationCharacters.union(.symbols).union(.whitespacesAndNewlines)
         for scalar in trimmed.unicodeScalars { if !punctuationSet.contains(scalar) { return false } }

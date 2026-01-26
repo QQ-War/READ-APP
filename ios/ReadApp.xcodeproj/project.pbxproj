@@ -54,6 +54,7 @@
 		A10000030000000000000001 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000040000000000000001 /* AuthService.swift */; };
 		A10000050000000000000001 /* BooksService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000060000000000000001 /* BooksService.swift */; };
 		D10000020000000000000002 /* BookUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000020000000000000001 /* BookUploadService.swift */; };
+		D10000030000000000000002 /* InlineImageAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000030000000000000001 /* InlineImageAttachment.swift */; };
 		A10000070000000000000001 /* BookSourceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000080000000000000001 /* BookSourceService.swift */; };
 		A10000090000000000000001 /* ReplaceRuleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A0000000000000001 /* ReplaceRuleService.swift */; };
 		A100000B0000000000000001 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C0000000000000001 /* TTSService.swift */; };
@@ -156,6 +157,7 @@
 		A10000040000000000000001 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		A10000060000000000000001 /* BooksService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BooksService.swift; sourceTree = "<group>"; };
 		D10000020000000000000001 /* BookUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookUploadService.swift; sourceTree = "<group>"; };
+		D10000030000000000000001 /* InlineImageAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineImageAttachment.swift; sourceTree = "<group>"; };
 		A10000080000000000000001 /* BookSourceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSourceService.swift; sourceTree = "<group>"; };
 		A100000A0000000000000001 /* ReplaceRuleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplaceRuleService.swift; sourceTree = "<group>"; };
 		A100000C0000000000000001 /* TTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
@@ -397,6 +399,7 @@
 				A10000040000000000000001 /* AuthService.swift */,
 				A10000060000000000000001 /* BooksService.swift */,
 				D10000020000000000000001 /* BookUploadService.swift */,
+				D10000030000000000000001 /* InlineImageAttachment.swift */,
 				A10000080000000000000001 /* BookSourceService.swift */,
 				A100000A0000000000000001 /* ReplaceRuleService.swift */,
 				A100000C0000000000000001 /* TTSService.swift */,
@@ -547,6 +550,7 @@
 				A10000030000000000000001 /* AuthService.swift in Sources */,
 				A10000050000000000000001 /* BooksService.swift in Sources */,
 				D10000020000000000000002 /* BookUploadService.swift in Sources */,
+				D10000030000000000000002 /* InlineImageAttachment.swift in Sources */,
 				A10000070000000000000001 /* BookSourceService.swift in Sources */,
 				A10000090000000000000001 /* ReplaceRuleService.swift in Sources */,
 				A100000B0000000000000001 /* TTSService.swift in Sources */,
