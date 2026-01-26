@@ -14,6 +14,11 @@ struct HttpTTS: Codable, Identifiable {
     let enabledCookieJar: Bool?
     let loginCheckJs: String?
     let lastUpdateTime: Int64?
+    
+    // 增加一个辅助属性用于 UI 渲染的唯一性，防止后端返回重复 ID
+    var identity: String {
+        return "\(id)_\(name)"
+    }
 
     init(
         id: String,

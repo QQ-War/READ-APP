@@ -11,8 +11,7 @@ struct TTSEngineListView: View {
 
     var body: some View {
         List {
-            ForEach(ttsList.indices, id: \.self) { index in
-                let tts = ttsList[index]
+            ForEach(ttsList, id: \.identity) { tts in
                 NavigationLink(destination: TTSEngineEditView(ttsToEdit: tts)) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(tts.name)

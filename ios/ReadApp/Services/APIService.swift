@@ -275,7 +275,8 @@ class APIService {
 
     private func updateTtsCache(with list: [HttpTTS]) {
         ttsCacheQueue.sync {
-            ttsEngineCache = Dictionary(uniqueKeysWithValues: list.map { ($0.id, $0) })
+            // 使用 uniquingKeysWith 处理重复 ID，防止崩溃
+            ttsEngineCache = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         }
     }
 

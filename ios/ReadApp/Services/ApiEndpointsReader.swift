@@ -22,7 +22,7 @@ enum ApiEndpointsReader {
     static let saveReplaceRules = "saveReplaceRules"
     static let deleteReplaceRule = "deleteReplaceRule"
     static let importBookPreview = "importBookPreview"
-    static let getRssSources = "getRssSourcess"
+    static let getRssSources = "getRssSources"
     static let stopRssSource = "stopRssSource"
     static let saveRssSource = "saveRssSource"
     static let deleteRssSource = "deleteRssSource"

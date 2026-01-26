@@ -53,15 +53,15 @@ struct TTSSelectionView: View {
         .navigationTitle("TTS 引擎")
         .ifAvailableHideTabBar()
         .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: TTSEngineListView()) {
+                    Text("管理")
+                }
+            }
             ToolbarItem(placement: .navigationBarLeading) {
-                HStack {
-                    Button("刷新") {
-                        Task {
-                            await loadTTSList()
-                        }
-                    }
-                    NavigationLink(destination: TTSEngineListView()) {
-                        Text("管理")
+                Button("刷新") {
+                    Task {
+                        await loadTTSList()
                     }
                 }
             }
@@ -83,6 +83,7 @@ struct TTSSelectionView: View {
         }
     }
     
+    @MainActor
     private func loadTTSList() async {
         isLoading = true
         errorMessage = nil
@@ -166,8 +167,7 @@ private extension TTSSelectionView {
     var narrationTTSSection: some View {
         Section {
             Picker("选择旁白 TTS", selection: $preferences.narrationTTSId) {
-                ForEach(ttsList.indices, id: \.self) { index in
-                    let tts = ttsList[index]
+                ForEach(ttsList, id: \.identity) { tts in
                     Text(tts.name).tag(tts.id)
                 }
             }
@@ -182,8 +182,7 @@ private extension TTSSelectionView {
     var dialogueTTSSection: some View {
         Section {
             Picker("选择对话 TTS", selection: $preferences.dialogueTTSId) {
-                ForEach(ttsList.indices, id: \.self) { index in
-                    let tts = ttsList[index]
+                ForEach(ttsList, id: \.identity) { tts in
                     Text(tts.name).tag(tts.id)
                 }
             }
@@ -222,8 +221,7 @@ private extension TTSSelectionView {
                         updateMapping(for: speaker, ttsId: newId)
                     }
                 )) {
-                    ForEach(ttsList.indices, id: \.self) { index in
-                        let tts = ttsList[index]
+                    ForEach(ttsList, id: \.identity) { tts in
                         Text(tts.name).tag(tts.id)
                     }
                 }
