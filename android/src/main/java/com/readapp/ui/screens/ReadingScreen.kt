@@ -754,7 +754,7 @@ private fun rememberPaginatedText(
             text = fullText,
             style = style,
             constraints = Constraints(maxWidth = constraints.maxWidth),
-            placeholders = fullText.placeholders
+            placeholders = inlineResult.placeholders
         )
         if (layout.lineCount == 0) return@remember PaginationResult(emptyList(), fullText)
         val pages = mutableListOf<PaginatedPage>()
@@ -807,7 +807,8 @@ private data class PaginationResult(
 private data class InlineContentResult(
     val text: AnnotatedString,
     val inlineContent: Map<String, InlineTextContent>,
-    val paragraphStarts: List<Int>
+    val paragraphStarts: List<Int>,
+    val placeholders: List<AnnotatedString.Range<Placeholder>>
 )
 
 private fun buildInlineContent(
@@ -819,6 +820,7 @@ private fun buildInlineContent(
 ): InlineContentResult {
     val inlineContent = mutableMapOf<String, InlineTextContent>()
     val paragraphStarts = mutableListOf<Int>()
+    val placeholders = mutableListOf<AnnotatedString.Range<Placeholder>>()
     val builder = AnnotatedString.Builder()
     var current = 0
 
@@ -844,9 +846,8 @@ private fun buildInlineContent(
             val height = width * 0.75f
             val widthSp = with(density) { width.toSp() }
             val heightSp = with(density) { height.toSp() }
-            inlineContent[id] = InlineTextContent(
-                placeholder = Placeholder(width = widthSp, height = heightSp, placeholderVerticalAlign = PlaceholderVerticalAlign.AboveBaseline)
-            ) {
+            val placeholder = Placeholder(width = widthSp, height = heightSp, placeholderVerticalAlign = PlaceholderVerticalAlign.AboveBaseline)
+            inlineContent[id] = InlineTextContent(placeholder = placeholder) {
                 AsyncImage(
                     model = imageUrl,
                     contentDescription = null,
@@ -854,13 +855,14 @@ private fun buildInlineContent(
                     contentScale = ContentScale.FillWidth
                 )
             }
+            placeholders.add(AnnotatedString.Range(placeholder, current - 1, current))
         } else {
             val trimmed = paragraph.trim()
             builder.append(trimmed)
             current += trimmed.length
         }
     }
-    return InlineContentResult(builder.toAnnotatedString(), inlineContent, paragraphStarts)
+    return InlineContentResult(builder.toAnnotatedString(), inlineContent, paragraphStarts, placeholders)
 }
 
 private fun extractImageUrlFromParagraph(text: String): String? {
