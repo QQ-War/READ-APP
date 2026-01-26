@@ -49,7 +49,26 @@ struct Book: Codable, Identifiable {
                 let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
                 return baseURL + "/" + url
             }
+            if url.hasPrefix("/") {
+                let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+                return baseURL + url
+            }
+            if url.hasPrefix("assets/") || url.hasPrefix("book-assets/") {
+                let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+                return baseURL + "/" + url
+            }
             return url
+        }
+        if let bookUrl = bookUrl,
+           bookUrl.lowercased().hasSuffix(".pdf"),
+           UserPreferences.shared.apiBackend == .read {
+            let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+            var components = URLComponents(string: "\(baseURL)/api/v\(APIService.apiVersion)/pdfImage")
+            components?.queryItems = [
+                URLQueryItem(name: "path", value: bookUrl),
+                URLQueryItem(name: "page", value: "0")
+            ]
+            return components?.url?.absoluteString
         }
         return nil
     }
