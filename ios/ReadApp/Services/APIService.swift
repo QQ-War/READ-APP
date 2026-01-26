@@ -13,6 +13,9 @@ struct ChapterContentFetchPolicy {
 class APIService {
     static let shared = APIService()
     static let apiVersion = 5
+
+    private let minValidChapterLength = 200
+    private let invalidCacheMarkers = ["加载失败:", "点击屏幕中心呼出菜单", "服务器错误", "获取章节内容失败"]
     
     private let client: APIClient
     private var ttsEngineCache: [String: HttpTTS] = [:]
@@ -102,8 +105,12 @@ class APIService {
     func fetchChapterContent(bookUrl: String, bookSourceUrl: String?, index: Int, contentType: Int = 0, cachePolicy: ChapterContentFetchPolicy = .standard) async throws -> String {
         // 1. 优先尝试从本地磁盘缓存读取
         if cachePolicy.useDiskCache, let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
-            LogManager.shared.log("章节缓存命中(磁盘): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
-            return cachedContent
+            if shouldUseCachedContent(cachedContent) {
+                LogManager.shared.log("章节缓存命中(磁盘): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
+                return cachedContent
+            } else {
+                LogManager.shared.log("章节缓存忽略(磁盘): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
+            }
         }
         
         return try await withTimeout(seconds: 5) { [weak self] in
@@ -111,8 +118,12 @@ class APIService {
             
             let cacheKey = "\(bookUrl)_\(index)_\(contentType)"
             if cachePolicy.useMemoryCache, let cachedContent = await self.chapterCache.value(for: cacheKey) {
-                LogManager.shared.log("章节缓存命中(内存): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
-                return cachedContent
+                if shouldUseCachedContent(cachedContent) {
+                    LogManager.shared.log("章节缓存命中(内存): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
+                    return cachedContent
+                } else {
+                    LogManager.shared.log("章节缓存忽略(内存): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
+                }
             }
 
             LogManager.shared.log("章节请求开始: index=\(index) type=\(contentType) cache=\(cachePolicy.useDiskCache ? "disk" : "-")/\(cachePolicy.useMemoryCache ? "mem" : "-")", category: "阅读诊断")
@@ -141,10 +152,14 @@ class APIService {
                     LogManager.shared.log("章节内容解析完成: index=\(index) resolvedLen=\(resolvedContent.count)", category: "阅读诊断")
                 }
                 if cachePolicy.saveToCache {
-                    await self.chapterCache.insert(resolvedContent, for: cacheKey)
-                    let shouldCache = (contentType == 2) ? UserPreferences.shared.isMangaAutoCacheEnabled : UserPreferences.shared.isTextAutoCacheEnabled
-                    if shouldCache {
-                        LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: resolvedContent)
+                    if shouldUseCachedContent(resolvedContent) {
+                        await self.chapterCache.insert(resolvedContent, for: cacheKey)
+                        let shouldCache = (contentType == 2) ? UserPreferences.shared.isMangaAutoCacheEnabled : UserPreferences.shared.isTextAutoCacheEnabled
+                        if shouldCache {
+                            LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: resolvedContent)
+                        }
+                    } else {
+                        LogManager.shared.log("章节缓存跳过(内容过短/错误): index=\(index) len=\(resolvedContent.count)", category: "阅读诊断")
                     }
                 }
                 return resolvedContent
@@ -152,6 +167,16 @@ class APIService {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节内容失败"])
             }
         }
+    }
+
+    private func shouldUseCachedContent(_ content: String) -> Bool {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return false }
+        if trimmed.count < minValidChapterLength { return false }
+        for marker in invalidCacheMarkers {
+            if trimmed.contains(marker) { return false }
+        }
+        return true
     }
 
     private func resolveReaderLocalContentIfNeeded(_ content: String) async throws -> String {

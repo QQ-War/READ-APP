@@ -80,8 +80,9 @@ extension ReaderContainerViewController {
         guard loadToken == token else { return }
         defer { self.isInternalTransitioning = false }
         let trimmed = rawContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preview = trimmed.prefix(80).replacingOccurrences(of: "\n", with: " ")
         LogManager.shared.log(
-            "章节渲染准备: index=\(index) manga=\(isManga) rawLen=\(rawContent.count) empty=\(trimmed.isEmpty)",
+            "章节渲染准备: index=\(index) manga=\(isManga) rawLen=\(rawContent.count) empty=\(trimmed.isEmpty) preview=\(preview)",
             category: "阅读诊断"
         )
         var resolvedManga = isManga
