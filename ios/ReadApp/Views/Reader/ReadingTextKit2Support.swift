@@ -38,7 +38,8 @@ class TextKit2RenderStore {
             if let attachment = value as? InlineImageAttachment {
                 attachment.onImageLoaded = { [weak self] in
                     guard let self else { return }
-                    self.layoutManager.invalidateDisplay(for: self.contentStorage.documentRange)
+                    self.layoutManager.invalidateLayout(for: self.contentStorage.documentRange)
+                    self.layoutManager.ensureLayout(for: self.contentStorage.documentRange)
                 }
             }
         }

@@ -78,7 +78,7 @@ extension ReaderContainerViewController {
         guard loadToken == token else { return }
         defer { self.isInternalTransitioning = false }
         let trimmed = rawContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        var resolvedManga = isManga
+        let resolvedManga = isManga
         self.isMangaMode = resolvedManga
         self.onModeDetected?(resolvedManga)
 
