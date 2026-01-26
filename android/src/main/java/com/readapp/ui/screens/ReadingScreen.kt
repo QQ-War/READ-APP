@@ -68,7 +68,8 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.InlineTextContent
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -749,7 +750,12 @@ private fun rememberPaginatedText(
         val inlineResult = buildInlineContent(paragraphs, headerText, headerFontSize, constraints.maxWidth.toFloat(), density)
         val paragraphStartIndices = inlineResult.paragraphStarts
         val fullText = inlineResult.text
-        val layout = textMeasurer.measure(fullText, style, constraints = Constraints(maxWidth = constraints.maxWidth), inlineContent = inlineResult.inlineContent)
+        val layout = textMeasurer.measure(
+            text = fullText,
+            style = style,
+            constraints = Constraints(maxWidth = constraints.maxWidth),
+            placeholders = fullText.placeholders
+        )
         if (layout.lineCount == 0) return@remember PaginationResult(emptyList(), fullText)
         val pages = mutableListOf<PaginatedPage>()
         var startLine = 0
@@ -836,10 +842,10 @@ private fun buildInlineContent(
             current += 1
             val width = maxWidthPx.coerceAtLeast(120f)
             val height = width * 0.75f
-            val widthDp = with(density) { width.toDp() }
-            val heightDp = with(density) { height.toDp() }
+            val widthSp = with(density) { width.toSp() }
+            val heightSp = with(density) { height.toSp() }
             inlineContent[id] = InlineTextContent(
-                placeholder = Placeholder(width = widthDp, height = heightDp, placeholderVerticalAlign = PlaceholderVerticalAlign.AboveBaseline)
+                placeholder = Placeholder(width = widthSp, height = heightSp, placeholderVerticalAlign = PlaceholderVerticalAlign.AboveBaseline)
             ) {
                 AsyncImage(
                     model = imageUrl,
