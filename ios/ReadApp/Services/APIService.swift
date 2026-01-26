@@ -106,10 +106,8 @@ class APIService {
         // 1. 优先尝试从本地磁盘缓存读取
         if cachePolicy.useDiskCache, let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
             if shouldUseCachedContent(cachedContent) {
-                LogManager.shared.log("章节缓存命中(磁盘): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
                 return cachedContent
             } else {
-                LogManager.shared.log("章节缓存忽略(磁盘): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
             }
         }
         
@@ -119,14 +117,11 @@ class APIService {
             let cacheKey = "\(bookUrl)_\(index)_\(contentType)"
             if cachePolicy.useMemoryCache, let cachedContent = await self.chapterCache.value(for: cacheKey) {
                 if shouldUseCachedContent(cachedContent) {
-                    LogManager.shared.log("章节缓存命中(内存): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
                     return cachedContent
                 } else {
-                    LogManager.shared.log("章节缓存忽略(内存): index=\(index) len=\(cachedContent.count)", category: "阅读诊断")
                 }
             }
 
-            LogManager.shared.log("章节请求开始: index=\(index) type=\(contentType) cache=\(cachePolicy.useDiskCache ? "disk" : "-")/\(cachePolicy.useMemoryCache ? "mem" : "-")", category: "阅读诊断")
             var queryItems = [
                 URLQueryItem(name: "accessToken", value: self.accessToken),
                 URLQueryItem(name: "url", value: bookUrl),
@@ -144,13 +139,7 @@ class APIService {
             }
             let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
             if apiResponse.isSuccess, let content = apiResponse.data {
-                LogManager.shared.log("章节请求成功: index=\(index) rawLen=\(content.count)", category: "阅读诊断")
                 let resolvedContent = try await resolveReaderLocalContentIfNeeded(content)
-                if resolvedContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    LogManager.shared.log("章节内容为空(解析后): index=\(index)", category: "阅读诊断")
-                } else if resolvedContent.count != content.count {
-                    LogManager.shared.log("章节内容解析完成: index=\(index) resolvedLen=\(resolvedContent.count)", category: "阅读诊断")
-                }
                 if cachePolicy.saveToCache {
                     if shouldUseCachedContent(resolvedContent) {
                         await self.chapterCache.insert(resolvedContent, for: cacheKey)
@@ -159,7 +148,6 @@ class APIService {
                             LocalCacheManager.shared.saveChapter(bookUrl: bookUrl, index: index, content: resolvedContent)
                         }
                     } else {
-                        LogManager.shared.log("章节缓存跳过(内容过短/错误): index=\(index) len=\(resolvedContent.count)", category: "阅读诊断")
                     }
                 }
                 return resolvedContent

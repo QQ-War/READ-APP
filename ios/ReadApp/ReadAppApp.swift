@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct ReadAppApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     @StateObject private var bookshelfStore = BookshelfStore()
     @StateObject private var sourceStore = SourceStore()
     @StateObject private var preferences = UserPreferences.shared

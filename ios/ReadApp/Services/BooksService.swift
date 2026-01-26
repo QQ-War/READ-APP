@@ -285,28 +285,8 @@ final class BooksService {
             throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的上传URL"])
         }
 
-        let boundary = "Boundary-\(UUID().uuidString)"
-        var request = URLRequest(url: serverURL)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        let fileName = url.lastPathComponent
-        let fileData = try Data(contentsOf: url)
-
-        var body = Data()
-        body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n")
-        body.append("Content-Type: application/octet-stream\r\n\r\n")
-        body.append(fileData)
-        body.append("\r\n")
-        body.append("--\(boundary)--\r\n")
-
         do {
-            let (data, response) = try await URLSession.shared.upload(for: request, from: body)
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "无效的响应类型"])
-            }
+            let (data, httpResponse) = try await BookUploadService.shared.uploadBook(fileURL: url, serverURL: serverURL)
 
             if httpResponse.statusCode != 200 {
                 let errorMsg = String(data: data, encoding: .utf8) ?? "未知服务器错误"
