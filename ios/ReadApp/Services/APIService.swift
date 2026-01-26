@@ -14,7 +14,6 @@ class APIService {
     static let shared = APIService()
     static let apiVersion = 5
 
-    private let minValidChapterLength = 200
     private let invalidCacheMarkers = ["加载失败:", "点击屏幕中心呼出菜单", "服务器错误", "获取章节内容失败"]
     
     private let client: APIClient
@@ -160,7 +159,6 @@ class APIService {
     private func shouldUseCachedContent(_ content: String) -> Bool {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return false }
-        if trimmed.count < minValidChapterLength { return false }
         for marker in invalidCacheMarkers {
             if trimmed.contains(marker) { return false }
         }
