@@ -150,23 +150,29 @@ class APIService {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return content }
         if trimmed.contains("<") { return content }
-        if !trimmed.contains("/book-assets/") { return content }
+        let looksLikeAssetPath = trimmed.contains("/book-assets/")
+        let looksLikeHtmlPath = trimmed.localizedCaseInsensitiveContains(".xhtml") || trimmed.localizedCaseInsensitiveContains(".html")
+        if !looksLikeAssetPath && !looksLikeHtmlPath { return content }
 
         let base = ApiBackendResolver.stripApiBasePath(client.baseURL)
         let publicBase = client.publicBaseURL.map { ApiBackendResolver.stripApiBasePath($0) }
-        let path = trimmed.hasPrefix("/") ? trimmed : "/\(trimmed)"
+        var normalized = trimmed
+        if normalized.hasPrefix("__API_ROOT__") {
+            normalized = normalized.replacingOccurrences(of: "__API_ROOT__", with: "")
+        }
+        let path = normalized.hasPrefix("/") ? normalized : "/\(normalized)"
 
         var candidates: [String] = []
-        if trimmed.contains("://") {
-            candidates.append(trimmed)
-            if let publicBase = publicBase, trimmed.hasPrefix(base) {
-                let replaced = trimmed.replacingOccurrences(of: base, with: publicBase)
-                candidates.append(replaced)
+        if normalized.contains("://") {
+            candidates.append(buildEncodedAbsoluteURL(normalized))
+            if let publicBase = publicBase, normalized.hasPrefix(base) {
+                let replaced = normalized.replacingOccurrences(of: base, with: publicBase)
+                candidates.append(buildEncodedAbsoluteURL(replaced))
             }
         } else {
-            candidates.append(base + path)
+            candidates.append(base + customURLEncodePath(path))
             if let publicBase = publicBase {
-                candidates.append(publicBase + path)
+                candidates.append(publicBase + customURLEncodePath(path))
             }
         }
 
@@ -176,6 +182,46 @@ class APIService {
             }
         }
         return content
+    }
+
+    private func buildEncodedAbsoluteURL(_ urlString: String) -> String {
+        guard let schemeRange = urlString.range(of: "://") else {
+            return customURLEncodePath(urlString)
+        }
+        let scheme = urlString[..<schemeRange.upperBound]
+        let rest = urlString[schemeRange.upperBound...]
+        if let slashIndex = rest.firstIndex(of: "/") {
+            let host = rest[..<slashIndex]
+            let path = rest[slashIndex...]
+            return "\(scheme)\(host)\(customURLEncodePath(String(path)))"
+        }
+        return urlString
+    }
+
+    private func customURLEncodePath(_ input: String) -> String {
+        var result = ""
+        result.reserveCapacity(input.count)
+        let allowed: Set<Unicode.Scalar> = {
+            let symbols = "-._~,!*'()/?&=:@"
+            var set = Set<Unicode.Scalar>()
+            for scalar in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".unicodeScalars {
+                set.insert(scalar)
+            }
+            for scalar in symbols.unicodeScalars {
+                set.insert(scalar)
+            }
+            return set
+        }()
+        for scalar in input.unicodeScalars {
+            if allowed.contains(scalar) {
+                result.unicodeScalars.append(scalar)
+            } else {
+                for byte in String(scalar).utf8 {
+                    result += String(format: "%%%02X", byte)
+                }
+            }
+        }
+        return result
     }
 
     private func fetchTextContent(urlString: String) async -> String? {
