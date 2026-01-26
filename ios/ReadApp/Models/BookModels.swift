@@ -43,7 +43,8 @@ struct Book: Codable, Identifiable {
     }
 
     var displayCoverUrl: String? {
-        if let url = coverUrl, !url.isEmpty {
+        if let url = coverUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty,
+           url.lowercased() != "null", url.lowercased() != "nil", url.lowercased() != "undefined" {
             // 如果是相对路径，拼接完整URL
             if url.hasPrefix("baseurl/") {
                 let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
@@ -59,13 +60,15 @@ struct Book: Codable, Identifiable {
             }
             return url
         }
-        if let bookUrl = bookUrl,
+        if let bookUrl = bookUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !bookUrl.isEmpty,
            bookUrl.lowercased().hasSuffix(".pdf"),
            UserPreferences.shared.apiBackend == .read {
             let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+            let decodedPath = bookUrl.removingPercentEncoding ?? bookUrl
             var components = URLComponents(string: "\(baseURL)/api/v\(APIService.apiVersion)/pdfImage")
             components?.queryItems = [
-                URLQueryItem(name: "path", value: bookUrl),
+                URLQueryItem(name: "path", value: decodedPath),
                 URLQueryItem(name: "page", value: "0")
             ]
             return components?.url?.absoluteString
