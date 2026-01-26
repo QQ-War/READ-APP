@@ -166,7 +166,8 @@ private extension TTSSelectionView {
     var narrationTTSSection: some View {
         Section {
             Picker("选择旁白 TTS", selection: $preferences.narrationTTSId) {
-                ForEach(ttsList) { tts in
+                ForEach(ttsList.indices, id: \.self) { index in
+                    let tts = ttsList[index]
                     Text(tts.name).tag(tts.id)
                 }
             }
@@ -181,7 +182,8 @@ private extension TTSSelectionView {
     var dialogueTTSSection: some View {
         Section {
             Picker("选择对话 TTS", selection: $preferences.dialogueTTSId) {
-                ForEach(ttsList) { tts in
+                ForEach(ttsList.indices, id: \.self) { index in
+                    let tts = ttsList[index]
                     Text(tts.name).tag(tts.id)
                 }
             }
@@ -220,7 +222,8 @@ private extension TTSSelectionView {
                         updateMapping(for: speaker, ttsId: newId)
                     }
                 )) {
-                    ForEach(ttsList) { tts in
+                    ForEach(ttsList.indices, id: \.self) { index in
+                        let tts = ttsList[index]
                         Text(tts.name).tag(tts.id)
                     }
                 }
