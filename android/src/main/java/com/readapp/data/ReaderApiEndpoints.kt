@@ -25,5 +25,7 @@ object ReaderApiEndpoints {
     const val GetRssSources = "getRssSourcess"
     const val StopRssSource = "stopRssSource"
     const val HttpTtsList = "httpTTS/list"
+    const val HttpTtsSave = "httpTTS/save"
+    const val HttpTtsDelete = "httpTTS/delete"
     const val BookTts = "book/tts"
 }

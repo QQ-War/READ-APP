@@ -324,14 +324,30 @@ private class ReaderTtsRemoteDataSource(
         client.runReader(endpoints) { it.getHttpTtsList(accessToken, System.currentTimeMillis()) }
 
     override suspend fun fetchDefaultTts(accessToken: String): Result<String> =
-        Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
+        fetchTtsEngines(accessToken).map { list -> list.firstOrNull()?.id.orEmpty() }
 
     override suspend fun addTts(accessToken: String, tts: HttpTTS): Result<String> =
-        Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
+        client.runReader(endpoints) { it.saveHttpTts(accessToken, System.currentTimeMillis(), tts) }
 
     override suspend fun deleteTts(accessToken: String, id: String): Result<String> =
-        Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
+        client.runReader(endpoints) { it.deleteHttpTts(accessToken, id, System.currentTimeMillis()) }
 
     override suspend fun saveTtsBatch(accessToken: String, json: String): Result<Any> =
-        Result.failure(UnsupportedOperationException("当前服务端不支持TTS"))
+        runCatching {
+            val gson = com.google.gson.GsonBuilder()
+                .registerTypeAdapter(HttpTTS::class.java, com.readapp.data.model.HttpTtsAdapter())
+                .serializeNulls()
+                .create()
+            val list = gson.fromJson(json, Array<HttpTTS>::class.java)?.toList()
+            if (!list.isNullOrEmpty()) {
+                list.forEach { addTts(accessToken, it).getOrThrow() }
+                return@runCatching Any()
+            }
+            val single = gson.fromJson(json, HttpTTS::class.java)
+            addTts(accessToken, single).getOrThrow()
+            Any()
+        }.fold(
+            onSuccess = { Result.success(it) },
+            onFailure = { Result.failure(it) }
+        )
 }

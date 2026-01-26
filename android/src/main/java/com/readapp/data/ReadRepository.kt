@@ -34,6 +34,7 @@ class ReadRepository(
 ) {
 
     private val gson = Gson()
+    private val httpClient = okhttp3.OkHttpClient.Builder().build()
     private val SOURCES_CACHE_FILE = "sources_cache.json"
     private val failoverClient = FailoverClient(apiFactory, readerApiFactory)
 
@@ -83,7 +84,12 @@ class ReadRepository(
             ApiBackend.Read -> executeWithFailover { it.getBookshelf(accessToken) }(endpoints)
             ApiBackend.Reader -> executeWithFailoverReader { it.getBookshelf(accessToken) }(endpoints)
         }
-        return result.map { list -> list.map { book -> book.toUiModel() } }
+        return result.map { list ->
+            list.map { book ->
+                val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                book.copy(coverUrl = resolvedCover).toUiModel()
+            }
+        }
     }
 
     suspend fun fetchChapterList(
@@ -118,9 +124,18 @@ class ReadRepository(
             ApiBackend.Read -> executeWithFailover {
                 it.getBookContent(accessToken, bookUrl, index, contentType, bookSourceUrl)
             }(endpoints)
-            ApiBackend.Reader -> executeWithFailoverReader {
-                it.getBookContent(accessToken, bookUrl, index, contentType, bookSourceUrl)
-            }(endpoints)
+            ApiBackend.Reader -> {
+                val result = executeWithFailoverReader {
+                    it.getBookContent(accessToken, bookUrl, index, contentType, bookSourceUrl)
+                }(endpoints)
+                result.fold(
+                    onSuccess = { raw ->
+                        val resolved = resolveReaderLocalContentIfNeeded(raw, baseUrl, publicUrl)
+                        Result.success(resolved)
+                    },
+                    onFailure = { error -> Result.failure(error) }
+                )
+            }
         }
     }
 
@@ -488,10 +503,20 @@ class ReadRepository(
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.exploreBook(accessToken, bookSourceUrl, ruleFindUrl, page)
-            }(endpoints)
+            }(endpoints).map { list ->
+                list.map { book ->
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                    book.copy(coverUrl = resolvedCover)
+                }
+            }
             ApiBackend.Reader -> executeWithFailoverReader {
                 it.exploreBook(accessToken, bookSourceUrl, ruleFindUrl, page)
-            }(endpoints)
+            }(endpoints).map { list ->
+                list.map { book ->
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                    book.copy(coverUrl = resolvedCover)
+                }
+            }
         }
     }
 
@@ -568,10 +593,20 @@ class ReadRepository(
         return when (backend) {
             ApiBackend.Read -> executeWithFailover {
                 it.searchBook(accessToken, keyword, bookSourceUrl, page)
-            }(endpoints)
+            }(endpoints).map { list ->
+                list.map { book ->
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                    book.copy(coverUrl = resolvedCover)
+                }
+            }
             ApiBackend.Reader -> executeWithFailoverReader {
                 it.searchBook(accessToken, keyword, bookSourceUrl, page)
-            }(endpoints)
+            }(endpoints).map { list ->
+                list.map { book ->
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                    book.copy(coverUrl = resolvedCover)
+                }
+            }
         }
     }
 
@@ -691,6 +726,97 @@ class ReadRepository(
 
     private fun formatDecimal(value: Double): String =
         String.format(Locale.US, "%.2f", value)
+
+    private fun resolveCoverUrl(baseUrl: String, coverUrl: String?): String? {
+        if (coverUrl.isNullOrBlank()) return coverUrl
+        val trimmed = coverUrl.trim()
+        if (trimmed.equals("null", true) || trimmed.equals("nil", true) || trimmed.equals("undefined", true)) {
+            return null
+        }
+        val root = stripApiBasePath(baseUrl)
+        return when {
+            trimmed.startsWith("baseurl/") -> "$root/$trimmed"
+            trimmed.startsWith("/") -> root + trimmed
+            trimmed.startsWith("assets/") || trimmed.startsWith("book-assets/") -> "$root/$trimmed"
+            else -> trimmed
+        }
+    }
+
+    private suspend fun resolveReaderLocalContentIfNeeded(rawContent: String, baseUrl: String, publicUrl: String?): String {
+        if (rawContent.isBlank()) return rawContent
+        val trimmed = rawContent.trim()
+        if (trimmed.isEmpty()) return rawContent
+        if (trimmed.contains("<")) return rawContent
+
+        val looksLikeAsset = trimmed.contains("/book-assets/")
+        val looksLikeHtml = trimmed.contains(".xhtml", ignoreCase = true) || trimmed.contains(".html", ignoreCase = true)
+        if (!looksLikeAsset && !looksLikeHtml) return rawContent
+
+        val baseRoot = stripApiBasePath(baseUrl)
+        val publicRoot = publicUrl?.takeIf { it.isNotBlank() }?.let { stripApiBasePath(it) }
+        var normalized = trimmed
+        if (normalized.startsWith("__API_ROOT__")) {
+            normalized = normalized.removePrefix("__API_ROOT__")
+        }
+        val path = if (normalized.startsWith("/")) normalized else "/$normalized"
+
+        val candidates = mutableListOf<String>()
+        if (normalized.contains("://")) {
+            candidates.add(buildEncodedAbsoluteUrl(normalized))
+            if (publicRoot != null && normalized.startsWith(baseRoot)) {
+                candidates.add(buildEncodedAbsoluteUrl(normalized.replaceFirst(baseRoot, publicRoot)))
+            }
+        } else {
+            candidates.add(baseRoot + customURLEncodePath(path))
+            if (publicRoot != null) {
+                candidates.add(publicRoot + customURLEncodePath(path))
+            }
+        }
+
+        for (url in candidates.distinct()) {
+            val fetched = fetchTextContent(url)
+            if (!fetched.isNullOrBlank()) return fetched
+        }
+        return rawContent
+    }
+
+    private fun buildEncodedAbsoluteUrl(urlString: String): String {
+        val schemeIndex = urlString.indexOf("://")
+        if (schemeIndex <= 0) return customURLEncodePath(urlString)
+        val scheme = urlString.substring(0, schemeIndex + 3)
+        val rest = urlString.substring(schemeIndex + 3)
+        val slashIndex = rest.indexOf('/')
+        if (slashIndex < 0) return urlString
+        val host = rest.substring(0, slashIndex)
+        val path = rest.substring(slashIndex)
+        return scheme + host + customURLEncodePath(path)
+    }
+
+    private fun customURLEncodePath(input: String): String {
+        val allowed = "-._~,!*'()/?&=:@"
+        val sb = StringBuilder(input.length)
+        input.forEach { ch ->
+            val isAllowed = ch.isLetterOrDigit() || allowed.indexOf(ch) >= 0
+            if (isAllowed) {
+                sb.append(ch)
+            } else {
+                ch.toString().toByteArray().forEach { byte ->
+                    sb.append(String.format("%%%02X", byte))
+                }
+            }
+        }
+        return sb.toString()
+    }
+
+    private suspend fun fetchTextContent(url: String): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val request = okhttp3.Request.Builder().url(url).get().build()
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                response.body?.string()
+            }
+        }.getOrNull()
+    }
 
     private fun <T> executeWithFailoverReader(block: suspend (ReaderApiService) -> Response<ApiResponse<T>>):
             suspend (List<String>) -> Result<T> = lambda@ { endpoints: List<String> ->

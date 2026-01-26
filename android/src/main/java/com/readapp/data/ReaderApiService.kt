@@ -26,6 +26,7 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Query
+import com.readapp.data.model.HttpTtsAdapter
 
 interface ReaderApiService {
     @POST(ReaderApiEndpoints.Login)
@@ -163,6 +164,20 @@ interface ReaderApiService {
         @Query("v") version: Long,
     ): Response<ApiResponse<List<HttpTTS>>>
 
+    @POST(ReaderApiEndpoints.HttpTtsSave)
+    suspend fun saveHttpTts(
+        @Query("accessToken") accessToken: String,
+        @Query("v") version: Long,
+        @Body tts: HttpTTS,
+    ): Response<ApiResponse<String>>
+
+    @GET(ReaderApiEndpoints.HttpTtsDelete)
+    suspend fun deleteHttpTts(
+        @Query("accessToken") accessToken: String,
+        @Query("id") id: String,
+        @Query("v") version: Long,
+    ): Response<ApiResponse<String>>
+
     @POST(ReaderApiEndpoints.BookTts)
     suspend fun requestBookTts(
         @Query("accessToken") accessToken: String,
@@ -212,6 +227,7 @@ interface ReaderApiService {
                 .addConverterFactory(
                     GsonConverterFactory.create(
                         GsonBuilder()
+                            .registerTypeAdapter(HttpTTS::class.java, HttpTtsAdapter())
                             .serializeNulls()
                             .create()
                     )
