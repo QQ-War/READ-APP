@@ -24,6 +24,10 @@ Chinese README: `README_CN.md`
 - After the cooldown, if TTS is not within the current page, TTS restarts from the current page start; if it is within the page, playback continues without restart.
 - The cooldown duration is configurable in TTS Settings (“TTS follow cooldown”).
 
+## PDF Images & Inline Layout (iOS)
+- PDF images use direct `/pdfImage` requests to avoid response parsing errors caused by complex headers.
+- Inline images are rendered via TextKit 2 `NSTextAttachment`, keeping TTS offsets and paging behavior stable.
+
 ## Build
 - iOS: open `ios/ReadApp.xcodeproj` in Xcode
 - Android: open `android/` in Android Studio

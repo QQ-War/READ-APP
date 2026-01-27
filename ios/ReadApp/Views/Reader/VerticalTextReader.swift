@@ -5,6 +5,9 @@ import UIKit
 struct VerticalTextReader: UIViewControllerRepresentable {
     let sentences: [String]; let fontSize: CGFloat; let lineSpacing: CGFloat; let horizontalMargin: CGFloat; let highlightIndex: Int?; let secondaryIndices: Set<Int>; let isPlayingHighlight: Bool; let chapterUrl: String?
     let title: String?; let nextTitle: String?; let prevTitle: String?
+    let renderStore: TextKit2RenderStore?; let paragraphStarts: [Int]
+    let nextRenderStore: TextKit2RenderStore?; let nextParagraphStarts: [Int]
+    let prevRenderStore: TextKit2RenderStore?; let prevParagraphStarts: [Int]
     let verticalThreshold: CGFloat
     let verticalDampingFactor: CGFloat
     @Binding var currentVisibleIndex: Int; @Binding var pendingScrollIndex: Int?
@@ -30,7 +33,26 @@ struct VerticalTextReader: UIViewControllerRepresentable {
         vc.threshold = verticalThreshold
         vc.dampingFactor = verticalDampingFactor
         
-        let changed = vc.update(sentences: sentences, nextSentences: nextChapterSentences, prevSentences: prevChapterSentences, title: title, nextTitle: nextTitle, prevTitle: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing, margin: horizontalMargin, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlayingHighlight)
+        let changed = vc.update(
+            sentences: sentences,
+            nextSentences: nextChapterSentences,
+            prevSentences: prevChapterSentences,
+            title: title,
+            nextTitle: nextTitle,
+            prevTitle: prevTitle,
+            fontSize: fontSize,
+            lineSpacing: lineSpacing,
+            margin: horizontalMargin,
+            highlightIndex: highlightIndex,
+            secondaryIndices: secondaryIndices,
+            isPlaying: isPlayingHighlight,
+            renderStore: renderStore,
+            paragraphStarts: paragraphStarts,
+            nextRenderStore: nextRenderStore,
+            nextParagraphStarts: nextParagraphStarts,
+            prevRenderStore: prevRenderStore,
+            prevParagraphStarts: prevParagraphStarts
+        )
         
         if forceScrollToTop {
             vc.scrollToTop(animated: false); DispatchQueue.main.async { onScrollFinished?() }
@@ -171,7 +193,26 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
 
     @discardableResult
-    func update(sentences: [String], nextSentences: [String]?, prevSentences: [String]?, title: String?, nextTitle: String?, prevTitle: String?, fontSize: CGFloat, lineSpacing: CGFloat, margin: CGFloat, highlightIndex: Int?, secondaryIndices: Set<Int>, isPlaying: Bool) -> Bool {
+    func update(
+        sentences: [String],
+        nextSentences: [String]?,
+        prevSentences: [String]?,
+        title: String?,
+        nextTitle: String?,
+        prevTitle: String?,
+        fontSize: CGFloat,
+        lineSpacing: CGFloat,
+        margin: CGFloat,
+        highlightIndex: Int?,
+        secondaryIndices: Set<Int>,
+        isPlaying: Bool,
+        renderStore: TextKit2RenderStore?,
+        paragraphStarts: [Int],
+        nextRenderStore: TextKit2RenderStore?,
+        nextParagraphStarts: [Int],
+        prevRenderStore: TextKit2RenderStore?,
+        prevParagraphStarts: [Int]
+    ) -> Bool {
         let marginChanged = self.lastMargin != margin
         self.lastMargin = margin
         
@@ -193,24 +234,33 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         var layoutNeeded = modeChanged // 关键：如果模式变了，必须重新布局
         
-        if contentChanged || renderStore == nil {
+        if contentChanged || self.renderStore == nil || (renderStore != nil && self.renderStore !== renderStore) {
             self.previousContentHeight = currentContentView.frame.height
             self.currentSentences = trimmedSentences; self.lastFontSize = fontSize; self.lastLineSpacing = lineSpacing; isUpdatingLayout = true
-            
-            let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
-            let titleLen = titleText.utf16.count
-            var pS: [Int] = []; var cP = titleLen
-            for (idx, s) in trimmedSentences.enumerated() { 
-                pS.append(cP)
-                cP += (s.utf16.count + 2) 
-                if idx < trimmedSentences.count - 1 { cP += 1 } 
-            }; paragraphStarts = pS
-            
-            let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
-            if let s = renderStore { s.update(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) } 
-            else { renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
+
+            if let externalStore = renderStore {
+                self.renderStore = externalStore
+                if !paragraphStarts.isEmpty {
+                    self.paragraphStarts = paragraphStarts
+                }
+                let width = max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)
+                externalStore.update(attributedString: externalStore.attributedString, layoutWidth: width)
+            } else {
+                let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
+                let titleLen = titleText.utf16.count
+                var pS: [Int] = []; var cP = titleLen
+                for (idx, s) in trimmedSentences.enumerated() {
+                    pS.append(cP)
+                    cP += (s.utf16.count + 2)
+                    if idx < trimmedSentences.count - 1 { cP += 1 }
+                }; paragraphStarts = pS
+                
+                let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
+                if let s = self.renderStore { s.update(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
+                else { self.renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
+            }
             calculateSentenceOffsets(); isUpdatingLayout = false
-            currentContentView.update(renderStore: renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, highlightRange: nil, paragraphStarts: paragraphStarts, margin: margin, forceRedraw: true)
+            currentContentView.update(renderStore: self.renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, highlightRange: nil, paragraphStarts: self.paragraphStarts, margin: margin, forceRedraw: true)
             layoutNeeded = true
         }
         
@@ -220,10 +270,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 nextRenderStore = nil
                 nextContentView.isHidden = true
             } else {
-                let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
-                if let s = nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
-                else { nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                nextContentView.update(renderStore: nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, highlightRange: nil, paragraphStarts: [], margin: margin, forceRedraw: true)
+                if let externalStore = nextRenderStore {
+                    self.nextRenderStore = externalStore
+                    let width = max(100, view.bounds.width - margin * 2)
+                    externalStore.update(attributedString: externalStore.attributedString, layoutWidth: width)
+                } else {
+                    let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
+                    if let s = self.nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                    else { self.nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                }
+                nextContentView.update(renderStore: self.nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, highlightRange: nil, paragraphStarts: nextParagraphStarts, margin: margin, forceRedraw: true)
             }
             layoutNeeded = true
         }
@@ -234,10 +290,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 prevRenderStore = nil
                 prevContentView.isHidden = true
             } else {
-                let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
-                if let s = prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) } 
-                else { prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                prevContentView.update(renderStore: prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, highlightRange: nil, paragraphStarts: [], margin: margin, forceRedraw: true)
+                if let externalStore = prevRenderStore {
+                    self.prevRenderStore = externalStore
+                    let width = max(100, view.bounds.width - margin * 2)
+                    externalStore.update(attributedString: externalStore.attributedString, layoutWidth: width)
+                } else {
+                    let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
+                    if let s = self.prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                    else { self.prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                }
+                prevContentView.update(renderStore: self.prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, highlightRange: nil, paragraphStarts: prevParagraphStarts, margin: margin, forceRedraw: true)
             }
             layoutNeeded = true
         }
