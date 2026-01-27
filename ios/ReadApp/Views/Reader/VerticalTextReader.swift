@@ -268,7 +268,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                     pS.append(cP)
                     cP += (s.utf16.count + 2)
                     if idx < trimmedSentences.count - 1 { cP += 1 }
-                }; paragraphStarts = pS
+                }
+                self.paragraphStarts = pS
                 
                 let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
                 if let s = self.renderStore { s.update(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
@@ -282,7 +283,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if nextChanged {
             self.nextSentences = trimmedNextSentences
             if trimmedNextSentences.isEmpty {
-                nextRenderStore = nil
+                self.nextRenderStore = nil
                 nextContentView.isHidden = true
             } else {
                 if let externalStore = nextRenderStore {
@@ -302,7 +303,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if prevChanged {
             self.prevSentences = trimmedPrevSentences
             if trimmedPrevSentences.isEmpty {
-                prevRenderStore = nil
+                self.prevRenderStore = nil
                 prevContentView.isHidden = true
             } else {
                 if let externalStore = prevRenderStore {
