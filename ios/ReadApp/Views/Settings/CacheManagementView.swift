@@ -41,6 +41,7 @@ struct CacheManagementView: View {
         AnyView(
             List {
                 strategySection
+                mangaDownloadSection
                 downloadingSection
                 storageSection
                 cachedBooksSection
@@ -55,6 +56,32 @@ struct CacheManagementView: View {
             Toggle("文字章节自动离线", isOn: $preferences.isTextAutoCacheEnabled)
             Toggle("漫画图片自动离线", isOn: $preferences.isMangaAutoCacheEnabled)
             Toggle("漫画后台预载", isOn: $preferences.isMangaPreloadEnabled)
+        }
+    }
+
+    private var mangaDownloadSection: some View {
+        Section(header: Text("漫画下载设置")) {
+            HStack {
+                Text("图片并发数")
+                Spacer()
+                Text("\(preferences.mangaImageMaxConcurrent)")
+                    .foregroundColor(.secondary)
+            }
+            Stepper("", value: $preferences.mangaImageMaxConcurrent, in: 1...6)
+            Text("并发越大加载越快，但更容易超时")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            HStack {
+                Text("图片超时")
+                Spacer()
+                Text("\(Int(preferences.mangaImageTimeout)) 秒")
+                    .foregroundColor(.secondary)
+            }
+            Stepper("", value: $preferences.mangaImageTimeout, in: 5...60, step: 5)
+            Text("超时越大越稳，但等待更久")
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
     }
     

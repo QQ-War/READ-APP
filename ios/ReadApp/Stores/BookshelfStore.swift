@@ -24,6 +24,9 @@ final class BookshelfStore: ObservableObject {
             books = fetched
             LocalCacheManager.shared.saveBookshelfCache(fetched)
         } catch {
+            if Task.isCancelled || error is CancellationError {
+                return
+            }
             errorMessage = error.localizedDescription
         }
     }

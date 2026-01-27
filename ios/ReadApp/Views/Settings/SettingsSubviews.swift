@@ -198,33 +198,6 @@ struct ReadingSettingsView: View {
                     }
                     .padding(.vertical, 4)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("漫画图片并发数")
-                            Spacer()
-                            Text("\(preferences.mangaImageMaxConcurrent)")
-                                .foregroundColor(.secondary)
-                        }
-                        Stepper("", value: $preferences.mangaImageMaxConcurrent, in: 1...6)
-                        Text("并发越大加载越快，但更容易超时")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("漫画图片超时")
-                            Spacer()
-                            Text("\(Int(preferences.mangaImageTimeout)) 秒")
-                                .foregroundColor(.secondary)
-                        }
-                        Stepper("", value: $preferences.mangaImageTimeout, in: 5...60, step: 5)
-                        Text("超时越大越稳，但等待更久")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
                 }
             }
             
