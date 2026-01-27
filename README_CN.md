@@ -27,6 +27,7 @@ English README: `README.md`
 ## PDF 图片与图文混排（iOS）
 - PDF 图片通过 `/pdfImage` 直连获取，避免附加复杂请求头导致响应解析失败。
 - 图文混排使用 TextKit2 的内联图片（`NSTextAttachment`）渲染，保持 TTS 的字符偏移与自动翻页逻辑不变。
+- 内联图片支持点击全屏预览并可缩放查看细节。
 
 ## 构建
 - iOS：用 Xcode 打开 `ios/ReadApp.xcodeproj`

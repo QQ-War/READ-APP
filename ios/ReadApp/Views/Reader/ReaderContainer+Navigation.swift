@@ -372,6 +372,9 @@ private extension ReaderContainerViewController {
             pV.pageInfo = TK2PageInfo(range: info.range, yOffset: info.yOffset, pageHeight: info.pageHeight, actualContentHeight: info.actualContentHeight, startSentenceIndex: info.startSentenceIndex, contentInset: currentLayoutSpec.topInset)
         }
         pV.onTapLocation = { [weak self] loc in if loc == .middle { self?.safeToggleMenu() } else { self?.handlePageTap(isNext: loc == .right) } }
+        pV.onImageTapped = { [weak self] url in
+            self?.presentImagePreview(url: url)
+        }
         pV.onAddReplaceRule = { [weak self] text in self?.onAddReplaceRuleWithText?(text) }
         pV.horizontalInset = currentLayoutSpec.sideMargin
         pV.paragraphStarts = aPS

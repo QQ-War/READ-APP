@@ -196,6 +196,9 @@ extension ReaderContainerViewController {
     func setupNewHorizontalMode() {
         let vc = HorizontalCollectionViewController()
         vc.delegate = self
+        vc.onImageTapped = { [weak self] url in
+            self?.presentImagePreview(url: url)
+        }
         addChild(vc)
         view.insertSubview(vc.view, at: 0)
         vc.view.frame = view.bounds
@@ -281,6 +284,9 @@ extension ReaderContainerViewController {
         v.threshold = verticalThreshold
         v.seamlessSwitchThreshold = readerSettings.infiniteScrollSwitchThreshold
         v.dampingFactor = readerSettings.verticalDampingFactor
+        v.onImageTapped = { [weak self] url in
+            self?.presentImagePreview(url: url)
+        }
         self.verticalVC = v
         addChild(v); view.insertSubview(v.view, at: 0); v.view.frame = view.bounds; v.didMove(toParent: self); v.safeAreaTop = safeAreaTop
 

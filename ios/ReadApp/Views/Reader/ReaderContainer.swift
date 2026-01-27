@@ -1249,4 +1249,16 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             self.requestChapterSwitch(offset: offset, preferSeamless: true)
         }
     }
+
+    func presentImagePreview(url: URL) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.presentedViewController is ImagePreviewViewController {
+                return
+            }
+            let vc = ImagePreviewViewController(imageURL: url)
+            vc.modalPresentationStyle = .fullScreen
+            self.present(vc, animated: true)
+        }
+    }
 }

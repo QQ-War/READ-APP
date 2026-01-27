@@ -235,6 +235,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     
     var horizontalInset: CGFloat = 16
     var onTapLocation: ((ReaderTapLocation) -> Void)?
+    var onImageTapped: ((URL) -> Void)?
     
     var onAddReplaceRule: ((String) -> Void)?
     var highlightIndex: Int? { didSet { setNeedsDisplay() } }
@@ -266,7 +267,15 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     }
     
     @objc private func handleTap(_ g: UITapGestureRecognizer) {
-        let x = g.location(in: self).x
+        let point = g.location(in: self)
+        if let store = renderStore {
+            let adjusted = CGPoint(x: point.x - horizontalInset, y: point.y)
+            if let url = InlineImageHitTester.imageURL(at: adjusted, in: store) {
+                onImageTapped?(url)
+                return
+            }
+        }
+        let x = point.x
         if x < bounds.width * 0.3 { onTapLocation?(.left) }
         else if x > bounds.width * 0.7 { onTapLocation?(.right) }
         else { onTapLocation?(.middle) }
@@ -362,5 +371,29 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         guard trimmed.count > limit else { return trimmed }
         let endIndex = trimmed.index(trimmed.startIndex, offsetBy: limit)
         return String(trimmed[..<endIndex]) + "…"
+    }
+}
+
+enum InlineImageHitTester {
+    static func imageURL(at point: CGPoint, in store: TextKit2RenderStore) -> URL? {
+        let lm = store.layoutManager
+        guard let fragment = lm.textLayoutFragment(for: point) else { return nil }
+        let fragmentOrigin = fragment.layoutFragmentFrame.origin
+        for line in fragment.textLineFragments {
+            let rect = line.typographicBounds.offsetBy(dx: fragmentOrigin.x, dy: fragmentOrigin.y)
+            if rect.contains(point) {
+                let fragmentStart = store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: fragment.rangeInElement.location)
+                let lineRange = NSRange(location: fragmentStart + line.characterRange.location, length: line.characterRange.length)
+                var found: URL?
+                store.attributedString.enumerateAttribute(.attachment, in: lineRange, options: []) { value, _, stop in
+                    if let attachment = value as? InlineImageAttachment {
+                        found = attachment.imageURL
+                        stop.pointee = true
+                    }
+                }
+                return found
+            }
+        }
+        return nil
     }
 }

@@ -17,6 +17,7 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     let chapterOffset: Int
     let onAddReplaceRule: ((String) -> Void)?
     let onTapLocation: ((ReaderTapLocation) -> Void)?
+    let onImageTapped: ((URL) -> Void)?
     
     // Highlight state
     var highlightIndex: Int?
@@ -28,7 +29,7 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
     private var tk2View: ReadContent2View?
     private var pendingPageInfo: TK2PageInfo?
     
-    init(pageIndex: Int, renderStore: TextKit2RenderStore?, sentences: [String]? = nil, chapterUrl: String? = nil, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?) {
+    init(pageIndex: Int, renderStore: TextKit2RenderStore?, sentences: [String]? = nil, chapterUrl: String? = nil, chapterOffset: Int, onAddReplaceRule: ((String) -> Void)?, onTapLocation: ((ReaderTapLocation) -> Void)?, onImageTapped: ((URL) -> Void)? = nil) {
         self.pageIndex = pageIndex
         self.renderStore = renderStore
         self.sentences = sentences
@@ -36,6 +37,7 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
         self.chapterOffset = chapterOffset
         self.onAddReplaceRule = onAddReplaceRule
         self.onTapLocation = onTapLocation
+        self.onImageTapped = onImageTapped
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -54,6 +56,7 @@ class ReadContentViewController: UIViewController, UIGestureRecognizerDelegate {
          v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
          v.renderStore = store
          v.onTapLocation = onTapLocation
+         v.onImageTapped = onImageTapped
          v.onAddReplaceRule = onAddReplaceRule
          v.highlightIndex = highlightIndex
          v.secondaryIndices = secondaryIndices

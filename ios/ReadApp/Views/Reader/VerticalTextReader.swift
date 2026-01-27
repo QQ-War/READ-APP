@@ -5,13 +5,13 @@ import UIKit
 struct VerticalTextReader: UIViewControllerRepresentable {
     let sentences: [String]; let fontSize: CGFloat; let lineSpacing: CGFloat; let horizontalMargin: CGFloat; let highlightIndex: Int?; let secondaryIndices: Set<Int>; let isPlayingHighlight: Bool; let chapterUrl: String?
     let title: String?; let nextTitle: String?; let prevTitle: String?
-    let renderStore: TextKit2RenderStore?; let paragraphStarts: [Int]
-    let nextRenderStore: TextKit2RenderStore?; let nextParagraphStarts: [Int]
-    let prevRenderStore: TextKit2RenderStore?; let prevParagraphStarts: [Int]
+    let renderStore: TextKit2RenderStore? = nil; let paragraphStarts: [Int] = []
+    let nextRenderStore: TextKit2RenderStore? = nil; let nextParagraphStarts: [Int] = []
+    let prevRenderStore: TextKit2RenderStore? = nil; let prevParagraphStarts: [Int] = []
     let verticalThreshold: CGFloat
     let verticalDampingFactor: CGFloat
     @Binding var currentVisibleIndex: Int; @Binding var pendingScrollIndex: Int?
-    var forceScrollToTop: Bool = false; var onScrollFinished: (() -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
+    var forceScrollToTop: Bool = false; var onScrollFinished: (() -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?; var onImageTapped: ((URL) -> Void)?
     var safeAreaTop: CGFloat = 0
     
     // 无限流扩展
@@ -27,7 +27,7 @@ struct VerticalTextReader: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ vc: VerticalTextViewController, context: Context) {
-        vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; vc.safeAreaTop = safeAreaTop
+        vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; vc.onImageTapped = onImageTapped; vc.safeAreaTop = safeAreaTop
         vc.onReachedBottom = onReachedBottom; vc.onReachedTop = onReachedTop; vc.onChapterSwitched = onChapterSwitched
         vc.onInteractionChanged = onInteractionChanged
         vc.threshold = verticalThreshold
@@ -91,7 +91,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private let chapterGap: CGFloat = 80
     private var lastInfiniteSetting: Bool?
 
-    var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?
+    var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?; var onImageTapped: ((URL) -> Void)?
     var onReachedBottom: (() -> Void)?; var onReachedTop: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
@@ -141,7 +141,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         scrollView.addSubview(nextContentView)
         setupSwitchHint()
         
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         tap.delegate = self
         scrollView.addGestureRecognizer(tap)
         
@@ -164,11 +164,26 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
-    @objc private func handleTap() {
+    @objc private func handleTap(_ g: UITapGestureRecognizer) {
+        let point = g.location(in: scrollView)
+        if let url = imageURLForTap(point) {
+            onImageTapped?(url)
+            return
+        }
         pendingSeamlessSwitch = 0
         suppressAutoSwitchUntil = Date().timeIntervalSince1970 + 0.6
         cancelSwitchHold()
         onTapMenu?()
+    }
+
+    private func imageURLForTap(_ point: CGPoint) -> URL? {
+        let isInPrev = !prevContentView.isHidden && point.y < currentContentView.frame.minY
+        let isInNext = !nextContentView.isHidden && point.y >= nextContentView.frame.minY
+        let targetView = isInPrev ? prevContentView : (isInNext ? nextContentView : currentContentView)
+        let store = isInPrev ? prevRenderStore : (isInNext ? nextRenderStore : renderStore)
+        guard let store = store else { return nil }
+        let local = CGPoint(x: point.x - targetView.frame.minX, y: point.y - targetView.frame.minY)
+        return InlineImageHitTester.imageURL(at: local, in: store)
     }
     @objc private func handleLongPress(_ g: UILongPressGestureRecognizer) {
         guard g.state == .began else { return }

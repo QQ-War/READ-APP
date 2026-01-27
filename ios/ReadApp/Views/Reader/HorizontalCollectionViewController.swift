@@ -92,6 +92,7 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
 class HorizontalCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     
     weak var delegate: HorizontalCollectionViewDelegate?
+    var onImageTapped: ((URL) -> Void)?
     
     var pages: [PaginatedPage] = []
     var pageInfos: [TK2PageInfo] = []
@@ -230,6 +231,9 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
             case .right: self.delegate?.horizontalCollectionView(self, didTapRight: true)
             }
         }
+        cell.onImageTapped = { [weak self] url in
+            self?.onImageTapped?(url)
+        }
         
         return cell
     }
@@ -334,6 +338,7 @@ class ReaderPageCell: UICollectionViewCell {
     private let contentView2 = ReadContent2View(frame: .zero)
     
     var onTapLocation: ((ReaderTapLocation) -> Void)?
+    var onImageTapped: ((URL) -> Void)?
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -351,6 +356,9 @@ class ReaderPageCell: UICollectionViewCell {
         
         contentView2.onTapLocation = { [weak self] loc in
             self?.onTapLocation?(loc)
+        }
+        contentView2.onImageTapped = { [weak self] url in
+            self?.onImageTapped?(url)
         }
     }
     

@@ -27,6 +27,7 @@ Chinese README: `README_CN.md`
 ## PDF Images & Inline Layout (iOS)
 - PDF images use direct `/pdfImage` requests to avoid response parsing errors caused by complex headers.
 - Inline images are rendered via TextKit 2 `NSTextAttachment`, keeping TTS offsets and paging behavior stable.
+- Inline images can be tapped to open a full-screen zoomable preview.
 
 ## Build
 - iOS: open `ios/ReadApp.xcodeproj` in Xcode
