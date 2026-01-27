@@ -335,11 +335,6 @@ struct MangaImageView: View {
     }
     
     private func resolveURL(_ original: String) -> URL? {
-        if original.hasPrefix("http") {
-            return URL(string: original)
-        }
-        let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
-        let resolved = original.hasPrefix("/") ? (baseURL + original) : (baseURL + "/" + original)
-        return URL(string: resolved)
+        MangaImageService.shared.resolveImageURL(original)
     }
 }

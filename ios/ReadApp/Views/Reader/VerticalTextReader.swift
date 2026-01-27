@@ -1117,7 +1117,11 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             iv.contentMode = .scaleAspectFit
             iv.clipsToBounds = true
             iv.backgroundColor = UIColor.white.withAlphaComponent(0.05)
+            iv.translatesAutoresizingMaskIntoConstraints = false
             stackView.addArrangedSubview(iv)
+            let placeholderConstraint = iv.heightAnchor.constraint(equalToConstant: 300)
+            placeholderConstraint.priority = .defaultHigh
+            placeholderConstraint.isActive = true
             
             let urlStr2 = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
             guard let resolved = MangaImageService.shared.resolveImageURL(urlStr2) else { continue }
@@ -1129,6 +1133,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                let image = UIImage(data: cachedData) {
                 iv.image = image
                 let ratio = image.size.height / image.size.width
+                placeholderConstraint.isActive = false
                 iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
                 if self.pendingScrollIndex == index {
                     self.scrollToIndex(index, animated: false)
@@ -1149,7 +1154,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                         guard iv.superview == self.stackView else { return }
                         iv.image = image
                         let ratio = image.size.height / image.size.width
-                        // 移除可能存在的占位高度（如果有的话，目前是靠 intrinsic size 或 0）
+                        placeholderConstraint.isActive = false
                         iv.heightAnchor.constraint(equalTo: iv.widthAnchor, multiplier: ratio).isActive = true
                         if self.pendingScrollIndex == index {
                             self.scrollToIndex(index, animated: false)
