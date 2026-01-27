@@ -57,18 +57,18 @@ final class MangaImageService {
     }
     
     func fetchImageData(for url: URL, referer: String?) async -> Data? {
-        // 1. 优先处理特殊路径：本地上传的 PDF 图片缩略图
+        let verbose = UserPreferences.shared.isVerboseLoggingEnabled
         if isPdfImageURL(url) {
             return await fetchPdfImageData(url)
         }
-        
-        // 2. 处理代理逻辑
         if UserPreferences.shared.forceMangaProxy, let proxyURL = buildProxyURL(for: url) {
             return await fetchImageData(requestURL: proxyURL, referer: referer)
         }
 
-        // 3. 普通图像抓取
-        return await fetchImageData(requestURL: url, referer: referer)
+        if let data = await fetchImageData(requestURL: url, referer: referer) {
+            return data
+        }
+        return nil
     }
 
     private func fetchImageData(requestURL: URL, referer: String?) async -> Data? {
@@ -77,42 +77,52 @@ final class MangaImageService {
         request.timeoutInterval = timeout
         request.httpShouldHandleCookies = true
         request.cachePolicy = .returnCacheDataElseLoad
+        let verbose = UserPreferences.shared.isVerboseLoggingEnabled
         
-        // 统一移动端 User-Agent
-        let defaultUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1"
-        request.setValue(defaultUA, forHTTPHeaderField: "User-Agent")
+        // 1:1 模拟真实移动端浏览器请求头
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
         request.setValue("image/webp,image/avif,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
         request.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
         request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
         request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+        request.setValue("no-cors", forHTTPHeaderField: "Sec-Fetch-Mode")
+        request.setValue("image", forHTTPHeaderField: "Sec-Fetch-Dest")
+        request.setValue("cross-site", forHTTPHeaderField: "Sec-Fetch-Site")
 
         let normalizedReferer = normalizeReferer(referer, imageURL: requestURL)
-        let profile = MangaAntiScrapingService.shared.resolveProfile(imageURL: requestURL, referer: normalizedReferer)
-        
-        // 特殊站点热身逻辑（如快看）
-        if profile?.key == "kuaikan" {
-            let warmupReferer = normalizedReferer ?? profile?.referer ?? "https://www.kuaikanmanhua.com/"
-            await warmupKuaikanCookies(referer: warmupReferer)
+        let antiScrapingProfile = MangaAntiScrapingService.shared.resolveProfile(imageURL: requestURL, referer: normalizedReferer)
+        if antiScrapingProfile?.key == "kuaikan" {
+            let warmupReferer = normalizedReferer ?? antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/"
+            await warmupKuaikanCookies(referer: warmupReferer, verbose: verbose)
         }
-        
-        // 应用站点特定配置
-        if let customUA = profile?.userAgent {
+        if let customUA = antiScrapingProfile?.userAgent {
             request.setValue(customUA, forHTTPHeaderField: "User-Agent")
         }
-        profile?.extraHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        if let extraHeaders = antiScrapingProfile?.extraHeaders, !extraHeaders.isEmpty {
+            for (key, value) in extraHeaders {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+        }
         
-        // 智能推断最终 Referer
-        let finalReferer: String
-        if profile?.key == "dm5", let custom = normalizedReferer, !custom.isEmpty {
-            finalReferer = custom.replacingOccurrences(of: "http://", with: "https://").appending(custom.hasSuffix("/") ? "" : "/")
-        } else if let profileReferer = profile?.referer {
-            finalReferer = profileReferer
-        } else if let custom = normalizedReferer, !custom.isEmpty {
-            finalReferer = custom.replacingOccurrences(of: "http://", with: "https://").appending(custom.hasSuffix("/") ? "" : "/")
-        } else if let host = requestURL.host {
+        var finalReferer = antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/"
+        if antiScrapingProfile?.key == "dm5", var customReferer = normalizedReferer, !customReferer.isEmpty {
+            if customReferer.hasPrefix("http://") {
+                customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
+            }
+            if !customReferer.hasSuffix("/") {
+                customReferer += "/"
+            }
+            finalReferer = customReferer
+        } else if antiScrapingProfile == nil, var customReferer = normalizedReferer, !customReferer.isEmpty {
+            if customReferer.hasPrefix("http://") {
+                customReferer = customReferer.replacingOccurrences(of: "http://", with: "https://")
+            }
+            if !customReferer.hasSuffix("/") {
+                customReferer += "/"
+            }
+            finalReferer = customReferer
+        } else if antiScrapingProfile == nil, let host = requestURL.host {
             finalReferer = "https://\(host)/"
-        } else {
-            finalReferer = "https://www.kuaikanmanhua.com/" // 最后的备选项
         }
         request.setValue(finalReferer, forHTTPHeaderField: "Referer")
 
@@ -122,17 +132,25 @@ final class MangaImageService {
             if statusCode == 200, !data.isEmpty {
                 return data
             }
-            
-            // 针对 403/401 的二次重试逻辑（使用更保守的站点主页作为 Referer）
-            if (statusCode == 403 || statusCode == 401), let fallbackReferer = profile?.referer {
-                var retryRequest = request
-                retryRequest.setValue(fallbackReferer, forHTTPHeaderField: "Referer")
-                let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
-                if (retryResponse as? HTTPURLResponse)?.statusCode == 200 {
+            if requestURL.absoluteString.localizedCaseInsensitiveContains("/pdfImage") {
+                logger.log("PDF图片请求失败: code=\(statusCode) url=\(requestURL.absoluteString)", category: "漫画调试")
+            }
+            if statusCode == 403 || statusCode == 401 {
+                var retry = request
+                retry.setValue(antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
+                let retryCode = (retryResponse as? HTTPURLResponse)?.statusCode ?? 0
+                if retryCode == 200, !retryData.isEmpty {
                     return retryData
+                }
+                if requestURL.absoluteString.localizedCaseInsensitiveContains("/pdfImage") {
+                    logger.log("PDF图片重试失败: code=\(retryCode) url=\(requestURL.absoluteString)", category: "漫画调试")
                 }
             }
         } catch {
+            if requestURL.absoluteString.localizedCaseInsensitiveContains("/pdfImage") {
+                logger.log("PDF图片请求异常: \(error.localizedDescription) url=\(requestURL.absoluteString)", category: "漫画调试")
+            }
             return nil
         }
         return nil
@@ -140,16 +158,19 @@ final class MangaImageService {
 
     private func fetchPdfImageData(_ url: URL) async -> Data? {
         var request = URLRequest(url: url)
-        request.timeoutInterval = max(8, UserPreferences.shared.mangaImageTimeout)
+        let timeout = max(8, UserPreferences.shared.mangaImageTimeout)
+        request.timeoutInterval = timeout
         request.httpShouldHandleCookies = true
         request.cachePolicy = .returnCacheDataElseLoad
         request.setValue("image/png,image/*;q=0.8,*/*;q=0.5", forHTTPHeaderField: "Accept")
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            if (response as? HTTPURLResponse)?.statusCode == 200 {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if statusCode == 200, !data.isEmpty {
                 return data
             }
+            logger.log("PDF图片请求失败: code=\(statusCode) url=\(url.absoluteString)", category: "漫画调试")
         } catch {
             logger.log("PDF图片请求异常: \(error.localizedDescription) url=\(url.absoluteString)", category: "漫画调试")
         }
@@ -160,7 +181,7 @@ final class MangaImageService {
         url.absoluteString.localizedCaseInsensitiveContains("/pdfImage")
     }
 
-    private func warmupKuaikanCookies(referer: String) async {
+    private func warmupKuaikanCookies(referer: String, verbose: Bool) async {
         let now = Date()
         if let lastReferer = lastKuaikanWarmupReferer,
            let lastAt = lastKuaikanWarmupAt,
