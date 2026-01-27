@@ -1141,6 +1141,8 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             
             // 缓存未命中，异步下载
             Task {
+                await MangaImageService.shared.acquireDownloadPermit()
+                defer { MangaImageService.shared.releaseDownloadPermit() }
                 if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl), let image = UIImage(data: data) {
                     if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
                         LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)

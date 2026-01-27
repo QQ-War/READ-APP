@@ -275,6 +275,20 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 漫画图片并发下载数量
+    @Published var mangaImageMaxConcurrent: Int {
+        didSet {
+            UserDefaults.standard.set(mangaImageMaxConcurrent, forKey: "mangaImageMaxConcurrent")
+        }
+    }
+
+    /// 漫画图片请求超时（秒）
+    @Published var mangaImageTimeout: TimeInterval {
+        didSet {
+            UserDefaults.standard.set(mangaImageTimeout, forKey: "mangaImageTimeout")
+        }
+    }
+
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex, sentenceOffset)
     private var ttsProgress: [String: (Int, Int, Int)] {
         get {
@@ -388,6 +402,10 @@ class UserPreferences: ObservableObject {
         self.isTextAutoCacheEnabled = UserDefaults.standard.object(forKey: "isTextAutoCacheEnabled") as? Bool ?? true
         self.isMangaAutoCacheEnabled = UserDefaults.standard.object(forKey: "isMangaAutoCacheEnabled") as? Bool ?? true
         self.isMangaPreloadEnabled = UserDefaults.standard.object(forKey: "isMangaPreloadEnabled") as? Bool ?? true
+        let savedMangaConcurrent = UserDefaults.standard.integer(forKey: "mangaImageMaxConcurrent")
+        self.mangaImageMaxConcurrent = savedMangaConcurrent == 0 ? 2 : max(1, savedMangaConcurrent)
+        let savedMangaTimeout = UserDefaults.standard.double(forKey: "mangaImageTimeout")
+        self.mangaImageTimeout = savedMangaTimeout == 0 ? 30 : max(5, savedMangaTimeout)
         let savedChunk = UserDefaults.standard.integer(forKey: "ttsSentenceChunkLimit")
         self.ttsSentenceChunkLimit = savedChunk == 0 ? 600 : savedChunk
 

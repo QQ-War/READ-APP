@@ -6,8 +6,19 @@ final class MangaImageService {
     private let logger = LogManager.shared
     private var lastKuaikanWarmupReferer: String?
     private var lastKuaikanWarmupAt: Date?
+    private let limiter = ImageDownloadLimiter()
     
     private init() {}
+
+    func acquireDownloadPermit() async {
+        let maxConcurrent = max(1, UserPreferences.shared.mangaImageMaxConcurrent)
+        await limiter.updateMax(maxConcurrent)
+        await limiter.acquire()
+    }
+
+    func releaseDownloadPermit() {
+        Task { await limiter.release() }
+    }
     
     func resolveImageURL(_ original: String) -> URL? {
         let cleaned = MangaImageNormalizer.sanitizeUrlString(original)
@@ -57,7 +68,8 @@ final class MangaImageService {
 
     private func fetchImageData(requestURL: URL, referer: String?) async -> Data? {
         var request = URLRequest(url: requestURL)
-        request.timeoutInterval = 15
+        let timeout = max(5, UserPreferences.shared.mangaImageTimeout)
+        request.timeoutInterval = timeout
         request.httpShouldHandleCookies = true
         request.cachePolicy = .returnCacheDataElseLoad
         let verbose = UserPreferences.shared.isVerboseLoggingEnabled
@@ -184,5 +196,41 @@ final class MangaImageService {
             URLQueryItem(name: "accessToken", value: UserPreferences.shared.accessToken)
         ]
         return components?.url
+    }
+}
+
+actor ImageDownloadLimiter {
+    private var maxConcurrent: Int = 2
+    private var running: Int = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func updateMax(_ max: Int) {
+        maxConcurrent = max(1, max)
+        while running < maxConcurrent && !waiters.isEmpty {
+            running += 1
+            let waiter = waiters.removeFirst()
+            waiter.resume()
+        }
+    }
+
+    func acquire() async {
+        if running < maxConcurrent {
+            running += 1
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func release() {
+        if running > 0 {
+            running -= 1
+        }
+        if running < maxConcurrent && !waiters.isEmpty {
+            running += 1
+            let waiter = waiters.removeFirst()
+            waiter.resume()
+        }
     }
 }
