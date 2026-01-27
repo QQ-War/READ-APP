@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct TTSEngineListView: View {
     @State private var ttsList: [HttpTTS] = []
@@ -8,6 +9,9 @@ struct TTSEngineListView: View {
     @State private var showingURLImportDialog = false
     @State private var importURL = ""
     @State private var showingFilePicker = false
+    @State private var exportItems: [Any] = []
+    @State private var showingShareSheet = false
+    @State private var isExporting = false
 
     var body: some View {
         List {
@@ -21,6 +25,21 @@ struct TTSEngineListView: View {
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                     }
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    Button {
+                        Task { await exportEngine(tts, toFile: false) }
+                    } label: {
+                        Label("复制", systemImage: "doc.on.doc")
+                    }
+                    .tint(.orange)
+
+                    Button {
+                        Task { await exportEngine(tts, toFile: true) }
+                    } label: {
+                        Label("导出", systemImage: "square.and.arrow.up")
+                    }
+                    .tint(.green)
                 }
             }
             .onDelete(perform: deleteTTS)
@@ -54,6 +73,9 @@ struct TTSEngineListView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingShareSheet) {
+            ActivityView(activityItems: exportItems)
+        }
         .alert("网络导入", isPresented: $showingURLImportDialog) {
             TextField("输入引擎 URL", text: $importURL)
                 .autocapitalization(.none)
@@ -75,6 +97,16 @@ struct TTSEngineListView: View {
         } message: {
             if let error = errorMessage { Text(error) }
         }
+        .overlay {
+            if isExporting {
+                Color.black.opacity(0.2).ignoresSafeArea()
+                ProgressView("正在导出...")
+                    .padding()
+                    .background(Color(UIColor.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(radius: 10)
+            }
+        }
     }
     
     private func importFromURL() async {
@@ -91,6 +123,36 @@ struct TTSEngineListView: View {
             }
         }
         importURL = ""
+    }
+
+    private func exportEngine(_ tts: HttpTTS, toFile: Bool) async {
+        await MainActor.run { isExporting = true }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode([tts])
+            let json = String(data: data, encoding: .utf8) ?? "[]"
+            if toFile {
+                let tempDir = FileManager.default.temporaryDirectory
+                let sanitizedName = tts.name.replacingOccurrences(of: "/", with: "_")
+                    .replacingOccurrences(of: "\\", with: "_")
+                    .replacingOccurrences(of: ":", with: "_")
+                let fileName = "\(sanitizedName).json"
+                let fileURL = tempDir.appendingPathComponent(fileName)
+                try json.write(to: fileURL, atomically: true, encoding: .utf8)
+                await MainActor.run {
+                    exportItems = [fileURL]
+                    showingShareSheet = true
+                }
+            } else {
+                UIPasteboard.general.string = json
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "导出失败: \(error.localizedDescription)"
+            }
+        }
+        await MainActor.run { isExporting = false }
     }
     
     private func loadTTSList() async {

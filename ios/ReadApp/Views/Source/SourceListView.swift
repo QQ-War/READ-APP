@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SourceListView: View {
     @EnvironmentObject var bookshelfStore: BookshelfStore
@@ -10,6 +11,10 @@ struct SourceListView: View {
     @State private var showingURLImportDialog = false
     @State private var importURL = ""
     @State private var showingFilePicker = false
+    
+    @State private var exportItems: [Any] = []
+    @State private var showingShareSheet = false
+    @State private var isExporting = false
     
     // 分组展开状态
     @State private var expandedGroups: Set<String> = []
@@ -44,6 +49,15 @@ struct SourceListView: View {
             }
             
             sourceManagementView
+
+            if isExporting {
+                Color.black.opacity(0.2).ignoresSafeArea()
+                ProgressView("正在导出...")
+                    .padding()
+                    .background(Color(UIColor.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(radius: 10)
+            }
         }
         .navigationTitle("书源管理")
         .toolbar {
@@ -73,6 +87,9 @@ struct SourceListView: View {
                             }
                         }
             }
+            .sheet(isPresented: $showingShareSheet) {
+                ActivityView(activityItems: exportItems)
+            }
             .alert("网络导入", isPresented: $showingURLImportDialog) {
                 TextField("输入书源 URL", text: $importURL)
                     .autocapitalization(.none)
@@ -83,7 +100,7 @@ struct SourceListView: View {
             } message: {
                 Text("请输入合法的书源 JSON 地址")
             }
-            .alert("加入书架", isPresented: $showAddResultAlert) {
+            .alert("提示", isPresented: $showAddResultAlert) {
                 Button("确定", role: .cancel) { }
             } message: {
                 Text(addResultMessage)
@@ -105,6 +122,39 @@ struct SourceListView: View {
             }
         }
         importURL = ""
+    }
+
+    private func exportSource(_ source: BookSource, toFile: Bool) async {
+        await MainActor.run { isExporting = true }
+        do {
+            let json = try await APIService.shared.getBookSourceDetail(id: source.bookSourceUrl)
+            if toFile {
+                let tempDir = FileManager.default.temporaryDirectory
+                let sanitizedName = source.bookSourceName.replacingOccurrences(of: "/", with: "_")
+                    .replacingOccurrences(of: "\\", with: "_")
+                    .replacingOccurrences(of: ":", with: "_")
+                let fileName = "\(sanitizedName).json"
+                let fileURL = tempDir.appendingPathComponent(fileName)
+                try json.write(to: fileURL, atomically: true, encoding: .utf8)
+                
+                await MainActor.run {
+                    exportItems = [fileURL]
+                    showingShareSheet = true
+                }
+            } else {
+                UIPasteboard.general.string = json
+                await MainActor.run {
+                    addResultMessage = "已复制到剪贴板"
+                    showAddResultAlert = true
+                }
+            }
+        } catch {
+            await MainActor.run {
+                addResultMessage = "导出失败: \(error.localizedDescription)"
+                showAddResultAlert = true
+            }
+        }
+        await MainActor.run { isExporting = false }
     }
     
     @ViewBuilder
@@ -201,6 +251,25 @@ struct SourceListView: View {
             .scaleEffect(0.7)
         }
         .padding(.vertical, 8)
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                Task {
+                    await exportSource(source, toFile: false)
+                }
+            } label: {
+                Label("复制", systemImage: "doc.on.doc")
+            }
+            .tint(.orange)
+            
+            Button {
+                Task {
+                    await exportSource(source, toFile: true)
+                }
+            } label: {
+                Label("导出", systemImage: "square.and.arrow.up")
+            }
+            .tint(.green)
+        }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
                 sourceIdToEdit = source.bookSourceUrl

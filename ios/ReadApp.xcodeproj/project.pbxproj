@@ -43,6 +43,7 @@
 		1A0000C5000000000000001 /* ReadingTextKit2Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B5000000000000001 /* ReadingTextKit2Support.swift */; };
 		1A0000C6000000000000001 /* ReadingMangaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B6000000000000001 /* ReadingMangaViews.swift */; };
 		1A0000FA000000000000001 /* ImagePreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F9000000000000001 /* ImagePreviewViewController.swift */; };
+		1A0000FC000000000000001 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000FB000000000000001 /* ActivityView.swift */; };
 		1A0000C7000000000000001 /* ReadingChapterLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B7000000000000001 /* ReadingChapterLifecycle.swift */; };
 		1A0000C8000000000000001 /* ReadingContentProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B8000000000000001 /* ReadingContentProcessing.swift */; };
 		1A0000C9000000000000001 /* ReadingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B9000000000000001 /* ReadingProgress.swift */; };
@@ -147,6 +148,7 @@
 		1A0000B5000000000000001 /* ReadingTextKit2Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingTextKit2Support.swift; sourceTree = "<group>"; };
 		1A0000B6000000000000001 /* ReadingMangaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingMangaViews.swift; sourceTree = "<group>"; };
 		1A0000F9000000000000001 /* ImagePreviewViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreviewViewController.swift; sourceTree = "<group>"; };
+		1A0000FB000000000000001 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		1A0000B7000000000000001 /* ReadingChapterLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingChapterLifecycle.swift; sourceTree = "<group>"; };
 		1A0000B8000000000000001 /* ReadingContentProcessing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingContentProcessing.swift; sourceTree = "<group>"; };
 		1A0000B9000000000000001 /* ReadingProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingProgress.swift; sourceTree = "<group>"; };
@@ -357,6 +359,7 @@
 				1A000027000000000000003 /* DocumentPicker.swift */,
 				1A000026000000000000002 /* HTMLContentView.swift */,
 				1A000022000000000000002 /* LoginView.swift */,
+				1A0000FB000000000000001 /* ActivityView.swift */,
 				A20000070000000000000001 /* CachedRemoteImage.swift */,
 				7B4B2D6E5A2A4C7AA1F0A001 /* ViewExtensions.swift */,
 			);
@@ -544,6 +547,7 @@
 				1A0000C5000000000000001 /* ReadingTextKit2Support in Sources */,
 				1A0000C6000000000000001 /* ReadingMangaViews in Sources */,
 				1A0000C7000000000000001 /* ReadingChapterLifecycle in Sources */,
+				1A0000FC000000000000001 /* ActivityView.swift in Sources */,
 				1A0000C8000000000000001 /* ReadingContentProcessing in Sources */,
 				1A0000C9000000000000001 /* ReadingProgress in Sources */,
 				1A0000D3000000000000001 /* ChapterPrefetcher.swift in Sources */,

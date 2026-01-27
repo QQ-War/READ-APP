@@ -72,16 +72,3 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.large)
     }
 }
-
-
-// MARK: - 分享视图
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
-    }
-}

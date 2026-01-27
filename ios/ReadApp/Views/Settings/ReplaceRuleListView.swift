@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ReplaceRuleListView: View {
     @StateObject private var viewModel = ReplaceRuleViewModel()
@@ -8,6 +9,9 @@ struct ReplaceRuleListView: View {
     @State private var importURL = ""
     @State private var showingFilePicker = false
     @State private var errorMessageAlert: String?
+    @State private var exportItems: [Any] = []
+    @State private var showingShareSheet = false
+    @State private var isExporting = false
 
     var body: some View {
         List {
@@ -61,6 +65,21 @@ struct ReplaceRuleListView: View {
                         }
                     }
                     .padding(.vertical, 4)
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                        Button {
+                            Task { await exportRule(rule, toFile: false) }
+                        } label: {
+                            Label("复制", systemImage: "doc.on.doc")
+                        }
+                        .tint(.orange)
+
+                        Button {
+                            Task { await exportRule(rule, toFile: true) }
+                        } label: {
+                            Label("导出", systemImage: "square.and.arrow.up")
+                        }
+                        .tint(.green)
+                    }
                     .onTapGesture {
                         self.selectedRule = rule
                         self.showEditView = true
@@ -94,6 +113,9 @@ struct ReplaceRuleListView: View {
         .sheet(isPresented: $showEditView) {
             ReplaceRuleEditView(viewModel: viewModel, rule: selectedRule)
         }
+        .sheet(isPresented: $showingShareSheet) {
+            ActivityView(activityItems: exportItems)
+        }
         .sheet(isPresented: $showingFilePicker) {
             DocumentPicker { url in
                 Task {
@@ -124,8 +146,50 @@ struct ReplaceRuleListView: View {
                 await viewModel.fetchRules()
             }
         }
+        .overlay {
+            if isExporting {
+                Color.black.opacity(0.2).ignoresSafeArea()
+                ProgressView("正在导出...")
+                    .padding()
+                    .background(Color(UIColor.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(radius: 10)
+            }
+        }
     }
 
+    private func exportRule(_ rule: ReplaceRule, toFile: Bool) async {
+        await MainActor.run { isExporting = true }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode([rule])
+            let json = String(data: data, encoding: .utf8) ?? "[]"
+            if toFile {
+                let tempDir = FileManager.default.temporaryDirectory
+                let sanitizedName = rule.name.replacingOccurrences(of: "/", with: "_")
+                    .replacingOccurrences(of: "\\", with: "_")
+                    .replacingOccurrences(of: ":", with: "_")
+                let fileName = "\(sanitizedName).json"
+                let fileURL = tempDir.appendingPathComponent(fileName)
+                try json.write(to: fileURL, atomically: true, encoding: .utf8)
+                await MainActor.run {
+                    exportItems = [fileURL]
+                    showingShareSheet = true
+                }
+            } else {
+                UIPasteboard.general.string = json
+                await MainActor.run {
+                    errorMessageAlert = "已复制到剪贴板"
+                }
+            }
+        } catch {
+            await MainActor.run {
+                errorMessageAlert = "导出失败: \(error.localizedDescription)"
+            }
+        }
+        await MainActor.run { isExporting = false }
+    }
     private func importFromURL() async {
         guard let url = URL(string: importURL) else { return }
         do {

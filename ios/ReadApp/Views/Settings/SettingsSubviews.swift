@@ -618,7 +618,7 @@ struct DebugSettingsView: View {
             LogView()
         }
         .sheet(item: $logURLToShare) { ident in
-            ShareSheet(items: [ident.url])
+            ActivityView(activityItems: [ident.url])
         }
         .alert("清空日志", isPresented: $showClearLogsAlert) {
             Button("取消", role: .cancel) { }
