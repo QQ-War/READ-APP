@@ -22,7 +22,6 @@ final class MangaImageService {
     private func normalizeSchemeIfNeeded(_ url: URL) -> URL {
         guard url.scheme?.lowercased() == "http" else { return url }
         guard let base = URL(string: APIService.shared.baseURL),
-              base.scheme?.lowercased() == "https",
               let baseHost = base.host?.lowercased(),
               let host = url.host?.lowercased(),
               host == baseHost
