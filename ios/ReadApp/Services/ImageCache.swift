@@ -24,6 +24,13 @@ final class ImageCache {
             memoryCache.setObject(image, forKey: key)
             return image
         }
+        if url.absoluteString.localizedCaseInsensitiveContains("/pdfImage"),
+           let data = await MangaImageService.shared.fetchImageData(for: url, referer: nil),
+           let image = UIImage(data: data) {
+            memoryCache.setObject(image, forKey: key)
+            try? data.write(to: diskURL, options: [.atomic])
+            return image
+        }
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 { return nil }

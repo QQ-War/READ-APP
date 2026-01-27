@@ -24,6 +24,10 @@ English README: `README.md`
 - 缓冲结束后，如果 TTS 位置不在当前页，则从当前页开头重启；若已在当前页，则继续播放不打断。
 - 缓冲时长可在听书设置里配置（“TTS 跟随缓冲时间”）。
 
+## PDF 图片与图文混排（iOS）
+- PDF 图片通过 `/pdfImage` 直连获取，避免附加复杂请求头导致响应解析失败。
+- 图文混排使用 TextKit2 的内联图片（`NSTextAttachment`）渲染，保持 TTS 的字符偏移与自动翻页逻辑不变。
+
 ## 构建
 - iOS：用 Xcode 打开 `ios/ReadApp.xcodeproj`
 - Android：用 Android Studio 打开 `android/`
