@@ -23,11 +23,25 @@ final class MangaImageService {
     func resolveImageURL(_ original: String) -> URL? {
         let cleaned = MangaImageNormalizer.sanitizeUrlString(original)
         if cleaned.hasPrefix("http") {
-            return URL(string: cleaned).map { normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost($0)) }
+            if let url = URL(string: cleaned) {
+                return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
+            }
+            if let encoded = cleaned.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+               let url = URL(string: encoded) {
+                return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
+            }
+            return nil
         }
         let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
         let resolved = cleaned.hasPrefix("/") ? (baseURL + cleaned) : (baseURL + "/" + cleaned)
-        return URL(string: resolved).map { normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost($0)) }
+        if let url = URL(string: resolved) {
+            return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
+        }
+        if let encoded = resolved.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let url = URL(string: encoded) {
+            return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
+        }
+        return nil
     }
 
     private func normalizeSchemeIfNeeded(_ url: URL) -> URL {
@@ -115,6 +129,9 @@ final class MangaImageService {
             if statusCode == 200, !data.isEmpty {
                 return data
             }
+            if requestURL.absoluteString.localizedCaseInsensitiveContains("/pdfImage") {
+                logger.log("PDF图片请求失败: code=\(statusCode) url=\(requestURL.absoluteString)", category: "漫画调试")
+            }
             if statusCode == 403 || statusCode == 401 {
                 var retry = request
                 retry.setValue(antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
@@ -123,8 +140,14 @@ final class MangaImageService {
                 if retryCode == 200, !retryData.isEmpty {
                     return retryData
                 }
+                if requestURL.absoluteString.localizedCaseInsensitiveContains("/pdfImage") {
+                    logger.log("PDF图片重试失败: code=\(retryCode) url=\(requestURL.absoluteString)", category: "漫画调试")
+                }
             }
         } catch {
+            if requestURL.absoluteString.localizedCaseInsensitiveContains("/pdfImage") {
+                logger.log("PDF图片请求异常: \(error.localizedDescription) url=\(requestURL.absoluteString)", category: "漫画调试")
+            }
             return nil
         }
         return nil
