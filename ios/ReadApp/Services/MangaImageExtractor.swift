@@ -13,10 +13,6 @@ enum MangaImageExtractor {
     }
 
     private static func extractInternal(from rawContent: String, wrapToken: Bool) -> [String] {
-        let verbose = UserPreferences.shared.isVerboseLoggingEnabled
-        if verbose {
-            LogManager.shared.log("图片解析开始: len=\(rawContent.count)", category: "漫画调试")
-        }
         var results: [String] = []
         var seen = Set<String>()
 
@@ -90,9 +86,6 @@ enum MangaImageExtractor {
             }
         }
 
-        if verbose {
-            LogManager.shared.log("图片解析完成: count=\(results.count)", category: "漫画调试")
-        }
         return results
     }
 
