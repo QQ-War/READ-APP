@@ -1108,6 +1108,9 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     func update(urls: [String]) {
         guard urls != self.imageUrls else { return }
         self.imageUrls = urls
+        if UserPreferences.shared.isVerboseLoggingEnabled {
+            LogManager.shared.log("漫画更新: count=\(urls.count)", category: "漫画调试")
+        }
         
         // 关键优化：先收集现有视图以便复用或平滑过渡（可选），这里简单处理为先准备好所有图片
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }

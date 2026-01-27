@@ -33,12 +33,24 @@ final class MangaImageService {
     
     func fetchImageData(for url: URL, referer: String?) async -> Data? {
         let verbose = UserPreferences.shared.isVerboseLoggingEnabled
+        if verbose {
+            logger.log("图片下载开始: url=\(url.absoluteString) referer=\(referer ?? "nil")", category: "漫画调试")
+        }
         if UserPreferences.shared.forceMangaProxy, let proxyURL = buildProxyURL(for: url) {
+            if verbose {
+                logger.log("图片下载走代理: \(proxyURL.absoluteString)", category: "漫画调试")
+            }
             return await fetchImageData(requestURL: proxyURL, referer: referer)
         }
 
         if let data = await fetchImageData(requestURL: url, referer: referer) {
+            if verbose {
+                logger.log("图片下载成功: \(url.absoluteString)", category: "漫画调试")
+            }
             return data
+        }
+        if verbose {
+            logger.log("图片下载失败: \(url.absoluteString)", category: "漫画调试")
         }
         return nil
     }
@@ -100,6 +112,9 @@ final class MangaImageService {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if verbose {
+                logger.log("图片响应: url=\(requestURL.absoluteString) code=\(statusCode) bytes=\(data.count)", category: "漫画调试")
+            }
             if statusCode == 200, !data.isEmpty {
                 return data
             }
@@ -108,11 +123,17 @@ final class MangaImageService {
                 retry.setValue(antiScrapingProfile?.referer ?? "https://www.kuaikanmanhua.com/", forHTTPHeaderField: "Referer")
                 let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
                 let retryCode = (retryResponse as? HTTPURLResponse)?.statusCode ?? 0
+                if verbose {
+                    logger.log("图片重试响应: url=\(requestURL.absoluteString) code=\(retryCode) bytes=\(retryData.count)", category: "漫画调试")
+                }
                 if retryCode == 200, !retryData.isEmpty {
                     return retryData
                 }
             }
         } catch {
+            if verbose {
+                logger.log("图片请求异常: url=\(requestURL.absoluteString) error=\(error.localizedDescription)", category: "漫画调试")
+            }
             return nil
         }
         return nil
