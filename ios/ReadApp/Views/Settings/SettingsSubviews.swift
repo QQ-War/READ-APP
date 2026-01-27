@@ -122,10 +122,11 @@ struct ReadingSettingsView: View {
                 Slider(value: $preferences.progressFontSize, in: 8...20, step: 1)
                 
                 Picker("阅读模式", selection: $preferences.readingMode) {
-                    ForEach(ReadingMode.allCases) { mode in
+                    ForEach(ReadingMode.allCases.filter { $0 != .newHorizontal }) { mode in
                         Text(mode.localizedName).tag(mode)
                     }
                 }
+                .pickerStyle(.segmented)
 
                 if preferences.readingMode == .horizontal || preferences.readingMode == .newHorizontal {
                     Picker("翻页方式", selection: $preferences.pageTurningMode) {
@@ -203,6 +204,11 @@ struct ReadingSettingsView: View {
             
         }
         .navigationTitle("阅读设置")
+        .onAppear {
+            if preferences.readingMode == .newHorizontal {
+                preferences.readingMode = .horizontal
+            }
+        }
         .ifAvailableHideTabBar()
     }
 }
