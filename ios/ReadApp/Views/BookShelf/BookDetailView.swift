@@ -428,6 +428,12 @@ struct BookDetailView: View {
                     dismiss() // 换源后通常需要重新打开详情页
                 }
             } catch { 
+                if Task.isCancelled || error is CancellationError {
+                    await MainActor.run {
+                        isLoading = false
+                    }
+                    return
+                }
                 await MainActor.run {
                     isLoading = false
                     errorMessage = "换源失败: \(error.localizedDescription)" 
@@ -445,6 +451,9 @@ struct BookDetailView: View {
                     showingAddSuccessAlert = true
                 }
             } catch {
+                if Task.isCancelled || error is CancellationError {
+                    return
+                }
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                 }
@@ -461,6 +470,9 @@ struct BookDetailView: View {
                     showingRemoveSuccessAlert = true
                 }
             } catch {
+                if Task.isCancelled || error is CancellationError {
+                    return
+                }
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                 }

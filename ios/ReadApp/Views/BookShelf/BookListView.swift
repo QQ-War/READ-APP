@@ -226,6 +226,10 @@ struct BookListView: View {
             try await bookshelfStore.importBook(from: url)
             await listViewModel.loadBooks()
         } catch {
+            if Task.isCancelled || error is CancellationError {
+                listViewModel.isRefreshing = false
+                return
+            }
             bookshelfStore.errorMessage = "导入失败: \(error.localizedDescription)"
         }
         listViewModel.isRefreshing = false
@@ -238,6 +242,9 @@ struct BookListView: View {
                 // 清除成功后刷新书架
                 await loadBooks()
             } catch {
+                if Task.isCancelled || error is CancellationError {
+                    return
+                }
                 bookshelfStore.errorMessage = "清除缓存失败: \(error.localizedDescription)"
             }
         }
@@ -252,6 +259,9 @@ struct BookListView: View {
             do {
                 try await bookshelfStore.deleteBook(bookUrl: bookUrl)
             } catch {
+                if Task.isCancelled || error is CancellationError {
+                    return
+                }
                 bookshelfStore.errorMessage = "删除失败: \(error.localizedDescription)"
             }
         }
