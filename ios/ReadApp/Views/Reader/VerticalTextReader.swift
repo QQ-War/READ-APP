@@ -1186,6 +1186,10 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     func update(urls: [String]) {
         guard urls != self.imageUrls else { return }
         self.imageUrls = urls
+
+        if urls.isEmpty {
+            LogManager.shared.log("漫画图片列表为空", category: "漫画调试")
+        }
         
         // 关键优化：先收集现有视图以便复用或平滑过渡（可选），这里简单处理为先准备好所有图片
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -1202,7 +1206,10 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             placeholderConstraint.isActive = true
             
             let urlStr2 = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
-            guard let resolved = MangaImageService.shared.resolveImageURL(urlStr2) else { continue }
+            guard let resolved = MangaImageService.shared.resolveImageURL(urlStr2) else {
+                LogManager.shared.log("漫画图片URL解析失败: \(urlStr2)", category: "漫画调试")
+                continue
+            }
             let absolute = resolved.absoluteString
             
             // 尝试同步加载本地缓存，减少闪烁
@@ -1238,6 +1245,8 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                             self.scrollToIndex(index, animated: false)
                         }
                     }
+                } else {
+                    LogManager.shared.log("漫画图片加载失败: \(absolute)", category: "漫画调试")
                 }
             }
         }
