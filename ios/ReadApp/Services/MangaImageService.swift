@@ -183,8 +183,8 @@ actor ImageDownloadLimiter {
     private var running: Int = 0
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
-    func updateMax(_ max: Int) {
-        maxConcurrent = max(1, max)
+    func updateMax(_ value: Int) {
+        maxConcurrent = max(1, value)
         while running < maxConcurrent && !waiters.isEmpty {
             running += 1
             let waiter = waiters.removeFirst()
