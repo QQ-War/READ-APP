@@ -58,6 +58,9 @@ final class MangaImageService {
     
     func fetchImageData(for url: URL, referer: String?) async -> Data? {
         let verbose = UserPreferences.shared.isVerboseLoggingEnabled
+        if isPdfImageURL(url) {
+            return await fetchPdfImageData(url)
+        }
         if UserPreferences.shared.forceMangaProxy, let proxyURL = buildProxyURL(for: url) {
             return await fetchImageData(requestURL: proxyURL, referer: referer)
         }
@@ -151,6 +154,31 @@ final class MangaImageService {
             return nil
         }
         return nil
+    }
+
+    private func fetchPdfImageData(_ url: URL) async -> Data? {
+        var request = URLRequest(url: url)
+        let timeout = max(8, UserPreferences.shared.mangaImageTimeout)
+        request.timeoutInterval = timeout
+        request.httpShouldHandleCookies = true
+        request.cachePolicy = .returnCacheDataElseLoad
+        request.setValue("image/png,image/*;q=0.8,*/*;q=0.5", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if statusCode == 200, !data.isEmpty {
+                return data
+            }
+            logger.log("PDF图片请求失败: code=\(statusCode) url=\(url.absoluteString)", category: "漫画调试")
+        } catch {
+            logger.log("PDF图片请求异常: \(error.localizedDescription) url=\(url.absoluteString)", category: "漫画调试")
+        }
+        return nil
+    }
+
+    private func isPdfImageURL(_ url: URL) -> Bool {
+        url.absoluteString.localizedCaseInsensitiveContains("/pdfImage")
     }
 
     private func warmupKuaikanCookies(referer: String, verbose: Bool) async {
