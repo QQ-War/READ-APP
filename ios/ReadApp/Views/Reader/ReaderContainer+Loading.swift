@@ -21,6 +21,10 @@ extension ReaderContainerViewController {
                     loadChapterContent(at: currentChapterIndex)
                 }
             } catch {
+                if Task.isCancelled || error is CancellationError {
+                    await MainActor.run { self.onLoadingChanged?(false) }
+                    return
+                }
                 await MainActor.run {
                     self.onLoadingChanged?(false)
                     let errorMsg = "获取目录失败: \(error.localizedDescription)\n\n[点击屏幕中心呼出菜单，点击右上角刷新按钮重试]"
@@ -66,6 +70,9 @@ extension ReaderContainerViewController {
                     self.processLoadedChapterContent(index: index, rawContent: content, isManga: isM, startAtEnd: startAtEnd, token: token)
                 }
             } catch {
+                if Task.isCancelled || error is CancellationError {
+                    return
+                }
                 await MainActor.run {
                     let errorMsg = "加载失败: \(error.localizedDescription)\n\n[点击屏幕中心呼出菜单，点击右上角刷新按钮重试]"
                     self.processLoadedChapterContent(index: index, rawContent: errorMsg, isManga: false, startAtEnd: false, token: token)
