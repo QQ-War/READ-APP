@@ -8,11 +8,13 @@ enum MangaImageNormalizer {
             if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
                let match = regex.firstMatch(in: trimmed, options: [], range: NSRange(location: 0, length: (trimmed as NSString).length)) {
                 let end = match.range.location + match.range.length
-                if end < (trimmed as NSString).length {
-                    let prefix = (trimmed as NSString).substring(to: end)
+                let length = (trimmed as NSString).length
+                if end >= length { return trimmed }
+                let prefix = (trimmed as NSString).substring(to: end)
+                let suffix = (trimmed as NSString).substring(from: end)
+                if suffix.hasPrefix(",") {
                     return prefix
                 }
-                return trimmed
             }
         }
         if let idx = trimmed.range(of: ",%7B")?.lowerBound {
