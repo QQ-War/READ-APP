@@ -57,6 +57,10 @@ struct BookDetailView: View {
         }
     }
 
+    private var isAudioBook: Bool {
+        book.type == 1
+    }
+
     var body: some View {
         content
             .navigationTitle(book.name ?? "书籍详情")
@@ -116,16 +120,18 @@ struct BookDetailView: View {
                     // 1. 头部信息
                     headerSection
                     
-                    // 漫画模式手动开关
-                    HStack {
-                        Label("强制漫画模式", systemImage: "photo.on.rectangle.angled")
-                            .font(.subheadline)
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { isManuallyMarkedAsManga },
-                            set: { _ in toggleManualManga() }
-                        ))
-                        .labelsHidden()
+                    if !isAudioBook {
+                        // 漫画模式手动开关
+                        HStack {
+                            Label("强制漫画模式", systemImage: "photo.on.rectangle.angled")
+                                .font(.subheadline)
+                            Spacer()
+                            Toggle("", isOn: Binding(
+                                get: { isManuallyMarkedAsManga },
+                                set: { _ in toggleManualManga() }
+                            ))
+                            .labelsHidden()
+                        }
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 8)
@@ -267,7 +273,22 @@ struct BookDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(book.name ?? "未知书名").font(.title2).fontWeight(.bold)
                 Text(book.author ?? "未知作者").font(.subheadline).foregroundColor(.secondary)
-                Text(book.originName ?? "未知来源").font(.caption).padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.1)).foregroundColor(.blue).cornerRadius(4)
+                HStack(spacing: 8) {
+                    Text(book.originName ?? "未知来源")
+                        .font(.caption)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(4)
+                    if isAudioBook {
+                        Text("音频书")
+                            .font(.caption)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Color.orange.opacity(0.1))
+                            .foregroundColor(.orange)
+                            .cornerRadius(4)
+                    }
+                }
                 
                 Spacer()
                 
@@ -294,7 +315,7 @@ struct BookDetailView: View {
                 }
                 
                 Button(action: { isReading = true }) {
-                    Text("开始阅读")
+                    Text(isAudioBook ? "开始播放" : "开始阅读")
                         .font(.system(size: 16, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -303,7 +324,11 @@ struct BookDetailView: View {
                         .cornerRadius(8)
                 }
                 .fullScreenCover(isPresented: $isReading) {
-                    ReadingView(book: currentBook).environmentObject(bookshelfStore)
+                    if isAudioBook {
+                        AudioReadingView(book: currentBook).environmentObject(bookshelfStore)
+                    } else {
+                        ReadingView(book: currentBook).environmentObject(bookshelfStore)
+                    }
                 }
             }
         }

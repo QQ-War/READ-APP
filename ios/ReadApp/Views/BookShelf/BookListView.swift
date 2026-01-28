@@ -85,7 +85,11 @@ struct BookListView: View {
             DocumentPicker { url in Task { await importBook(from: url) } }
         }
         .fullScreenCover(item: $selectedBook) { book in
-            ReadingView(book: book).environmentObject(bookshelfStore)
+            if book.type == 1 {
+                AudioReadingView(book: book).environmentObject(bookshelfStore)
+            } else {
+                ReadingView(book: book).environmentObject(bookshelfStore)
+            }
         }
         .task { 
             listViewModel.configure(bookshelfStore: bookshelfStore, sourceStore: sourceStore, preferences: preferences)
@@ -302,6 +306,11 @@ struct BookInfoArea: View {
             Text(book.author ?? "未知作者").font(.subheadline).foregroundColor(.secondary).lineLimit(1)
             if let latest = book.latestChapterTitle {
                 Text("最新: \(latest)").font(.caption).foregroundColor(.secondary).lineLimit(1)
+            }
+            if book.type == 1 {
+                Text("音频书")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
             }
             HStack {
                 if let dur = book.durChapterTitle {

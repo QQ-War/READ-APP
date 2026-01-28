@@ -59,11 +59,12 @@ extension ReaderContainerViewController {
             }
             do {
                 let realIndex = chapters.indices.contains(index) ? chapters[index].index : index
+                let contentType = (book.type == 2) ? 2 : (book.type == 1 ? 1 : 0)
                 let content = try await APIService.shared.fetchChapterContent(
                     bookUrl: book.bookUrl ?? "",
                     bookSourceUrl: book.origin,
                     index: realIndex,
-                    contentType: isM ? 2 : 0,
+                    contentType: contentType,
                     cachePolicy: cachePolicy
                 )
                 await MainActor.run {
