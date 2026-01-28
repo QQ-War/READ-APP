@@ -83,7 +83,6 @@ final class MangaImageService {
         request.setValue(defaultUA, forHTTPHeaderField: "User-Agent")
         request.setValue("image/webp,image/avif,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
         request.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
-        request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
         request.setValue("keep-alive", forHTTPHeaderField: "Connection")
 
         let normalizedReferer = normalizeReferer(referer, imageURL: requestURL)
