@@ -80,7 +80,7 @@ final class MangaAntiScrapingService {
         MangaAntiScrapingProfile(key: "xiuren", name: "xiuren", hostSuffixes: ["xiuren.org", "www.xiuren.org"], referer: "http://www.xiuren.org/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "ykmh", name: "ykmh", hostSuffixes: ["ykmh.com", "www.ykmh.com"], referer: "https://www.ykmh.com/", userAgent: nil, extraHeaders: [:]),
         MangaAntiScrapingProfile(key: "yymh889", name: "yymh889", hostSuffixes: ["yymh889.com"], referer: "http://yymh889.com/", userAgent: nil, extraHeaders: [:]),
-        MangaAntiScrapingProfile(key: "godamanga", name: "godamanga", hostSuffixes: ["godamanga.com", "g-mh.org", "godamanga.online"], referer: "https://m.g-mh.org/", userAgent: nil, extraHeaders: [:])
+        MangaAntiScrapingProfile(key: "godamanga", name: "godamanga", hostSuffixes: ["godamanga.com", "g-mh.org", "godamanga.online"], referer: "https://godamanga.com/", userAgent: nil, extraHeaders: [:])
     ]
     static let profileKeys = profiles.map { $0.key }
     static let shared = MangaAntiScrapingService()
