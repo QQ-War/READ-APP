@@ -565,7 +565,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    internal fun saveAudioProgress() {
+    internal fun saveAudioProgress(updateTimestamp: Boolean = true) {
         val book = _selectedBook.value ?: return
         val bookUrl = book.bookUrl ?: return
         val token = _accessToken.value
@@ -575,12 +575,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val progress = _audioProgress.value.toDouble()
         val title = _chapters.value.getOrNull(index)?.title ?: book.durChapterTitle
 
-        val now = System.currentTimeMillis()
         val updatedBook = book.copy(
             durChapterIndex = index,
             durChapterTitle = title,
             durChapterPos = progress,
-            durChapterTime = now
+            durChapterTime = if (updateTimestamp) System.currentTimeMillis() else book.durChapterTime
         )
         _selectedBook.value = updatedBook
         allBooks = allBooks.map { if (it.bookUrl == bookUrl) updatedBook else it }
@@ -655,7 +654,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     _audioCurrentIndex.value = index
                     _audioChapterTitle.value = chapter.title
                     audioController.playUrl(audioUrl, chapter.title, book.coverUrl)
-                    saveAudioProgress()
+                    saveAudioProgress(updateTimestamp = false)
                 }
             }.onFailure {
                 _audioErrorMessage.value = "加载音频失败: ${it.message}"
