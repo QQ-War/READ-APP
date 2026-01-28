@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.readapp.data.model.Book
+import com.readapp.ui.components.RemoteCoverImage
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
 
@@ -45,8 +46,8 @@ fun PlayerScreen(
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         if (!book.coverUrl.isNullOrBlank()) {
-            androidx.compose.foundation.Image(
-                painter = coil.compose.rememberAsyncImagePainter(book.coverUrl),
+            RemoteCoverImage(
+                url = book.coverUrl,
                 contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier
@@ -172,8 +173,8 @@ private fun BookCoverLarge(
         contentAlignment = Alignment.Center
     ) {
         if (!coverUrl.isNullOrBlank()) {
-            androidx.compose.foundation.Image(
-                painter = coil.compose.rememberAsyncImagePainter(coverUrl),
+            RemoteCoverImage(
+                url = coverUrl,
                 contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()

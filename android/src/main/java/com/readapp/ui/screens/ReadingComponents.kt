@@ -35,7 +35,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import com.readapp.ui.components.MangaAsyncImage
 import com.readapp.ui.theme.AppDimens
 import com.readapp.ui.theme.customColors
 
@@ -65,9 +65,11 @@ internal fun ParagraphItem(
                 ?.get(1)
         }
         if (imgUrl != null) {
-            AsyncImage(
-                model = imgUrl,
-                contentDescription = null,
+            MangaAsyncImage(
+                rawUrl = imgUrl,
+                serverUrl = serverUrl,
+                chapterUrl = chapterUrl,
+                forceProxy = forceProxy,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),

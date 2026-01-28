@@ -86,7 +86,7 @@ class ReadRepository(
         }
         return result.map { list ->
             list.map { book ->
-                val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
                 book.copy(coverUrl = resolvedCover).toUiModel()
             }
         }
@@ -505,7 +505,7 @@ class ReadRepository(
                 it.exploreBook(accessToken, bookSourceUrl, ruleFindUrl, page)
             }(endpoints).map { list ->
                 list.map { book ->
-                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
                     book.copy(coverUrl = resolvedCover)
                 }
             }
@@ -513,7 +513,7 @@ class ReadRepository(
                 it.exploreBook(accessToken, bookSourceUrl, ruleFindUrl, page)
             }(endpoints).map { list ->
                 list.map { book ->
-                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
                     book.copy(coverUrl = resolvedCover)
                 }
             }
@@ -595,7 +595,7 @@ class ReadRepository(
                 it.searchBook(accessToken, keyword, bookSourceUrl, page)
             }(endpoints).map { list ->
                 list.map { book ->
-                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
                     book.copy(coverUrl = resolvedCover)
                 }
             }
@@ -603,7 +603,7 @@ class ReadRepository(
                 it.searchBook(accessToken, keyword, bookSourceUrl, page)
             }(endpoints).map { list ->
                 list.map { book ->
-                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl)
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
                     book.copy(coverUrl = resolvedCover)
                 }
             }
@@ -727,11 +727,11 @@ class ReadRepository(
     private fun formatDecimal(value: Double): String =
         String.format(Locale.US, "%.2f", value)
 
-    private fun resolveCoverUrl(baseUrl: String, coverUrl: String?): String? {
-        if (coverUrl.isNullOrBlank()) return coverUrl
+    private fun resolveCoverUrl(baseUrl: String, coverUrl: String?, bookUrl: String?, bookSourceUrl: String?): String? {
+        if (coverUrl.isNullOrBlank()) return buildPdfCoverUrl(baseUrl, bookUrl, bookSourceUrl)
         val trimmed = coverUrl.trim()
         if (trimmed.equals("null", true) || trimmed.equals("nil", true) || trimmed.equals("undefined", true)) {
-            return null
+            return buildPdfCoverUrl(baseUrl, bookUrl, bookSourceUrl)
         }
         val root = stripApiBasePath(baseUrl)
         return when {
@@ -740,6 +740,19 @@ class ReadRepository(
             trimmed.startsWith("assets/") || trimmed.startsWith("book-assets/") -> "$root/$trimmed"
             else -> trimmed
         }
+    }
+
+    private fun buildPdfCoverUrl(baseUrl: String, bookUrl: String?, bookSourceUrl: String?): String? {
+        if (!isLocalPdf(bookUrl, bookSourceUrl)) return null
+        if (bookUrl.isNullOrBlank()) return null
+        val root = stripApiBasePath(baseUrl)
+        val encodedPath = Uri.encode(bookUrl)
+        return "$root/api/v5/pdfImage?path=$encodedPath&page=0"
+    }
+
+    private fun isLocalPdf(bookUrl: String?, bookSourceUrl: String?): Boolean {
+        val url = bookUrl?.lowercase() ?: return false
+        return bookSourceUrl == "loc_book" && url.endsWith(".pdf")
     }
 
     private suspend fun resolveReaderLocalContentIfNeeded(rawContent: String, baseUrl: String, publicUrl: String?): String {

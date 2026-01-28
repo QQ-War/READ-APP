@@ -40,7 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import com.readapp.ui.components.RemoteCoverImage
 import com.readapp.Screen
 import com.readapp.data.model.Book
 import com.readapp.ui.theme.AppDimens
@@ -437,7 +437,12 @@ private fun BookCover(
         contentAlignment = Alignment.Center
     ) {
         if (!coverUrl.isNullOrBlank()) {
-            AsyncImage(model = coverUrl, contentDescription = "书籍封面", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            RemoteCoverImage(
+                url = coverUrl,
+                contentDescription = "书籍封面",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
         } else {
             Icon(Icons.Default.Book, null, modifier = Modifier.size(48.dp), tint = Color.White.copy(alpha = 0.5f))
         }

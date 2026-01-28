@@ -24,13 +24,8 @@ import coil.load
 import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import com.readapp.data.ApiBackend
-import com.readapp.data.detectApiBackend
-import com.readapp.data.normalizeApiBaseUrl
-import com.readapp.data.stripApiBasePath
 import com.readapp.data.LocalCacheManager
-import com.readapp.data.manga.MangaAntiScrapingService
-import com.readapp.data.manga.MangaImageNormalizer
+import com.readapp.data.manga.MangaImageRequestFactory
 
 class MangaAdapter(
     var paragraphs: List<String>,
@@ -61,12 +56,13 @@ class MangaAdapter(
         val imgUrl = extractImgUrl(text)
         
         if (imgUrl != null) {
-            val base = stripApiBasePath(serverUrl)
-            val finalUrl = MangaImageNormalizer.resolveUrl(imgUrl, base)
-            val proxyUrl = buildProxyUrl(finalUrl)
-            val requestUrl = if (forceProxy && proxyUrl != null) proxyUrl else finalUrl
-            val profile = MangaAntiScrapingService.resolveProfile(finalUrl, chapterUrl)
-            val referer = MangaAntiScrapingService.resolveReferer(profile, chapterUrl, finalUrl)
+            val request = MangaImageRequestFactory.build(
+                rawUrl = imgUrl,
+                serverUrl = serverUrl,
+                chapterUrl = chapterUrl,
+                forceProxy = forceProxy
+            ) ?: return
+            val finalUrl = request.resolvedUrl
             val cacheManager = LocalCacheManager(holder.imageView.context)
             val cachedBytes = if (!bookUrl.isNullOrBlank() && chapterIndex != null) {
                 cacheManager.loadMangaImage(bookUrl, chapterIndex, finalUrl)
@@ -77,16 +73,9 @@ class MangaAdapter(
                 return
             }
 
-            holder.imageView.load(requestUrl) {
+            val imageRequest = MangaImageRequestFactory.buildImageRequest(holder.imageView.context, request)
+            holder.imageView.load(imageRequest) {
                 crossfade(true)
-                if (referer != null) {
-                    addHeader("Referer", referer)
-                }
-                val ua = profile?.userAgent ?: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
-                addHeader("User-Agent", ua)
-                profile?.extraHeaders?.forEach { (key, value) ->
-                    addHeader(key, value)
-                }
                 listener(object : coil.request.ImageRequest.Listener {
                     override fun onSuccess(request: ImageRequest, result: SuccessResult) {
                         if (!bookUrl.isNullOrBlank() && chapterIndex != null) {
@@ -98,9 +87,15 @@ class MangaAdapter(
                     }
 
                     override fun onError(request: ImageRequest, result: ErrorResult) {
-                        if (!forceProxy && proxyUrl != null) {
+                        if (!forceProxy) {
+                            val fallback = MangaImageRequestFactory.build(
+                                rawUrl = imgUrl,
+                                serverUrl = serverUrl,
+                                chapterUrl = chapterUrl,
+                                forceProxy = true
+                            ) ?: return
                             holder.imageView.post {
-                                holder.imageView.load(proxyUrl)
+                                holder.imageView.load(MangaImageRequestFactory.buildImageRequest(holder.imageView.context, fallback))
                             }
                         }
                     }
@@ -116,20 +111,6 @@ class MangaAdapter(
     private fun extractImgUrl(text: String): String? {
         val pattern = """(?:__IMG__|<img[^>]+(?:src|data-src)=["']?)([^"'>\s\n]+)["']?""" .toRegex()
         return pattern.find(text)?.groupValues?.get(1)
-    }
-
-    private fun buildProxyUrl(finalUrl: String): String? {
-        val backend = detectApiBackend(serverUrl)
-        if (backend != ApiBackend.Read) {
-            return null
-        }
-        val base = stripApiBasePath(normalizeApiBaseUrl(serverUrl, backend))
-        return android.net.Uri.parse(base).buildUpon()
-            .path("api/5/proxypng")
-            .appendQueryParameter("url", finalUrl)
-            .appendQueryParameter("accessToken", "")
-            .build()
-            .toString()
     }
 
     private fun drawableToBytes(drawable: android.graphics.drawable.Drawable): ByteArray? {

@@ -78,7 +78,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
-import coil.compose.AsyncImage
+import com.readapp.ui.components.MangaAsyncImage
+import com.readapp.ui.components.SelectableMessageDialog
 
 private enum class ChapterNavIntent {
     NONE, FIRST, LAST
@@ -246,11 +247,10 @@ fun ReadingScreen(
     }
     
     if (errorMessage != null) {
-        AlertDialog(
-            onDismissRequest = onClearError,
-            title = { Text("错误") },
-            text = { Text(errorMessage) },
-            confirmButton = { TextButton(onClick = onClearError) { Text("好的") } }
+        SelectableMessageDialog(
+            title = "错误",
+            message = errorMessage,
+            onDismiss = onClearError
         )
     }
     
@@ -581,7 +581,18 @@ fun ReadingScreen(
                     val lineHeightPx = with(LocalDensity.current) { (readingFontSize * 1.8f).sp.toPx() }
                     val density = LocalDensity.current
                     val availableConstraints = remember(constraints, contentPadding, density) { adjustedConstraints(constraints, contentPadding, density) }
-                    val paginatedPages = rememberPaginatedText(currentParagraphs, style, availableConstraints, lineHeightPx, headerText, headerFontSize, density)
+                    val paginatedPages = rememberPaginatedText(
+                        paragraphs = currentParagraphs,
+                        style = style,
+                        constraints = availableConstraints,
+                        lineHeightPx = lineHeightPx,
+                        headerText = headerText,
+                        headerFontSize = headerFontSize,
+                        density = density,
+                        serverUrl = serverUrl,
+                        chapterUrl = currentChapterUrl,
+                        forceProxy = forceProxy
+                    )
                     
                     key(currentChapterIndex) { // 强行重置 Pager 状态
                         val pagerState = rememberPagerState(initialPage = 0, pageCount = { paginatedPages.pages.size.coerceAtLeast(1) })
@@ -742,12 +753,24 @@ private fun rememberPaginatedText(
     lineHeightPx: Float,
     headerText: String,
     headerFontSize: TextUnit,
-    density: Density
+    density: Density,
+    serverUrl: String,
+    chapterUrl: String?,
+    forceProxy: Boolean
 ): PaginationResult {
     val textMeasurer = rememberTextMeasurer()
-    return remember(paragraphs, style, constraints, lineHeightPx, headerText, headerFontSize, density) {
+    return remember(paragraphs, style, constraints, lineHeightPx, headerText, headerFontSize, density, serverUrl, chapterUrl, forceProxy) {
         if (paragraphs.isEmpty() || constraints.maxWidth == 0 || constraints.maxHeight == 0) return@remember PaginationResult(emptyList(), AnnotatedString(""))
-        val inlineResult = buildInlineContent(paragraphs, headerText, headerFontSize, constraints.maxWidth.toFloat(), density)
+        val inlineResult = buildInlineContent(
+            paragraphs = paragraphs,
+            headerText = headerText,
+            headerFontSize = headerFontSize,
+            maxWidthPx = constraints.maxWidth.toFloat(),
+            density = density,
+            serverUrl = serverUrl,
+            chapterUrl = chapterUrl,
+            forceProxy = forceProxy
+        )
         val paragraphStartIndices = inlineResult.paragraphStarts
         val fullText = inlineResult.text
         val layout = textMeasurer.measure(
@@ -816,7 +839,10 @@ private fun buildInlineContent(
     headerText: String,
     headerFontSize: TextUnit,
     maxWidthPx: Float,
-    density: Density
+    density: Density,
+    serverUrl: String,
+    chapterUrl: String?,
+    forceProxy: Boolean
 ): InlineContentResult {
     val inlineContent = mutableMapOf<String, InlineTextContent>()
     val paragraphStarts = mutableListOf<Int>()
@@ -848,9 +874,11 @@ private fun buildInlineContent(
             val heightSp = with(density) { height.toSp() }
             val placeholder = Placeholder(width = widthSp, height = heightSp, placeholderVerticalAlign = PlaceholderVerticalAlign.AboveBaseline)
             inlineContent[id] = InlineTextContent(placeholder = placeholder) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = null,
+                MangaAsyncImage(
+                    rawUrl = imageUrl,
+                    serverUrl = serverUrl,
+                    chapterUrl = chapterUrl,
+                    forceProxy = forceProxy,
                     modifier = Modifier.fillMaxWidth(),
                     contentScale = ContentScale.FillWidth
                 )

@@ -29,9 +29,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import com.readapp.ui.components.RemoteCoverImage
 import com.readapp.data.model.Book
 import com.readapp.viewmodel.BookSearchUiState
 import com.readapp.viewmodel.BookSearchViewModel
@@ -163,11 +162,9 @@ fun BookSearchItem(book: Book, onClick: () -> Unit) {
             modifier = Modifier.padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = book.coverUrl,
+            RemoteCoverImage(
+                url = book.coverUrl,
                 contentDescription = book.name,
-                placeholder = painterResource(id = android.R.drawable.ic_menu_report_image),
-                error = painterResource(id = android.R.drawable.ic_menu_report_image),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(60.dp, 80.dp)
             )

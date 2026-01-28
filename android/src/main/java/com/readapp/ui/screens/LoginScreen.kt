@@ -3,6 +3,7 @@ package com.readapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -256,12 +257,14 @@ fun LoginScreen(
                     
                     // 错误消息
                     if (errorMessage != null) {
-                        Text(
-                            text = errorMessage!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        SelectionContainer {
+                            Text(
+                                text = errorMessage!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))

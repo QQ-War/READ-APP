@@ -12,9 +12,21 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
     }
     private var mangaPrefetchNextIndex: Int? = null
 
+    private fun resolveContentType(book: Book, isManga: Boolean): Int {
+        if (book.type == 1) return 1
+        return if (isManga) 2 else 0
+    }
+
     suspend fun loadChapters(book: Book) {
         val bookUrl = book.bookUrl ?: return
         viewModel._isChapterListLoading.value = true
+        val isLocalPdf = viewModel.isLocalPdf(book)
+        val normalizeChapters: (List<com.readapp.data.model.Chapter>) -> List<com.readapp.data.model.Chapter> = { list ->
+            if (!isLocalPdf) return@normalizeChapters list
+            list.mapIndexed { idx, chapter ->
+                if (chapter.index == idx) chapter else chapter.copy(index = idx)
+            }
+        }
         val chaptersResult = runCatching {
             viewModel.bookRepository.fetchChapterList(
                 viewModel.currentServerEndpoint(),
@@ -27,7 +39,11 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
             Log.e(TAG, "加载章节列表失败", throwable)
             val cached = viewModel.loadChapterListFromCache(bookUrl)
             if (!cached.isNullOrEmpty()) {
-                viewModel._chapters.value = cached
+                val normalized = normalizeChapters(cached)
+                if (normalized != cached) {
+                    viewModel.saveChapterListToCache(bookUrl, normalized)
+                }
+                viewModel._chapters.value = normalized
                 viewModel._isChapterListLoading.value = false
                 return
             }
@@ -36,10 +52,11 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
             return
         }
         chaptersResult.onSuccess { chapterList ->
-            viewModel._chapters.value = chapterList
-            viewModel.saveChapterListToCache(bookUrl, chapterList)
-            if (chapterList.isNotEmpty()) {
-                val index = viewModel._currentChapterIndex.value.coerceIn(0, chapterList.lastIndex)
+            val normalized = normalizeChapters(chapterList)
+            viewModel._chapters.value = normalized
+            viewModel.saveChapterListToCache(bookUrl, normalized)
+            if (normalized.isNotEmpty()) {
+                val index = viewModel._currentChapterIndex.value.coerceIn(0, normalized.lastIndex)
                 viewModel._currentChapterIndex.value = index
                 loadChapterContent(index)
             }
@@ -69,11 +86,7 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
         val bookUrl = book.bookUrl ?: return null
 
         val isManga = viewModel.manualMangaUrls.value.contains(bookUrl) || book.type == 2
-        val effectiveType = when {
-            book.type == 1 -> 1
-            isManga -> 2
-            else -> 0
-        }
+        val effectiveType = resolveContentType(book, isManga)
 
         if (viewModel._isChapterContentLoading.value) {
             return viewModel._currentChapterContent.value.ifBlank { null }
@@ -153,7 +166,7 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
         viewModel._prevChapterIndex.value = prevIndex
         viewModel._nextChapterIndex.value = nextIndex
 
-        val effectiveType = 0
+        val effectiveType = resolveContentType(book, false)
         val prevContent = prevIndex?.let { fetchChapterContentForIndex(it, effectiveType) }
         val nextContent = nextIndex?.let { fetchChapterContentForIndex(it, effectiveType) }
 
@@ -211,7 +224,7 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
         if (mangaPrefetchNextIndex == nextIndex) return
         mangaPrefetchNextIndex = nextIndex
         try {
-            val content = fetchChapterContentForIndex(nextIndex, 2)
+            val content = fetchChapterContentForIndex(nextIndex, resolveContentType(book, true))
             if (!content.isNullOrBlank()) {
                 viewModel._nextChapterIndex.value = nextIndex
                 viewModel._nextChapterContent.value = content

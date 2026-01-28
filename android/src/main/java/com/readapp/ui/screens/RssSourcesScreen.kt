@@ -45,7 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
+import com.readapp.ui.components.RemoteCoverImage
 import com.readapp.ui.theme.AppDimens
 import com.readapp.viewmodel.BookViewModel
 import com.readapp.viewmodel.RssViewModel
@@ -166,15 +166,13 @@ fun RssSourcesScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (!source.sourceIcon.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = source.sourceIcon,
+                                RemoteCoverImage(
+                                    url = source.sourceIcon,
                                     contentDescription = null,
                                     modifier = Modifier
                                         .size(40.dp)
                                         .clip(RoundedCornerShape(AppDimens.CornerRadiusMedium)),
-                                    contentScale = ContentScale.Crop,
-                                    placeholder = null,
-                                    error = null
+                                    contentScale = ContentScale.Crop
                                 )
                                 Spacer(modifier = Modifier.size(12.dp))
                             } else {

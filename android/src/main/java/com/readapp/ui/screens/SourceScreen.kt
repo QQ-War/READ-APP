@@ -65,13 +65,12 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
+import com.readapp.ui.components.RemoteCoverImage
 import com.google.gson.Gson
 import com.readapp.data.model.Book
 import com.readapp.data.model.BookSource
@@ -484,11 +483,9 @@ fun BookSearchResultRow(
             modifier = Modifier.padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = book.coverUrl,
+            RemoteCoverImage(
+                url = book.coverUrl,
                 contentDescription = book.name,
-                placeholder = painterResource(id = android.R.drawable.ic_menu_report_image), // Fallback image
-                error = painterResource(id = android.R.drawable.ic_menu_report_image), // Fallback image
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(60.dp, 80.dp)
             )

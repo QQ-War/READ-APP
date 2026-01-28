@@ -36,6 +36,7 @@ object MangaImageExtractor {
         if (results.isEmpty() || results.size < minExpectedImageCount || MangaImageNormalizer.shouldPreferSignedUrls(results.toList(), normalizedText)) {
             val fallbackResults = linkedSetOf<String>()
             val patterns = listOf(
+                """https?://[^\s"'<>]+/pdfimage\?[^\s"'<>]+""",
                 """https?://[^\s"'<>]+(?:\?|&)(?:sign|t)=[^\s"'<>]+""",
                 """https?://[^\s"'<>]+(?:\.(?:jpg|jpeg|png|webp|gif|bmp))(?:\?[^\"'\s<>]*)?"""
             ).map { it.toRegex(RegexOption.IGNORE_CASE) }

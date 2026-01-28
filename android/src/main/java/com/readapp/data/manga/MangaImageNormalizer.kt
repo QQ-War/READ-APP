@@ -11,7 +11,10 @@ object MangaImageNormalizer {
             val idx = lower.indexOf(pattern)
             if (idx >= 0) {
                 val end = idx + pattern.length
-                return if (end < trimmed.length) trimmed.substring(0, end) else trimmed
+                if (end < trimmed.length && trimmed[end] == ',') {
+                    return trimmed.substring(0, end)
+                }
+                return trimmed
             }
         }
         val idx1 = trimmed.indexOf(",%7B")
@@ -46,6 +49,11 @@ object MangaImageNormalizer {
             }
         }
         return url
+    }
+
+    fun normalizeCoverUrl(raw: String): String {
+        val cleaned = sanitizeUrlString(raw)
+        return if (cleaned.startsWith("http")) normalizeHost(cleaned) else cleaned
     }
 
     fun shouldPreferSignedUrls(results: List<String>, text: String): Boolean {

@@ -3,7 +3,6 @@ package com.readapp
 import android.content.ClipData
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
@@ -54,6 +53,7 @@ import com.readapp.data.model.BookSource
 import com.readapp.ui.screens.BookSearchScreen
 import com.readapp.viewmodel.BookSearchViewModel
 import com.readapp.ui.screens.TtsEngineManageScreen
+import com.readapp.ui.components.AppToastHost
 import java.net.URLDecoder
 import java.net.URLEncoder
 import kotlin.text.Charsets.UTF_8
@@ -84,6 +84,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
     val accessToken by bookViewModel.accessToken.collectAsState()
     val isInitialized by bookViewModel.isInitialized.collectAsState()
     val isLoading by bookViewModel.isLoading.collectAsState()
+    val toastMessage by bookViewModel.toastMessage.collectAsState()
     val context = LocalContext.current
 
     val importBookLauncher = rememberLauncherForActivityResult(
@@ -533,6 +534,10 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 CircularProgressIndicator(modifier = Modifier.padding(16.dp))
             }
         }
+        AppToastHost(
+            message = toastMessage,
+            onDismiss = bookViewModel::clearToastMessage
+        )
     }
 }
 

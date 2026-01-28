@@ -24,9 +24,8 @@ import com.readapp.data.detectApiBackend
 import com.readapp.data.normalizeApiBaseUrl
 import com.readapp.data.stripApiBasePath
 import com.readapp.data.RemoteDataSourceFactory
-import com.readapp.data.manga.MangaAntiScrapingService
 import com.readapp.data.manga.MangaImageExtractor
-import com.readapp.data.manga.MangaImageNormalizer
+import com.readapp.data.manga.MangaImageRequestFactory
 import com.readapp.data.repo.AuthRepository
 import com.readapp.data.repo.BookRepository
 import com.readapp.data.repo.ReplaceRuleRepository
@@ -54,7 +53,6 @@ import com.readapp.data.model.ReplaceRule
 import com.readapp.data.model.TtsAudioRequest
 import com.readapp.ui.state.ReaderUiState
 import android.speech.tts.Voice
-import android.widget.Toast
 import android.os.SystemClock
 
 class BookViewModel(application: Application) : AndroidViewModel(application) {
@@ -220,6 +218,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val username: StateFlow<String> = _username.asStateFlow()
     internal val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private val _toastMessage = MutableStateFlow<String?>(null)
+    val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     private val _onlineSearchResults = MutableStateFlow<List<Book>>(emptyList())
@@ -318,6 +318,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val readerUiState: StateFlow<ReaderUiState> = readerState.readerUiState
 
     fun clearError() { _errorMessage.value = null }
+    fun clearToastMessage() { _toastMessage.value = null }
+
+    internal fun isLocalPdf(book: Book?): Boolean {
+        val bookUrl = book?.bookUrl?.lowercase() ?: return false
+        return book.origin == "loc_book" && bookUrl.endsWith(".pdf")
+    }
 
     // ==================== 鍒濆鍖?====================
 
@@ -1090,9 +1096,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val actualEnd = endIndex.coerceIn(actualStart, chapters.lastIndex)
         val count = actualEnd - actualStart + 1
 
-        // 判断是否为漫画模式
+        // 判断是否为漫画模式 / 本地 PDF
         val isManga = manualMangaUrls.value.contains(book.bookUrl) || book.type == 2
         val effectiveType = if (isManga) 2 else 0
+        val shouldCacheImages = isManga
 
         viewModelScope.launch(Dispatchers.IO) {
             for (i in actualStart..actualEnd) {
@@ -1109,14 +1116,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     ).onSuccess { content ->
                         val cleaned = cleanChapterContent(content.orEmpty())
                         localCache.saveChapter(book.bookUrl ?: "", i, cleaned)
-                        if (isManga) {
+                        if (shouldCacheImages) {
                             cacheMangaImages(book, chapter, i, cleaned)
                         }
                     }
                 }
             }
             withContext(Dispatchers.Main) {
-                Toast.makeText(appContext, "缓存完成 ($count 章)", Toast.LENGTH_SHORT).show()
+                _toastMessage.value = "缓存完成 ($count 章)"
             }
         }
     }
@@ -1132,22 +1139,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val forceProxy = readerSettings.forceMangaProxy.value
         val client = okhttp3.OkHttpClient()
         for (img in images) {
-            val resolved = resolveImageUrl(img)
-            val profile = MangaAntiScrapingService.resolveProfile(resolved, chapter.url)
-            val referer = MangaAntiScrapingService.resolveReferer(profile, chapter.url, resolved)
+            val requestInfo = MangaImageRequestFactory.build(
+                rawUrl = img,
+                serverUrl = currentServerEndpoint(),
+                chapterUrl = chapter.url,
+                forceProxy = forceProxy,
+                accessToken = _accessToken.value
+            ) ?: continue
+            val resolved = requestInfo.resolvedUrl
             if (localCache.isMangaImageCached(bookUrl, chapterIndex, resolved)) continue
-            val proxyUrl = buildProxyUrl(resolved)
-            val requestUrl = if (forceProxy && proxyUrl != null) proxyUrl else resolved
             val request = okhttp3.Request.Builder()
-                .url(requestUrl)
+                .url(requestInfo.requestUrl)
                 .apply {
-                    if (!referer.isNullOrBlank()) {
-                        header("Referer", referer)
-                    }
-                }
-                .header("User-Agent", profile?.userAgent ?: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
-                .apply {
-                    profile?.extraHeaders?.forEach { (key, value) ->
+                    requestInfo.headers.forEach { (key, value) ->
                         header(key, value)
                     }
                 }
@@ -1163,18 +1167,17 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
-            if (!forceProxy && proxyUrl != null) {
+            if (!forceProxy) {
+                val proxyUrl = MangaImageRequestFactory.buildProxyUrl(
+                    url = resolved,
+                    serverUrl = currentServerEndpoint(),
+                    accessToken = _accessToken.value
+                )
                 runCatching {
                     val fallback = okhttp3.Request.Builder()
-                        .url(proxyUrl)
+                        .url(proxyUrl ?: resolved)
                         .apply {
-                            if (!referer.isNullOrBlank()) {
-                                header("Referer", referer)
-                            }
-                        }
-                        .header("User-Agent", profile?.userAgent ?: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
-                        .apply {
-                            profile?.extraHeaders?.forEach { (key, value) ->
+                            requestInfo.headers.forEach { (key, value) ->
                                 header(key, value)
                             }
                         }
@@ -1190,25 +1193,6 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
-    }
-
-    private fun resolveImageUrl(url: String): String {
-        val base = stripApiBasePath(currentServerEndpoint())
-        return MangaImageNormalizer.resolveUrl(url, base)
-    }
-
-    private fun buildProxyUrl(url: String): String? {
-        val backend = detectApiBackend(currentServerEndpoint())
-        if (backend != ApiBackend.Read) {
-            return null
-        }
-        val base = stripApiBasePath(normalizeApiBaseUrl(currentServerEndpoint(), backend))
-        return Uri.parse(base).buildUpon()
-            .path("api/5/proxypng")
-            .appendQueryParameter("url", url)
-            .appendQueryParameter("accessToken", _accessToken.value)
-            .build()
-            .toString()
     }
 
     private suspend fun loadChapters(book: Book) = readerInteractor.loadChapters(book)

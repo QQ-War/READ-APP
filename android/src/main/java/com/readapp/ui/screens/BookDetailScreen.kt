@@ -24,7 +24,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import com.readapp.ui.components.RemoteCoverImage
 import com.readapp.data.model.Book
 import com.readapp.data.model.Chapter
 import com.readapp.ui.theme.AppDimens
@@ -362,8 +362,8 @@ private fun BookHeaderSection(
             .padding(16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        AsyncImage(
-            model = book.coverUrl,
+        RemoteCoverImage(
+            url = book.coverUrl,
             contentDescription = null,
             modifier = Modifier
                 .width(100.dp)
