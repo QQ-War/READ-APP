@@ -335,7 +335,7 @@ struct ReaderOptionsSheet: View {
                                     Text("\(Int(preferences.verticalThreshold)) pt")
                                         .foregroundColor(.secondary)
                                 }
-                                Slider(value: $preferences.verticalThreshold, in: 50...150, step: 5)
+                                Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
                             }
                             .padding(.vertical, 4)
                         }

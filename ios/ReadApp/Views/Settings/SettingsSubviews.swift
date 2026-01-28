@@ -163,7 +163,7 @@ struct ReadingSettingsView: View {
                                 Text("\(Int(preferences.verticalThreshold)) pt")
                                     .foregroundColor(.secondary)
                             }
-                            Slider(value: $preferences.verticalThreshold, in: 50...150, step: 5)
+                            Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
                             Text("数值越小越灵敏，数值越大拉伸感越强")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
