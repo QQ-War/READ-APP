@@ -93,6 +93,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     
     weak var delegate: HorizontalCollectionViewDelegate?
     var onImageTapped: ((URL) -> Void)?
+    var onAddReplaceRule: ((String) -> Void)?
     
     var pages: [PaginatedPage] = []
     var pageInfos: [TK2PageInfo] = []
@@ -234,6 +235,9 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         cell.onImageTapped = { [weak self] url in
             self?.onImageTapped?(url)
         }
+        cell.onAddReplaceRule = { [weak self] text in
+            self?.onAddReplaceRule?(text)
+        }
         
         return cell
     }
@@ -339,6 +343,7 @@ class ReaderPageCell: UICollectionViewCell {
     
     var onTapLocation: ((ReaderTapLocation) -> Void)?
     var onImageTapped: ((URL) -> Void)?
+    var onAddReplaceRule: ((String) -> Void)?
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -359,6 +364,9 @@ class ReaderPageCell: UICollectionViewCell {
         }
         contentView2.onImageTapped = { [weak self] url in
             self?.onImageTapped?(url)
+        }
+        contentView2.onAddReplaceRule = { [weak self] text in
+            self?.onAddReplaceRule?(text)
         }
     }
     

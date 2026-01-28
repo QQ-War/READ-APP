@@ -196,6 +196,9 @@ extension ReaderContainerViewController {
     func setupNewHorizontalMode() {
         let vc = HorizontalCollectionViewController()
         vc.delegate = self
+        vc.onAddReplaceRule = { [weak self] text in
+            self?.onAddReplaceRuleWithText?(text)
+        }
         vc.onImageTapped = { [weak self] url in
             self?.presentImagePreview(url: url)
         }
