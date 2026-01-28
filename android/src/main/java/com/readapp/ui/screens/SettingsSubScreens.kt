@@ -234,8 +234,8 @@ fun ReadingSettingsScreen(
                     Slider(
                         value = mangaSwitchThreshold.toFloat(),
                         onValueChange = { onMangaSwitchThresholdChange(it.toInt()) },
-                        valueRange = 40f..300f,
-                        steps = 25
+                        valueRange = 50f..500f,
+                        steps = 44
                     )
                     Text("数值越小越容易切章，数值越大越稳", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 }

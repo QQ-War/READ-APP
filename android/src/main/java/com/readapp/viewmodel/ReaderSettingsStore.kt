@@ -140,7 +140,7 @@ class ReaderSettingsStore(
     }
 
     fun updateMangaSwitchThreshold(threshold: Int) {
-        _mangaSwitchThreshold.value = threshold.coerceIn(40, 300)
+        _mangaSwitchThreshold.value = threshold.coerceIn(50, 500)
         scope.launch { preferences.saveMangaSwitchThreshold(_mangaSwitchThreshold.value) }
     }
 
