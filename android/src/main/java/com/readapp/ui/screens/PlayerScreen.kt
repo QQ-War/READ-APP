@@ -32,99 +32,122 @@ fun PlayerScreen(
     totalTime: String,
     progress: Float,
     isPlaying: Boolean,
+    playbackSpeed: Float,
     onPlayPauseClick: () -> Unit,
     onPreviousParagraph: () -> Unit,
     onNextParagraph: () -> Unit,
     onPreviousChapter: () -> Unit,
     onNextChapter: () -> Unit,
     onShowChapterList: () -> Unit,
+    onSpeedChange: (Float) -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(AppDimens.PaddingLarge),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // 顶部工具栏
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    Box(modifier = modifier.fillMaxSize()) {
+        if (!book.coverUrl.isNullOrBlank()) {
+            androidx.compose.foundation.Image(
+                painter = coil.compose.rememberAsyncImagePainter(book.coverUrl),
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .graphicsLayer(alpha = 0.15f)
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(AppDimens.PaddingLarge),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            IconButton(onClick = onExit) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "退出",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+            // 顶部工具栏
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onExit) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "退出",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                IconButton(onClick = { /* 更多选项 */ }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "更多",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
             
-            IconButton(onClick = { /* 更多选项 */ }) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "更多",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            // 大封面
+            BookCoverLarge(
+                emoji = book.coverEmoji,
+                coverUrl = book.coverUrl,
+                isPlaying = isPlaying,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .padding(horizontal = 32.dp)
+            )
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            // 播放信息
+            PlaybackInfo(
+                bookTitle = book.title,
+                chapterTitle = chapterTitle,
+                currentParagraph = currentParagraph,
+                totalParagraphs = totalParagraphs
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // 进度条
+            PlaybackProgress(
+                progress = progress,
+                currentTime = currentTime,
+                totalTime = totalTime
+            )
+
+            PlaybackSpeedRow(
+                speed = playbackSpeed,
+                onSpeedChange = onSpeedChange
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // 播放控制
+            PlaybackControls(
+                isPlaying = isPlaying,
+                onPlayPauseClick = onPlayPauseClick,
+                onPreviousChapter = onPreviousChapter,
+                onNextChapter = onNextChapter
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // 快捷控制
+            QuickControls(
+                onPreviousParagraph = onPreviousParagraph,
+                onShowChapterList = onShowChapterList,
+                onNextParagraph = onNextParagraph
+            )
         }
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // 大封面
-        BookCoverLarge(
-            emoji = book.coverEmoji,
-            isPlaying = isPlaying,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .padding(horizontal = 32.dp)
-        )
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // 播放信息
-        PlaybackInfo(
-            bookTitle = book.title,
-            chapterTitle = chapterTitle,
-            currentParagraph = currentParagraph,
-            totalParagraphs = totalParagraphs
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // 进度条
-        PlaybackProgress(
-            progress = progress,
-            currentTime = currentTime,
-            totalTime = totalTime
-        )
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // 播放控制
-        PlaybackControls(
-            isPlaying = isPlaying,
-            onPlayPauseClick = onPlayPauseClick,
-            onPreviousChapter = onPreviousChapter,
-            onNextChapter = onNextChapter
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // 快捷控制
-        QuickControls(
-            onPreviousParagraph = onPreviousParagraph,
-            onShowChapterList = onShowChapterList,
-            onNextParagraph = onNextParagraph
-        )
     }
 }
 
 @Composable
 private fun BookCoverLarge(
     emoji: String,
+    coverUrl: String?,
     isPlaying: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -148,11 +171,40 @@ private fun BookCoverLarge(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = emoji,
-            style = MaterialTheme.typography.displayLarge,
-            fontSize = 120.sp
-        )
+        if (!coverUrl.isNullOrBlank()) {
+            androidx.compose.foundation.Image(
+                painter = coil.compose.rememberAsyncImagePainter(coverUrl),
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Text(
+                text = emoji,
+                style = MaterialTheme.typography.displayLarge,
+                fontSize = 120.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaybackSpeedRow(
+    speed: Float,
+    onSpeedChange: (Float) -> Unit
+) {
+    val options = listOf(0.8f, 1.0f, 1.25f, 1.5f, 2.0f)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+    ) {
+        options.forEach { value ->
+            FilterChip(
+                selected = speed == value,
+                onClick = { onSpeedChange(value) },
+                label = { Text("${value}x") }
+            )
+        }
     }
 }
 

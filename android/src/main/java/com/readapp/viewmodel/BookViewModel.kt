@@ -94,6 +94,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val replaceRuleRepository = ReplaceRuleRepository(remoteDataSourceFactory, repository)
     internal val chapterContentRepository = ChapterContentRepository(repository, localCache)
     private val ttsController = TtsController(this)
+    private val audioController = AudioBookController(this)
     private val ttsSyncCoordinator by lazy { TtsSyncCoordinator(this) }
     private val readerInteractor = ReaderInteractor(this)
 
@@ -121,6 +122,24 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
     internal val _showTtsControls = MutableStateFlow(false)
     val showTtsControls: StateFlow<Boolean> = _showTtsControls.asStateFlow()
+
+    internal val _audioIsPlaying = MutableStateFlow(false)
+    internal val _audioProgress = MutableStateFlow(0f)
+    internal val _audioDurationMs = MutableStateFlow(0L)
+    internal val _audioPositionMs = MutableStateFlow(0L)
+    internal val _audioSpeed = MutableStateFlow(1.0f)
+    internal val _audioChapterTitle = MutableStateFlow("")
+    internal val _audioCurrentIndex = MutableStateFlow(0)
+    internal val _audioErrorMessage = MutableStateFlow<String?>(null)
+
+    val audioIsPlaying: StateFlow<Boolean> = _audioIsPlaying.asStateFlow()
+    val audioProgress: StateFlow<Float> = _audioProgress.asStateFlow()
+    val audioDurationMs: StateFlow<Long> = _audioDurationMs.asStateFlow()
+    val audioPositionMs: StateFlow<Long> = _audioPositionMs.asStateFlow()
+    val audioSpeed: StateFlow<Float> = _audioSpeed.asStateFlow()
+    val audioChapterTitle: StateFlow<String> = _audioChapterTitle.asStateFlow()
+    val audioCurrentIndex: StateFlow<Int> = _audioCurrentIndex.asStateFlow()
+    val audioErrorMessage: StateFlow<String?> = _audioErrorMessage.asStateFlow()
 
     internal val _currentTime = MutableStateFlow("00:00")
     val currentTime: StateFlow<String> = _currentTime.asStateFlow()
@@ -372,6 +391,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 ttsController.bindMediaController(controllerFuture.get())
             }, MoreExecutors.directExecutor())
         }
+
+        viewModelScope.launch {
+            val sessionToken = SessionToken(appContext, ComponentName(appContext, com.readapp.media.AudioBookService::class.java))
+            val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
+            controllerFuture.addListener({
+                audioController.bindMediaController(controllerFuture.get())
+            }, MoreExecutors.directExecutor())
+        }
     }
 
     // ==================== 鍑€鍖栬鍒欑姸鎬?====================
@@ -486,6 +513,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         ttsController.release()
+        audioController.release()
     }
 
     // =================================================================
@@ -529,6 +557,136 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 Log.w(TAG, "保存阅读进度失败: ${error.message}", error)
             }
         }
+    }
+
+    internal fun saveAudioProgress() {
+        val book = _selectedBook.value ?: return
+        val bookUrl = book.bookUrl ?: return
+        val token = _accessToken.value
+        if (token.isBlank()) return
+
+        val index = _audioCurrentIndex.value
+        val progress = _audioProgress.value.toDouble()
+        val title = _chapters.value.getOrNull(index)?.title ?: book.durChapterTitle
+
+        val now = System.currentTimeMillis()
+        val updatedBook = book.copy(
+            durChapterIndex = index,
+            durChapterTitle = title,
+            durChapterPos = progress,
+            durChapterTime = now
+        )
+        _selectedBook.value = updatedBook
+        allBooks = allBooks.map { if (it.bookUrl == bookUrl) updatedBook else it }
+        applyBooksFilterAndSort()
+
+        viewModelScope.launch {
+            bookRepository.saveBookProgress(
+                currentServerEndpoint(),
+                _publicServerAddress.value.ifBlank { null },
+                token,
+                bookUrl,
+                index,
+                progress,
+                title
+            ).onFailure { error ->
+                Log.w(TAG, "保存音频进度失败: ${error.message}", error)
+            }
+        }
+    }
+
+    fun startAudioBook() {
+        val book = _selectedBook.value ?: return
+        if (book.bookUrl.isNullOrBlank()) return
+        com.readapp.media.AudioBookService.startService(appContext)
+        viewModelScope.launch {
+            if (_chapters.value.isEmpty()) {
+                loadAudioChapters(book)
+            }
+            val index = _audioCurrentIndex.value.coerceIn(0, _chapters.value.lastIndex.coerceAtLeast(0))
+            playAudioChapter(index)
+        }
+    }
+
+    private suspend fun loadAudioChapters(book: Book) {
+        val bookUrl = book.bookUrl ?: return
+        val result = bookRepository.fetchChapterList(
+            currentServerEndpoint(),
+            _publicServerAddress.value.ifBlank { null },
+            _accessToken.value,
+            bookUrl,
+            book.origin
+        )
+        result.onSuccess { list ->
+            _chapters.value = list
+            saveChapterListToCache(bookUrl, list)
+            val index = (book.durChapterIndex ?: 0).coerceIn(0, list.lastIndex.coerceAtLeast(0))
+            _audioCurrentIndex.value = index
+        }.onFailure {
+            _audioErrorMessage.value = "加载目录失败: ${it.message}"
+        }
+    }
+
+    fun playAudioChapter(index: Int) {
+        val book = _selectedBook.value ?: return
+        val bookUrl = book.bookUrl ?: return
+        val chapter = _chapters.value.getOrNull(index) ?: return
+        viewModelScope.launch {
+            val result = bookRepository.fetchChapterContent(
+                currentServerEndpoint(),
+                _publicServerAddress.value.ifBlank { null },
+                _accessToken.value,
+                bookUrl,
+                book.origin,
+                chapter.index,
+                1
+            )
+            result.onSuccess { content ->
+                val audioUrl = extractAudioUrl(content)
+                if (audioUrl == null) {
+                    _audioErrorMessage.value = "未找到音频地址"
+                } else {
+                    _audioCurrentIndex.value = index
+                    _audioChapterTitle.value = chapter.title
+                    audioController.playUrl(audioUrl, chapter.title, book.coverUrl)
+                    saveAudioProgress()
+                }
+            }.onFailure {
+                _audioErrorMessage.value = "加载音频失败: ${it.message}"
+            }
+        }
+    }
+
+    fun toggleAudioPlayPause() {
+        audioController.togglePlayPause()
+    }
+
+    fun seekAudioTo(progress: Float) {
+        audioController.seekTo(progress)
+    }
+
+    fun setAudioSpeed(speed: Float) {
+        _audioSpeed.value = speed
+        audioController.setSpeed(speed)
+    }
+
+    fun nextAudioChapter() {
+        val next = (_audioCurrentIndex.value + 1).coerceAtMost(_chapters.value.lastIndex)
+        if (next != _audioCurrentIndex.value) playAudioChapter(next)
+    }
+
+    fun previousAudioChapter() {
+        val prev = (_audioCurrentIndex.value - 1).coerceAtLeast(0)
+        if (prev != _audioCurrentIndex.value) playAudioChapter(prev)
+    }
+
+    private fun extractAudioUrl(content: String): String? {
+        val trimmed = content.trim()
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return trimmed
+        }
+        val regex = Regex("(https?://[^\\s\\\"'<>]+)")
+        return regex.find(content)?.value
     }
 
     internal suspend fun ensureCurrentChapterContent(): String? {

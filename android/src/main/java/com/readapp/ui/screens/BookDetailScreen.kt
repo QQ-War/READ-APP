@@ -53,6 +53,7 @@ fun BookDetailScreen(
     val isManuallyMarkedAsManga = remember(manualMangaUrls, book.bookUrl) {
         manualMangaUrls.contains(book.bookUrl)
     }
+    val isAudioBook = book.type == 1
 
     Scaffold(
         // ... topBar ...
@@ -73,32 +74,51 @@ fun BookDetailScreen(
                 )
             }
 
-            // Manga Mode Toggle
+            if (!isAudioBook) {
+                // Manga Mode Toggle
+                item {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clickable { book.bookUrl?.let { onToggleManualManga(it) } },
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Book, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(16.dp))
+                            Text(
+                                "强制漫画模式",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Switch(
+                                checked = isManuallyMarkedAsManga,
+                                onCheckedChange = { book.bookUrl?.let { onToggleManualManga(it) } }
+                            )
+                        }
+                    }
+                }
+            }
+
             item {
-                Surface(
+                Button(
+                    onClick = onStartReading,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .clickable { book.bookUrl?.let { onToggleManualManga(it) } },
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(12.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Book, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(16.dp))
-                        Text(
-                            "强制漫画模式",
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Switch(
-                            checked = isManuallyMarkedAsManga,
-                            onCheckedChange = { book.bookUrl?.let { onToggleManualManga(it) } }
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isAudioBook) "开始播放" else "开始阅读")
                 }
             }
 
@@ -390,10 +410,18 @@ private fun BookHeaderSection(
             }
 
             Spacer(Modifier.height(8.dp))
-            SuggestionChip(
-                onClick = { },
-                label = { Text(book.originName ?: "未知来源") }
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SuggestionChip(
+                    onClick = { },
+                    label = { Text(book.originName ?: "未知来源") }
+                )
+                if (book.type == 1) {
+                    SuggestionChip(
+                        onClick = { },
+                        label = { Text("音频书") }
+                    )
+                }
+            }
             if (book.durChapterTitle != null) {
                 Text(
                     "读至: ${book.durChapterTitle}",

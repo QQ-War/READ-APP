@@ -9,6 +9,7 @@ final class AudioReadingViewModel: ObservableObject {
     @Published var isPlaying = false
     @Published var progress: Double = 0
     @Published var duration: Double = 0
+    @Published var playbackRate: Double = 1.0
 
     private var timeObserver: Any?
     private var player: AVPlayer?
@@ -87,12 +88,20 @@ final class AudioReadingViewModel: ObservableObject {
 
     func play() {
         player?.play()
+        player?.rate = Float(playbackRate)
         isPlaying = true
     }
 
     func pause() {
         player?.pause()
         isPlaying = false
+    }
+
+    func setSpeed(_ rate: Double) {
+        playbackRate = rate
+        if isPlaying {
+            player?.rate = Float(rate)
+        }
     }
 
     func nextChapter() {
@@ -117,7 +126,7 @@ final class AudioReadingViewModel: ObservableObject {
 
     private func setupAudioSession() {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [])
+        try? session.setCategory(.playback, mode: .default, options: [.allowAirPlay])
         try? session.setActive(true)
     }
 
@@ -198,39 +207,76 @@ struct AudioReadingView: View {
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 16) {
-                VStack(spacing: 8) {
-                    Text(book.name ?? "音频书籍")
-                        .font(.headline)
-                        .lineLimit(1)
-                    Text(viewModel.currentTitle)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+            ZStack {
+                if let coverUrl = book.displayCoverUrl {
+                    CachedRemoteImage(urlString: coverUrl) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color.black.opacity(0.1)
+                    }
+                    .blur(radius: 20)
+                    .opacity(0.25)
+                    .ignoresSafeArea()
                 }
 
-                Slider(value: Binding(
-                    get: { viewModel.progress },
-                    set: { viewModel.seek(to: $0) }
-                ))
+                VStack(spacing: 16) {
+                    VStack(spacing: 8) {
+                        Text(book.name ?? "音频书籍")
+                            .font(.headline)
+                            .lineLimit(1)
+                        Text(viewModel.currentTitle)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
 
-                HStack(spacing: 24) {
-                    Button(action: viewModel.previousChapter) {
-                        Image(systemName: "backward.fill").font(.title2)
+                    if let coverUrl = book.displayCoverUrl {
+                        CachedRemoteImage(urlString: coverUrl) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Color.gray.opacity(0.3)
+                        }
+                        .frame(width: 220, height: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .shadow(radius: 8)
                     }
-                    Button(action: viewModel.playPause) {
-                        Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 48))
+
+                    Slider(value: Binding(
+                        get: { viewModel.progress },
+                        set: { viewModel.seek(to: $0) }
+                    ))
+
+                    HStack(spacing: 24) {
+                        Button(action: viewModel.previousChapter) {
+                            Image(systemName: "backward.fill").font(.title2)
+                        }
+                        Button(action: viewModel.playPause) {
+                            Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                .font(.system(size: 48))
+                        }
+                        Button(action: viewModel.nextChapter) {
+                            Image(systemName: "forward.fill").font(.title2)
+                        }
                     }
-                    Button(action: viewModel.nextChapter) {
-                        Image(systemName: "forward.fill").font(.title2)
+                    .padding(.vertical, 8)
+
+                    HStack(spacing: 12) {
+                        ForEach([0.8, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
+                            Button(action: { viewModel.setSpeed(rate) }) {
+                                Text(String(format: "%.2gx", rate))
+                                    .font(.caption)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(viewModel.playbackRate == rate ? Color.blue.opacity(0.2) : Color.gray.opacity(0.15))
+                                    .cornerRadius(8)
+                            }
+                        }
                     }
+
+                    Spacer()
                 }
-                .padding(.vertical, 8)
-
-                Spacer()
+                .padding()
             }
-            .padding()
             .navigationTitle("音频播放")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

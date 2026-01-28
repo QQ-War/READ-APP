@@ -69,7 +69,11 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
         val bookUrl = book.bookUrl ?: return null
 
         val isManga = viewModel.manualMangaUrls.value.contains(bookUrl) || book.type == 2
-        val effectiveType = if (isManga) 2 else 0
+        val effectiveType = when {
+            book.type == 1 -> 1
+            isManga -> 2
+            else -> 0
+        }
 
         if (viewModel._isChapterContentLoading.value) {
             return viewModel._currentChapterContent.value.ifBlank { null }

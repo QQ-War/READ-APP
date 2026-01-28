@@ -30,6 +30,7 @@ import com.readapp.ui.screens.CacheManagementScreen
 import com.readapp.ui.screens.MainScreen
 import com.readapp.ui.screens.LoginScreen
 import com.readapp.ui.screens.ReadingScreen
+import com.readapp.ui.screens.AudioBookScreen
 import com.readapp.ui.screens.ReplaceRuleScreen
 import com.readapp.ui.screens.RssSourcesScreen
 import com.readapp.ui.screens.SettingsScreen
@@ -155,11 +156,19 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                         },
                         onNavigateBack = { navController.popBackStack() },
                         onStartReading = {
-                            navController.navigate(Screen.Reading.route)
+                            if (book.type == 1) {
+                                navController.navigate(Screen.AudioPlayer.route)
+                            } else {
+                                navController.navigate(Screen.Reading.route)
+                            }
                         },
                         onChapterClick = { index ->
                             bookViewModel.setCurrentChapter(index)
-                            navController.navigate(Screen.Reading.route)
+                            if (book.type == 1) {
+                                navController.navigate(Screen.AudioPlayer.route)
+                            } else {
+                                navController.navigate(Screen.Reading.route)
+                            }
                         },
                         onDownloadChapters = { start, end ->
                             bookViewModel.downloadChapters(start, end)
@@ -258,6 +267,16 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                         }
                     )
                 }
+            }
+
+            composable(Screen.AudioPlayer.route) {
+                AudioBookScreen(
+                    bookViewModel = bookViewModel,
+                    onExit = {
+                        bookViewModel.saveAudioProgress()
+                        navController.popBackStack()
+                    }
+                )
             }
 
             // 设置页面
@@ -523,6 +542,7 @@ sealed class Screen(val route: String) {
     object Bookshelf : Screen("bookshelf")
     object BookDetail : Screen("book_detail")
     object Reading : Screen("reading")
+    object AudioPlayer : Screen("audio_player")
     object Settings : Screen("settings")
     object SettingsAccount : Screen("settings_account")
     object SettingsReading : Screen("settings_reading")

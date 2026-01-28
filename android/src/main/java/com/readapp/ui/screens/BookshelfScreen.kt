@@ -175,8 +175,12 @@ fun BookshelfScreen(
                                     mainNavController.navigate(Screen.BookDetail.route)
                                 },
                                 onInfoClick = { 
-                                    bookViewModel.selectBook(book)
-                                    mainNavController.navigate(Screen.Reading.route)
+                                bookViewModel.selectBook(book)
+                                    if (book.type == 1) {
+                                        mainNavController.navigate(Screen.AudioPlayer.route)
+                                    } else {
+                                        mainNavController.navigate(Screen.Reading.route)
+                                    }
                                 }
                             )
                         }
@@ -193,8 +197,12 @@ fun BookshelfScreen(
                                     mainNavController.navigate(Screen.BookDetail.route)
                                 },
                                 onInfoClick = { 
-                                    bookViewModel.selectBook(book)
-                                    mainNavController.navigate(Screen.Reading.route)
+                                bookViewModel.selectBook(book)
+                                    if (book.type == 1) {
+                                        mainNavController.navigate(Screen.AudioPlayer.route)
+                                    } else {
+                                        mainNavController.navigate(Screen.Reading.route)
+                                    }
                                 }
                             )
                         }
