@@ -123,7 +123,7 @@ final class MangaImageService {
                 return data
             }
             let elapsed = Date().timeIntervalSince(startedAt)
-            logger.log("图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: \"%.2f\", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
+            logger.log("图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: "%.2f", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
             
             // 针对 403/401 的二次重试逻辑（使用更保守的站点主页作为 Referer）
             if (statusCode == 403 || statusCode == 401), let fallbackReferer = profile?.referer {
@@ -136,12 +136,12 @@ final class MangaImageService {
                     return retryData
                 }
                 let retryElapsed = Date().timeIntervalSince(retryStartedAt)
-                logger.log("图片重试失败: status=\(retryStatus) bytes=\(retryData.count) elapsed=\(String(format: \"%.2f\", retryElapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
+                logger.log("图片重试失败: status=\(retryStatus) bytes=\(retryData.count) elapsed=\(String(format: "%.2f", retryElapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
             }
         } catch {
             let elapsed = Date().timeIntervalSince(startedAt)
             let nsError = error as NSError
-            logger.log("图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: \"%.2f\", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
+            logger.log("图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: "%.2f", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
             return nil
         }
         return nil
@@ -162,11 +162,11 @@ final class MangaImageService {
                 return data
             }
             let elapsed = Date().timeIntervalSince(startedAt)
-            logger.log("PDF图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: \"%.2f\", elapsed))s url=\(url.absoluteString)", category: "漫画调试")
+            logger.log("PDF图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: "%.2f", elapsed))s url=\(url.absoluteString)", category: "漫画调试")
         } catch {
             let elapsed = Date().timeIntervalSince(startedAt)
             let nsError = error as NSError
-            logger.log("PDF图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: \"%.2f\", elapsed))s url=\(url.absoluteString)", category: "漫画调试")
+            logger.log("PDF图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: "%.2f", elapsed))s url=\(url.absoluteString)", category: "漫画调试")
         }
         return nil
     }
