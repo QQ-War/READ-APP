@@ -12,8 +12,11 @@ struct SourceListView: View {
     @State private var importURL = ""
     @State private var showingFilePicker = false
     
-    @State private var exportItems: [Any] = []
-    @State private var showingShareSheet = false
+    private struct SharePayload: Identifiable {
+        let id = UUID()
+        let items: [Any]
+    }
+    @State private var sharePayload: SharePayload?
     @State private var isExporting = false
     
     // 分组展开状态
@@ -87,8 +90,8 @@ struct SourceListView: View {
                             }
                         }
             }
-            .sheet(isPresented: $showingShareSheet) {
-                ActivityView(activityItems: exportItems)
+            .sheet(item: $sharePayload) { payload in
+                ActivityView(activityItems: payload.items)
             }
             .alert("网络导入", isPresented: $showingURLImportDialog) {
                 TextField("输入书源 URL", text: $importURL)
@@ -138,8 +141,7 @@ struct SourceListView: View {
                 try json.write(to: fileURL, atomically: true, encoding: .utf8)
                 
                 await MainActor.run {
-                    exportItems = [fileURL]
-                    showingShareSheet = true
+                    sharePayload = SharePayload(items: [fileURL])
                 }
             } else {
                 UIPasteboard.general.string = json
