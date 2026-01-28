@@ -85,6 +85,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
     }
     private var isTransitioning = false
+    private var isChapterSwitching = false
     private var suppressAutoSwitchUntil: TimeInterval = 0
     private var dragStartTime: TimeInterval = 0
     var dampingFactor: CGFloat = 0.12
@@ -534,9 +535,10 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         onInteractionChanged?(false)
         
         if !isInfiniteScrollEnabled {
-            if switchReady && pendingSwitchDirection != 0 && !isTransitioning {
+            if switchReady && pendingSwitchDirection != 0 && !isTransitioning && !isChapterSwitching {
                 let direction = pendingSwitchDirection
                 isTransitioning = true
+                isChapterSwitching = true
                 scrollView.isUserInteractionEnabled = false
                 
                 // 停止当前的滚动速度，防止回弹干扰转场
@@ -569,6 +571,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     
     private func executeSeamlessSwitchIfNeeded() {
         if pendingSeamlessSwitch != 0 {
+            if isChapterSwitching { return }
             let dir = pendingSeamlessSwitch
             let y = scrollView.contentOffset.y
             
@@ -588,8 +591,14 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             
             if safeToSwitch {
                 pendingSeamlessSwitch = 0
+                isChapterSwitching = true
                 showSwitchResultHint(direction: dir)
                 onChapterSwitched?(dir)
+            }
+            if isChapterSwitching {
+                if isChapterSwap || isChapterSwapToPrev || (!isInfiniteScrollEnabled && !isTransitioning && pendingSwitchDirection == 0) {
+                    isChapterSwitching = false
+                }
             }
         }
     }
@@ -919,7 +928,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        guard !isInfiniteScrollEnabled, scrollView.isDragging else {
+        guard !isInfiniteScrollEnabled, scrollView.isDragging, !isChapterSwitching else {
             if isInfiniteScrollEnabled && !isShowingSwitchResultHint { hideSwitchHint() }
             return
         }
@@ -1372,6 +1381,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
+        if isChapterSwitching { return }
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
         let topPullDistance = max(0, -rawOffset)
         let bottomPullDistance = max(0, rawOffset - actualMaxScrollY)
