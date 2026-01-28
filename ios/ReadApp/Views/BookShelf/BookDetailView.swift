@@ -247,7 +247,7 @@ struct BookDetailView: View {
     private var headerSection: some View {
         HStack(alignment: .top, spacing: 16) {
             if let coverUrl = book.displayCoverUrl {
-                AsyncImage(url: URL(string: coverUrl)) { image in
+                CachedRemoteImage(urlString: coverUrl) { image in
                     image.resizable().aspectRatio(contentMode: .fill)
                 } placeholder: {
                     Color.gray.opacity(0.3)
@@ -255,6 +255,7 @@ struct BookDetailView: View {
                 .frame(width: 100, height: 140)
                 .cornerRadius(8)
                 .shadow(radius: 4)
+                .clipped()
             }
             
             VStack(alignment: .leading, spacing: 8) {
