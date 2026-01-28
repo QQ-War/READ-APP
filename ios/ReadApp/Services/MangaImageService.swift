@@ -115,23 +115,33 @@ final class MangaImageService {
         }
         request.setValue(finalReferer, forHTTPHeaderField: "Referer")
 
+        let startedAt = Date()
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             if statusCode == 200, !data.isEmpty {
                 return data
             }
+            let elapsed = Date().timeIntervalSince(startedAt)
+            logger.log("图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: \"%.2f\", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
             
             // 针对 403/401 的二次重试逻辑（使用更保守的站点主页作为 Referer）
             if (statusCode == 403 || statusCode == 401), let fallbackReferer = profile?.referer {
                 var retryRequest = request
                 retryRequest.setValue(fallbackReferer, forHTTPHeaderField: "Referer")
+                let retryStartedAt = Date()
                 let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
-                if (retryResponse as? HTTPURLResponse)?.statusCode == 200 {
+                let retryStatus = (retryResponse as? HTTPURLResponse)?.statusCode ?? 0
+                if retryStatus == 200, !retryData.isEmpty {
                     return retryData
                 }
+                let retryElapsed = Date().timeIntervalSince(retryStartedAt)
+                logger.log("图片重试失败: status=\(retryStatus) bytes=\(retryData.count) elapsed=\(String(format: \"%.2f\", retryElapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
             }
         } catch {
+            let elapsed = Date().timeIntervalSince(startedAt)
+            let nsError = error as NSError
+            logger.log("图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: \"%.2f\", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
             return nil
         }
         return nil
@@ -144,13 +154,19 @@ final class MangaImageService {
         request.cachePolicy = .returnCacheDataElseLoad
         request.setValue("image/png,image/*;q=0.8,*/*;q=0.5", forHTTPHeaderField: "Accept")
 
+        let startedAt = Date()
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            if (response as? HTTPURLResponse)?.statusCode == 200 {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if statusCode == 200, !data.isEmpty {
                 return data
             }
+            let elapsed = Date().timeIntervalSince(startedAt)
+            logger.log("PDF图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: \"%.2f\", elapsed))s url=\(url.absoluteString)", category: "漫画调试")
         } catch {
-            logger.log("PDF图片请求异常: \(error.localizedDescription) url=\(url.absoluteString)", category: "漫画调试")
+            let elapsed = Date().timeIntervalSince(startedAt)
+            let nsError = error as NSError
+            logger.log("PDF图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: \"%.2f\", elapsed))s url=\(url.absoluteString)", category: "漫画调试")
         }
         return nil
     }
