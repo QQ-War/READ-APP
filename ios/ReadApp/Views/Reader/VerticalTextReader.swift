@@ -934,13 +934,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
-                // 如果已经 Ready，只要不缩回 10pt 以内就保持 Ready，增加稳定性
-                if pullDistance < 10 { switchReady = false }
-                if !switchReady {
-                    updateSwitchHint(text: "下拉切换上一章", isTop: true)
-                } else {
-                    updateSwitchHint(text: "松开切换上一章", isTop: true)
-                }
+                if switchReady { switchReady = false }
+                updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
         } else if rawOffset > actualMaxScrollY + 5 {
             let pullDistance = rawOffset - actualMaxScrollY
@@ -950,15 +945,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
-                if pullDistance < 10 { switchReady = false }
-                if !switchReady {
-                    updateSwitchHint(text: "上拉切换下一章", isTop: false)
-                } else {
-                    updateSwitchHint(text: "松开切换下一章", isTop: false)
-                }
+                if switchReady { switchReady = false }
+                updateSwitchHint(text: "上拉切换下一章", isTop: false)
             }
         } else {
-            if !switchReady && rawOffset > -2 && rawOffset < actualMaxScrollY + 2 { hideSwitchHint() }
+            // 回到正常区域，必须清除所有状态
+            cancelSwitchHold()
         }
     }
     
@@ -1393,12 +1385,8 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                 }
                 updateSwitchHint(text: "松开切换上一章", isTop: true)
             } else {
-                if topPullDistance < 10 { switchReady = false }
-                if !switchReady {
-                    updateSwitchHint(text: "下拉切换上一章", isTop: true)
-                } else {
-                    updateSwitchHint(text: "松开切换上一章", isTop: true)
-                }
+                if switchReady { switchReady = false }
+                updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
         } else if bottomPullDistance > 5 {
             if bottomPullDistance > threshold {
@@ -1409,17 +1397,12 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                 }
                 updateSwitchHint(text: "松开切换下一章", isTop: false)
             } else {
-                if bottomPullDistance < 10 { switchReady = false }
-                if !switchReady {
-                    updateSwitchHint(text: "上拉切换下一章", isTop: false)
-                } else {
-                    updateSwitchHint(text: "松开切换下一章", isTop: false)
-                }
+                if switchReady { switchReady = false }
+                updateSwitchHint(text: "上拉切换下一章", isTop: false)
             }
         } else {
-            if !scrollView.isDragging && rawOffset >= -5 && rawOffset <= actualMaxScrollY + 5 {
-                cancelSwitchHold()
-            }
+            // 回到正常区域
+            cancelSwitchHold()
         }
     }
 
