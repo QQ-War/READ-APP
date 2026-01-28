@@ -294,10 +294,13 @@ struct AudioReadingView: View {
         }
         .onAppear {
             viewModel.loadChapters()
+            // 进入时更新一次排序时间
+            bookshelfStore.updateProgress(bookUrl: book.bookUrl ?? "", index: viewModel.currentIndex, pos: viewModel.progress, title: viewModel.currentTitle, updateTimestamp: true)
         }
         .onChange(of: viewModel.currentIndex) { newValue in
             let pos = viewModel.progress
-            bookshelfStore.updateProgress(bookUrl: book.bookUrl ?? "", index: newValue, pos: pos, title: viewModel.currentTitle)
+            // 切章时不更新排序时间，防止书架列表重排导致导航失效
+            bookshelfStore.updateProgress(bookUrl: book.bookUrl ?? "", index: newValue, pos: pos, title: viewModel.currentTitle, updateTimestamp: false)
         }
         .onChange(of: viewModel.errorMessage) { newValue in
             guard let message = newValue, !message.isEmpty else { return }

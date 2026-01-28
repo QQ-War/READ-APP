@@ -132,15 +132,19 @@ struct BookListView: View {
     @ViewBuilder
     private func bookRowView(for book: Book) -> some View {
         HStack(spacing: 0) {
-            // 左侧封面：点击进入详情页
-            NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore)) {
+            // 左侧封面：点击设置状态触发 ZStack 中的 NavigationLink
+            Button(action: { selectedBookForDetail = book }) {
                 BookCoverImage(url: book.displayCoverUrl)
             }
             .frame(width: 60, height: 80)
             .buttonStyle(PlainButtonStyle())
             
             // 右侧信息：点击直接进入阅读器
-            Button(action: { selectedBook = book }) {
+            Button(action: { 
+                // 启动阅读器前先更新一次排序时间，确保书籍排到最前
+                bookshelfStore.updateProgress(bookUrl: book.bookUrl ?? "", index: book.durChapterIndex ?? 0, pos: book.durChapterPos ?? 0, title: book.durChapterTitle, updateTimestamp: true)
+                selectedBook = book 
+            }) {
                 BookInfoArea(book: book)
                     .contentShape(Rectangle())
             }

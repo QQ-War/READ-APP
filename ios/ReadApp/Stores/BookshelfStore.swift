@@ -58,13 +58,15 @@ final class BookshelfStore: ObservableObject {
         await refreshBookshelf()
     }
 
-    func updateProgress(bookUrl: String, index: Int, pos: Double, title: String?) {
+    func updateProgress(bookUrl: String, index: Int, pos: Double, title: String?, updateTimestamp: Bool = true) {
         guard let idx = books.firstIndex(where: { $0.bookUrl == bookUrl }) else { return }
         var updated = books[idx]
         updated.durChapterIndex = index
         updated.durChapterPos = pos
         updated.durChapterTitle = title
-        updated.durChapterTime = Int64(Date().timeIntervalSince1970 * 1000)
+        if updateTimestamp {
+            updated.durChapterTime = Int64(Date().timeIntervalSince1970 * 1000)
+        }
         books[idx] = updated
         LocalCacheManager.shared.saveBookshelfCache(books)
     }
