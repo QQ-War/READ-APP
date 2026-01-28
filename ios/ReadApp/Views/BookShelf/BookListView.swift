@@ -105,11 +105,6 @@ struct BookListView: View {
                 .foregroundColor(.secondary)
             }
         }
-        .alert("错误", isPresented: .constant(bookshelfStore.errorMessage != nil)) {
-            Button("确定") { bookshelfStore.errorMessage = nil }
-        } message: {
-            if let error = bookshelfStore.errorMessage { Text(error) }
-        }
         .alert("操作结果", isPresented: $listViewModel.showAddResultAlert) {
             Button("确定", role: .cancel) { }
         } message: {

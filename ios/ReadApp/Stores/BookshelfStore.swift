@@ -27,7 +27,10 @@ final class BookshelfStore: ObservableObject {
             if Task.isCancelled || error is CancellationError {
                 return
             }
-            errorMessage = error.localizedDescription
+            let nsError = error as NSError
+            let detail = nsError.localizedDescription
+            let codeInfo = "\(nsError.domain)#\(nsError.code)"
+            errorMessage = "书架刷新失败(\(codeInfo)): \(detail)"
         }
     }
 
