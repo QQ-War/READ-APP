@@ -21,8 +21,8 @@ internal class ReaderInteractor(private val viewModel: BookViewModel) {
         val bookUrl = book.bookUrl ?: return
         viewModel._isChapterListLoading.value = true
         val isLocalPdf = viewModel.isLocalPdf(book)
-        val normalizeChapters: (List<com.readapp.data.model.Chapter>) -> List<com.readapp.data.model.Chapter> = { list ->
-            if (!isLocalPdf) return@normalizeChapters list
+        val normalizeChapters: (List<com.readapp.data.model.Chapter>) -> List<com.readapp.data.model.Chapter> = label@{ list ->
+            if (!isLocalPdf) return@label list
             list.mapIndexed { idx, chapter ->
                 if (chapter.index == idx) chapter else chapter.copy(index = idx)
             }

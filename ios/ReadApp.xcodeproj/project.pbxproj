@@ -285,6 +285,7 @@
 			isa = PBXGroup;
 			children = (
 				1A000014000000000000001 /* ReadingView.swift */,
+				1A000101000000000000001 /* AudioReadingView.swift */,
 				1A000099000000000000001 /* VerticalTextReader.swift */,
 				1A0000AA000000000000001 /* ReaderContainer.swift */,
 				1A0000F9000000000000001 /* ImagePreviewViewController.swift */,
@@ -368,7 +369,6 @@
 				1A0000FB000000000000001 /* ActivityView.swift */,
 				1A0000FD000000000000001 /* ToastView.swift */,
 				1A0000FF000000000000001 /* SelectableMessageSheet.swift */,
-				1A000101000000000000001 /* AudioReadingView.swift */,
 				A20000070000000000000001 /* CachedRemoteImage.swift */,
 				7B4B2D6E5A2A4C7AA1F0A001 /* ViewExtensions.swift */,
 			);

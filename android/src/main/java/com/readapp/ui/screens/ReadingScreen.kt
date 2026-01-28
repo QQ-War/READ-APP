@@ -591,7 +591,7 @@ fun ReadingScreen(
                         density = density,
                         serverUrl = serverUrl,
                         chapterUrl = currentChapterUrl,
-                        forceProxy = forceProxy
+                        forceProxy = forceMangaProxy
                     )
                     
                     key(currentChapterIndex) { // 强行重置 Pager 状态
