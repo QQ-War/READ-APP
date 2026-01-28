@@ -221,6 +221,7 @@ struct ChangePasswordView: View {
     @State private var confirmPassword = ""
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var errorSheet: SelectableMessage?
     @State private var showSuccess = false
 
     var body: some View {
@@ -258,11 +259,16 @@ struct ChangePasswordView: View {
             } message: {
                 Text("密码修改成功")
             }
-            .alert("错误", isPresented: .constant(errorMessage != nil)) {
-                Button("确定") { errorMessage = nil }
-            } message: {
-                if let error = errorMessage { Text(error) }
+            .sheet(item: $errorSheet) { sheet in
+                SelectableMessageSheet(title: sheet.title, message: sheet.message) {
+                    errorMessage = nil
+                    errorSheet = nil
+                }
             }
+        }
+        .onChange(of: errorMessage) { newValue in
+            guard let message = newValue, !message.isEmpty else { return }
+            errorSheet = SelectableMessage(title: "错误", message: message)
         }
     }
 

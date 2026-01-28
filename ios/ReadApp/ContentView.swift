@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var toastMessage: String?
     @State private var showToast = false
     @State private var toastTask: Task<Void, Never>?
+    @State private var toastDetail: SelectableMessage?
     
     var body: some View {
         ZStack {
@@ -45,11 +46,19 @@ struct ContentView: View {
             if showToast, let message = toastMessage {
                 VStack {
                     ToastView(message: message)
+                        .onTapGesture {
+                            toastDetail = SelectableMessage(title: "错误", message: message)
+                        }
                         .transition(.move(edge: .top).combined(with: .opacity))
                     Spacer()
                 }
                 .padding(.top, 12)
                 .animation(.easeInOut(duration: 0.2), value: showToast)
+            }
+        }
+        .sheet(item: $toastDetail) { detail in
+            SelectableMessageSheet(title: detail.title, message: detail.message) {
+                toastDetail = nil
             }
         }
         .onChange(of: bookshelfStore.errorMessage) { newValue in

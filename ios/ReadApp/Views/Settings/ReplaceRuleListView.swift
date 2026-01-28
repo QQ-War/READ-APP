@@ -9,6 +9,7 @@ struct ReplaceRuleListView: View {
     @State private var importURL = ""
     @State private var showingFilePicker = false
     @State private var errorMessageAlert: String?
+    @State private var errorSheet: SelectableMessage?
     @State private var exportItems: [Any] = []
     @State private var showingShareSheet = false
     @State private var isExporting = false
@@ -136,15 +137,20 @@ struct ReplaceRuleListView: View {
         } message: {
             Text("请输入合法的规则 JSON 地址")
         }
-        .alert("错误", isPresented: .constant(errorMessageAlert != nil)) {
-            Button("确定") { errorMessageAlert = nil }
-        } message: {
-            if let error = errorMessageAlert { Text(error) }
+        .sheet(item: $errorSheet) { sheet in
+            SelectableMessageSheet(title: sheet.title, message: sheet.message) {
+                errorMessageAlert = nil
+                errorSheet = nil
+            }
         }
         .onAppear {
             Task {
                 await viewModel.fetchRules()
             }
+        }
+        .onChange(of: errorMessageAlert) { newValue in
+            guard let message = newValue, !message.isEmpty else { return }
+            errorSheet = SelectableMessage(title: "错误", message: message)
         }
         .overlay {
             if isExporting {

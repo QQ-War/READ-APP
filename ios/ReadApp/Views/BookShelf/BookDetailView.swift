@@ -12,6 +12,7 @@ struct BookDetailView: View {
     @State private var chapters: [BookChapter] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var errorSheet: SelectableMessage?
     @StateObject private var downloadManager = OfflineDownloadManager.shared
     
     // 下载与缓存状态
@@ -79,10 +80,11 @@ struct BookDetailView: View {
         }
         .task { await loadData() }
         .onReceive(downloadManager.$jobs) { _ in refreshCachedStatus() }
-        .alert("提示", isPresented: .constant(errorMessage != nil)) {
-            Button("确定") { errorMessage = nil }
-        } message: {
-            if let error = errorMessage { Text(error) }
+        .sheet(item: $errorSheet) { sheet in
+            SelectableMessageSheet(title: sheet.title, message: sheet.message) {
+                errorMessage = nil
+                errorSheet = nil
+            }
         }
         .alert("清除缓存", isPresented: $showingClearCacheAlert) {
             Button("取消", role: .cancel) { }
@@ -100,6 +102,10 @@ struct BookDetailView: View {
             SourceSwitchView(bookName: book.name ?? "", author: book.author ?? "", currentSource: book.origin ?? "") { newBook in
                 updateBookSource(with: newBook)
             }
+        }
+        .onChange(of: errorMessage) { newValue in
+            guard let message = newValue, !message.isEmpty else { return }
+            errorSheet = SelectableMessage(title: "提示", message: message)
         }
     }
 

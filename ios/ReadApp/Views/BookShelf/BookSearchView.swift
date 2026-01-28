@@ -7,6 +7,7 @@ struct BookSearchView: View {
     @State private var showingAddSuccessAlert = false
     @State private var showingAddFailureAlert = false
     @State private var alertMessage = ""
+    @State private var errorSheet: SelectableMessage?
 
     var body: some View {
         NavigationView {
@@ -60,13 +61,16 @@ struct BookSearchView: View {
                     }
                 }
             }
-            .alert("错误", isPresented: .constant(viewModel.errorMessage != nil)) {
-                Button("确定", role: .cancel) { viewModel.errorMessage = nil }
-            } message: {
-                if let error = viewModel.errorMessage {
-                    Text(error)
+            .sheet(item: $errorSheet) { sheet in
+                SelectableMessageSheet(title: sheet.title, message: sheet.message) {
+                    viewModel.errorMessage = nil
+                    errorSheet = nil
                 }
             }
+        }
+        .onChange(of: viewModel.errorMessage) { newValue in
+            guard let message = newValue, !message.isEmpty else { return }
+            errorSheet = SelectableMessage(title: "错误", message: message)
         }
     }
 }
