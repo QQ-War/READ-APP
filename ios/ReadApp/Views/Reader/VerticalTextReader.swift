@@ -595,11 +595,6 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 showSwitchResultHint(direction: dir)
                 onChapterSwitched?(dir)
             }
-            if isChapterSwitching {
-                if isChapterSwap || isChapterSwapToPrev || (!isInfiniteScrollEnabled && !isTransitioning && pendingSwitchDirection == 0) {
-                    isChapterSwitching = false
-                }
-            }
         }
     }
 
@@ -1381,7 +1376,6 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        if isChapterSwitching { return }
         let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
         let topPullDistance = max(0, -rawOffset)
         let bottomPullDistance = max(0, rawOffset - actualMaxScrollY)
