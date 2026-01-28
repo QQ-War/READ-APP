@@ -132,12 +132,12 @@ struct BookDetailView: View {
                             ))
                             .labelsHidden()
                         }
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        .background(Color.gray.opacity(0.05))
+                        .cornerRadius(10)
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(Color.gray.opacity(0.05))
-                    .cornerRadius(10)
-                    .padding(.horizontal)
                     
                     // 2. 操作按钮区
                     HStack(spacing: 16) {
