@@ -1246,7 +1246,9 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
 
     func scrollViewDidScroll(_ s: UIScrollView) {
         let rawOffset = s.contentOffset.y
-        handleHoldSwitchIfNeeded(rawOffset: rawOffset)
+        if s.isDragging {
+            handleHoldSwitchIfNeeded(rawOffset: rawOffset)
+        }
         
         let actualMaxScrollY = max(-safeAreaTop, stackView.frame.height - scrollView.bounds.height)
         let currentScale = s.zoomScale
