@@ -99,10 +99,12 @@ extension ReaderContainerViewController {
                 guard let self = self else { return }
                 self.isInternalTransitioning = false
                 self.isAutoScrolling = false
+                self.notifyUserInteractionEnded()
             }
             if !animated {
                 self.isInternalTransitioning = false
                 self.isAutoScrolling = false
+                self.notifyUserInteractionEnded()
             }
             updateProgressUI()
             self.onProgressChanged?(currentChapterIndex, Double(currentPageIndex) / Double(max(1, currentCache.pages.count)))
@@ -131,181 +133,17 @@ extension ReaderContainerViewController {
             Task { @MainActor in
                 let currentVC = h.viewControllers?.first as? PageContentViewController
                 self.completeDataDrift(offset: offset, targetPage: targetPage, currentVC: currentVC)
+                self.notifyUserInteractionEnded()
             }
         }
     }
 
     func handlePageTap(isNext: Bool) {
-        guard !isInternalTransitioning else {
-            finalizeUserInteraction()
-            return
-        }
-        notifyUserInteractionStarted()
-        
-        let t = isNext ? currentPageIndex + 1 : currentPageIndex - 1
-        
-        // 统一检测是否需要跨章
-        let targetChapterOffset = detectTargetChapterOffset(currentPage: currentPageIndex, targetPage: t, isNext: isNext)
-        
-        if targetChapterOffset == 0 {
-            // 同章内翻页
-            let shouldAnimate = readerSettings.pageTurningMode != .none
-            updateHorizontalPage(to: t, animated: shouldAnimate)
-            notifyUserInteractionEnded()
-        } else {
-            // 跨章
-            handleCrossChapter(offset: targetChapterOffset, animated: true)
-        }
-    }
-    
-    private func detectTargetChapterOffset(currentPage: Int, targetPage: Int, isNext: Bool) -> Int {
-        if targetPage >= 0 && targetPage < currentCache.pages.count {
-            return 0
-        }
-        
-        if isNext && currentChapterIndex < chapters.count - 1 {
-            return 1
-        } else if !isNext && currentChapterIndex > 0 {
-            return -1
-        }
-        return 0
-    }
-    
-    private func handleCrossChapter(offset: Int, animated: Bool) {
-        let targetChapter = currentChapterIndex + offset
-        guard targetChapter >= 0 && targetChapter < chapters.count else {
-            finalizeUserInteraction()
-            return
-        }
-        
-        if offset > 0 && !nextCache.pages.isEmpty {
-            animateToAdjacentChapter(offset: 1, targetPage: 0, animated: animated)
-        } else if offset < 0 && !prevCache.pages.isEmpty {
-            animateToAdjacentChapter(offset: -1, targetPage: prevCache.pages.count - 1, animated: animated)
-        } else {
-            isInternalTransitioning = true
-            requestChapterSwitch(to: targetChapter, startAtEnd: offset < 0)
-        }
+        interactionCoordinator.handlePageTap(isNext: isNext)
     }
 
     func performChapterTransition(isNext: Bool, updates: @escaping () -> Void) {
-        let mode = readerSettings.pageTurningMode
-        
-        guard !isInternalTransitioning else { return }
-        isInternalTransitioning = true
-        
-        let transitionStartTime = transitionState.timestamp
-        
-        // 安全锁：使用动态超时，基于 transitionState.timestamp 检测回调是否丢失
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self = self else { return }
-            // 只有当状态未被正常恢复时才强制释放
-            if self.transitionState.isTransitioning && self.transitionState.timestamp == transitionStartTime {
-                self.isInternalTransitioning = false
-                self.notifyUserInteractionEnded()
-            }
-        }
-        
-        let containerView = view!
-        let themeColor = readerSettings.readingTheme.backgroundColor
-        
-        let activeView: UIView?
-        if currentReadingMode == .newHorizontal {
-            activeView = newHorizontalVC?.view
-        } else if currentReadingMode == .horizontal {
-            activeView = horizontalVC?.view
-        } else if currentReadingMode == .vertical {
-            activeView = verticalVC?.view
-        } else {
-            activeView = mangaVC?.view
-        }
-        
-        guard let horizontalView = activeView else {
-            updates()
-            isInternalTransitioning = false
-            notifyUserInteractionEnded()
-            return
-        }
-        
-        // 1. 截取旧视图快照 (Old Snapshot)
-        let oldSnapshot = horizontalView.snapshotView(afterScreenUpdates: false)
-        oldSnapshot?.frame = horizontalView.frame
-        oldSnapshot?.backgroundColor = themeColor
-        
-        if let snap = oldSnapshot { containerView.insertSubview(snap, aboveSubview: horizontalView) }
-        
-        // 2. 执行内容更新，并强制触发布局
-        updates()
-        horizontalView.setNeedsLayout()
-        horizontalView.layoutIfNeeded()
-        
-        if mode == .none {
-            oldSnapshot?.removeFromSuperview()
-            isInternalTransitioning = false
-            notifyUserInteractionEnded()
-            return
-        }
-
-        // 3. 截取新视图快照 (New Snapshot)，用于实现平滑转场，避免 CollectionView 异步重绘闪烁
-        let newSnapshot = horizontalView.snapshotView(afterScreenUpdates: true)
-        newSnapshot?.frame = horizontalView.frame
-        newSnapshot?.backgroundColor = themeColor
-        if let newSnap = newSnapshot { containerView.insertSubview(newSnap, aboveSubview: oldSnapshot!) }
-        
-        // 4. 执行动画 (在快照之间进行)
-        let width = horizontalView.bounds.width
-        switch mode {
-        case .scroll:
-            newSnapshot?.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
-            UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
-                oldSnapshot?.transform = CGAffineTransform(translationX: isNext ? -width : width, y: 0)
-                newSnapshot?.transform = .identity
-            }, completion: { _ in
-                oldSnapshot?.removeFromSuperview()
-                newSnapshot?.removeFromSuperview()
-            })
-            
-        case .cover:
-            // 覆盖模式：新快照从侧边滑入覆盖旧快照
-            newSnapshot?.transform = CGAffineTransform(translationX: isNext ? width : -width, y: 0)
-            newSnapshot?.layer.shadowColor = UIColor.black.cgColor
-            newSnapshot?.layer.shadowOpacity = 0.4
-            newSnapshot?.layer.shadowOffset = CGSize(width: isNext ? -4 : 4, height: 0)
-            newSnapshot?.layer.shadowRadius = 10
-            
-            UIView.animate(withDuration: 0.45, delay: 0, options: .curveEaseOut, animations: {
-                newSnapshot?.transform = .identity
-                oldSnapshot?.transform = CGAffineTransform(translationX: isNext ? -width * 0.3 : width * 0.3, y: 0)
-                oldSnapshot?.alpha = 0.7
-            }, completion: { _ in
-                oldSnapshot?.removeFromSuperview()
-                newSnapshot?.removeFromSuperview()
-            })
-            
-        case .fade, .simulation: 
-            newSnapshot?.alpha = 0
-            UIView.animate(withDuration: 0.35, animations: {
-                oldSnapshot?.alpha = 0
-                newSnapshot?.alpha = 1
-            }, completion: { _ in
-                oldSnapshot?.removeFromSuperview()
-                newSnapshot?.removeFromSuperview()
-            })
-            
-        case .flip:
-            newSnapshot?.isHidden = true
-            UIView.transition(with: containerView, duration: 0.5, options: isNext ? .transitionFlipFromRight : .transitionFlipFromLeft, animations: {
-                oldSnapshot?.isHidden = true
-                newSnapshot?.isHidden = false
-            }) { _ in
-                oldSnapshot?.removeFromSuperview()
-                newSnapshot?.removeFromSuperview()
-            }
-            
-        default:
-            oldSnapshot?.removeFromSuperview()
-            newSnapshot?.removeFromSuperview()
-        }
+        transitionCoordinator.performTransition(mode: readerSettings.pageTurningMode, isNext: isNext, updates: updates)
     }
 
     func performChapterTransitionFade(_ updates: @escaping () -> Void) {

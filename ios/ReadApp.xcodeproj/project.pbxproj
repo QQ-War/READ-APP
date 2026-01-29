@@ -35,6 +35,8 @@
 		1A0000BC000000000000001 /* ReaderContainer+Layout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AE000000000000001 /* ReaderContainer+Layout.swift */; };
 		1A0000BD000000000000001 /* ReaderContainer+Prefetch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000AF000000000000001 /* ReaderContainer+Prefetch.swift */; };
 		1A0000F20000000000000001 /* ReaderPrefetchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F10000000000000001 /* ReaderPrefetchCoordinator.swift */; };
+		1A0000F60000000000000001 /* ReaderInteractionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F50000000000000001 /* ReaderInteractionCoordinator.swift */; };
+		1A0000F80000000000000001 /* ReaderLayoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F70000000000000001 /* ReaderLayoutManager.swift */; };
 		1A0000F40000000000000001 /* TTSReadingSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F30000000000000001 /* TTSReadingSyncCoordinator.swift */; };
 		1A0000C1000000000000001 /* MangaNativeReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B1000000000000001 /* MangaNativeReader.swift */; };
 		1A0000C2000000000000001 /* ReadingControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B2000000000000001 /* ReadingControls.swift */; };
@@ -52,6 +54,19 @@
 		1A0000C9000000000000001 /* ReadingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B9000000000000001 /* ReadingProgress.swift */; };
 		1A0000D3000000000000001 /* ChapterPrefetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000D0000000000000001 /* ChapterPrefetcher.swift */; };
 		1A0000D4000000000000001 /* ReadingPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000D1000000000000001 /* ReadingPosition.swift */; };
+		1A0000FA000000000000010 /* ReaderMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F90000000000000010 /* ReaderMath.swift */; };
+		1A0000FB000000000000010 /* ReaderProgressFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000FA0000000000000010 /* ReaderProgressFormatter.swift */; };
+		1A0000FC000000000000010 /* ReaderSeamlessSwitchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000FB0000000000000010 /* ReaderSeamlessSwitchCoordinator.swift */; };
+		1A0000FD000000000000010 /* ReaderTextPositioning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000FC0000000000000010 /* ReaderTextPositioning.swift */; };
+		1A0000FE000000000000010 /* ReaderTransitionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000FD0000000000000010 /* ReaderTransitionCoordinator.swift */; };
+		1A000110000000000000010 /* ReaderTTSBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00010F0000000000000010 /* ReaderTTSBridge.swift */; };
+		1A000112000000000000010 /* ReaderPositionCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0001110000000000000010 /* ReaderPositionCalculator.swift */; };
+		1A000114000000000000010 /* ReaderTTSContextBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0001130000000000000010 /* ReaderTTSContextBuilder.swift */; };
+		1A000116000000000000010 /* ReaderPositionContextBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0001150000000000000010 /* ReaderPositionContextBuilder.swift */; };
+		1A000118000000000000010 /* ReaderModeControllerFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0001170000000000000010 /* ReaderModeControllerFactory.swift */; };
+		1A00011A000000000000010 /* ReaderProgressCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0001190000000000000010 /* ReaderProgressCoordinator.swift */; };
+		1A00011C000000000000010 /* ReaderModeSwitchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00011B0000000000000010 /* ReaderModeSwitchCoordinator.swift */; };
+		1A00011E000000000000010 /* ReaderModeSwitchContextBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00011D0000000000000010 /* ReaderModeSwitchContextBuilder.swift */; };
 		1A0000D5000000000000001 /* TTSSyncController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000D2000000000000001 /* TTSSyncController.swift */; };
 		1A000005000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A000006000000000000001 /* Assets.xcassets */; };
 		1A000007000000000000001 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000008000000000000001 /* APIService.swift */; };
@@ -143,6 +158,8 @@
 		1A0000AE000000000000001 /* ReaderContainer+Layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReaderContainer+Layout.swift"; sourceTree = "<group>"; };
 		1A0000AF000000000000001 /* ReaderContainer+Prefetch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReaderContainer+Prefetch.swift"; sourceTree = "<group>"; };
 		1A0000F10000000000000001 /* ReaderPrefetchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPrefetchCoordinator.swift; sourceTree = "<group>"; };
+		1A0000F50000000000000001 /* ReaderInteractionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderInteractionCoordinator.swift; sourceTree = "<group>"; };
+		1A0000F70000000000000001 /* ReaderLayoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderLayoutManager.swift; sourceTree = "<group>"; };
 		1A0000F30000000000000001 /* TTSReadingSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSReadingSyncCoordinator.swift; sourceTree = "<group>"; };
 		1A0000B1000000000000001 /* MangaNativeReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaNativeReader.swift; sourceTree = "<group>"; };
 		1A0000B2000000000000001 /* ReadingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingControls.swift; sourceTree = "<group>"; };
@@ -160,6 +177,19 @@
 		1A0000B9000000000000001 /* ReadingProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingProgress.swift; sourceTree = "<group>"; };
 		1A0000D0000000000000001 /* ChapterPrefetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPrefetcher.swift; sourceTree = "<group>"; };
 		1A0000D1000000000000001 /* ReadingPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingPosition.swift; sourceTree = "<group>"; };
+		1A0000F90000000000000010 /* ReaderMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderMath.swift; sourceTree = "<group>"; };
+		1A0000FA0000000000000010 /* ReaderProgressFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderProgressFormatter.swift; sourceTree = "<group>"; };
+		1A0000FB0000000000000010 /* ReaderSeamlessSwitchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSeamlessSwitchCoordinator.swift; sourceTree = "<group>"; };
+		1A0000FC0000000000000010 /* ReaderTextPositioning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTextPositioning.swift; sourceTree = "<group>"; };
+		1A0000FD0000000000000010 /* ReaderTransitionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTransitionCoordinator.swift; sourceTree = "<group>"; };
+		1A00010F0000000000000010 /* ReaderTTSBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTTSBridge.swift; sourceTree = "<group>"; };
+		1A0001110000000000000010 /* ReaderPositionCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPositionCalculator.swift; sourceTree = "<group>"; };
+		1A0001130000000000000010 /* ReaderTTSContextBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderTTSContextBuilder.swift; sourceTree = "<group>"; };
+		1A0001150000000000000010 /* ReaderPositionContextBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPositionContextBuilder.swift; sourceTree = "<group>"; };
+		1A0001170000000000000010 /* ReaderModeControllerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderModeControllerFactory.swift; sourceTree = "<group>"; };
+		1A0001190000000000000010 /* ReaderProgressCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderProgressCoordinator.swift; sourceTree = "<group>"; };
+		1A00011B0000000000000010 /* ReaderModeSwitchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderModeSwitchCoordinator.swift; sourceTree = "<group>"; };
+		1A00011D0000000000000010 /* ReaderModeSwitchContextBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderModeSwitchContextBuilder.swift; sourceTree = "<group>"; };
 		1A0000D2000000000000001 /* TTSSyncController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSSyncController.swift; sourceTree = "<group>"; };
 		1A000006000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A000008000000000000001 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
@@ -295,6 +325,8 @@
 				1A0000AE000000000000001 /* ReaderContainer+Layout.swift */,
 				1A0000AF000000000000001 /* ReaderContainer+Prefetch.swift */,
 				1A0000F10000000000000001 /* ReaderPrefetchCoordinator.swift */,
+				1A0000F50000000000000001 /* ReaderInteractionCoordinator.swift */,
+				1A0000F70000000000000001 /* ReaderLayoutManager.swift */,
 				1A0000B1000000000000001 /* MangaNativeReader.swift */,
 				1A0000B2000000000000001 /* ReadingControls.swift */,
 				1A0000B3000000000000001 /* ReadingCoreTypes.swift */,
@@ -306,6 +338,19 @@
 				1A0000B9000000000000001 /* ReadingProgress.swift */,
 				1A0000D0000000000000001 /* ChapterPrefetcher.swift */,
 				1A0000D1000000000000001 /* ReadingPosition.swift */,
+				1A0000F90000000000000010 /* ReaderMath.swift */,
+				1A0000FA0000000000000010 /* ReaderProgressFormatter.swift */,
+				1A0000FB0000000000000010 /* ReaderSeamlessSwitchCoordinator.swift */,
+				1A0000FC0000000000000010 /* ReaderTextPositioning.swift */,
+				1A0000FD0000000000000010 /* ReaderTransitionCoordinator.swift */,
+				1A00010F0000000000000010 /* ReaderTTSBridge.swift */,
+				1A0001110000000000000010 /* ReaderPositionCalculator.swift */,
+				1A0001130000000000000010 /* ReaderTTSContextBuilder.swift */,
+				1A0001150000000000000010 /* ReaderPositionContextBuilder.swift */,
+				1A0001170000000000000010 /* ReaderModeControllerFactory.swift */,
+				1A0001190000000000000010 /* ReaderProgressCoordinator.swift */,
+				1A00011B0000000000000010 /* ReaderModeSwitchCoordinator.swift */,
+				1A00011D0000000000000010 /* ReaderModeSwitchContextBuilder.swift */,
 			);
 			path = Reader;
 			sourceTree = "<group>";
@@ -548,6 +593,8 @@
 				1A0000BC000000000000001 /* ReaderContainer+Layout.swift in Sources */,
 				1A0000BD000000000000001 /* ReaderContainer+Prefetch.swift in Sources */,
 				1A0000F20000000000000001 /* ReaderPrefetchCoordinator.swift in Sources */,
+				1A0000F60000000000000001 /* ReaderInteractionCoordinator.swift in Sources */,
+				1A0000F80000000000000001 /* ReaderLayoutManager.swift in Sources */,
 				1A0000F40000000000000001 /* TTSReadingSyncCoordinator.swift in Sources */,
 				1A0000C1000000000000001 /* MangaNativeReader.swift in Sources */,
 				1A0000C2000000000000001 /* ReadingControls.swift in Sources */,
@@ -564,6 +611,19 @@
 				1A0000C9000000000000001 /* ReadingProgress in Sources */,
 				1A0000D3000000000000001 /* ChapterPrefetcher.swift in Sources */,
 				1A0000D4000000000000001 /* ReadingPosition.swift in Sources */,
+				1A0000FA000000000000010 /* ReaderMath.swift in Sources */,
+				1A0000FB000000000000010 /* ReaderProgressFormatter.swift in Sources */,
+				1A0000FC000000000000010 /* ReaderSeamlessSwitchCoordinator.swift in Sources */,
+				1A0000FD000000000000010 /* ReaderTextPositioning.swift in Sources */,
+				1A0000FE000000000000010 /* ReaderTransitionCoordinator.swift in Sources */,
+				1A000110000000000000010 /* ReaderTTSBridge.swift in Sources */,
+				1A000112000000000000010 /* ReaderPositionCalculator.swift in Sources */,
+				1A000114000000000000010 /* ReaderTTSContextBuilder.swift in Sources */,
+				1A000116000000000000010 /* ReaderPositionContextBuilder.swift in Sources */,
+				1A000118000000000000010 /* ReaderModeControllerFactory.swift in Sources */,
+				1A00011A000000000000010 /* ReaderProgressCoordinator.swift in Sources */,
+				1A00011C000000000000010 /* ReaderModeSwitchCoordinator.swift in Sources */,
+				1A00011E000000000000010 /* ReaderModeSwitchContextBuilder.swift in Sources */,
 				1A0000D5000000000000001 /* TTSSyncController.swift in Sources */,
 				1A000007000000000000001 /* APIService.swift in Sources */,
 				A10000010000000000000001 /* APIClient.swift in Sources */,

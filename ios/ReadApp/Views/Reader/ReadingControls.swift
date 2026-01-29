@@ -19,10 +19,10 @@ struct TTSControlBar: View {
     let onShowFontSettings: () -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: ReaderConstants.Controls.barSpacing) {
             // 第一行：播放进度与定时
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: ReaderConstants.Controls.rowLabelSpacing) {
                     Text("段落进度").font(.caption2).foregroundColor(.secondary)
                     Text("\(ttsManager.currentSentenceIndex + 1) / \(ttsManager.totalSentences)")
                         .font(.system(.subheadline, design: .monospaced))
@@ -42,17 +42,17 @@ struct TTSControlBar: View {
                 } label: {
                     Label(timerActive ? "\(timerRemaining)m" : "定时", systemImage: timerActive ? "timer" : "timer")
                         .font(.caption)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.horizontal, ReaderConstants.Controls.timerButtonHorizontalPadding)
+                        .padding(.vertical, ReaderConstants.Controls.timerButtonVerticalPadding)
                         .background(timerActive ? Color.orange.opacity(0.1) : Color.gray.opacity(0.1))
                         .foregroundColor(timerActive ? .orange : .secondary)
-                        .cornerRadius(12)
+                        .cornerRadius(ReaderConstants.Controls.timerButtonCornerRadius)
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, ReaderConstants.Controls.horizontalPadding)
 
             // 第二行：语速调节
-            HStack(spacing: 12) {
+            HStack(spacing: ReaderConstants.Controls.rowSpacing) {
                 Image(systemName: "speedometer").font(.caption).foregroundColor(.secondary)
                 Slider(value: $preferences.speechRate, in: 50...300, step: 10)
                     .accentColor(.blue)
@@ -60,7 +60,7 @@ struct TTSControlBar: View {
                     .font(.system(.caption, design: .monospaced))
                     .frame(width: 45)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, ReaderConstants.Controls.horizontalPadding)
 
             // 第三行：核心播放控制
             HStack(spacing: 0) {
@@ -71,7 +71,7 @@ struct TTSControlBar: View {
 
                 Button(action: onTogglePlayPause) {
                     ZStack {
-                        Circle().fill(Color.blue).frame(width: 56, height: 56)
+                        Circle().fill(Color.blue).frame(width: ReaderConstants.Controls.ttsMainButtonSize, height: ReaderConstants.Controls.ttsMainButtonSize)
                         Image(systemName: ttsManager.isPaused ? "play.fill" : "pause.fill")
                             .font(.title2).foregroundColor(.white)
                     }
@@ -82,7 +82,7 @@ struct TTSControlBar: View {
                 Spacer()
                 IconButton(icon: "chevron.right.2", label: "下章", action: onNextChapter, enabled: currentChapterIndex < chaptersCount - 1)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, ReaderConstants.Controls.horizontalPadding)
 
             // 第四行：功能入口
             HStack {
@@ -100,12 +100,12 @@ struct TTSControlBar: View {
                 }
             }
             .font(.caption)
-            .padding(.horizontal, 25)
-            .padding(.bottom, 8)
+            .padding(.horizontal, ReaderConstants.Controls.secondaryHorizontalPadding)
+            .padding(.bottom, ReaderConstants.Controls.ttsRowVerticalPadding)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, ReaderConstants.Controls.barSpacing)
         .background(Color(UIColor.systemBackground))
-        .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
+        .shadow(color: Color.black.opacity(ReaderConstants.Controls.controlShadowOpacity), radius: ReaderConstants.Controls.controlShadowRadius, y: ReaderConstants.Controls.controlShadowYOffset)
     }
 }
 
@@ -117,11 +117,11 @@ struct IconButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: ReaderConstants.Controls.rowLabelSpacing) {
                 Image(systemName: icon).font(.title3)
-                Text(label).font(.system(size: 10))
+                Text(label).font(.system(size: ReaderConstants.Controls.iconLabelSize))
             }
-            .frame(width: 44)
+            .frame(width: ReaderConstants.Controls.iconButtonWidth)
             .foregroundColor(enabled ? .primary : .gray.opacity(0.3))
         }
         .disabled(!enabled)
@@ -141,23 +141,23 @@ struct ChapterNavButton: View {
             Group {
                 if isLandscape {
                     // 横屏：全宽填充，比例布局
-                    HStack(spacing: 12) {
+                    HStack(spacing: ReaderConstants.Controls.rowSpacing) {
                         Image(systemName: icon).font(.system(size: 18, weight: .bold))
                         Text(title).font(.headline).fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity) // 强制填满父容器分配的空间
                 } else {
                     // 竖屏：保持固定宽度
-                    VStack(spacing: 6) {
+                    VStack(spacing: ReaderConstants.Controls.rowLabelSpacing + 2) {
                         Image(systemName: icon).font(.title2.weight(.bold))
-                        Text(title).font(.system(size: 11, weight: .bold))
+                        Text(title).font(.system(size: ReaderConstants.Controls.iconLabelSize + 1, weight: .bold))
                     }
-                    .frame(width: 85)
+                    .frame(width: ReaderConstants.Controls.chapterButtonWidthPortrait)
                 }
             }
-            .frame(height: isLandscape ? 50 : 64)
+            .frame(height: isLandscape ? ReaderConstants.Controls.chapterButtonHeightLandscape : ReaderConstants.Controls.chapterButtonHeightPortrait)
             .background(Color.primary.opacity(isDisabled ? 0.03 : 0.1))
-            .cornerRadius(isLandscape ? 25 : 16)
+            .cornerRadius(isLandscape ? ReaderConstants.Controls.chapterButtonCornerLandscape : ReaderConstants.Controls.chapterButtonCornerPortrait)
         }
         .foregroundColor(isDisabled ? .secondary.opacity(0.3) : .primary)
         .disabled(isDisabled)
@@ -192,40 +192,40 @@ struct NormalControlBar: View {
             // 中间：核心功能区 (横屏时固定宽度)
             HStack(spacing: isForceLandscape ? 25 : 10) {
                 Button(action: onShowChapterList) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: ReaderConstants.Controls.rowLabelSpacing) {
                         Image(systemName: "list.bullet").font(.title3)
-                        Text("目录").font(.system(size: 10))
+                        Text("目录").font(.system(size: ReaderConstants.Controls.iconLabelSize))
                     }
-                    .frame(width: 44, height: 44)
+                    .frame(width: ReaderConstants.Controls.iconButtonWidth, height: ReaderConstants.Controls.iconButtonWidth)
                 }
                 .foregroundColor(.primary)
 
                 if isMangaMode {
                     Button(action: { withAnimation { isForceLandscape.toggle() } }) {
-                        VStack(spacing: 4) {
+                        VStack(spacing: ReaderConstants.Controls.rowLabelSpacing) {
                             Image(systemName: isForceLandscape ? "iphone.smartrotate.forward" : "iphone.landscape").font(.title3)
-                            Text(isForceLandscape ? "竖屏" : "横屏").font(.system(size: 10))
+                            Text(isForceLandscape ? "竖屏" : "横屏").font(.system(size: ReaderConstants.Controls.iconLabelSize))
                         }
-                        .frame(width: 44, height: 44)
+                        .frame(width: ReaderConstants.Controls.iconButtonWidth, height: ReaderConstants.Controls.iconButtonWidth)
                     }
                     .foregroundColor(isForceLandscape ? .blue : .primary)
                 } else {
                     Button(action: onToggleTTS) {
-                        VStack(spacing: 2) {
+                        VStack(spacing: ReaderConstants.Controls.rowLabelSpacing - 2) {
                             Image(systemName: "speaker.wave.2.circle.fill").font(.system(size: 28))
-                            Text("听书").font(.system(size: 10))
+                            Text("听书").font(.system(size: ReaderConstants.Controls.iconLabelSize))
                         }
-                        .frame(width: 44, height: 44)
+                        .frame(width: ReaderConstants.Controls.iconButtonWidth, height: ReaderConstants.Controls.iconButtonWidth)
                     }
                     .foregroundColor(.blue)
                 }
 
                 Button(action: onShowFontSettings) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: ReaderConstants.Controls.rowLabelSpacing) {
                         Image(systemName: isMangaMode ? "gearshape" : "slider.horizontal.3").font(.title3)
-                        Text("选项").font(.system(size: 10))
+                        Text("选项").font(.system(size: ReaderConstants.Controls.iconLabelSize))
                     }
-                    .frame(width: 44, height: 44)
+                    .frame(width: ReaderConstants.Controls.iconButtonWidth, height: ReaderConstants.Controls.iconButtonWidth)
                 }
                 .foregroundColor(.primary)
             }
@@ -243,10 +243,10 @@ struct NormalControlBar: View {
             )
             .frame(maxWidth: isForceLandscape ? .infinity : nil)
         }
-        .padding(.horizontal, isForceLandscape ? 15 : 10)
-        .padding(.vertical, 10)
+        .padding(.horizontal, isForceLandscape ? ReaderConstants.Controls.controlBarHorizontalPaddingLandscape : ReaderConstants.Controls.controlBarHorizontalPaddingPortrait)
+        .padding(.vertical, ReaderConstants.Controls.controlVerticalPadding)
         .background(Color(UIColor.systemBackground))
-        .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
+        .shadow(color: Color.black.opacity(ReaderConstants.Controls.controlShadowOpacity), radius: ReaderConstants.Controls.controlShadowRadius, y: ReaderConstants.Controls.controlShadowYOffset)
     }
 }
 
@@ -276,7 +276,7 @@ struct ReaderOptionsSheet: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, ReaderConstants.UI.formSectionPaddingVertical)
 
                         if preferences.readingMode == .horizontal || preferences.readingMode == .newHorizontal {
                             Picker("翻页方式", selection: $preferences.pageTurningMode) {
@@ -286,7 +286,7 @@ struct ReaderOptionsSheet: View {
                             }
                         }
 
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
                             Text("字体")
                                 .font(.subheadline)
                             Picker("字体", selection: $preferences.readingFontName) {
@@ -299,13 +299,13 @@ struct ReaderOptionsSheet: View {
                                 .font(.caption)
                         }
 
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
                             Text("字体大小: \(String(format: "%.0f", preferences.fontSize))")
                                 .font(.subheadline)
                             Slider(value: $preferences.fontSize, in: 12...30, step: 1)
                         }
 
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
                             Text("行间距: \(String(format: "%.0f", preferences.lineSpacing))")
                                 .font(.subheadline)
                             Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
@@ -313,7 +313,7 @@ struct ReaderOptionsSheet: View {
                     }
 
                     Section(header: Text("页面布局")) {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
                             Text("左右边距: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
                                 .font(.subheadline)
                             Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
@@ -328,7 +328,7 @@ struct ReaderOptionsSheet: View {
                         }
 
                         if shouldShowSlider {
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
                                 HStack {
                                     Text("切章触发拉伸距离")
                                     Spacer()
@@ -337,13 +337,13 @@ struct ReaderOptionsSheet: View {
                                 }
                                 Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, ReaderConstants.UI.formSectionPaddingVertical)
                         }
                     }
                 }
 
                 Section(header: Text("夜间模式")) {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: ReaderConstants.UI.formHeaderSpacing) {
                         Text("模式切换").font(.subheadline).foregroundColor(.secondary)
                         Picker("夜间模式", selection: $preferences.darkMode) {
                             ForEach(DarkModeConfig.allCases) { config in
@@ -352,7 +352,7 @@ struct ReaderOptionsSheet: View {
                         }
                         .pickerStyle(.segmented)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, ReaderConstants.UI.formSectionPaddingVertical)
                 }
 
                 Section(header: Text("主题")) {

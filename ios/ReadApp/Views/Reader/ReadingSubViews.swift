@@ -106,7 +106,7 @@ struct TextKitPaginator {
         let font = ReaderFontProvider.bodyFont(size: fontSize)
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = lineSpacing
-        paragraphStyle.paragraphSpacing = fontSize * 0.5
+        paragraphStyle.paragraphSpacing = fontSize * ReaderConstants.Text.paragraphSpacingFactor
         paragraphStyle.alignment = .justified
         paragraphStyle.firstLineHeadIndent = fontSize * 1.5
         
@@ -155,17 +155,17 @@ struct ChapterListView: View {
         self.bookUrl = bookUrl
         self.onSelectChapter = onSelectChapter
         self.onRebuildChapterUrls = onRebuildChapterUrls
-        self._selectedGroupIndex = State(initialValue: currentIndex / 50)
+        self._selectedGroupIndex = State(initialValue: currentIndex / ReaderConstants.Text.chapterGroupSize)
     }
     
     var chapterGroups: [Int] {
         guard !chapters.isEmpty else { return [] }
-        return Array(0...((chapters.count - 1) / 50))
+        return Array(0...((chapters.count - 1) / ReaderConstants.Text.chapterGroupSize))
     }
     
     var displayedChapters: [(offset: Int, element: BookChapter)] {
-        let startIndex = selectedGroupIndex * 50
-        let endIndex = min(startIndex + 50, chapters.count)
+        let startIndex = selectedGroupIndex * ReaderConstants.Text.chapterGroupSize
+        let endIndex = min(startIndex + ReaderConstants.Text.chapterGroupSize, chapters.count)
         let slice = chapters.indices.contains(startIndex) ? Array(chapters[startIndex..<endIndex].enumerated()).map { (offset: $0.offset + startIndex, element: $0.element) } : []
         return isReversed ? Array(slice.reversed()) : slice
     }
@@ -175,18 +175,18 @@ struct ChapterListView: View {
             VStack(spacing: 0) {
                 if chapterGroups.count > 1 {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: ReaderConstants.List.groupSpacing) {
                             ForEach(chapterGroups, id: \.self) { index in
-                                let start = index * 50 + 1
-                                let end = min((index + 1) * 50, chapters.count)
+                                let start = index * ReaderConstants.Text.chapterGroupSize + 1
+                                let end = min((index + 1) * ReaderConstants.Text.chapterGroupSize, chapters.count)
                                 Button(action: { selectedGroupIndex = index }) {
                                     Text("\(start)-\(end)")
                                         .font(.caption)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
+                                        .padding(.horizontal, ReaderConstants.List.groupHorizontalPadding)
+                                        .padding(.vertical, ReaderConstants.List.groupVerticalPadding)
                                         .background(selectedGroupIndex == index ? Color.blue : Color.gray.opacity(0.1))
                                         .foregroundColor(selectedGroupIndex == index ? .white : .primary)
-                                        .cornerRadius(16)
+                                        .cornerRadius(ReaderConstants.List.groupCornerRadius)
                                 }
                             }
                         }
@@ -232,7 +232,7 @@ struct ChapterListView: View {
                             Button(action: {
                                 withAnimation { isReversed.toggle() }
                             }) {
-                                HStack(spacing: 4) {
+                                HStack(spacing: ReaderConstants.List.toolbarSpacing) {
                                     Image(systemName: isReversed ? "arrow.up" : "arrow.down")
                                     Text(isReversed ? "倒序" : "正序")
                                 }.font(.caption)
@@ -245,7 +245,7 @@ struct ChapterListView: View {
                                     await MainActor.run { isRebuilding = false }
                                 }
                             }) {
-                                HStack(spacing: 4) {
+                                HStack(spacing: ReaderConstants.List.toolbarSpacing) {
                                     if isRebuilding {
                                         ProgressView().scaleEffect(0.7)
                                     }
@@ -272,23 +272,23 @@ struct RichTextView: View {
     var chapterUrl: String? = nil
     
     var body: some View {
-        VStack(alignment: .leading, spacing: fontSize * 0.8) {
+        VStack(alignment: .leading, spacing: fontSize * ReaderConstants.Text.chapterGroupSpacingFactor) {
             ForEach(Array(sentences.enumerated()), id: \.offset) { index, sentence in
                 if sentence.contains("__IMG__") {
                     let urlString = extractImageUrl(from: sentence)
                     MangaImageView(url: urlString, referer: chapterUrl)
                         .id(index)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, ReaderConstants.List.inlineImagePadding)
                 } else {
                     Text(sentence.trimmingCharacters(in: .whitespacesAndNewlines))
                         .font(.system(size: fontSize))
                         .lineSpacing(lineSpacing)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 8)
+                        .padding(.vertical, ReaderConstants.List.textVerticalPadding)
+                        .padding(.horizontal, ReaderConstants.List.textHorizontalPadding)
                         .background(GeometryReader { proxy in Color.clear.preference(key: SentenceFramePreferenceKey.self, value: [index: proxy.frame(in: .named("scroll"))]) })
-                        .background(RoundedRectangle(cornerRadius: 4).fill(highlightColor(for: index)).animation(.easeInOut, value: highlightIndex))
+                        .background(RoundedRectangle(cornerRadius: ReaderConstants.List.textCornerRadius).fill(highlightColor(for: index)).animation(.easeInOut, value: highlightIndex))
                         .id(index)
                 }
             }
@@ -296,7 +296,7 @@ struct RichTextView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             if let highlightIndex = highlightIndex, let scrollProxy = scrollProxy {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { scrollProxy.scrollTo(highlightIndex, anchor: .center) } }
+                DispatchQueue.main.asyncAfter(deadline: .now() + ReaderConstants.List.scrollToHighlightDelay) { withAnimation { scrollProxy.scrollTo(highlightIndex, anchor: .center) } }
             }
         }
     }
@@ -312,11 +312,11 @@ struct RichTextView: View {
 
     private func highlightColor(for index: Int) -> Color {
         if isPlayingHighlight {
-            if index == highlightIndex { return Color.blue.opacity(0.2) }
+            if index == highlightIndex { return Color.blue.opacity(ReaderConstants.Highlight.listPrimaryAlpha) }
             if secondaryIndices.contains(index) { return Color.green.opacity(0.18) }
             return .clear
         }
-        return index == highlightIndex ? Color.orange.opacity(0.2) : .clear
+        return index == highlightIndex ? Color.orange.opacity(ReaderConstants.Highlight.listPrimaryAlpha) : .clear
     }
 }
 

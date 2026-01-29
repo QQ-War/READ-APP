@@ -30,7 +30,7 @@ final class ReaderChapterBuilder {
         let built = buildAttributedText(segments: segments, title: title, layoutWidth: layoutSpec.pageSize.width - layoutSpec.sideMargin * 2)
         let sentences = built.sentences
         let attr = built.attributedText
-        let width = max(100, layoutSpec.pageSize.width - layoutSpec.sideMargin * 2)
+        let width = ReaderMath.layoutWidth(containerWidth: layoutSpec.pageSize.width, margin: layoutSpec.sideMargin)
         let store: TextKit2RenderStore
         if let reuseStore = reuseStore {
             reuseStore.update(attributedString: attr, layoutWidth: width)

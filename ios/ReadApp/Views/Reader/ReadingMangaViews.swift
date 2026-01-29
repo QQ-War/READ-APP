@@ -71,7 +71,7 @@ struct RemoteImageView: View {
                 }
                 .frame(minHeight: 200) // 基础高度占位，防止容器塌陷
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: ReaderConstants.Manga.placeholderSpacing) {
                     Image(systemName: "photo.fill")
                         .font(.largeTitle)
                         .foregroundColor(.gray)
@@ -79,13 +79,13 @@ struct RemoteImageView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     if let url = url {
-                        Text(url.absoluteString).font(.system(size: 8)).lineLimit(1).foregroundColor(.gray)
+                        Text(url.absoluteString).font(.system(size: ReaderConstants.Manga.placeholderTextSize)).lineLimit(1).foregroundColor(.gray)
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 200) // 失败也要保持高度
+                .frame(minHeight: ReaderConstants.Manga.placeholderMinHeight) // 失败也要保持高度
                 .background(Color.gray.opacity(0.1))
-                .cornerRadius(8)
+                .cornerRadius(ReaderConstants.Manga.placeholderCornerRadius)
             }
         }
         .onAppear(perform: loadImage)

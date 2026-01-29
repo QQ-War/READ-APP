@@ -27,17 +27,17 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
         return attributes.compactMap { $0.copy() as? UICollectionViewLayoutAttributes }.map { attr in
             let diff = attr.center.x - contentOffset - width / 2
             let progress = diff / width
-            let absProgress = min(1.0, abs(progress))
+        let absProgress = min(ReaderConstants.Animation.maxTransformAbsProgress, abs(progress))
 
             switch turningMode {
             case .fade:
                 attr.alpha = 1.0 - absProgress
-                attr.zIndex = progress < 0 ? 10 : 5
+                attr.zIndex = progress < 0 ? ReaderConstants.Animation.fadeZIndexFront : ReaderConstants.Animation.fadeZIndexBack
                 attr.transform = CGAffineTransform(translationX: -diff, y: 0)
                 
             case .cover:
                 if progress <= 0 {
-                    attr.zIndex = 100
+                    attr.zIndex = ReaderConstants.Animation.coverZIndexFront
                     attr.alpha = 1.0
                     attr.transform = .identity
                 } else if progress < 1.0 {
@@ -49,7 +49,7 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
                 }
                 
             case .flip:
-                if absProgress > 0.6 {
+                if absProgress > ReaderConstants.Animation.fadeCutoff {
                     attr.alpha = 0
                     return attr
                 }
@@ -58,12 +58,12 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
                     attr.alpha = 0
                     return attr
                 }
-                attr.alpha = 1.0 - (absProgress * 0.6)
-                attr.zIndex = Int((1.0 - absProgress) * 1000.0)
+                attr.alpha = 1.0 - (absProgress * ReaderConstants.Animation.fadeCutoff)
+                attr.zIndex = Int((1.0 - absProgress) * ReaderConstants.Animation.flipZIndexMax)
                 
                 var transform = CATransform3DIdentity
-                transform.m34 = -1.0 / 1000.0
-                let angle = progress * (.pi / 2)
+                transform.m34 = ReaderConstants.Animation.flipPerspective
+                let angle = progress * ReaderConstants.Animation.flipMaxAngle
                 
                 // 先平移抵消位移，再以左右边缘作为旋转轴进行翻页
                 let w = attr.size.width
@@ -100,7 +100,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     var renderStore: TextKit2RenderStore?
     var paragraphStarts: [Int] = []
     var chapterPrefixLen: Int = 0
-    var sideMargin: CGFloat = 20
+    var sideMargin: CGFloat = ReaderConstants.Layout.defaultMargin
     var topInset: CGFloat = 0
     var themeBackgroundColor: UIColor = .white
     var turningMode: PageTurningMode = .scroll
@@ -132,7 +132,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         super.viewDidLoad()
         view.addSubview(collectionView)
         var perspective = CATransform3DIdentity
-        perspective.m34 = -1.0 / 1000.0
+        perspective.m34 = ReaderConstants.Animation.flipPerspective
         collectionView.layer.sublayerTransform = perspective
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -289,7 +289,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         let estimatedPage = currentX / width
         
         var targetPage: Int
-        if abs(velocity.x) > 0.2 {
+        if abs(velocity.x) > ReaderConstants.Interaction.velocitySnapThreshold {
             targetPage = velocity.x > 0 ? Int(ceil(estimatedPage)) : Int(floor(estimatedPage))
         } else {
             targetPage = Int(round(estimatedPage))
@@ -306,7 +306,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     }
 
     private var lastSwitchRequestTime: TimeInterval = 0
-    private let switchRequestCooldown: TimeInterval = 1.0
+    private let switchRequestCooldown: TimeInterval = ReaderConstants.Interaction.switchRequestCooldown
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         let offsetX = scrollView.contentOffset.x
@@ -328,7 +328,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     }
     
     private func detectChapterSwitchOffset(offsetX: CGFloat, width: CGFloat, contentWidth: CGFloat) -> Int {
-        let threshold = 50.0
+        let threshold = ReaderConstants.Interaction.horizontalSwitchThreshold
         if offsetX > contentWidth - width + threshold {
             return 1
         } else if offsetX < -threshold {

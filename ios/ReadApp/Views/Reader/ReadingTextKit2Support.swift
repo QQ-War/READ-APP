@@ -1,5 +1,194 @@
 import UIKit
 
+enum ReaderConstants {
+    enum Layout {
+        static let safeAreaTopDefault: CGFloat = 47
+        static let safeAreaBottomDefault: CGFloat = 34
+        static let extraTopInset: CGFloat = 15
+        static let extraBottomInset: CGFloat = 40
+        static let sideMarginPadding: CGFloat = 8
+        static let horizontalInset: CGFloat = 16
+        static let safeBottomPadding: CGFloat = 8
+        static let minUsableHeight: CGFloat = 100
+        static let minLayoutWidth: CGFloat = 100
+        static let minLayoutWidthFallback: CGFloat = 375
+        static let extraSpacing: CGFloat = 100
+        static let verticalContentInsetBottom: CGFloat = 100
+        static let defaultMargin: CGFloat = 20
+    }
+
+    enum Interaction {
+        static let chapterSwitchCooldown: TimeInterval = 1.0
+        static let ttsSuppressDuration: TimeInterval = 0.5
+        static let horizontalSwitchThreshold: CGFloat = 50
+        static let switchRequestCooldown: TimeInterval = 1.0
+        static let velocitySnapThreshold: CGFloat = 0.2
+        static let longPressDuration: TimeInterval = 0.8
+        static let switchHintAnimation: TimeInterval = 0.2
+        static let switchHintWidthMin: CGFloat = 120
+        static let switchHintHorizontalPadding: CGFloat = 40
+        static let switchHintBottomPadding: CGFloat = 36
+        static let switchHintTopPadding: CGFloat = 12
+        static let pullThreshold: CGFloat = 5
+        static let interactionStartSnapThreshold: CGFloat = 0.5
+        static let progressDelayShort: TimeInterval = 0.05
+        static let progressDelayNormal: TimeInterval = 0.1
+        static let seamlessSwitchThreshold: CGFloat = 120
+        static let dampingFactorDefault: CGFloat = 0.2
+        static let textDampingFactor: CGFloat = 0.12
+        static let mangaSwitchHoldDuration: TimeInterval = 0.6
+        static let visibleRangePadding: CGFloat = 50
+        static let detectionOffsetMin: CGFloat = 2.0
+        static let detectionOffsetFactor: CGFloat = 0.2
+        static let detectionNegativeClamp: CGFloat = 50
+        static let seamlessTriggerMin: CGFloat = 40
+        static let minHorizontalInset: CGFloat = 10
+        static let minVerticalOffset: CGFloat = 2
+        static let maxVerticalOffset: CGFloat = 12
+        static let viewportTopMargin: CGFloat = 15
+        static let chapterGap: CGFloat = 80
+        static let estimatedLineHeight: CGFloat = 30
+        static let lineSpacingFactor: CGFloat = 0.35
+        static let lineThresholdFactor: CGFloat = 0.3
+        static let firstSentenceThreshold: CGFloat = 2.0
+        static let transitionGuardTimeout: TimeInterval = 1.0
+        static let verticalThresholdDefault: CGFloat = 80
+        static let autoSwitchSuppressDuration: TimeInterval = 0.6
+        static let reachBottomFactor: CGFloat = 1.5
+        static let reachTopFactor: CGFloat = 0.6
+        static let tapZoneLeft: CGFloat = 0.3
+        static let tapZoneRight: CGFloat = 0.7
+    }
+
+    enum Text {
+        static let previewSnippetLength: Int = 120
+        static let paragraphIndentLength: Int = 2
+        static let paragraphSpacingFactor: CGFloat = 0.5
+        static let chapterGroupSize: Int = 50
+        static let chapterGroupSpacingFactor: CGFloat = 0.8
+        static let titleParagraphSpacingFactor: CGFloat = 1.5
+    }
+
+    enum Highlight {
+        static let primaryAlpha: CGFloat = 0.12
+        static let secondaryAlpha: CGFloat = 0.06
+        static let listPrimaryAlpha: CGFloat = 0.2
+        static let cornerRadius: CGFloat = 4
+        static let switchHintCornerRadius: CGFloat = 12
+    }
+
+    enum Pagination {
+        static let targetYOffsetEpsilon: CGFloat = 2.0
+        static let lineMaxYEpsilon: CGFloat = 0.01
+        static let highlightInsetX: CGFloat = -2
+        static let highlightInsetY: CGFloat = -1
+    }
+
+    enum ProgressLabel {
+        static let trailing: CGFloat = 12
+        static let bottom: CGFloat = 4
+    }
+
+    enum Animation {
+        static let flipPerspective: CGFloat = -1.0 / 1000.0
+        static let flipMaxAngle: CGFloat = .pi / 2
+        static let fadeCutoff: CGFloat = 0.6
+        static let maxTransformAbsProgress: CGFloat = 1.0
+        static let fadeZIndexBack: Int = 5
+        static let fadeZIndexFront: Int = 10
+        static let coverZIndexFront: Int = 100
+        static let flipZIndexMax: CGFloat = 1000.0
+        static let modeTransitionDuration: TimeInterval = 0.5
+        static let shouldAnimateViewportThreshold: CGFloat = 0.5
+        static let scrollTransitionDuration: TimeInterval = 0.35
+        static let coverTransitionDuration: TimeInterval = 0.45
+        static let fadeTransitionDuration: TimeInterval = 0.35
+        static let coverShadowOpacity: Float = 0.4
+        static let coverShadowRadius: CGFloat = 10
+        static let coverShadowOffset: CGFloat = 4
+        static let coverBackShiftFactor: CGFloat = 0.3
+    }
+
+    enum Controls {
+        static let barSpacing: CGFloat = 16
+        static let rowSpacing: CGFloat = 12
+        static let rowLabelSpacing: CGFloat = 4
+        static let horizontalPadding: CGFloat = 20
+        static let secondaryHorizontalPadding: CGFloat = 25
+        static let controlVerticalPadding: CGFloat = 10
+        static let controlShadowOpacity: Double = 0.1
+        static let controlShadowRadius: CGFloat = 5
+        static let controlShadowYOffset: CGFloat = -2
+        static let timerButtonHorizontalPadding: CGFloat = 10
+        static let timerButtonVerticalPadding: CGFloat = 5
+        static let timerButtonCornerRadius: CGFloat = 12
+        static let ttsMainButtonSize: CGFloat = 56
+        static let ttsRowVerticalPadding: CGFloat = 8
+        static let iconButtonWidth: CGFloat = 44
+        static let iconLabelSize: CGFloat = 10
+        static let chapterButtonWidthPortrait: CGFloat = 85
+        static let chapterButtonHeightLandscape: CGFloat = 50
+        static let chapterButtonHeightPortrait: CGFloat = 64
+        static let chapterButtonCornerLandscape: CGFloat = 25
+        static let chapterButtonCornerPortrait: CGFloat = 16
+        static let controlBarHorizontalPaddingLandscape: CGFloat = 15
+        static let controlBarHorizontalPaddingPortrait: CGFloat = 10
+    }
+
+    enum Audio {
+        static let viewSpacing: CGFloat = 16
+        static let headerSpacing: CGFloat = 8
+        static let backgroundBlurRadius: CGFloat = 20
+        static let backgroundOpacity: Double = 0.25
+        static let coverSize: CGFloat = 220
+        static let coverCornerRadius: CGFloat = 20
+        static let coverShadowRadius: CGFloat = 8
+        static let buttonSpacing: CGFloat = 24
+        static let playButtonSize: CGFloat = 48
+        static let speedButtonHorizontalPadding: CGFloat = 10
+        static let speedButtonVerticalPadding: CGFloat = 6
+        static let speedButtonCornerRadius: CGFloat = 8
+        static let speedButtonSpacing: CGFloat = 12
+        static let progressIntervalSeconds: Double = 0.5
+    }
+
+    enum UI {
+        static let overlayCornerRadius: CGFloat = 10
+        static let topBarButtonSize: CGFloat = 20
+        static let topBarSecondaryButtonSize: CGFloat = 18
+        static let topBarButtonPadding: CGFloat = 8
+        static let topBarHorizontalPadding: CGFloat = 16
+        static let topBarBottomPadding: CGFloat = 10
+        static let topBarSpacing: CGFloat = 12
+        static let formRowSpacing: CGFloat = 8
+        static let formSectionPaddingVertical: CGFloat = 4
+        static let formHeaderSpacing: CGFloat = 10
+        static let selectionHeaderSpacing: CGFloat = 2
+        static let selectionNoticeTopPadding: CGFloat = 8
+        static let selectionButtonCornerRadius: CGFloat = 10
+    }
+
+    enum List {
+        static let groupSpacing: CGFloat = 8
+        static let groupHorizontalPadding: CGFloat = 12
+        static let groupVerticalPadding: CGFloat = 6
+        static let groupCornerRadius: CGFloat = 16
+        static let toolbarSpacing: CGFloat = 4
+        static let inlineImagePadding: CGFloat = 4
+        static let textVerticalPadding: CGFloat = 6
+        static let textHorizontalPadding: CGFloat = 8
+        static let textCornerRadius: CGFloat = 4
+        static let scrollToHighlightDelay: TimeInterval = 0.3
+    }
+
+    enum Manga {
+        static let placeholderSpacing: CGFloat = 8
+        static let placeholderCornerRadius: CGFloat = 8
+        static let placeholderTextSize: CGFloat = 8
+        static let placeholderMinHeight: CGFloat = 200
+    }
+}
+
 // MARK: - TextKit 2 渲染存储
 class TextKit2RenderStore {
     let contentStorage = NSTextContentStorage()
@@ -65,8 +254,8 @@ struct TextKit2Paginator {
         let storage = renderStore.contentStorage
         lm.ensureLayout(for: storage.documentRange)
         
-        let safeBottomPadding: CGFloat = 8.0
-        let usableHeight = max(100, pageSize.height - topInset - bottomInset - safeBottomPadding)
+        let safeBottomPadding: CGFloat = ReaderConstants.Layout.safeBottomPadding
+        let usableHeight = max(ReaderConstants.Layout.minUsableHeight, pageSize.height - topInset - bottomInset - safeBottomPadding)
         let totalTextLen = storage.attributedString?.length ?? 0
         
         // 1. 定位锚点行
@@ -157,7 +346,7 @@ struct TextKit2Paginator {
         let startSentenceIdx = paragraphStarts.lastIndex(where: { $0 <= fromOffset }) ?? 0
         let targetY = fromY + usableHeight
         
-        guard let endFragment = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY - 2.0)) else {
+        guard let endFragment = lm.textLayoutFragment(for: CGPoint(x: 0, y: targetY - ReaderConstants.Pagination.targetYOffsetEpsilon)) else {
             // 到底了
             let endOffset = totalTextLen
             let range = NSRange(location: fromOffset, length: endOffset - fromOffset)
@@ -177,8 +366,8 @@ struct TextKit2Paginator {
                 for line in endFragment.textLineFragments {
                     let lineMaxY = endFragment.layoutFragmentFrame.minY + line.typographicBounds.maxY
                     // 核心修复：只考虑在本页范围内且在起始点之后的行
-                    if lineMaxY <= targetY + 0.01 {
-                        if lineMaxY > fromY + 0.01 {
+                    if lineMaxY <= targetY + ReaderConstants.Pagination.lineMaxYEpsilon {
+                        if lineMaxY > fromY + ReaderConstants.Pagination.lineMaxYEpsilon {
                             lastLineEndOffset = fragmentStartOffset + line.characterRange.upperBound
                             lastLineMaxY = lineMaxY
                         }
@@ -233,7 +422,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         }
     }
     
-    var horizontalInset: CGFloat = 16
+    var horizontalInset: CGFloat = ReaderConstants.Layout.horizontalInset
     var onTapLocation: ((ReaderTapLocation) -> Void)?
     var onImageTapped: ((URL) -> Void)?
     
@@ -255,7 +444,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         addGestureRecognizer(tap)
         
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
-        longPress.minimumPressDuration = 0.8
+        longPress.minimumPressDuration = ReaderConstants.Interaction.longPressDuration
         longPress.delegate = self
         addGestureRecognizer(longPress)
     }
@@ -310,7 +499,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         if isPlayingHighlight {
             ctx.saveGState()
             if let range = highlightRange {
-                drawHighlight(range: range, store: s, info: info, context: ctx, color: UIColor.systemBlue.withAlphaComponent(0.12))
+                drawHighlight(range: range, store: s, info: info, context: ctx, color: UIColor.systemBlue.withAlphaComponent(ReaderConstants.Highlight.primaryAlpha))
             } else {
                 let allIndices = ([highlightIndex].compactMap { $0 } + Array(secondaryIndices))
                 for i in allIndices {
@@ -318,7 +507,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
                     let start = paragraphStarts[i]
                     let end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length
                     let range = NSRange(location: start, length: max(0, end - start))
-                    let color = (i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)
+                    let color = (i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(ReaderConstants.Highlight.primaryAlpha) : UIColor.systemGreen.withAlphaComponent(ReaderConstants.Highlight.secondaryAlpha)
                     drawHighlight(range: range, store: s, info: info, context: ctx, color: color)
                 }
             }
@@ -342,10 +531,10 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         lastLoggedPageIndex = pageIdx
         
         // 核心修复：基于 info.range 获取片段，解决日志误导问题
-        let snippetLen = min(120, info.range.length)
+        let snippetLen = min(ReaderConstants.Text.previewSnippetLength, info.range.length)
         guard snippetLen > 0 else { return }
         let raw = (store.attributedString.string as NSString).substring(with: NSRange(location: info.range.location, length: snippetLen))
-        let cleaned = sanitizedPreviewText(raw, limit: 120)
+        let cleaned = sanitizedPreviewText(raw, limit: ReaderConstants.Text.previewSnippetLength)
         
         onVisibleFragments?(pageIdx, [cleaned])
     }
@@ -359,7 +548,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
                 if fRangeStart >= range.location + range.length { return false }
                 let frame = f.layoutFragmentFrame
                 if frame.maxY > info.yOffset && frame.minY < info.yOffset + info.actualContentHeight {
-                    context.fill(frame.insetBy(dx: -2, dy: -1))
+                    context.fill(frame.insetBy(dx: ReaderConstants.Pagination.highlightInsetX, dy: ReaderConstants.Pagination.highlightInsetY))
                 }
                 return true
             }

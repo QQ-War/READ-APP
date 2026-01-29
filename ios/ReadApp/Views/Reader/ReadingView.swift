@@ -86,7 +86,7 @@ struct ReadingView: View {
                         }
                         .ignoresSafeArea(edges: .vertical)
                     }
-                    if isLoading { ProgressView().padding().background(.ultraThinMaterial).cornerRadius(10) }
+                    if isLoading { ProgressView().padding().background(.ultraThinMaterial).cornerRadius(ReaderConstants.UI.overlayCornerRadius) }
                 }
             }
             .navigationBarHidden(true)
@@ -145,10 +145,10 @@ struct ReadingView: View {
     private func topBar(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: safeArea.top)
-            HStack(spacing: 12) {
-                Button(action: { dismiss() }) { Image(systemName: "chevron.left").font(.system(size: 20, weight: .semibold)).padding(8) }
+            HStack(spacing: ReaderConstants.UI.topBarSpacing) {
+                Button(action: { dismiss() }) { Image(systemName: "chevron.left").font(.system(size: ReaderConstants.UI.topBarButtonSize, weight: .semibold)).padding(ReaderConstants.UI.topBarButtonPadding) }
                 Button(action: { showDetailFromHeader = true }) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: ReaderConstants.UI.selectionHeaderSpacing) {
                         Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
                         Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "正在加载...").font(.caption).foregroundColor(.secondary).lineLimit(1)
                     }
@@ -158,11 +158,11 @@ struct ReadingView: View {
                 .buttonStyle(PlainButtonStyle())
                 Button(action: { refreshChapterAction?() }) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 18, weight: .semibold))
-                        .padding(8)
+                        .font(.system(size: ReaderConstants.UI.topBarSecondaryButtonSize, weight: .semibold))
+                        .padding(ReaderConstants.UI.topBarButtonPadding)
                 }
             }
-            .padding(.horizontal, 16).padding(.bottom, 10)
+            .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding).padding(.bottom, ReaderConstants.UI.topBarBottomPadding)
         }
         .background(.thinMaterial)
     }
@@ -243,7 +243,7 @@ struct TextSelectionHelperSheet: View {
                     Text("提示：段落过长，已截取前 500 个字符")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .padding(.top, 8)
+                        .padding(.top, ReaderConstants.UI.selectionNoticeTopPadding)
                 }
                 
                 NativeTextViewWrapper(text: displayLines, selectedText: $selectedText)
@@ -257,7 +257,7 @@ struct TextSelectionHelperSheet: View {
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.gray.opacity(0.1))
-                            .cornerRadius(10)
+                            .cornerRadius(ReaderConstants.UI.selectionButtonCornerRadius)
                     }
                     
                     Button(action: {
@@ -269,7 +269,7 @@ struct TextSelectionHelperSheet: View {
                             .padding()
                             .background(Color.blue)
                             .foregroundColor(.white)
-                            .cornerRadius(10)
+                            .cornerRadius(ReaderConstants.UI.selectionButtonCornerRadius)
                     }
                 }
                 .padding()

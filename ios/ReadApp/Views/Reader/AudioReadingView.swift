@@ -151,7 +151,7 @@ final class AudioReadingViewModel: ObservableObject {
     }
 
     private func observeTime(player: AVPlayer) {
-        let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
+        let interval = CMTime(seconds: ReaderConstants.Audio.progressIntervalSeconds, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self else { return }
             let current = CMTimeGetSeconds(time)
@@ -214,13 +214,13 @@ struct AudioReadingView: View {
                     } placeholder: {
                         Color.black.opacity(0.1)
                     }
-                    .blur(radius: 20)
-                    .opacity(0.25)
+                    .blur(radius: ReaderConstants.Audio.backgroundBlurRadius)
+                    .opacity(ReaderConstants.Audio.backgroundOpacity)
                     .ignoresSafeArea()
                 }
 
-                VStack(spacing: 16) {
-                    VStack(spacing: 8) {
+                VStack(spacing: ReaderConstants.Audio.viewSpacing) {
+                    VStack(spacing: ReaderConstants.Audio.headerSpacing) {
                         Text(book.name ?? "音频书籍")
                             .font(.headline)
                             .lineLimit(1)
@@ -236,9 +236,9 @@ struct AudioReadingView: View {
                         } placeholder: {
                             Color.gray.opacity(0.3)
                         }
-                        .frame(width: 220, height: 220)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .shadow(radius: 8)
+                        .frame(width: ReaderConstants.Audio.coverSize, height: ReaderConstants.Audio.coverSize)
+                        .clipShape(RoundedRectangle(cornerRadius: ReaderConstants.Audio.coverCornerRadius))
+                        .shadow(radius: ReaderConstants.Audio.coverShadowRadius)
                     }
 
                     Slider(value: Binding(
@@ -246,29 +246,29 @@ struct AudioReadingView: View {
                         set: { viewModel.seek(to: $0) }
                     ))
 
-                    HStack(spacing: 24) {
+                    HStack(spacing: ReaderConstants.Audio.buttonSpacing) {
                         Button(action: viewModel.previousChapter) {
                             Image(systemName: "backward.fill").font(.title2)
                         }
                         Button(action: viewModel.playPause) {
                             Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                                .font(.system(size: 48))
+                                .font(.system(size: ReaderConstants.Audio.playButtonSize))
                         }
                         Button(action: viewModel.nextChapter) {
                             Image(systemName: "forward.fill").font(.title2)
                         }
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, ReaderConstants.Controls.ttsRowVerticalPadding)
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: ReaderConstants.Audio.speedButtonSpacing) {
                         ForEach([0.8, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
                             Button(action: { viewModel.setSpeed(rate) }) {
                                 Text(String(format: "%.2gx", rate))
                                     .font(.caption)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, ReaderConstants.Audio.speedButtonHorizontalPadding)
+                                    .padding(.vertical, ReaderConstants.Audio.speedButtonVerticalPadding)
                                     .background(viewModel.playbackRate == rate ? Color.blue.opacity(0.2) : Color.gray.opacity(0.15))
-                                    .cornerRadius(8)
+                                    .cornerRadius(ReaderConstants.Audio.speedButtonCornerRadius)
                             }
                         }
                     }
@@ -288,7 +288,7 @@ struct AudioReadingView: View {
             }
             .overlay {
                 if viewModel.isLoading {
-                    ProgressView().padding().background(.ultraThinMaterial).cornerRadius(10)
+                    ProgressView().padding().background(.ultraThinMaterial).cornerRadius(ReaderConstants.UI.overlayCornerRadius)
                 }
             }
         }

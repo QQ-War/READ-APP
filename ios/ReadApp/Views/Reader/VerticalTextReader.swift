@@ -88,8 +88,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private var isChapterSwitching = false
     private var suppressAutoSwitchUntil: TimeInterval = 0
     private var dragStartTime: TimeInterval = 0
-    var dampingFactor: CGFloat = 0.12
-    private let chapterGap: CGFloat = 80
+    var dampingFactor: CGFloat = ReaderConstants.Interaction.textDampingFactor
+    private let chapterGap: CGFloat = ReaderConstants.Interaction.chapterGap
     private var lastInfiniteSetting: Bool?
 
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?; var onImageTapped: ((URL) -> Void)?
@@ -97,21 +97,20 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var onInteractionChanged: ((Bool) -> Void)?
     var safeAreaTop: CGFloat = 0; var chapterUrl: String?
     private struct CharDetectionConfig {
-        static let minHorizontalInset: CGFloat = 10
-        static let minVerticalOffset: CGFloat = 2 
-        static let maxVerticalOffset: CGFloat = 12
+        static let minHorizontalInset: CGFloat = ReaderConstants.Interaction.minHorizontalInset
+        static let minVerticalOffset: CGFloat = ReaderConstants.Interaction.minVerticalOffset
+        static let maxVerticalOffset: CGFloat = ReaderConstants.Interaction.maxVerticalOffset
     }
-    private let viewportTopMargin: CGFloat = 15 // 统一调整为 15，与水平模式对齐
+    private let viewportTopMargin: CGFloat = ReaderConstants.Interaction.viewportTopMargin
     private var contentTopPadding: CGFloat { safeAreaTop + viewportTopMargin }
     private var horizontalMarginForDetection: CGFloat {
         max(CharDetectionConfig.minHorizontalInset, lastMargin)
     }
     private var verticalDetectionOffset: CGFloat {
-        let spacingDriven = lastLineSpacing > 0 ? lastLineSpacing * 0.35 : CharDetectionConfig.minVerticalOffset
-        return min(CharDetectionConfig.maxVerticalOffset, max(CharDetectionConfig.minVerticalOffset, spacingDriven))
+        ReaderTextPositioning.detectionOffset(fontSize: lastFontSize, lineSpacing: lastLineSpacing)
     }
     var threshold: CGFloat = 80
-    var seamlessSwitchThreshold: CGFloat = 120
+    var seamlessSwitchThreshold: CGFloat = ReaderConstants.Interaction.seamlessSwitchThreshold
     
     private var renderStore: TextKit2RenderStore?; private var nextRenderStore: TextKit2RenderStore?; private var prevRenderStore: TextKit2RenderStore?
     private var currentSentences: [String] = []; private var nextSentences: [String] = []; private var prevSentences: [String] = []
@@ -128,7 +127,24 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     // 无限流无缝切换标记 (0: 无, 1: 下一章, -1: 上一章)
     private var pendingSeamlessSwitch: Int = 0
     private var isAutoScrolling = false
-    private var estimatedLineHeight: CGFloat = 30 // 新增：估算行高用于滚动时机判定
+    private var estimatedLineHeight: CGFloat = ReaderConstants.Interaction.estimatedLineHeight
+    private lazy var seamlessSwitchCoordinator = ReaderSeamlessSwitchCoordinator(
+        state: .init(
+            isInfiniteScrollEnabled: { [weak self] in self?.isInfiniteScrollEnabled ?? false },
+            pendingDirection: { [weak self] in self?.pendingSeamlessSwitch ?? 0 },
+            setPendingDirection: { [weak self] value in self?.pendingSeamlessSwitch = value },
+            nextAvailable: { [weak self] in self?.nextRenderStore != nil },
+            prevAvailable: { [weak self] in self?.prevRenderStore != nil },
+            currentTopY: { [weak self] in self?.currentContentView.frame.minY ?? 0 },
+            currentBottomY: { [weak self] in self?.currentContentView.frame.maxY ?? 0 },
+            contentHeight: { [weak self] in self?.scrollView.contentSize.height ?? 0 },
+            viewportHeight: { [weak self] in self?.scrollView.bounds.height ?? 0 }
+        ),
+        params: .init(
+            triggerPadding: ReaderConstants.Layout.extraSpacing,
+            triggerMin: ReaderConstants.Interaction.seamlessTriggerMin
+        )
+    )
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -147,7 +163,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         scrollView.addGestureRecognizer(tap)
         
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
-        longPress.minimumPressDuration = 0.8
+        longPress.minimumPressDuration = ReaderConstants.Interaction.longPressDuration
         longPress.delegate = self
         scrollView.addGestureRecognizer(longPress)
     }
@@ -172,7 +188,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             return
         }
         pendingSeamlessSwitch = 0
-        suppressAutoSwitchUntil = Date().timeIntervalSince1970 + 0.6
+        suppressAutoSwitchUntil = Date().timeIntervalSince1970 + ReaderConstants.Interaction.autoSwitchSuppressDuration
         cancelSwitchHold()
         onTapMenu?()
     }
@@ -259,7 +275,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 if !paragraphStarts.isEmpty {
                     self.paragraphStarts = paragraphStarts
                 }
-                let width = max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)
+                let width = ReaderMath.layoutWidth(containerWidth: (viewIfLoaded?.bounds.width ?? ReaderConstants.Layout.minLayoutWidthFallback), margin: margin)
                 externalStore.update(attributedString: externalStore.attributedString, layoutWidth: width)
             } else {
                 let titleText = title != nil && !title!.isEmpty ? title! + "\n" : ""
@@ -273,8 +289,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 self.paragraphStarts = pS
                 
                 let attr = createAttr(trimmedSentences, title: title, fontSize: fontSize, lineSpacing: lineSpacing)
-                if let s = self.renderStore { s.update(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
-                else { self.renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, (viewIfLoaded?.bounds.width ?? 375) - margin * 2)) }
+                if let s = self.renderStore { s.update(attributedString: attr, layoutWidth: ReaderMath.layoutWidth(containerWidth: (viewIfLoaded?.bounds.width ?? ReaderConstants.Layout.minLayoutWidthFallback), margin: margin)) }
+                else { self.renderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: ReaderMath.layoutWidth(containerWidth: (viewIfLoaded?.bounds.width ?? ReaderConstants.Layout.minLayoutWidthFallback), margin: margin)) }
             }
             calculateSentenceOffsets(); isUpdatingLayout = false
             currentContentView.update(renderStore: self.renderStore, highlightIndex: highlightIndex, secondaryIndices: secondaryIndices, isPlaying: isPlaying, highlightRange: nil, paragraphStarts: self.paragraphStarts, margin: margin, forceRedraw: true)
@@ -289,12 +305,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             } else {
                 if let externalStore = nextRenderStore {
                     self.nextRenderStore = externalStore
-                    let width = max(100, view.bounds.width - margin * 2)
+                    let width = ReaderMath.layoutWidth(containerWidth: view.bounds.width, margin: margin)
                     externalStore.update(attributedString: externalStore.attributedString, layoutWidth: width)
                 } else {
                     let attr = createAttr(trimmedNextSentences, title: nextTitle, fontSize: fontSize, lineSpacing: lineSpacing)
-                    if let s = self.nextRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                    else { self.nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                    if let s = self.nextRenderStore { s.update(attributedString: attr, layoutWidth: ReaderMath.layoutWidth(containerWidth: view.bounds.width, margin: margin)) }
+                    else { self.nextRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: ReaderMath.layoutWidth(containerWidth: view.bounds.width, margin: margin)) }
                 }
                 nextContentView.update(renderStore: self.nextRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, highlightRange: nil, paragraphStarts: nextParagraphStarts, margin: margin, forceRedraw: true)
             }
@@ -309,12 +325,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             } else {
                 if let externalStore = prevRenderStore {
                     self.prevRenderStore = externalStore
-                    let width = max(100, view.bounds.width - margin * 2)
+                    let width = ReaderMath.layoutWidth(containerWidth: view.bounds.width, margin: margin)
                     externalStore.update(attributedString: externalStore.attributedString, layoutWidth: width)
                 } else {
                     let attr = createAttr(trimmedPrevSentences, title: prevTitle, fontSize: fontSize, lineSpacing: lineSpacing)
-                    if let s = self.prevRenderStore { s.update(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
-                    else { self.prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: max(100, view.bounds.width - margin * 2)) }
+                    if let s = self.prevRenderStore { s.update(attributedString: attr, layoutWidth: ReaderMath.layoutWidth(containerWidth: view.bounds.width, margin: margin)) }
+                    else { self.prevRenderStore = TextKit2RenderStore(attributedString: attr, layoutWidth: ReaderMath.layoutWidth(containerWidth: view.bounds.width, margin: margin)) }
                 }
                 prevContentView.update(renderStore: self.prevRenderStore, highlightIndex: nil, secondaryIndices: [], isPlaying: false, highlightRange: nil, paragraphStarts: prevParagraphStarts, margin: margin, forceRedraw: true)
             }
@@ -383,7 +399,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if let title = title, !title.isEmpty {
             let p = NSMutableParagraphStyle()
             p.alignment = .center
-            p.paragraphSpacing = fontSize * 1.5
+            p.paragraphSpacing = fontSize * ReaderConstants.Text.titleParagraphSpacingFactor
             fullAttr.append(NSAttributedString(string: title + "\n", attributes: [
                 .font: ReaderFontProvider.titleFont(size: fontSize + 8),
                 .foregroundColor: UserPreferences.shared.readingTheme.textColor,
@@ -451,26 +467,26 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 nextContentView.frame = CGRect(x: m, y: currentY + h1 + chapterGap, width: ns.layoutWidth, height: h2)
                 totalH += h2 + chapterGap
             } else { nextContentView.isHidden = true }
-            scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + 100)
+            scrollView.contentSize = CGSize(width: view.bounds.width, height: totalH + ReaderConstants.Layout.extraSpacing)
         } else {
             // 非无限流：ContentSize 仅为当前章
             currentContentView.frame = CGRect(x: m, y: topPadding, width: s.layoutWidth, height: h1)
             // 关键优化：增加 100px 底部余量，确保最后一章节的末尾也能滚到探测点
-            scrollView.contentSize = CGSize(width: view.bounds.width, height: topPadding + h1 + 100)
+            scrollView.contentSize = CGSize(width: view.bounds.width, height: topPadding + h1 + ReaderConstants.Layout.extraSpacing)
             
             // 预览内容放置在 100px 间距外
             if let ps = prevRenderStore {
                 var h0: CGFloat = 0
                 ps.layoutManager.enumerateTextLayoutFragments(from: ps.contentStorage.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { f in h0 = f.layoutFragmentFrame.maxY; return false }
                 prevContentView.isHidden = false
-                prevContentView.frame = CGRect(x: m, y: topPadding - h0 - 100, width: ps.layoutWidth, height: h0)
+                prevContentView.frame = CGRect(x: m, y: topPadding - h0 - ReaderConstants.Layout.extraSpacing, width: ps.layoutWidth, height: h0)
             } else { prevContentView.isHidden = true }
             
             if let ns = nextRenderStore {
                 var h2: CGFloat = 0
                 ns.layoutManager.enumerateTextLayoutFragments(from: ns.contentStorage.documentRange.endLocation, options: [.ensuresLayout]) { f in h2 = f.layoutFragmentFrame.maxY; return false }
                 nextContentView.isHidden = false
-                nextContentView.frame = CGRect(x: m, y: topPadding + h1 + 100, width: ns.layoutWidth, height: h2)
+                nextContentView.frame = CGRect(x: m, y: topPadding + h1 + ReaderConstants.Layout.extraSpacing, width: ns.layoutWidth, height: h2)
             } else { nextContentView.isHidden = true }
             lastPrevHasContent = false
         }
@@ -481,7 +497,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         let rawOffset = s.contentOffset.y
         let y = s.contentOffset.y - contentTopPadding
         
-        if isInfiniteScrollEnabled { handleAutoSwitchIfNeeded(rawOffset: rawOffset) }
+        seamlessSwitchCoordinator.handleAutoSwitch(rawOffset: rawOffset)
         handleHoldSwitchIfNeeded(rawOffset: rawOffset)
         
         // 当关闭无限流时，应用视觉阻尼
@@ -508,8 +524,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         if isInfiniteScrollEnabled {
-            if s.contentOffset.y > s.contentSize.height - s.bounds.height * 1.5 { onReachedBottom?() }
-            if s.contentOffset.y < s.bounds.height * 0.6 { onReachedTop?() }
+            if s.contentOffset.y > s.contentSize.height - s.bounds.height * ReaderConstants.Interaction.reachBottomFactor { onReachedBottom?() }
+            if s.contentOffset.y < s.bounds.height * ReaderConstants.Interaction.reachTopFactor { onReachedTop?() }
         }
         
         // 实时同步进度 UI：通知外部容器刷新进度标签
@@ -544,7 +560,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 // 停止当前的滚动速度，防止回弹干扰转场
                 scrollView.setContentOffset(scrollView.contentOffset, animated: false)
                 
-                UIView.animate(withDuration: 0.2, animations: { 
+                UIView.animate(withDuration: ReaderConstants.Interaction.switchHintAnimation, animations: {
                     self.view.alpha = 0 
                 }) { _ in
                     self.onChapterSwitched?(direction)
@@ -611,7 +627,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     private func getYOffsetForCharOffset(_ o: Int) -> CGFloat? {
         guard let s = renderStore else { return nil }
         let totalLen = s.attributedString.length
-        let clampedO = max(0, min(o, totalLen > 0 ? totalLen - 1 : 0))
+        let clampedO = ReaderTextPositioning.clampCharOffset(o, totalLength: totalLen)
         
         s.layoutManager.ensureLayout(for: s.contentStorage.documentRange)
         
@@ -691,15 +707,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 // 1. 如果是章节第一句且还没对齐，或者偏离非常大（超过2行），则强制对齐
                 // 2. 如果是普通微调，维持 0.3 行的灵敏度
                 let isFirstSentence = tts.currentSentenceIndex <= (tts.hasChapterTitleInSentences ? 1 : 0)
-                let threshold = isFirstSentence ? 2.0 : (estimatedLineHeight * 0.3)
-                
-                if abs(currentReadingYRelativeToViewport) > threshold {
+                let tuning = ReaderTextPositioning.isAutoScrollNeeded(
+                    relativeOffset: currentReadingYRelativeToViewport,
+                    estimatedLineHeight: estimatedLineHeight,
+                    isFirstSentence: isFirstSentence,
+                    viewportHeight: vH
+                )
+                if tuning.shouldScroll {
                     let targetY = max(0, absY - contentTopPadding)
                     isAutoScrolling = true
                     // 如果偏离巨大，说明是刚换章或者用户跳进度了，用非动画形式先跳过去，再由 sync 维持平滑
-                    let shouldAnimate = abs(currentReadingYRelativeToViewport) < vH * 0.5
-                    scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: shouldAnimate)
-                    if !shouldAnimate {
+                    scrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, max(0, scrollView.contentSize.height - scrollView.bounds.height))), animated: tuning.shouldAnimate)
+                    if !tuning.shouldAnimate {
                         isAutoScrolling = false
                     }
                 }
@@ -710,7 +729,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     private func getYOffsetForCharOffsetInStore(_ s: TextKit2RenderStore, offset: Int) -> CGFloat? {
         let totalLen = s.attributedString.length
-        let clampedO = max(0, min(offset, totalLen > 0 ? totalLen - 1 : 0))
+        let clampedO = ReaderTextPositioning.clampCharOffset(offset, totalLength: totalLen)
         s.layoutManager.ensureLayout(for: s.contentStorage.documentRange)
         
         if let loc = s.contentStorage.location(s.contentStorage.documentRange.location, offsetBy: clampedO),
@@ -740,7 +759,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         // 修正判定逻辑：只要段落的任意一部分在可见区域内，或者包含当前视口顶部，就认为可见
         // 允许 50pt 的缓冲，防止频繁重定位
-        return (startY <= cur + vH + 50) && (endY >= cur - 50)
+        return (startY <= cur + vH + ReaderConstants.Interaction.visibleRangePadding) && (endY >= cur - ReaderConstants.Interaction.visibleRangePadding)
     }
     func scrollToTop(animated: Bool) { scrollView.setContentOffset(.zero, animated: animated) }
     func scrollToBottom(animated: Bool) {
@@ -769,12 +788,12 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         // 关键：确保排版已计算，否则 textLayoutFragment 可能返回 nil
         s.layoutManager.ensureLayout(for: s.contentStorage.documentRange)
         
-        let detectionOffset = max(2.0, lastFontSize * 0.2)
+        let detectionOffset = ReaderTextPositioning.lineDetectionOffset(fontSize: lastFontSize)
         let globalY = scrollView.contentOffset.y + contentTopPadding + detectionOffset
         let localY = globalY - currentContentView.frame.minY
         
         // 边界保护：如果在当前章节视图上方 50pt 以上，说明视觉中心还在上一章，返回 -1 标识不要重定位
-        if localY < -50 {
+        if localY < -ReaderConstants.Interaction.detectionNegativeClamp {
             return -1
         }
         
@@ -840,7 +859,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         switchHintLabel.font = .systemFont(ofSize: 12, weight: .semibold)
         switchHintLabel.textColor = .secondaryLabel
         switchHintLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.9)
-        switchHintLabel.layer.cornerRadius = 12
+        switchHintLabel.layer.cornerRadius = ReaderConstants.Highlight.switchHintCornerRadius
         switchHintLabel.layer.masksToBounds = true
         view.addSubview(switchHintLabel)
     }
@@ -849,11 +868,11 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         if switchHintLabel.text != "  \(text)  " {
             switchHintLabel.text = "  \(text)  "
             switchHintLabel.sizeToFit()
-            let width = min(view.bounds.width - 40, max(120, switchHintLabel.bounds.width))
+            let width = min(view.bounds.width - ReaderConstants.Interaction.switchHintHorizontalPadding, max(ReaderConstants.Interaction.switchHintWidthMin, switchHintLabel.bounds.width))
             let bottomSafe = max(0, view.safeAreaInsets.bottom)
             let newFrame = CGRect(
                 x: (view.bounds.width - width) / 2,
-                y: isTop ? (safeAreaTop + 12) : (view.bounds.height - bottomSafe - 36),
+                y: isTop ? (safeAreaTop + ReaderConstants.Interaction.switchHintTopPadding) : (view.bounds.height - bottomSafe - ReaderConstants.Interaction.switchHintBottomPadding),
                 width: width,
                 height: 24
             )
@@ -863,63 +882,20 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         }
         
         if switchHintLabel.alpha == 0 {
-            UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 1 }
+            UIView.animate(withDuration: ReaderConstants.Interaction.switchHintAnimation) { self.switchHintLabel.alpha = 1 }
         }
     }
 
     private func hideSwitchHint() {
         guard switchHintLabel.alpha > 0 else { return }
         isShowingSwitchResultHint = false
-        UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 0 }
-    }
-
-    private func handleAutoSwitchIfNeeded(rawOffset: CGFloat) {
-        if Date().timeIntervalSince1970 < suppressAutoSwitchUntil { return }
-        if pendingSeamlessSwitch != 0 { return }
-        
-        // 只有当旧章节已经完全滚出视野，且接缝处在屏幕上方一定距离外时，才标记切换
-        // 这样可以确保切换时，用户眼中只有新章节的内容，增加稳定性
-        
-        if let _ = nextRenderStore {
-            let maxOffsetY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-            let triggerThreshold = max(40, seamlessSwitchThreshold)
-            if rawOffset > maxOffsetY - triggerThreshold {
-                pendingSeamlessSwitch = 1
-                return
-            }
-        }
-        
-        if let _ = prevRenderStore {
-            // 当前章节顶部坐标
-            let currentTopY = currentContentView.frame.minY
-            // 如果当前章节顶部已经滚出屏幕下方 100 像素
-            if rawOffset + scrollView.bounds.height < currentTopY - 100 {
-                pendingSeamlessSwitch = -1
-            }
-        }
+        UIView.animate(withDuration: ReaderConstants.Interaction.switchHintAnimation) { self.switchHintLabel.alpha = 0 }
     }
 
     private func checkSeamlessSwitchAfterContentUpdate() {
-        guard isInfiniteScrollEnabled, pendingSeamlessSwitch == 0 else { return }
         let rawOffset = scrollView.contentOffset.y
-
-        if nextRenderStore != nil {
-            let currentBottomY = currentContentView.frame.maxY
-            if rawOffset > currentBottomY + 100 {
-                pendingSeamlessSwitch = 1
-            }
-        }
-
-        if pendingSeamlessSwitch == 0, prevRenderStore != nil {
-            let currentTopY = currentContentView.frame.minY
-            if rawOffset + scrollView.bounds.height < currentTopY - 100 {
-                pendingSeamlessSwitch = -1
-            }
-        }
-
-        if pendingSeamlessSwitch != 0 {
-            executeSeamlessSwitchIfNeeded()
-        }
+        seamlessSwitchCoordinator.handleContentUpdate(rawOffset: rawOffset)
+        if pendingSeamlessSwitch != 0 { executeSeamlessSwitchIfNeeded() }
     }
 
     func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
@@ -1009,14 +985,14 @@ class VerticalTextContentView: UIView {
         if isPlayingHighlight {
             ctx?.saveGState()
             if let range = highlightRange {
-                drawHighlight(range: range, store: s, context: ctx, color: UIColor.systemBlue.withAlphaComponent(0.12))
+                drawHighlight(range: range, store: s, context: ctx, color: UIColor.systemBlue.withAlphaComponent(ReaderConstants.Highlight.primaryAlpha))
             } else {
                 for i in ([highlightIndex].compactMap{$0} + Array(secondaryIndices)) {
                     guard i < paragraphStarts.count else { continue }
                     let start = paragraphStarts[i]
                     let end = (i + 1 < paragraphStarts.count) ? paragraphStarts[i + 1] : s.attributedString.length
                     let r = NSRange(location: start, length: max(0, end - start))
-                    let color = (i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.systemGreen.withAlphaComponent(0.06)
+                    let color = (i == highlightIndex) ? UIColor.systemBlue.withAlphaComponent(ReaderConstants.Highlight.primaryAlpha) : UIColor.systemGreen.withAlphaComponent(ReaderConstants.Highlight.secondaryAlpha)
                     drawHighlight(range: r, store: s, context: ctx, color: color)
                 }
             }
@@ -1041,7 +1017,7 @@ class VerticalTextContentView: UIView {
                 if store.contentStorage.offset(from: store.contentStorage.documentRange.location, to: f.rangeInElement.location) >= NSMaxRange(range) { return false }
                 for line in f.textLineFragments {
                     let lr = line.typographicBounds.offsetBy(dx: f.layoutFragmentFrame.origin.x, dy: f.layoutFragmentFrame.origin.y)
-                    ctx.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: -2, dy: -1), cornerRadius: 4).cgPath)
+                    ctx.addPath(UIBezierPath(roundedRect: lr.insetBy(dx: ReaderConstants.Pagination.highlightInsetX, dy: ReaderConstants.Pagination.highlightInsetY), cornerRadius: ReaderConstants.Highlight.cornerRadius).cgPath)
                     ctx.fillPath()
                 }
                 return true
@@ -1059,8 +1035,8 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     private var pendingSwitchDirection: Int = 0
     private var switchReady = false
     private var switchWorkItem: DispatchWorkItem?
-    private let switchHoldDuration: TimeInterval = 0.6
-    var dampingFactor: CGFloat = 0.2
+    private let switchHoldDuration: TimeInterval = ReaderConstants.Interaction.mangaSwitchHoldDuration
+    var dampingFactor: CGFloat = ReaderConstants.Interaction.dampingFactorDefault
     
     var onChapterSwitched: ((Int) -> Void)?
     var onToggleMenu: (() -> Void)?
@@ -1100,7 +1076,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         scrollView.delegate = self
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.alwaysBounceVertical = true
-        scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
+        scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
         scrollView.maximumZoomScale = maxZoomScale
         scrollView.minimumZoomScale = 1.0
         view.addSubview(scrollView)
@@ -1158,7 +1134,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             
             lastViewSize = view.bounds.size
             scrollView.frame = view.bounds
-            scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: 100, right: 0)
+            scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
             
             // 旋转后恢复位置
             if oldContentHeight > 0 {
@@ -1279,8 +1255,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         let offset = rawOffset + safeAreaTop
         let maxOffset = stackView.frame.height - s.bounds.height
         if maxOffset > 0 {
-            let percent = Int(round(min(1.0, max(0.0, offset / maxOffset)) * 100))
-            progressLabel.text = "\(min(100, percent))%"
+            progressLabel.text = ReaderProgressFormatter.percentProgressText(offset: offset, maxOffset: maxOffset)
         } else {
             progressLabel.text = "0%"
         }
@@ -1347,7 +1322,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         switchHintLabel.font = .systemFont(ofSize: 12, weight: .semibold)
         switchHintLabel.textColor = .white
         switchHintLabel.backgroundColor = UIColor.black.withAlphaComponent(0.6)
-        switchHintLabel.layer.cornerRadius = 12
+        switchHintLabel.layer.cornerRadius = ReaderConstants.Highlight.switchHintCornerRadius
         switchHintLabel.layer.masksToBounds = true
         view.addSubview(switchHintLabel)
     }
@@ -1356,23 +1331,23 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         if switchHintLabel.text != "  \(text)  " {
             switchHintLabel.text = "  \(text)  "
             switchHintLabel.sizeToFit()
-            let width = min(view.bounds.width - 40, max(120, switchHintLabel.bounds.width))
+            let width = min(view.bounds.width - ReaderConstants.Interaction.switchHintHorizontalPadding, max(ReaderConstants.Interaction.switchHintWidthMin, switchHintLabel.bounds.width))
             let bottomSafe = max(0, view.safeAreaInsets.bottom)
             let newFrame = CGRect(
                 x: (view.bounds.width - width) / 2,
-                y: isTop ? (safeAreaTop + 12) : (view.bounds.height - bottomSafe - 36),
+                y: isTop ? (safeAreaTop + ReaderConstants.Interaction.switchHintTopPadding) : (view.bounds.height - bottomSafe - ReaderConstants.Interaction.switchHintBottomPadding),
                 width: width, height: 24
             )
             if switchHintLabel.frame != newFrame {
                 switchHintLabel.frame = newFrame
             }
         }
-        if switchHintLabel.alpha == 0 { UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 1 } }
+        if switchHintLabel.alpha == 0 { UIView.animate(withDuration: ReaderConstants.Interaction.switchHintAnimation) { self.switchHintLabel.alpha = 1 } }
     }
 
     private func hideSwitchHint() {
         guard switchHintLabel.alpha > 0 else { return }
-        UIView.animate(withDuration: 0.2) { self.switchHintLabel.alpha = 0 }
+        UIView.animate(withDuration: ReaderConstants.Interaction.switchHintAnimation) { self.switchHintLabel.alpha = 0 }
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
@@ -1380,7 +1355,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         let topPullDistance = max(0, -rawOffset)
         let bottomPullDistance = max(0, rawOffset - actualMaxScrollY)
 
-        if topPullDistance > 5 {
+        if topPullDistance > ReaderConstants.Interaction.pullThreshold {
             if topPullDistance > threshold {
                 if !switchReady {
                     switchReady = true; pendingSwitchDirection = -1
@@ -1392,7 +1367,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                 if switchReady { switchReady = false }
                 updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
-        } else if bottomPullDistance > 5 {
+        } else if bottomPullDistance > ReaderConstants.Interaction.pullThreshold {
             if bottomPullDistance > threshold {
                 if !switchReady {
                     switchReady = true; pendingSwitchDirection = 1
