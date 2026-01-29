@@ -249,7 +249,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var lastLoggedPrevUrl: String?
     private var lastLoggedNextCount: Int = -1
     private var lastLoggedPrevCount: Int = -1
-    private lazy var transitionCoordinator: ReaderTransitionCoordinator = {
+    lazy var pageTransitionCoordinator: ReaderTransitionCoordinator = {
         ReaderTransitionCoordinator(
             state: .init(
                 isTransitioning: { [weak self] in self?.isInternalTransitioning ?? true },
@@ -271,7 +271,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             )
         )
     }()
-    private lazy var interactionCoordinator: ReaderInteractionCoordinator = {
+    lazy var interactionCoordinator: ReaderInteractionCoordinator = {
         ReaderInteractionCoordinator(
             state: .init(
                 isTransitioning: { [weak self] in self?.isInternalTransitioning ?? true },
@@ -931,7 +931,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             chapters: chapters,
             currentIndex: currentChapterIndex,
             bookUrl: book.bookUrl ?? "",
-            bookSourceUrl: book.origin,
+            bookSourceUrl: book.origin ?? "",
             bookTitle: book.name ?? "未知书名",
             coverUrl: book.coverUrl,
             replaceRules: replaceRuleViewModel?.rules,

@@ -143,7 +143,7 @@ extension ReaderContainerViewController {
     }
 
     func performChapterTransition(isNext: Bool, updates: @escaping () -> Void) {
-        transitionCoordinator.performTransition(mode: readerSettings.pageTurningMode, isNext: isNext, updates: updates)
+        pageTransitionCoordinator.performTransition(mode: readerSettings.pageTurningMode, isNext: isNext, updates: updates)
     }
 
     func performChapterTransitionFade(_ updates: @escaping () -> Void) {
