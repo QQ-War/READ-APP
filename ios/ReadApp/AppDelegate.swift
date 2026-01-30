@@ -6,7 +6,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         handleEventsForBackgroundURLSession identifier: String,
         completionHandler: @escaping () -> Void
     ) {
-        if identifier == "com.readapp.packagedownload" {
+        if identifier == "com.readapp.packagedownload.v1" {
             PackageDownloadManager.shared.setBackgroundCompletionHandler(completionHandler, for: identifier)
         } else {
             BookUploadService.shared.setBackgroundCompletionHandler(completionHandler)

@@ -13,6 +13,8 @@
 		C10000050000000000000002 /* MangaImageNormalizationRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000050000000000000001 /* MangaImageNormalizationRules.swift */; };
 		CB32C6E6EEB05D59848CC517 /* MangaAntiScrapingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1D6F0B56486D3FEE732E99 /* MangaAntiScrapingService.swift */; };
 		C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000020000000000000001 /* OfflineDownloadManager.swift */; };
+		C10000060000000000000002 /* PackageDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000060000000000000001 /* PackageDownloadManager.swift */; };
+		C20000000000000000000003 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = C20000000000000000000002 /* ZIPFoundation */; };
 		2A83F7C979DC464A96CE4D4C /* BookSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */; };
 		72FDB17ADA4241E9BF6A5BB9 /* BookSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A79963738344134ACDF2305 /* BookSearchViewModel.swift */; };
 		1A000001000000000000001 /* ReadAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000001 /* ReadAppApp.swift */; };
@@ -138,6 +140,7 @@
 		C10000040000000000000001 /* MangaImageNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaImageNormalizer.swift; sourceTree = "<group>"; };
 		C10000050000000000000001 /* MangaImageNormalizationRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaImageNormalizationRules.swift; sourceTree = "<group>"; };
 		C10000020000000000000001 /* OfflineDownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineDownloadManager.swift; sourceTree = "<group>"; };
+		C10000060000000000000001 /* PackageDownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageDownloadManager.swift; sourceTree = "<group>"; };
 		CA1D6F0B56486D3FEE732E99 /* MangaAntiScrapingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaAntiScrapingService.swift; sourceTree = "<group>"; };
 		BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSearchView.swift; sourceTree = "<group>"; };
 		0A79963738344134ACDF2305 /* BookSearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSearchViewModel.swift; sourceTree = "<group>"; };
@@ -265,6 +268,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C20000000000000000000003 /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -458,6 +462,7 @@
 				C10000040000000000000001 /* MangaImageNormalizer.swift */,
 				C10000050000000000000001 /* MangaImageNormalizationRules.swift */,
 				C10000020000000000000001 /* OfflineDownloadManager.swift */,
+				C10000060000000000000001 /* PackageDownloadManager.swift */,
 				CA1D6F0B56486D3FEE732E99 /* MangaAntiScrapingService.swift */,
 				A20000030000000000000001 /* FontManager.swift */,
 				A20000040000000000000001 /* ReaderFontProvider.swift */,
@@ -521,6 +526,9 @@
 			);
 			dependencies = (
 			);
+			packageProductDependencies = (
+				C20000000000000000000002 /* ZIPFoundation */,
+			);
 			name = ReadApp;
 			productName = ReadApp;
 			productReference = 1A000020000000000000001 /* ReadApp.app */;
@@ -550,6 +558,9 @@
 				Base,
 			);
 			mainGroup = 1A000023000000000000001;
+			packageReferences = (
+				C20000000000000000000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+			);
 			productRefGroup = 1A000025000000000000001 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -580,6 +591,7 @@
 				C10000040000000000000002 /* MangaImageNormalizer.swift in Sources */,
 				C10000050000000000000002 /* MangaImageNormalizationRules.swift in Sources */,
 				C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */,
+				C10000060000000000000002 /* PackageDownloadManager.swift in Sources */,
 				CB32C6E6EEB05D59848CC517 /* MangaAntiScrapingService.swift in Sources */,
 				1A000001000000000000001 /* ReadAppApp.swift in Sources */,
 				D10000010000000000000002 /* AppDelegate.swift in Sources */,
@@ -881,6 +893,25 @@
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C20000000000000000000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.19;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C20000000000000000000002 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C20000000000000000000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCConfigurationList section */
 		1A000030000000000000001 /* Build configuration list for PBXNativeTarget "ReadApp" */ = {
