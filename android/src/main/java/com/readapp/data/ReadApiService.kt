@@ -76,6 +76,16 @@ interface ReadApiService {
         @Query("bookSourceUrl") bookSourceUrl: String? = null,
     ): Response<ApiResponse<String>>
 
+    @retrofit2.http.Streaming
+    @GET(ApiEndpoints.GetChapterPackage)
+    suspend fun getChapterPackage(
+        @Query("accessToken") accessToken: String,
+        @Query("url") url: String,
+        @Query("index") index: Int,
+        @Query("type") type: Int = 2,
+        @Query("bookSourceUrl") bookSourceUrl: String? = null,
+    ): Response<okhttp3.ResponseBody>
+
     @GET(ApiEndpoints.SaveBookProgress)
     suspend fun saveBookProgress(
         @Query("accessToken") accessToken: String,

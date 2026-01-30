@@ -91,6 +91,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private val ttsRepository = TtsRepository(remoteDataSourceFactory, repository)
     private val replaceRuleRepository = ReplaceRuleRepository(remoteDataSourceFactory, repository)
     internal val chapterContentRepository = ChapterContentRepository(repository, localCache)
+    private val packageDownloadManager by lazy {
+        PackageDownloadManager(apiFactory(currentServerEndpoint()), localCache)
+    }
     private val ttsController = TtsController(this)
     private val audioController = AudioBookController(this)
     private val ttsSyncCoordinator by lazy { TtsSyncCoordinator(this) }
@@ -1098,6 +1101,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         // 判断是否为漫画模式 / 本地 PDF
         val isManga = manualMangaUrls.value.contains(book.bookUrl) || book.type == 2
         val effectiveType = if (isManga) 2 else 0
+        val forceProxy = readerSettings.forceMangaProxy.value
+        val isQread = (readerSettings.serverType.value == 3)
         val shouldCacheImages = isManga
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -1115,8 +1120,25 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     ).onSuccess { content ->
                         val cleaned = cleanChapterContent(content.orEmpty())
                         localCache.saveChapter(book.bookUrl ?: "", i, cleaned)
+                        
                         if (shouldCacheImages) {
-                            cacheMangaImages(book, chapter, i, cleaned)
+                            if (forceProxy && isQread) {
+                                // 优先尝试服务端打包下载
+                                val result = packageDownloadManager.downloadAndCacheMangaPackage(
+                                    accessToken = _accessToken.value,
+                                    bookUrl = book.bookUrl ?: "",
+                                    bookOrigin = book.origin,
+                                    chapterIndex = i,
+                                    chapterApiIndex = chapter.index,
+                                    rawContent = content.orEmpty()
+                                )
+                                if (result.isFailure) {
+                                    Log.w(TAG, "Package download failed for chapter $i, falling back to individual download")
+                                    cacheMangaImages(book, chapter, i, content.orEmpty())
+                                }
+                            } else {
+                                cacheMangaImages(book, chapter, i, cleaned)
+                            }
                         }
                     }
                 }

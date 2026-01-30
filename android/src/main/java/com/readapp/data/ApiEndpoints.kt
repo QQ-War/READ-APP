@@ -8,6 +8,7 @@ object ApiEndpoints {
     const val GetBookshelf = "getBookshelf"
     const val GetChapterList = "getChapterList"
     const val GetBookContent = "getBookContent"
+    const val GetChapterPackage = "chapterPackage"
     const val SaveBookProgress = "saveBookProgress"
     const val SetBookSource = "setBookSource"
     const val GetAllTts = "getalltts"
