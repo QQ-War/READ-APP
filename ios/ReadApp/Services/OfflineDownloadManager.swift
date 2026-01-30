@@ -1,4 +1,5 @@
 import Foundation
+import ZIPFoundation
 import UIKit
 
 enum OfflineDownloadStatus: String {
@@ -201,7 +202,44 @@ final class OfflineDownloadManager: ObservableObject {
                         }
                     }
 
-                    if job.isManga {
+                    if job.isManga && UserPreferences.shared.forceMangaProxy {
+                        // 使用服务端打包接口进行后台下载
+                        await MainActor.run {
+                            self.updateJob(jobId) { job in
+                                job.message = "Downloading package: \(chapter.title)"
+                            }
+                        }
+                        
+                        do {
+                            let zipURL = try await PackageDownloadManager.shared.downloadPackage(
+                                bookUrl: job.bookUrl,
+                                bookSourceUrl: job.bookSourceUrl,
+                                chapterIndex: chapter.index,
+                                isManga: true
+                            )
+                            
+                            // 提取 ZIP 并保存到缓存
+                            let imageUrls = extractMangaImageUrls(from: rawContent)
+                            try await unzipAndSaveImages(
+                                zipURL: zipURL,
+                                bookUrl: job.bookUrl,
+                                chapterIndex: chapter.index,
+                                imageUrls: imageUrls
+                            )
+                            
+                            // 清理临时 ZIP
+                            try? FileManager.default.removeItem(at: zipURL)
+                            
+                            await MainActor.run {
+                                self.updateJob(jobId) { job in
+                                    job.completedUnits += imageUrls.count
+                                }
+                            }
+                        } catch {
+                            await markFailed(jobId: jobId, message: "Package download/extract failed: \(error.localizedDescription)")
+                            return
+                        }
+                    } else if job.isManga {
                         let imageUrls = extractMangaImageUrls(from: rawContent)
                         if !imageUrls.isEmpty {
                             await MainActor.run {
@@ -266,6 +304,58 @@ final class OfflineDownloadManager: ObservableObject {
                     return
                 }
             }
+        }
+    }
+
+    private func unzipAndSaveImages(zipURL: URL, bookUrl: String, chapterIndex: Int, imageUrls: [String]) async throws {
+        // 重要：由于 iOS 不支持通过命令行解压，必须引入 ZIPFoundation。
+        // 请确保在工程中添加了 https://github.com/weichsel/ZIPFoundation
+        // 并在文件顶部或此处 import ZIPFoundation。
+        
+        // 我们通过反射或动态检查来模拟调用，或者直接写逻辑。
+        // 这里提供完整实现，用户只需要确保库已链接。
+        
+        let fileManager = FileManager.default
+        let extractDir = fileManager.temporaryDirectory.appendingPathComponent("extract_\(UUID().uuidString)")
+        
+        do {
+            try fileManager.createDirectory(at: extractDir, withIntermediateDirectories: true)
+            
+            try fileManager.unzipItem(at: zipURL, to: extractDir)
+            
+            // 如果 unzipItem 被注释了，下面的逻辑会因为找不到文件而跳过。
+            // 建议用户在此处补全代码。
+            
+            // 获取解压后的所有文件并排序，以确保与 imageUrls 顺序一致
+            let contents = try fileManager.contentsOfDirectory(at: extractDir, includingPropertiesForKeys: [.isRegularFileKey])
+                .filter { $0.lastPathComponent != ".DS_Store" }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            
+            if contents.isEmpty {
+                // 如果解压失败或目录为空，我们抛出异常以便外层捕捉
+                throw NSError(domain: "OfflineDownloadManager", code: -3, userInfo: [NSLocalizedDescriptionKey: "解压失败或压缩包内无有效图片。请确保 ZIPFoundation 已集成并调用了 unzipItem。"])
+            }
+
+            for (i, imageUrl) in imageUrls.enumerated() {
+                guard i < contents.count else { break }
+                let sourceFile = contents[i]
+                
+                if let data = try? Data(contentsOf: sourceFile) {
+                    LocalCacheManager.shared.saveMangaImage(
+                        bookUrl: bookUrl,
+                        chapterIndex: chapterIndex,
+                        imageURL: imageUrl,
+                        data: data
+                    )
+                }
+            }
+            
+            // 清理
+            try? fileManager.removeItem(at: extractDir)
+            
+        } catch {
+            print("Extraction & Save error: \(error)")
+            throw error
         }
     }
 

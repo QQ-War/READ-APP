@@ -7,6 +7,7 @@ enum ApiEndpoints {
     static let getBookshelf = "getBookshelf"
     static let getChapterList = "getChapterList"
     static let getBookContent = "getBookContent"
+    static let getChapterPackage = "chapterPackage"
     static let saveBookProgress = "saveBookProgress"
     static let setBookSource = "setBookSource"
     static let getAllTts = "getalltts"
