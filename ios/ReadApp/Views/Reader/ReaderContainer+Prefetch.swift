@@ -121,6 +121,17 @@ extension ReaderContainerViewController {
             vc = MangaLegacyReaderViewController()
         case .collection:
             vc = MangaReaderViewController()
+        case .collectionNoChapterZoom:
+            vc = MangaReaderViewController()
+        }
+        let chapterZoomEnabled: Bool
+        switch readerSettings.mangaReaderMode {
+        case .legacy:
+            chapterZoomEnabled = true
+        case .collection:
+            chapterZoomEnabled = readerSettings.mangaChapterZoomEnabled
+        case .collectionNoChapterZoom:
+            chapterZoomEnabled = false
         }
         vc.safeAreaTop = safeAreaTop
         vc.onToggleMenu = { [weak self] in self?.safeToggleMenu() }
@@ -143,7 +154,7 @@ extension ReaderContainerViewController {
         vc.threshold = verticalThreshold
         vc.dampingFactor = readerSettings.verticalDampingFactor
         vc.maxZoomScale = readerSettings.mangaMaxZoom
-        vc.isChapterZoomEnabled = readerSettings.mangaReaderMode == .collection ? readerSettings.mangaChapterZoomEnabled : true
+        vc.isChapterZoomEnabled = chapterZoomEnabled
         vc.prefetchCount = readerSettings.mangaPrefetchCount
         vc.memoryCacheMB = readerSettings.mangaMemoryCacheMB
         vc.recentKeepCount = readerSettings.mangaRecentKeepCount

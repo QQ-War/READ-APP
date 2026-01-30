@@ -83,6 +83,17 @@ enum ReaderModeControllerFactory {
             vc = MangaLegacyReaderViewController()
         case .collection:
             vc = MangaReaderViewController()
+        case .collectionNoChapterZoom:
+            vc = MangaReaderViewController()
+        }
+        let chapterZoomEnabled: Bool
+        switch settings.mangaReaderMode {
+        case .legacy:
+            chapterZoomEnabled = true
+        case .collection:
+            chapterZoomEnabled = settings.mangaChapterZoomEnabled
+        case .collectionNoChapterZoom:
+            chapterZoomEnabled = false
         }
         vc.safeAreaTop = owner.safeAreaTop
         vc.onToggleMenu = { [weak owner] in owner?.safeToggleMenu() }
@@ -110,7 +121,7 @@ enum ReaderModeControllerFactory {
         vc.threshold = threshold
         vc.dampingFactor = settings.verticalDampingFactor
         vc.maxZoomScale = settings.mangaMaxZoom
-        vc.isChapterZoomEnabled = settings.mangaReaderMode == .collection ? settings.mangaChapterZoomEnabled : true
+        vc.isChapterZoomEnabled = chapterZoomEnabled
         vc.prefetchCount = settings.mangaPrefetchCount
         vc.memoryCacheMB = settings.mangaMemoryCacheMB
         vc.recentKeepCount = settings.mangaRecentKeepCount
