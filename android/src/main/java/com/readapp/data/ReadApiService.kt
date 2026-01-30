@@ -30,11 +30,12 @@ import retrofit2.http.Part
 import retrofit2.http.Query
 
 interface ReadApiService {
-    @GET(ApiEndpoints.Login)
+    @POST(ApiEndpoints.Login)
     suspend fun login(
         @Query("username") username: String,
         @Query("password") password: String,
         @Query("model") model: String = "android",
+        @Query("v") version: Int = 5
     ): Response<ApiResponse<LoginResponse>>
 
     @GET(ApiEndpoints.GetUserInfo)

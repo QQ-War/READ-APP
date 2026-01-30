@@ -32,6 +32,7 @@ enum class DarkModeConfig {
 }
 
 class UserPreferences(private val context: Context) {
+    private val secureStorage = SecureStorage(context)
 
     private object Keys {
         val ServerUrl = stringPreferencesKey("serverUrl")
@@ -77,7 +78,9 @@ class UserPreferences(private val context: Context) {
             ?: detectApiBackend(prefs[Keys.ServerUrl] ?: "")
     }
     val publicServerUrl: Flow<String> = context.dataStore.data.map { it[Keys.PublicServerUrl] ?: "" }
-    val accessToken: Flow<String> = context.dataStore.data.map { it[Keys.AccessToken] ?: "" }
+    val accessToken: Flow<String> = context.dataStore.data.map { 
+        secureStorage.getAccessToken() ?: it[Keys.AccessToken] ?: "" 
+    }
     val username: Flow<String> = context.dataStore.data.map { it[Keys.Username] ?: "" }
     val selectedTtsId: Flow<String> = context.dataStore.data.map { it[Keys.SelectedTtsId] ?: "" }
     val useSystemTts: Flow<Boolean> = context.dataStore.data.map { it[Keys.UseSystemTts] ?: false }
@@ -204,6 +207,11 @@ class UserPreferences(private val context: Context) {
     }
 
     suspend fun saveAccessToken(value: String) {
+        if (value.isBlank()) {
+            secureStorage.clearAccessToken()
+        } else {
+            secureStorage.saveAccessToken(value)
+        }
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.AccessToken] = value
         }

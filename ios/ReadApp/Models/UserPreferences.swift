@@ -23,7 +23,7 @@ class UserPreferences: ObservableObject {
 
     @Published var accessToken: String {
         didSet {
-            UserDefaults.standard.set(accessToken, forKey: "accessToken")
+            KeychainHelper.shared.save(accessToken, service: "com.readapp.ios", account: "accessToken")
         }
     }
 
@@ -423,7 +423,7 @@ class UserPreferences: ObservableObject {
         }
         self.serverURL = ApiBackendResolver.stripApiBasePath(rawServerURL)
         self.publicServerURL = ApiBackendResolver.stripApiBasePath(rawPublicURL)
-        self.accessToken = UserDefaults.standard.string(forKey: "accessToken") ?? ""
+        self.accessToken = KeychainHelper.shared.read(service: "com.readapp.ios", account: "accessToken") ?? UserDefaults.standard.string(forKey: "accessToken") ?? ""
         self.username = UserDefaults.standard.string(forKey: "username") ?? ""
         self.isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
         self.selectedTTSId = UserDefaults.standard.string(forKey: "selectedTTSId") ?? ""
@@ -486,6 +486,7 @@ class UserPreferences: ObservableObject {
 
     func logout() {
         accessToken = ""
+        KeychainHelper.shared.delete(service: "com.readapp.ios", account: "accessToken")
         username = ""
         isLoggedIn = false
     }

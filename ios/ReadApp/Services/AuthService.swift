@@ -13,15 +13,15 @@ final class AuthService {
         switch client.backend {
         case .read:
             let deviceModel = await MainActor.run { UIDevice.current.model }
-            let queryItems = [
-                URLQueryItem(name: "username", value: username),
-                URLQueryItem(name: "password", value: password),
-                URLQueryItem(name: "model", value: deviceModel)
-            ]
-            let url = try client.buildURL(endpoint: ApiEndpoints.login, queryItems: queryItems)
+            let url = try client.buildURL(endpoint: ApiEndpoints.login)
             var newRequest = URLRequest(url: url)
-            newRequest.httpMethod = "GET"
+            newRequest.httpMethod = "POST"
             newRequest.timeoutInterval = 15
+            newRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            
+            let apiVersion = APIService.apiVersion
+            let bodyString = "username=\(username)&password=\(password)&model=\(deviceModel)&v=\(apiVersion)"
+            newRequest.httpBody = bodyString.data(using: .utf8)
             request = newRequest
         case .reader:
             let url = try client.buildURL(endpoint: ApiEndpointsReader.login)
