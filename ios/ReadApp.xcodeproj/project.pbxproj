@@ -192,7 +192,7 @@
 		1A0001190000000000000010 /* ReaderProgressCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderProgressCoordinator.swift; sourceTree = "<group>"; };
 		1A00011B0000000000000010 /* ReaderModeSwitchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderModeSwitchCoordinator.swift; sourceTree = "<group>"; };
 		1A00011D0000000000000010 /* ReaderModeSwitchContextBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderModeSwitchContextBuilder.swift; sourceTree = "<group>"; };
-		1A00110000000000000001 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/KeychainHelper.swift; sourceTree = "<group>"; };
+		1A00110000000000000001 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		1A00100000000000000001 /* MangaReaderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaReaderViewController.swift; sourceTree = "<group>"; };
 		1A0000D2000000000000001 /* TTSSyncController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSSyncController.swift; sourceTree = "<group>"; };
 		1A000006000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
