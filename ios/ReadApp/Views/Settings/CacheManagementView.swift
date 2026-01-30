@@ -40,9 +40,9 @@ struct CacheManagementView: View {
     private var content: AnyView {
         AnyView(
             List {
+                downloadingSection
                 strategySection
                 mangaDownloadSection
-                downloadingSection
                 storageSection
                 cachedBooksSection
             }
@@ -61,60 +61,47 @@ struct CacheManagementView: View {
 
     private var mangaDownloadSection: some View {
         Section(header: Text("漫画下载设置")) {
-            HStack {
-                Text("图片并发数")
-                Spacer()
-                Text("\(preferences.mangaImageMaxConcurrent)")
-                    .foregroundColor(.secondary)
-            }
-            Stepper("", value: $preferences.mangaImageMaxConcurrent, in: 1...6)
-            Text("并发越大加载越快，但更容易超时")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+            Toggle("启动代理下载", isOn: $preferences.forceMangaProxy)
 
-            HStack {
-                Text("预加载张数")
-                Spacer()
-                Text("\(preferences.mangaPrefetchCount)")
-                    .foregroundColor(.secondary)
+            Stepper(value: $preferences.mangaImageMaxConcurrent, in: 1...6) {
+                HStack {
+                    Text("图片并发数")
+                    Spacer()
+                    Text("\(preferences.mangaImageMaxConcurrent)").foregroundColor(.secondary)
+                }
             }
-            Stepper("", value: $preferences.mangaPrefetchCount, in: 0...20)
-            Text("提前加载的图片数量（含接近章节末尾时的下一章前几张）")
-                .font(.caption2)
-                .foregroundColor(.secondary)
 
-            HStack {
-                Text("内存缓存上限")
-                Spacer()
-                Text("\(preferences.mangaMemoryCacheMB) MB")
-                    .foregroundColor(.secondary)
+            Stepper(value: $preferences.mangaPrefetchCount, in: 0...20) {
+                HStack {
+                    Text("预加载张数")
+                    Spacer()
+                    Text("\(preferences.mangaPrefetchCount)").foregroundColor(.secondary)
+                }
             }
-            Stepper("", value: $preferences.mangaMemoryCacheMB, in: 20...300, step: 10)
-            Text("限制内存占用，避免频繁回收")
-                .font(.caption2)
-                .foregroundColor(.secondary)
 
-            HStack {
-                Text("最近保留张数")
-                Spacer()
-                Text("\(preferences.mangaRecentKeepCount)")
-                    .foregroundColor(.secondary)
+            Stepper(value: $preferences.mangaMemoryCacheMB, in: 20...300, step: 10) {
+                HStack {
+                    Text("内存缓存上限")
+                    Spacer()
+                    Text("\(preferences.mangaMemoryCacheMB) MB").foregroundColor(.secondary)
+                }
             }
-            Stepper("", value: $preferences.mangaRecentKeepCount, in: 0...200, step: 5)
-            Text("保持最近浏览的图片不被快速释放")
-                .font(.caption2)
-                .foregroundColor(.secondary)
 
-            HStack {
-                Text("图片超时")
-                Spacer()
-                Text("\(Int(preferences.mangaImageTimeout)) 秒")
-                    .foregroundColor(.secondary)
+            Stepper(value: $preferences.mangaRecentKeepCount, in: 0...200, step: 5) {
+                HStack {
+                    Text("最近保留张数")
+                    Spacer()
+                    Text("\(preferences.mangaRecentKeepCount)").foregroundColor(.secondary)
+                }
             }
-            Stepper("", value: $preferences.mangaImageTimeout, in: 5...60, step: 5)
-            Text("超时越大越稳，但等待更久")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+
+            Stepper(value: $preferences.mangaImageTimeout, in: 5...60, step: 5) {
+                HStack {
+                    Text("图片超时")
+                    Spacer()
+                    Text("\(Int(preferences.mangaImageTimeout)) 秒").foregroundColor(.secondary)
+                }
+            }
         }
     }
     
