@@ -140,6 +140,12 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    @Published var mangaReaderMode: MangaReaderMode {
+        didSet {
+            UserDefaults.standard.set(mangaReaderMode.rawValue, forKey: "mangaReaderMode")
+        }
+    }
+
     @Published var pageHorizontalMargin: CGFloat {
         didSet {
             UserDefaults.standard.set(pageHorizontalMargin, forKey: "pageHorizontalMargin")
@@ -473,6 +479,13 @@ class UserPreferences: ObservableObject {
             }
         } else {
             self.readingMode = .vertical
+        }
+
+        if let savedMangaModeString = UserDefaults.standard.string(forKey: "mangaReaderMode"),
+           let savedMangaMode = MangaReaderMode(rawValue: savedMangaModeString) {
+            self.mangaReaderMode = savedMangaMode
+        } else {
+            self.mangaReaderMode = .collection
         }
 
         if let savedDarkModeString = UserDefaults.standard.string(forKey: "darkMode"),

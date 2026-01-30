@@ -230,9 +230,9 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     var verticalVC: VerticalTextViewController?
     var horizontalVC: UIPageViewController?
-    var mangaVC: MangaReaderViewController?
+    var mangaVC: (UIViewController & MangaReadable)?
     var newHorizontalVC: HorizontalCollectionViewController?
-    var prebuiltNextMangaVC: MangaReaderViewController?
+    var prebuiltNextMangaVC: (UIViewController & MangaReadable)?
     var prebuiltNextIndex: Int?
 
     let progressLabel = UILabel()

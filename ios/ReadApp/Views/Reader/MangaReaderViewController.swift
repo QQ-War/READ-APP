@@ -1,5 +1,29 @@
 import UIKit
 
+protocol MangaReadable: AnyObject {
+    var scrollView: UIScrollView { get }
+    var onChapterSwitched: ((Int) -> Void)? { get set }
+    var onToggleMenu: (() -> Void)? { get set }
+    var onInteractionChanged: ((Bool) -> Void)? { get set }
+    var onVisibleIndexChanged: ((Int) -> Void)? { get set }
+    var safeAreaTop: CGFloat { get set }
+    var threshold: CGFloat { get set }
+    var dampingFactor: CGFloat { get set }
+    var maxZoomScale: CGFloat { get set }
+    var prefetchCount: Int { get set }
+    var progressFontSize: CGFloat { get set }
+    var currentVisibleIndex: Int { get set }
+    var pendingScrollIndex: Int? { get set }
+    var bookUrl: String? { get set }
+    var chapterIndex: Int { get set }
+    var chapterUrl: String? { get set }
+    var progressLabel: UILabel { get }
+    func update(urls: [String])
+    func updateNextChapterPrefetch(urls: [String])
+    func scrollToIndex(_ index: Int, animated: Bool)
+    func scrollToBottom(animated: Bool)
+}
+
 private final class MangaImageCell: UICollectionViewCell {
     static let reuseIdentifier = "MangaImageCell"
 
@@ -83,7 +107,7 @@ private final class MangaImageCell: UICollectionViewCell {
 }
 
 // MARK: - Manga Reader Controller
-class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching, UIScrollViewDelegate, UIGestureRecognizerDelegate {
+class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching, UIScrollViewDelegate, UIGestureRecognizerDelegate, MangaReadable {
     private let zoomScrollView = UIScrollView()
     private let collectionView: UICollectionView
     private let switchHintLabel = UILabel()

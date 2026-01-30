@@ -10,7 +10,7 @@ final class ReaderProgressCoordinator {
         let progressLabel: UILabel
         let rootView: UIView
         let verticalVC: VerticalTextViewController?
-        let mangaVC: MangaReaderViewController?
+        let mangaVC: MangaReadable?
     }
 
     static func updateProgressUI(context: UIContext) {
@@ -68,7 +68,7 @@ final class ReaderProgressCoordinator {
         currentCache: ChapterCache,
         currentPageIndex: Int,
         verticalVC: VerticalTextViewController?,
-        mangaVC: MangaReaderViewController?
+        mangaVC: MangaReadable?
     ) -> Double {
         if readingMode == .vertical {
             if isMangaMode {
@@ -93,7 +93,7 @@ final class ReaderProgressCoordinator {
         currentCache: ChapterCache,
         currentPageIndex: Int,
         verticalVC: VerticalTextViewController?,
-        mangaVC: MangaReaderViewController?
+        mangaVC: MangaReadable?
     ) async {
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
         let pos = calculateProgress(

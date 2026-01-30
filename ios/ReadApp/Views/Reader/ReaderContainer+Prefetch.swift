@@ -115,7 +115,13 @@ extension ReaderContainerViewController {
         // 如果已经预制过了，且索引一致，跳过
         if prebuiltNextIndex == index && prebuiltNextMangaVC != nil { return }
 
-        let vc = MangaReaderViewController()
+        let vc: (UIViewController & MangaReadable)
+        switch readerSettings.mangaReaderMode {
+        case .legacy:
+            vc = MangaLegacyReaderViewController()
+        case .collection:
+            vc = MangaReaderViewController()
+        }
         vc.safeAreaTop = safeAreaTop
         vc.onToggleMenu = { [weak self] in self?.safeToggleMenu() }
         vc.onInteractionChanged = { [weak self] interacting in

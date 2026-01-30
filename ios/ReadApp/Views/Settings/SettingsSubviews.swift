@@ -199,6 +199,20 @@ struct ReadingSettingsView: View {
                     }
                     .padding(.vertical, 4)
 
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("漫画渲染模式")
+                        Picker("漫画渲染模式", selection: $preferences.mangaReaderMode) {
+                            ForEach(MangaReaderMode.allCases) { mode in
+                                Text(mode.localizedName).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        Text("模式1更稳定，模式2更省内存")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+
                 }
             }
             

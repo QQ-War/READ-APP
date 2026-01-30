@@ -69,3 +69,16 @@ enum ReadingTheme: String, CaseIterable, Identifiable {
         }
     }
 }
+
+enum MangaReaderMode: String, CaseIterable, Identifiable {
+    case legacy = "Legacy"
+    case collection = "Collection"
+
+    var id: String { self.rawValue }
+    var localizedName: String {
+        switch self {
+        case .legacy: return "漫画模式1（经典）"
+        case .collection: return "漫画模式2（优化）"
+        }
+    }
+}

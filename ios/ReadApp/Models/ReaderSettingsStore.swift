@@ -41,6 +41,11 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.readingMode = newValue }
     }
 
+    var mangaReaderMode: MangaReaderMode {
+        get { preferences.mangaReaderMode }
+        set { preferences.mangaReaderMode = newValue }
+    }
+
     var pageHorizontalMargin: CGFloat {
         get { preferences.pageHorizontalMargin }
         set { preferences.pageHorizontalMargin = newValue }

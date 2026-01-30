@@ -69,6 +69,7 @@
 		1A00011E000000000000010 /* ReaderModeSwitchContextBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00011D0000000000000010 /* ReaderModeSwitchContextBuilder.swift */; };
 		1A00110100000000000001 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00110000000000000001 /* KeychainHelper.swift */; };
 		1A00100100000000000001 /* MangaReaderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00100000000000000001 /* MangaReaderViewController.swift */; };
+		1A00120100000000000001 /* MangaReaderViewControllerLegacy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00120000000000000001 /* MangaReaderViewControllerLegacy.swift */; };
 		1A0000D5000000000000001 /* TTSSyncController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000D2000000000000001 /* TTSSyncController.swift */; };
 		1A000005000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A000006000000000000001 /* Assets.xcassets */; };
 		1A000007000000000000001 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000008000000000000001 /* APIService.swift */; };
@@ -194,6 +195,7 @@
 		1A00011D0000000000000010 /* ReaderModeSwitchContextBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderModeSwitchContextBuilder.swift; sourceTree = "<group>"; };
 		1A00110000000000000001 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		1A00100000000000000001 /* MangaReaderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaReaderViewController.swift; sourceTree = "<group>"; };
+		1A00120000000000000001 /* MangaReaderViewControllerLegacy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaReaderViewControllerLegacy.swift; sourceTree = "<group>"; };
 		1A0000D2000000000000001 /* TTSSyncController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSSyncController.swift; sourceTree = "<group>"; };
 		1A000006000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A000008000000000000001 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
@@ -356,6 +358,7 @@
 				1A00011B0000000000000010 /* ReaderModeSwitchCoordinator.swift */,
 				1A00011D0000000000000010 /* ReaderModeSwitchContextBuilder.swift */,
 				1A00100000000000000001 /* MangaReaderViewController.swift */,
+				1A00120000000000000001 /* MangaReaderViewControllerLegacy.swift */,
 			);
 			path = Reader;
 			sourceTree = "<group>";
@@ -632,6 +635,7 @@
 				1A00011E000000000000010 /* ReaderModeSwitchContextBuilder.swift in Sources */,
 				1A00110100000000000001 /* KeychainHelper.swift in Sources */,
 				1A00100100000000000001 /* MangaReaderViewController.swift in Sources */,
+				1A00120100000000000001 /* MangaReaderViewControllerLegacy.swift in Sources */,
 				1A0000D5000000000000001 /* TTSSyncController.swift in Sources */,
 				1A000007000000000000001 /* APIService.swift in Sources */,
 				A10000010000000000000001 /* APIClient.swift in Sources */,

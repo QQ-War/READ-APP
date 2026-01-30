@@ -76,8 +76,14 @@ enum ReaderModeControllerFactory {
         return v
     }
 
-    static func makeMangaController(owner: ReaderContainerViewController, settings: ReaderSettingsStore, threshold: CGFloat) -> MangaReaderViewController {
-        let vc = MangaReaderViewController()
+    static func makeMangaController(owner: ReaderContainerViewController, settings: ReaderSettingsStore, threshold: CGFloat) -> (UIViewController & MangaReadable) {
+        let vc: (UIViewController & MangaReadable)
+        switch settings.mangaReaderMode {
+        case .legacy:
+            vc = MangaLegacyReaderViewController()
+        case .collection:
+            vc = MangaReaderViewController()
+        }
         vc.safeAreaTop = owner.safeAreaTop
         vc.onToggleMenu = { [weak owner] in owner?.safeToggleMenu() }
         vc.onInteractionChanged = { [weak owner] interacting in
