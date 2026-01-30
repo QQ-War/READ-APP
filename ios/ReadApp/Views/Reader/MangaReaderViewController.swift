@@ -3,21 +3,21 @@ import UIKit
 private final class MangaZoomScrollView: UIScrollView {
     weak var linkedCollectionPan: UIPanGestureRecognizer?
 
-    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === panGestureRecognizer {
             let velocity = panGestureRecognizer.velocity(in: self)
             return abs(velocity.x) > abs(velocity.y)
         }
-        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+        return true
     }
 
-    override func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === panGestureRecognizer || otherGestureRecognizer === panGestureRecognizer {
             if otherGestureRecognizer === linkedCollectionPan || gestureRecognizer === linkedCollectionPan {
                 return true
             }
         }
-        return super.gestureRecognizer(gestureRecognizer, shouldRecognizeSimultaneouslyWith: otherGestureRecognizer)
+        return false
     }
 }
 
