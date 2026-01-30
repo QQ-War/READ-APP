@@ -140,6 +140,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
     let progressLabel = UILabel()
 
+    var scrollView: UIScrollView { collectionView }
+
     init() {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .vertical
