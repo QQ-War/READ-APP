@@ -20,6 +20,7 @@ import com.readapp.data.LocalCacheManager
 import com.readapp.data.LocalSourceCache
 import com.readapp.data.ChapterContentRepository
 import com.readapp.data.ApiBackend
+import com.readapp.data.PackageDownloadManager
 import com.readapp.data.detectApiBackend
 import com.readapp.data.normalizeApiBaseUrl
 import com.readapp.data.stripApiBasePath
@@ -1102,7 +1103,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         val isManga = manualMangaUrls.value.contains(book.bookUrl) || book.type == 2
         val effectiveType = if (isManga) 2 else 0
         val forceProxy = readerSettings.forceMangaProxy.value
-        val isQread = (readerSettings.serverType.value == 3)
+        val isReadBackend = (apiBackend.value == ApiBackend.Read)
         val shouldCacheImages = isManga
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -1122,7 +1123,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                         localCache.saveChapter(book.bookUrl ?: "", i, cleaned)
                         
                         if (shouldCacheImages) {
-                            if (forceProxy && isQread) {
+                            if (forceProxy && isReadBackend) {
                                 // 优先尝试服务端打包下载
                                 val result = packageDownloadManager.downloadAndCacheMangaPackage(
                                     accessToken = _accessToken.value,
