@@ -30,6 +30,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
     var chapterIndex: Int = 0
     var chapterUrl: String?
     private var imageUrls: [String] = []
+    private var loadingTasks: [Int: Task<Void, Never>] = [:]
     
     private lazy var progressOverlayView: UIView = {
         let view = UIView()
@@ -50,6 +51,7 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         scrollView.delegate = self
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.alwaysBounceVertical = true
+        scrollView.delaysContentTouches = false
         scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
         scrollView.maximumZoomScale = maxZoomScale
         scrollView.minimumZoomScale = 1.0
@@ -73,6 +75,11 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         scrollView.addGestureRecognizer(tap)
+    }
+
+    deinit {
+        loadingTasks.values.forEach { $0.cancel() }
+        loadingTasks.removeAll()
     }
     
     private func setupProgressLabel() {
@@ -131,6 +138,11 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
 
     func update(urls: [String]) {
         guard urls != self.imageUrls else { return }
+        
+        // 1. 取消正在进行的任务，防止旧任务操作已移除的视图
+        loadingTasks.values.forEach { $0.cancel() }
+        loadingTasks.removeAll()
+        
         self.imageUrls = urls
 
         if urls.isEmpty {
@@ -138,23 +150,47 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
         }
 
         func startLoadImage(
-            resolved: URL,
-            absolute: String,
+            urlStr: String,
             imageView: UIImageView,
             placeholderConstraint: NSLayoutConstraint,
             retryButton: UIButton,
+            spinner: UIActivityIndicatorView,
             index: Int
         ) {
-            Task {
+            let task = Task {
+                await MainActor.run {
+                    retryButton.isHidden = true
+                    spinner.startAnimating()
+                }
+                
+                let cleanUrl = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
+                guard let resolved = MangaImageService.shared.resolveImageURL(cleanUrl) else {
+                    await MainActor.run {
+                        spinner.stopAnimating()
+                        retryButton.isHidden = false
+                        retryButton.superview?.bringSubviewToFront(retryButton)
+                    }
+                    LogManager.shared.log("漫画图片URL解析失败: \(cleanUrl)", category: "漫画调试")
+                    return
+                }
+                
+                let absolute = resolved.absoluteString
+                
+                // 并发排队期间持续显示进度环
                 await MangaImageService.shared.acquireDownloadPermit()
                 defer { MangaImageService.shared.releaseDownloadPermit() }
+                
+                if Task.isCancelled { return }
+
                 if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl),
                    let image = UIImage(data: data) {
                     if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
                         LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)
                     }
                     await MainActor.run {
+                        if Task.isCancelled { return }
                         guard imageView.superview != nil else { return }
+                        spinner.stopAnimating()
                         retryButton.isHidden = true
                         imageView.image = image
                         let ratio = image.size.height / image.size.width
@@ -166,14 +202,18 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                     }
                 } else {
                     await MainActor.run {
+                        if Task.isCancelled { return }
+                        spinner.stopAnimating()
                         retryButton.isHidden = false
+                        retryButton.superview?.bringSubviewToFront(retryButton)
                     }
                     LogManager.shared.log("漫画图片加载失败: \(absolute)", category: "漫画调试")
                 }
             }
+            loadingTasks[index] = task
         }
 
-        // 关键优化：先收集现有视图以便复用或平滑过渡（可选），这里简单处理为先准备好所有图片
+        // 2. 清理旧视图
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         
         for (index, urlStr) in urls.enumerated() {
@@ -198,15 +238,29 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             placeholderConstraint.priority = .defaultHigh
             placeholderConstraint.isActive = true
 
+            // 添加进度环
+            let spinner = UIActivityIndicatorView(style: .medium)
+            spinner.color = .white
+            spinner.hidesWhenStopped = true
+            spinner.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(spinner)
+            NSLayoutConstraint.activate([
+                spinner.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                spinner.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+            ])
+
             let retryButton = UIButton(type: .system)
             retryButton.setTitle("重试", for: .normal)
             retryButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
             retryButton.setTitleColor(.white, for: .normal)
-            retryButton.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+            // 强化视觉：使用系统蓝色背景，增加辨识度
+            retryButton.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.8)
             retryButton.layer.cornerRadius = 12
             retryButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
             retryButton.isHidden = true
             retryButton.translatesAutoresizingMaskIntoConstraints = false
+            retryButton.layer.zPosition = 100
+            retryButton.isExclusiveTouch = true
             container.addSubview(retryButton)
             NSLayoutConstraint.activate([
                 retryButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
@@ -214,15 +268,19 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
             ])
             
             let urlStr2 = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
-            guard let resolved = MangaImageService.shared.resolveImageURL(urlStr2) else {
+            let resolvedForCache = MangaImageService.shared.resolveImageURL(urlStr2)
+            let absoluteForCache = resolvedForCache?.absoluteString
+            if resolvedForCache == nil {
+                spinner.stopAnimating()
+                retryButton.isHidden = false
+                retryButton.superview?.bringSubviewToFront(retryButton)
                 LogManager.shared.log("漫画图片URL解析失败: \(urlStr2)", category: "漫画调试")
                 continue
             }
-            let absolute = resolved.absoluteString
             
-            // 尝试同步加载本地缓存，减少闪烁
-            if let b = bookUrl,
-               let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute),
+            // 尝试同步加载本地缓存
+            if let b = bookUrl, let abs = absoluteForCache,
+               let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: abs),
                let image = UIImage(data: cachedData) {
                 iv.image = image
                 let ratio = image.size.height / image.size.width
@@ -232,31 +290,17 @@ class MangaReaderViewController: UIViewController, UIScrollViewDelegate {
                     self.scrollToIndex(index, animated: false)
                 }
                 retryButton.isHidden = true
+                spinner.stopAnimating()
                 continue
             }
             
-            retryButton.addAction(UIAction { [weak self, weak iv, weak placeholderConstraint, weak retryButton] _ in
-                guard let self, let iv, let placeholderConstraint, let retryButton else { return }
-                retryButton.isHidden = true
-                startLoadImage(
-                    resolved: resolved,
-                    absolute: absolute,
-                    imageView: iv,
-                    placeholderConstraint: placeholderConstraint,
-                    retryButton: retryButton,
-                    index: index
-                )
+            retryButton.addAction(UIAction { [weak self, weak iv, weak placeholderConstraint, weak retryButton, weak spinner] _ in
+                guard let self, let iv, let placeholderConstraint, let retryButton, let spinner else { return }
+                startLoadImage(urlStr: urlStr, imageView: iv, placeholderConstraint: placeholderConstraint, retryButton: retryButton, spinner: spinner, index: index)
             }, for: .touchUpInside)
 
-            // 缓存未命中，异步下载
-            startLoadImage(
-                resolved: resolved,
-                absolute: absolute,
-                imageView: iv,
-                placeholderConstraint: placeholderConstraint,
-                retryButton: retryButton,
-                index: index
-            )
+            // 异步加载
+            startLoadImage(urlStr: urlStr, imageView: iv, placeholderConstraint: placeholderConstraint, retryButton: retryButton, spinner: spinner, index: index)
         }
     }
 
