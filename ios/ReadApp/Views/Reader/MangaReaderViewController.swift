@@ -159,6 +159,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     private let prefetchCooldown: TimeInterval = 0.35
     private var recentImageOrder: [String] = []
     private var recentImageMap: [String: UIImage] = [:]
+    private var minLoadIndex: Int = 0
     private lazy var zoomPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleZoomPan(_:)))
 
     private enum ImageLoadState {
@@ -300,6 +301,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         self.imageUrls = urls
         self.imageAspectRatios = Array(repeating: nil, count: urls.count)
         self.imageStates = Array(repeating: .idle, count: urls.count)
+        self.minLoadIndex = max(0, pendingScrollIndex ?? 0)
         imageCache.removeAllObjects()
         prefetchDataCache.removeAllObjects()
         recentImageOrder.removeAll()
@@ -354,8 +356,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         }
     }
 
-    private func startLoadImage(index: Int) {
+    private func startLoadImage(index: Int, force: Bool = false) {
         guard index >= 0, index < imageUrls.count, index < imageStates.count else { return }
+        if !force && index < minLoadIndex { return }
         if imageStates[index] == .loading { return }
 
         imageStates[index] = .loading
@@ -471,9 +474,11 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let start = min(imageUrls.count - 1, index + 1)
         let end = min(imageUrls.count - 1, index + prefetchCount)
         if start > end { return }
+        let effectiveStart = max(start, minLoadIndex)
+        if effectiveStart > end { return }
         let threshold = min(5, prefetchCount)
         var buffered = 0
-        for idx in start...end {
+        for idx in effectiveStart...end {
             if idx < imageStates.count {
                 let state = imageStates[idx]
                 if state == .loading || state == .loaded {
@@ -482,7 +487,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             }
         }
         if buffered >= threshold { return }
-        for idx in start...end {
+        for idx in effectiveStart...end {
             if idx < imageStates.count, imageStates[idx] == .idle {
                 startLoadImage(index: idx)
                 buffered += 1
@@ -625,6 +630,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             if currentVisibleIndex != first.0 {
                 currentVisibleIndex = first.0
                 onVisibleIndexChanged?(first.0)
+                if currentVisibleIndex < minLoadIndex {
+                    minLoadIndex = currentVisibleIndex
+                }
                 let now = Date().timeIntervalSince1970
                 if now - lastPrefetchTime > prefetchCooldown {
                     lastPrefetchTime = now
@@ -812,7 +820,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let showRetry = (state == .failed)
 
         cell.configure(image: cachedImage, isLoading: isLoading, showRetry: showRetry) { [weak self] in
-            self?.startLoadImage(index: index)
+            self?.startLoadImage(index: index, force: true)
         }
 
         if cachedImage == nil && state == .idle {
