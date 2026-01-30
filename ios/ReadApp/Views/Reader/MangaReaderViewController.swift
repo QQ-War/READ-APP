@@ -1,5 +1,26 @@
 import UIKit
 
+private final class MangaZoomScrollView: UIScrollView {
+    weak var linkedCollectionPan: UIPanGestureRecognizer?
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === panGestureRecognizer {
+            let velocity = panGestureRecognizer.velocity(in: self)
+            return abs(velocity.x) > abs(velocity.y)
+        }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
+
+    override func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === panGestureRecognizer || otherGestureRecognizer === panGestureRecognizer {
+            if otherGestureRecognizer === linkedCollectionPan || gestureRecognizer === linkedCollectionPan {
+                return true
+            }
+        }
+        return super.gestureRecognizer(gestureRecognizer, shouldRecognizeSimultaneouslyWith: otherGestureRecognizer)
+    }
+}
+
 private final class MangaImageCell: UICollectionViewCell {
     static let reuseIdentifier = "MangaImageCell"
 
@@ -83,8 +104,8 @@ private final class MangaImageCell: UICollectionViewCell {
 }
 
 // MARK: - Manga Reader Controller
-class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching, UIScrollViewDelegate, UIGestureRecognizerDelegate {
-    private let zoomScrollView = UIScrollView()
+class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching, UIScrollViewDelegate {
+    private let zoomScrollView = MangaZoomScrollView()
     private let collectionView: UICollectionView
     private let switchHintLabel = UILabel()
     private var lastViewSize: CGSize = .zero
@@ -168,7 +189,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         zoomScrollView.backgroundColor = .clear
         zoomScrollView.contentInsetAdjustmentBehavior = .never
         zoomScrollView.panGestureRecognizer.isEnabled = false
-        zoomScrollView.panGestureRecognizer.delegate = self
         view.addSubview(zoomScrollView)
 
         collectionView.delegate = self
@@ -177,7 +197,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         collectionView.alwaysBounceVertical = true
         collectionView.delaysContentTouches = false
         collectionView.backgroundColor = .clear
-        collectionView.panGestureRecognizer.delegate = self
+        zoomScrollView.linkedCollectionPan = collectionView.panGestureRecognizer
         collectionView.register(MangaImageCell.self, forCellWithReuseIdentifier: MangaImageCell.reuseIdentifier)
         collectionView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -464,23 +484,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         zoomScrollView.panGestureRecognizer.isEnabled = zoomed
     }
 
-    // MARK: - Gesture handling
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        let isZoomPan = gestureRecognizer === zoomScrollView.panGestureRecognizer || otherGestureRecognizer === zoomScrollView.panGestureRecognizer
-        let isCollectionPan = gestureRecognizer === collectionView.panGestureRecognizer || otherGestureRecognizer === collectionView.panGestureRecognizer
-        if isZoomPan && isCollectionPan {
-            return true
-        }
-        return false
-    }
-
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        if gestureRecognizer === zoomScrollView.panGestureRecognizer {
-            let velocity = zoomScrollView.panGestureRecognizer.velocity(in: zoomScrollView)
-            return abs(velocity.x) > abs(velocity.y)
-        }
-        return true
-    }
 
     private func setupSwitchHint() {
         switchHintLabel.alpha = 0
