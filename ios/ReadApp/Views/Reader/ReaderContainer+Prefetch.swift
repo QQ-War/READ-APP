@@ -144,6 +144,8 @@ extension ReaderContainerViewController {
         vc.dampingFactor = readerSettings.verticalDampingFactor
         vc.maxZoomScale = readerSettings.mangaMaxZoom
         vc.prefetchCount = readerSettings.mangaPrefetchCount
+        vc.memoryCacheMB = readerSettings.mangaMemoryCacheMB
+        vc.recentKeepCount = readerSettings.mangaRecentKeepCount
 
         // 设置元数据并触发图片同步加载
         vc.bookUrl = book.bookUrl

@@ -11,6 +11,8 @@ protocol MangaReadable: AnyObject {
     var dampingFactor: CGFloat { get set }
     var maxZoomScale: CGFloat { get set }
     var prefetchCount: Int { get set }
+    var memoryCacheMB: Int { get set }
+    var recentKeepCount: Int { get set }
     var progressFontSize: CGFloat { get set }
     var currentVisibleIndex: Int { get set }
     var pendingScrollIndex: Int? { get set }
@@ -130,6 +132,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         }
     }
     var prefetchCount: Int = 6
+    var memoryCacheMB: Int = 120 {
+        didSet { updateCacheLimits() }
+    }
+    var recentKeepCount: Int = 24
     var progressFontSize: CGFloat = 12 {
         didSet {
             progressLabel.font = .monospacedDigitSystemFont(ofSize: progressFontSize, weight: .regular)
@@ -151,6 +157,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     private var pendingLayoutInvalidation: DispatchWorkItem?
     private var lastPrefetchTime: TimeInterval = 0
     private let prefetchCooldown: TimeInterval = 0.35
+    private var recentImageOrder: [String] = []
+    private var recentImageMap: [String: UIImage] = [:]
     private lazy var zoomPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleZoomPan(_:)))
 
     private enum ImageLoadState {
@@ -223,6 +231,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tap.cancelsTouchesInView = false
         zoomScrollView.addGestureRecognizer(tap)
+
+        updateCacheLimits()
     }
 
     deinit {
@@ -291,6 +301,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         self.imageAspectRatios = Array(repeating: nil, count: urls.count)
         self.imageStates = Array(repeating: .idle, count: urls.count)
         imageCache.removeAllObjects()
+        prefetchDataCache.removeAllObjects()
+        recentImageOrder.removeAll()
+        recentImageMap.removeAll()
         pendingLayoutInvalidation?.cancel()
         pendingLayoutInvalidation = nil
 
@@ -311,6 +324,34 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
     private func cacheKey(for url: String) -> NSString {
         NSString(string: sanitizedUrl(url))
+    }
+
+    private func updateCacheLimits() {
+        let bytes = max(0, memoryCacheMB) * 1024 * 1024
+        imageCache.totalCostLimit = bytes
+        prefetchDataCache.totalCostLimit = bytes / 2
+    }
+
+    private func estimatedCost(for image: UIImage) -> Int {
+        let width = Int(image.size.width * image.scale)
+        let height = Int(image.size.height * image.scale)
+        return max(1, width * height * 4)
+    }
+
+    private func keepRecentImage(key: String, image: UIImage) {
+        if recentKeepCount <= 0 { return }
+        recentImageMap[key] = image
+        recentImageOrder.removeAll { $0 == key }
+        recentImageOrder.append(key)
+        if recentImageOrder.count > recentKeepCount {
+            let overflow = recentImageOrder.count - recentKeepCount
+            for _ in 0..<overflow {
+                if let removeKey = recentImageOrder.first {
+                    recentImageOrder.removeFirst()
+                    recentImageMap.removeValue(forKey: removeKey)
+                }
+            }
+        }
     }
 
     private func startLoadImage(index: Int) {
@@ -347,7 +388,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
                           self.imageUrls[index] == expectedToken else { return }
-                    self.imageCache.setObject(cachedImage, forKey: cacheKey)
+                    let cost = self.estimatedCost(for: cachedImage)
+                    self.imageCache.setObject(cachedImage, forKey: cacheKey, cost: cost)
+                    self.keepRecentImage(key: cacheKey as String, image: cachedImage)
                     self.imageAspectRatios[index] = cachedImage.size.height / max(cachedImage.size.width, 1)
                     self.imageStates[index] = .loaded
                     self.scheduleLayoutInvalidation()
@@ -366,10 +409,12 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
                           self.imageUrls[index] == expectedToken else { return }
-                    self.imageCache.setObject(cachedImage, forKey: cacheKey)
+                    let cost = self.estimatedCost(for: cachedImage)
+                    self.imageCache.setObject(cachedImage, forKey: cacheKey, cost: cost)
+                    self.keepRecentImage(key: cacheKey as String, image: cachedImage)
                     self.imageAspectRatios[index] = cachedImage.size.height / max(cachedImage.size.width, 1)
                     self.imageStates[index] = .loaded
-                    self.collectionView.collectionViewLayout.invalidateLayout()
+                    self.scheduleLayoutInvalidation()
                     self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
@@ -393,7 +438,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
                           self.imageUrls[index] == expectedToken else { return }
-                    self.imageCache.setObject(image, forKey: cacheKey)
+                    let cost = self.estimatedCost(for: image)
+                    self.imageCache.setObject(image, forKey: cacheKey, cost: cost)
+                    self.keepRecentImage(key: cacheKey as String, image: image)
                     self.imageAspectRatios[index] = image.size.height / max(image.size.width, 1)
                     self.imageStates[index] = .loaded
                     self.scheduleLayoutInvalidation()
@@ -490,7 +537,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             defer { MangaImageService.shared.releaseDownloadPermit() }
             if Task.isCancelled { return }
             if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl) {
-                prefetchDataCache.setObject(data as NSData, forKey: key)
+                prefetchDataCache.setObject(data as NSData, forKey: key, cost: data.count)
                 if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
                     LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex + 1, imageURL: absolute, data: data)
                 }
@@ -758,7 +805,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         }
 
         let index = indexPath.item
-        let cachedImage = imageCache.object(forKey: cacheKey(for: imageUrls[index]))
+        let key = cacheKey(for: imageUrls[index])
+        let cachedImage = imageCache.object(forKey: key) ?? recentImageMap[key as String]
         let state = imageStates.indices.contains(index) ? imageStates[index] : .idle
         let isLoading = (state == .loading)
         let showRetry = (state == .failed)

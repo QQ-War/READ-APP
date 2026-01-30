@@ -20,6 +20,8 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
     var threshold: CGFloat = 80
     var maxZoomScale: CGFloat = 3.0
     var prefetchCount: Int = 0
+    var memoryCacheMB: Int = 0
+    var recentKeepCount: Int = 0
     var progressFontSize: CGFloat = 12 {
         didSet {
             progressLabel.font = .monospacedDigitSystemFont(ofSize: progressFontSize, weight: .regular)

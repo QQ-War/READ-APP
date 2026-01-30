@@ -84,6 +84,28 @@ struct CacheManagementView: View {
                 .foregroundColor(.secondary)
 
             HStack {
+                Text("内存缓存上限")
+                Spacer()
+                Text("\(preferences.mangaMemoryCacheMB) MB")
+                    .foregroundColor(.secondary)
+            }
+            Stepper("", value: $preferences.mangaMemoryCacheMB, in: 20...300, step: 10)
+            Text("限制内存占用，避免频繁回收")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            HStack {
+                Text("最近保留张数")
+                Spacer()
+                Text("\(preferences.mangaRecentKeepCount)")
+                    .foregroundColor(.secondary)
+            }
+            Stepper("", value: $preferences.mangaRecentKeepCount, in: 0...200, step: 5)
+            Text("保持最近浏览的图片不被快速释放")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            HStack {
                 Text("图片超时")
                 Spacer()
                 Text("\(Int(preferences.mangaImageTimeout)) 秒")

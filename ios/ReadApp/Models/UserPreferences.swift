@@ -288,6 +288,20 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 漫画图片内存缓存上限（MB）
+    @Published var mangaMemoryCacheMB: Int {
+        didSet {
+            UserDefaults.standard.set(mangaMemoryCacheMB, forKey: "mangaMemoryCacheMB")
+        }
+    }
+
+    /// 漫画图片最近保留数量（内存）
+    @Published var mangaRecentKeepCount: Int {
+        didSet {
+            UserDefaults.standard.set(mangaRecentKeepCount, forKey: "mangaRecentKeepCount")
+        }
+    }
+
     /// 漫画图片并发下载数量
     @Published var mangaImageMaxConcurrent: Int {
         didSet {
@@ -417,6 +431,10 @@ class UserPreferences: ObservableObject {
         self.isMangaPreloadEnabled = UserDefaults.standard.object(forKey: "isMangaPreloadEnabled") as? Bool ?? true
         let savedPrefetchCount = UserDefaults.standard.integer(forKey: "mangaPrefetchCount")
         self.mangaPrefetchCount = savedPrefetchCount == 0 ? 6 : max(0, savedPrefetchCount)
+        let savedMemoryCacheMB = UserDefaults.standard.integer(forKey: "mangaMemoryCacheMB")
+        self.mangaMemoryCacheMB = savedMemoryCacheMB == 0 ? 120 : max(20, savedMemoryCacheMB)
+        let savedRecentKeepCount = UserDefaults.standard.integer(forKey: "mangaRecentKeepCount")
+        self.mangaRecentKeepCount = savedRecentKeepCount == 0 ? 24 : max(0, savedRecentKeepCount)
         let savedMangaConcurrent = UserDefaults.standard.integer(forKey: "mangaImageMaxConcurrent")
         self.mangaImageMaxConcurrent = savedMangaConcurrent == 0 ? 2 : max(1, savedMangaConcurrent)
         let savedMangaTimeout = UserDefaults.standard.double(forKey: "mangaImageTimeout")

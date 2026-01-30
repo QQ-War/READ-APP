@@ -106,6 +106,16 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.mangaPrefetchCount = newValue }
     }
 
+    var mangaMemoryCacheMB: Int {
+        get { preferences.mangaMemoryCacheMB }
+        set { preferences.mangaMemoryCacheMB = newValue }
+    }
+
+    var mangaRecentKeepCount: Int {
+        get { preferences.mangaRecentKeepCount }
+        set { preferences.mangaRecentKeepCount = newValue }
+    }
+
     var infiniteScrollSwitchThreshold: CGFloat {
         get { preferences.infiniteScrollSwitchThreshold }
         set { preferences.infiniteScrollSwitchThreshold = newValue }
