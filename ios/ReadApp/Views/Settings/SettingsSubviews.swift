@@ -200,6 +200,15 @@ struct ReadingSettingsView: View {
                     .padding(.vertical, 4)
 
                     VStack(alignment: .leading, spacing: 8) {
+                        Toggle("章节整体缩放", isOn: $preferences.mangaChapterZoomEnabled)
+                            .disabled(preferences.mangaReaderMode != .collection)
+                        Text("仅模式2生效，关闭后改为单图缩放")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+
+                    VStack(alignment: .leading, spacing: 8) {
                         Text("漫画渲染模式")
                         Picker("漫画渲染模式", selection: $preferences.mangaReaderMode) {
                             ForEach(MangaReaderMode.allCases) { mode in

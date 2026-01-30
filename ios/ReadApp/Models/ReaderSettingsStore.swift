@@ -101,6 +101,11 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.mangaMaxZoom = newValue }
     }
 
+    var mangaChapterZoomEnabled: Bool {
+        get { preferences.mangaChapterZoomEnabled }
+        set { preferences.mangaChapterZoomEnabled = newValue }
+    }
+
     var mangaPrefetchCount: Int {
         get { preferences.mangaPrefetchCount }
         set { preferences.mangaPrefetchCount = newValue }

@@ -19,6 +19,15 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
     var safeAreaTop: CGFloat = 0
     var threshold: CGFloat = 80
     var maxZoomScale: CGFloat = 3.0
+    var isChapterZoomEnabled: Bool = true {
+        didSet {
+            guard isViewLoaded else { return }
+            scrollView.maximumZoomScale = isChapterZoomEnabled ? maxZoomScale : 1.0
+            if !isChapterZoomEnabled {
+                scrollView.setZoomScale(1.0, animated: false)
+            }
+        }
+    }
     var prefetchCount: Int = 0
     var memoryCacheMB: Int = 0
     var recentKeepCount: Int = 0

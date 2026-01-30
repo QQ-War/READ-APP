@@ -143,6 +143,7 @@ extension ReaderContainerViewController {
         vc.threshold = verticalThreshold
         vc.dampingFactor = readerSettings.verticalDampingFactor
         vc.maxZoomScale = readerSettings.mangaMaxZoom
+        vc.isChapterZoomEnabled = readerSettings.mangaReaderMode == .collection ? readerSettings.mangaChapterZoomEnabled : true
         vc.prefetchCount = readerSettings.mangaPrefetchCount
         vc.memoryCacheMB = readerSettings.mangaMemoryCacheMB
         vc.recentKeepCount = readerSettings.mangaRecentKeepCount

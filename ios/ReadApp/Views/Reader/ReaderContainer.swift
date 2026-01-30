@@ -106,6 +106,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let infiniteScrollSwitchThreshold: CGFloat
         let verticalDampingFactor: CGFloat
         let mangaMaxZoom: CGFloat
+        let mangaChapterZoomEnabled: Bool
         let pageTurningMode: PageTurningMode
         let ttsFollowCooldown: TimeInterval
         let verticalThreshold: CGFloat
@@ -400,6 +401,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 infiniteScrollSwitchThreshold: settings.infiniteScrollSwitchThreshold,
                 verticalDampingFactor: settings.verticalDampingFactor,
                 mangaMaxZoom: settings.mangaMaxZoom,
+                mangaChapterZoomEnabled: settings.mangaChapterZoomEnabled,
                 pageTurningMode: settings.pageTurningMode,
                 ttsFollowCooldown: settings.ttsFollowCooldown,
                 verticalThreshold: settings.verticalThreshold,
@@ -430,6 +432,13 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             horizontalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
             newHorizontalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
             mangaVC?.view.backgroundColor = settings.readingTheme.backgroundColor
+
+            if oldSettings.mangaMaxZoom != settings.mangaMaxZoom {
+                mangaVC?.maxZoomScale = settings.mangaMaxZoom
+            }
+            if oldSettings.mangaChapterZoomEnabled != settings.mangaChapterZoomEnabled {
+                mangaVC?.isChapterZoomEnabled = settings.mangaReaderMode == .collection ? settings.mangaChapterZoomEnabled : true
+            }
 
             // 检测关键布局参数是否改变
             let layoutChanged = oldSettings.fontSize != settings.fontSize ||

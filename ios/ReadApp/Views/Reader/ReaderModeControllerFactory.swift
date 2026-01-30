@@ -110,6 +110,7 @@ enum ReaderModeControllerFactory {
         vc.threshold = threshold
         vc.dampingFactor = settings.verticalDampingFactor
         vc.maxZoomScale = settings.mangaMaxZoom
+        vc.isChapterZoomEnabled = settings.mangaReaderMode == .collection ? settings.mangaChapterZoomEnabled : true
         vc.prefetchCount = settings.mangaPrefetchCount
         vc.memoryCacheMB = settings.mangaMemoryCacheMB
         vc.recentKeepCount = settings.mangaRecentKeepCount

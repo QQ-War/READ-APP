@@ -13,6 +13,7 @@ protocol MangaReadable: AnyObject {
     var prefetchCount: Int { get set }
     var memoryCacheMB: Int { get set }
     var recentKeepCount: Int { get set }
+    var isChapterZoomEnabled: Bool { get set }
     var progressFontSize: CGFloat { get set }
     var currentVisibleIndex: Int { get set }
     var pendingScrollIndex: Int? { get set }
@@ -26,9 +27,10 @@ protocol MangaReadable: AnyObject {
     func scrollToBottom(animated: Bool)
 }
 
-private final class MangaImageCell: UICollectionViewCell {
+private final class MangaImageCell: UICollectionViewCell, UIScrollViewDelegate {
     static let reuseIdentifier = "MangaImageCell"
 
+    private let zoomScrollView = UIScrollView()
     private let imageView = UIImageView()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let retryButton = UIButton(type: .system)
@@ -39,17 +41,36 @@ private final class MangaImageCell: UICollectionViewCell {
         super.init(frame: frame)
         contentView.backgroundColor = .clear
 
+        zoomScrollView.minimumZoomScale = 1.0
+        zoomScrollView.maximumZoomScale = 1.0
+        zoomScrollView.delegate = self
+        zoomScrollView.showsHorizontalScrollIndicator = false
+        zoomScrollView.showsVerticalScrollIndicator = false
+        zoomScrollView.bouncesZoom = true
+        zoomScrollView.clipsToBounds = true
+        zoomScrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(zoomScrollView)
+
+        NSLayoutConstraint.activate([
+            zoomScrollView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            zoomScrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            zoomScrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            zoomScrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
+
         imageView.contentMode = .scaleAspectFit
         imageView.clipsToBounds = true
         imageView.backgroundColor = UIColor.white.withAlphaComponent(0.05)
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(imageView)
+        zoomScrollView.addSubview(imageView)
 
         NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            imageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+            imageView.topAnchor.constraint(equalTo: zoomScrollView.contentLayoutGuide.topAnchor),
+            imageView.leadingAnchor.constraint(equalTo: zoomScrollView.contentLayoutGuide.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: zoomScrollView.contentLayoutGuide.trailingAnchor),
+            imageView.bottomAnchor.constraint(equalTo: zoomScrollView.contentLayoutGuide.bottomAnchor),
+            imageView.widthAnchor.constraint(equalTo: zoomScrollView.frameLayoutGuide.widthAnchor),
+            imageView.heightAnchor.constraint(equalTo: zoomScrollView.frameLayoutGuide.heightAnchor)
         ])
 
         spinner.color = .white
@@ -90,10 +111,26 @@ private final class MangaImageCell: UICollectionViewCell {
         spinner.stopAnimating()
         retryButton.isHidden = true
         retryHandler = nil
+        zoomScrollView.setZoomScale(1.0, animated: false)
+        zoomScrollView.isScrollEnabled = false
     }
 
-    func configure(image: UIImage?, isLoading: Bool, showRetry: Bool, onRetry: (() -> Void)?) {
+    func configure(image: UIImage?, isLoading: Bool, showRetry: Bool, allowZoom: Bool, maxZoom: CGFloat, onRetry: (() -> Void)?) {
         imageView.image = image
+        if allowZoom {
+            zoomScrollView.isScrollEnabled = zoomScrollView.zoomScale > 1.01
+            zoomScrollView.panGestureRecognizer.isEnabled = zoomScrollView.zoomScale > 1.01
+            zoomScrollView.maximumZoomScale = maxZoom
+            zoomScrollView.minimumZoomScale = 1.0
+            zoomScrollView.pinchGestureRecognizer?.isEnabled = true
+        } else {
+            zoomScrollView.setZoomScale(1.0, animated: false)
+            zoomScrollView.maximumZoomScale = 1.0
+            zoomScrollView.minimumZoomScale = 1.0
+            zoomScrollView.isScrollEnabled = false
+            zoomScrollView.panGestureRecognizer.isEnabled = false
+            zoomScrollView.pinchGestureRecognizer?.isEnabled = false
+        }
         if isLoading {
             spinner.startAnimating()
         } else {
@@ -105,6 +142,16 @@ private final class MangaImageCell: UICollectionViewCell {
 
     @objc private func handleRetryTapped() {
         retryHandler?()
+    }
+
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        imageView
+    }
+
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        let zoomed = scrollView.zoomScale > 1.01
+        zoomScrollView.isScrollEnabled = zoomed
+        zoomScrollView.panGestureRecognizer.isEnabled = zoomed
     }
 }
 
@@ -136,6 +183,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         didSet { updateCacheLimits() }
     }
     var recentKeepCount: Int = 24
+    var isChapterZoomEnabled: Bool = true {
+        didSet { updateChapterZoomBehavior() }
+    }
     var progressFontSize: CGFloat = 12 {
         didSet {
             progressLabel.font = .monospacedDigitSystemFont(ofSize: progressFontSize, weight: .regular)
@@ -234,6 +284,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         zoomScrollView.addGestureRecognizer(tap)
 
         updateCacheLimits()
+        updateChapterZoomBehavior()
     }
 
     deinit {
@@ -668,12 +719,12 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     }
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {
-        if scrollView === zoomScrollView { return collectionView }
+        if scrollView === zoomScrollView, isChapterZoomEnabled { return collectionView }
         return nil
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        if scrollView !== zoomScrollView { return }
+        if scrollView !== zoomScrollView || !isChapterZoomEnabled { return }
         let zoomed = scrollView.zoomScale > 1.01
         zoomPanGesture.isEnabled = zoomed
     }
@@ -692,6 +743,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     // MARK: - UIGestureRecognizerDelegate
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === zoomPanGesture {
+            if !isChapterZoomEnabled { return false }
             if zoomScrollView.zoomScale <= 1.01 { return false }
             let velocity = zoomPanGesture.velocity(in: zoomScrollView)
             return abs(velocity.x) > abs(velocity.y)
@@ -706,6 +758,22 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             }
         }
         return false
+    }
+
+    private func updateChapterZoomBehavior() {
+        guard isViewLoaded else { return }
+        if isChapterZoomEnabled {
+            zoomScrollView.maximumZoomScale = maxZoomScale
+            zoomScrollView.minimumZoomScale = 1.0
+            zoomScrollView.pinchGestureRecognizer?.isEnabled = true
+        } else {
+            zoomScrollView.pinchGestureRecognizer?.isEnabled = false
+            zoomScrollView.setZoomScale(1.0, animated: false)
+            zoomScrollView.maximumZoomScale = 1.0
+            zoomScrollView.minimumZoomScale = 1.0
+            zoomPanGesture.isEnabled = false
+        }
+        collectionView.reloadData()
     }
 
 
@@ -819,7 +887,13 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let isLoading = (state == .loading)
         let showRetry = (state == .failed)
 
-        cell.configure(image: cachedImage, isLoading: isLoading, showRetry: showRetry) { [weak self] in
+        cell.configure(
+            image: cachedImage,
+            isLoading: isLoading,
+            showRetry: showRetry,
+            allowZoom: !isChapterZoomEnabled,
+            maxZoom: maxZoomScale
+        ) { [weak self] in
             self?.startLoadImage(index: index, force: true)
         }
 
