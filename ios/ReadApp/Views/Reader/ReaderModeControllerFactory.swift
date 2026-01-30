@@ -104,6 +104,7 @@ enum ReaderModeControllerFactory {
         vc.threshold = threshold
         vc.dampingFactor = settings.verticalDampingFactor
         vc.maxZoomScale = settings.mangaMaxZoom
+        vc.prefetchCount = settings.mangaPrefetchCount
         vc.progressFontSize = settings.progressFontSize
         return vc
     }

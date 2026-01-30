@@ -96,6 +96,11 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.mangaMaxZoom = newValue }
     }
 
+    var mangaPrefetchCount: Int {
+        get { preferences.mangaPrefetchCount }
+        set { preferences.mangaPrefetchCount = newValue }
+    }
+
     var infiniteScrollSwitchThreshold: CGFloat {
         get { preferences.infiniteScrollSwitchThreshold }
         set { preferences.infiniteScrollSwitchThreshold = newValue }

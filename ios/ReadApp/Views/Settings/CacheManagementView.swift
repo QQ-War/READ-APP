@@ -73,6 +73,17 @@ struct CacheManagementView: View {
                 .foregroundColor(.secondary)
 
             HStack {
+                Text("预加载张数")
+                Spacer()
+                Text("\(preferences.mangaPrefetchCount)")
+                    .foregroundColor(.secondary)
+            }
+            Stepper("", value: $preferences.mangaPrefetchCount, in: 0...20)
+            Text("提前加载的图片数量（含接近章节末尾时的下一章前几张）")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            HStack {
                 Text("图片超时")
                 Spacer()
                 Text("\(Int(preferences.mangaImageTimeout)) 秒")

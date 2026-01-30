@@ -105,6 +105,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             zoomScrollView.maximumZoomScale = maxZoomScale
         }
     }
+    var prefetchCount: Int = 6
     var progressFontSize: CGFloat = 12 {
         didSet {
             progressLabel.font = .monospacedDigitSystemFont(ofSize: progressFontSize, weight: .regular)
@@ -120,6 +121,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     private var imageAspectRatios: [CGFloat?] = []
     private var imageStates: [ImageLoadState] = []
     private let imageCache = NSCache<NSString, UIImage>()
+    private let prefetchDataCache = NSCache<NSString, NSData>()
+    private var prefetchTasks: [String: Task<Void, Never>] = [:]
+    private var nextChapterPrefetchUrls: [String] = []
     private lazy var zoomPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleZoomPan(_:)))
 
     private enum ImageLoadState {
@@ -268,6 +272,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         collectionView.reloadData()
     }
 
+    func updateNextChapterPrefetch(urls: [String]) {
+        nextChapterPrefetchUrls = urls
+    }
+
     private func sanitizedUrl(_ url: String) -> String {
         url.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
     }
@@ -303,6 +311,24 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             }
 
             let absolute = resolved.absoluteString
+
+            if let cachedData = prefetchDataCache.object(forKey: cacheKey) as Data?,
+               let cachedImage = UIImage(data: cachedData) {
+                await MainActor.run {
+                    guard index < self.imageStates.count,
+                          index < self.imageUrls.count,
+                          self.imageUrls[index] == expectedToken else { return }
+                    self.imageCache.setObject(cachedImage, forKey: cacheKey)
+                    self.imageAspectRatios[index] = cachedImage.size.height / max(cachedImage.size.width, 1)
+                    self.imageStates[index] = .loaded
+                    self.collectionView.collectionViewLayout.invalidateLayout()
+                    self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                    if self.pendingScrollIndex == index {
+                        self.scrollToIndex(index, animated: false)
+                    }
+                }
+                return
+            }
 
             if let b = bookUrl,
                let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute),
@@ -361,6 +387,58 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         }
 
         loadingTasks[index] = task
+    }
+
+    private func prefetchAround(index: Int) {
+        guard prefetchCount > 0 else { return }
+        guard !imageUrls.isEmpty else { return }
+        let start = min(imageUrls.count - 1, index + 1)
+        let end = min(imageUrls.count - 1, index + prefetchCount)
+        if start > end { return }
+        for idx in start...end {
+            startLoadImage(index: idx)
+        }
+    }
+
+    private func prefetchNextChapterIfNeeded(currentIndex: Int) {
+        guard prefetchCount > 0 else { return }
+        guard !nextChapterPrefetchUrls.isEmpty else { return }
+        let remaining = (imageUrls.count - 1) - currentIndex
+        if remaining > prefetchCount { return }
+        let limit = min(prefetchCount, nextChapterPrefetchUrls.count)
+        for i in 0..<limit {
+            prefetchNextChapterImage(urlStr: nextChapterPrefetchUrls[i])
+        }
+    }
+
+    private func prefetchNextChapterImage(urlStr: String) {
+        let cleanUrl = sanitizedUrl(urlStr)
+        guard let resolved = MangaImageService.shared.resolveImageURL(cleanUrl) else { return }
+        let absolute = resolved.absoluteString
+        let key = NSString(string: cleanUrl)
+
+        if prefetchDataCache.object(forKey: key) != nil { return }
+        if prefetchTasks[cleanUrl] != nil { return }
+        if let b = bookUrl,
+           LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex + 1, imageURL: absolute) != nil {
+            return
+        }
+
+        let task = Task {
+            await MangaImageService.shared.acquireDownloadPermit()
+            defer { MangaImageService.shared.releaseDownloadPermit() }
+            if Task.isCancelled { return }
+            if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl) {
+                prefetchDataCache.setObject(data as NSData, forKey: key)
+                if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
+                    LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex + 1, imageURL: absolute, data: data)
+                }
+            }
+            await MainActor.run {
+                self.prefetchTasks[cleanUrl] = nil
+            }
+        }
+        prefetchTasks[cleanUrl] = task
     }
 
     func scrollToIndex(_ index: Int, animated: Bool = false) {
@@ -428,6 +506,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             if currentVisibleIndex != first.0 {
                 currentVisibleIndex = first.0
                 onVisibleIndexChanged?(first.0)
+                prefetchAround(index: first.0)
+                prefetchNextChapterIfNeeded(currentIndex: first.0)
             }
         }
     }

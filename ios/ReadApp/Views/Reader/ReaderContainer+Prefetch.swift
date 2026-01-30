@@ -21,6 +21,7 @@ extension ReaderContainerViewController {
                 if self.isMangaMode {
                     self.prefetchedMangaNextIndex = index + 1
                     self.prefetchedMangaNextContent = cache.rawContent
+                    self.mangaVC?.updateNextChapterPrefetch(urls: cache.contentSentences)
                     self.preparePrebuiltNextMangaVC(index: index + 1, cache: cache)
                 }
             },
@@ -93,6 +94,7 @@ extension ReaderContainerViewController {
         nextCache = .empty
         prefetchedMangaNextIndex = nil
         prefetchedMangaNextContent = nil
+        mangaVC?.updateNextChapterPrefetch(urls: [])
         prebuiltNextMangaVC?.view.removeFromSuperview()
         prebuiltNextMangaVC?.removeFromParent()
         prebuiltNextMangaVC = nil
@@ -135,6 +137,7 @@ extension ReaderContainerViewController {
         vc.threshold = verticalThreshold
         vc.dampingFactor = readerSettings.verticalDampingFactor
         vc.maxZoomScale = readerSettings.mangaMaxZoom
+        vc.prefetchCount = readerSettings.mangaPrefetchCount
 
         // 设置元数据并触发图片同步加载
         vc.bookUrl = book.bookUrl
