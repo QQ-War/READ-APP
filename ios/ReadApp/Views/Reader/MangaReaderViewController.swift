@@ -83,7 +83,7 @@ private final class MangaImageCell: UICollectionViewCell {
 }
 
 // MARK: - Manga Reader Controller
-class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching, UIScrollViewDelegate {
+class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     private let zoomScrollView = UIScrollView()
     private let collectionView: UICollectionView
     private let switchHintLabel = UILabel()
@@ -168,6 +168,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         zoomScrollView.backgroundColor = .clear
         zoomScrollView.contentInsetAdjustmentBehavior = .never
         zoomScrollView.panGestureRecognizer.isEnabled = false
+        zoomScrollView.panGestureRecognizer.delegate = self
         view.addSubview(zoomScrollView)
 
         collectionView.delegate = self
@@ -176,6 +177,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         collectionView.alwaysBounceVertical = true
         collectionView.delaysContentTouches = false
         collectionView.backgroundColor = .clear
+        collectionView.panGestureRecognizer.delegate = self
         collectionView.register(MangaImageCell.self, forCellWithReuseIdentifier: MangaImageCell.reuseIdentifier)
         collectionView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -276,6 +278,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         if imageStates[index] == .loading { return }
 
         imageStates[index] = .loading
+        DispatchQueue.main.async {
+            self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+        }
         let urlStr = imageUrls[index]
         let expectedToken = urlStr
         let cacheKey = cacheKey(for: urlStr)
@@ -457,6 +462,24 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         if scrollView !== zoomScrollView { return }
         let zoomed = scrollView.zoomScale > 1.01
         zoomScrollView.panGestureRecognizer.isEnabled = zoomed
+    }
+
+    // MARK: - Gesture handling
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        let isZoomPan = gestureRecognizer === zoomScrollView.panGestureRecognizer || otherGestureRecognizer === zoomScrollView.panGestureRecognizer
+        let isCollectionPan = gestureRecognizer === collectionView.panGestureRecognizer || otherGestureRecognizer === collectionView.panGestureRecognizer
+        if isZoomPan && isCollectionPan {
+            return true
+        }
+        return false
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === zoomScrollView.panGestureRecognizer {
+            let velocity = zoomScrollView.panGestureRecognizer.velocity(in: zoomScrollView)
+            return abs(velocity.x) > abs(velocity.y)
+        }
+        return true
     }
 
     private func setupSwitchHint() {
