@@ -159,6 +159,7 @@ private final class MangaImageCell: UICollectionViewCell, UIScrollViewDelegate {
 class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching, UIScrollViewDelegate, UIGestureRecognizerDelegate, MangaReadable {
     private let zoomScrollView = UIScrollView()
     private let collectionView: UICollectionView
+    private var contentTapGesture: UITapGestureRecognizer?
     private let switchHintLabel = UILabel()
     private var lastViewSize: CGSize = .zero
     private var pendingSwitchDirection: Int = 0
@@ -281,6 +282,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tap.cancelsTouchesInView = false
+        contentTapGesture = tap
         zoomScrollView.addGestureRecognizer(tap)
 
         updateCacheLimits()
@@ -325,7 +327,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
             lastViewSize = view.bounds.size
             zoomScrollView.frame = view.bounds
-            collectionView.frame = zoomScrollView.bounds
+            collectionView.frame = isChapterZoomEnabled ? zoomScrollView.bounds : view.bounds
             collectionView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
             collectionView.collectionViewLayout.invalidateLayout()
 
@@ -763,16 +765,35 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     private func updateChapterZoomBehavior() {
         guard isViewLoaded else { return }
         if isChapterZoomEnabled {
+            if collectionView.superview !== zoomScrollView {
+                collectionView.removeFromSuperview()
+                zoomScrollView.addSubview(collectionView)
+            }
             zoomScrollView.maximumZoomScale = maxZoomScale
             zoomScrollView.minimumZoomScale = 1.0
             zoomScrollView.pinchGestureRecognizer?.isEnabled = true
+            zoomScrollView.isUserInteractionEnabled = true
+            if let tap = contentTapGesture, tap.view !== zoomScrollView {
+                tap.view?.removeGestureRecognizer(tap)
+                zoomScrollView.addGestureRecognizer(tap)
+            }
         } else {
+            if collectionView.superview !== view {
+                collectionView.removeFromSuperview()
+                view.addSubview(collectionView)
+            }
             zoomScrollView.pinchGestureRecognizer?.isEnabled = false
             zoomScrollView.setZoomScale(1.0, animated: false)
             zoomScrollView.maximumZoomScale = 1.0
             zoomScrollView.minimumZoomScale = 1.0
             zoomPanGesture.isEnabled = false
+            zoomScrollView.isUserInteractionEnabled = false
+            if let tap = contentTapGesture, tap.view !== collectionView {
+                tap.view?.removeGestureRecognizer(tap)
+                collectionView.addGestureRecognizer(tap)
+            }
         }
+        view.setNeedsLayout()
         collectionView.reloadData()
     }
 

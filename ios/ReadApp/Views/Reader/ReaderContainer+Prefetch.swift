@@ -129,7 +129,7 @@ extension ReaderContainerViewController {
         case .legacy:
             chapterZoomEnabled = true
         case .collection:
-            chapterZoomEnabled = readerSettings.mangaChapterZoomEnabled
+            chapterZoomEnabled = true
         case .collectionNoChapterZoom:
             chapterZoomEnabled = false
         }

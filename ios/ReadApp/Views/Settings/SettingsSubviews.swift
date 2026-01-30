@@ -200,15 +200,6 @@ struct ReadingSettingsView: View {
                     .padding(.vertical, 4)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Toggle("章节整体缩放", isOn: $preferences.mangaChapterZoomEnabled)
-                            .disabled(preferences.mangaReaderMode != .collection)
-                        Text("模式2：可选开启/关闭整体缩放；模式3：固定单图缩放")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
-
-                    VStack(alignment: .leading, spacing: 8) {
                         Text("漫画渲染模式")
                         Picker("漫画渲染模式", selection: $preferences.mangaReaderMode) {
                             ForEach(MangaReaderMode.allCases) { mode in
@@ -216,7 +207,7 @@ struct ReadingSettingsView: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        Text("模式1更稳定；模式2更省内存；模式3强调缩放流畅")
+                        Text("模式1更稳定；模式2更省内存；模式3为纯列表单图缩放")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }

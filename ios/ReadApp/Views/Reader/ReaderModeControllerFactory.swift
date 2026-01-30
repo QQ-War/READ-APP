@@ -91,7 +91,7 @@ enum ReaderModeControllerFactory {
         case .legacy:
             chapterZoomEnabled = true
         case .collection:
-            chapterZoomEnabled = settings.mangaChapterZoomEnabled
+            chapterZoomEnabled = true
         case .collectionNoChapterZoom:
             chapterZoomEnabled = false
         }
