@@ -148,6 +148,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     private let prefetchDataCache = NSCache<NSString, NSData>()
     private var prefetchTasks: [String: Task<Void, Never>] = [:]
     private var nextChapterPrefetchUrls: [String] = []
+    private var pendingLayoutInvalidation: DispatchWorkItem?
+    private var lastPrefetchTime: TimeInterval = 0
+    private let prefetchCooldown: TimeInterval = 0.35
     private lazy var zoomPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleZoomPan(_:)))
 
     private enum ImageLoadState {
@@ -288,6 +291,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         self.imageAspectRatios = Array(repeating: nil, count: urls.count)
         self.imageStates = Array(repeating: .idle, count: urls.count)
         imageCache.removeAllObjects()
+        pendingLayoutInvalidation?.cancel()
+        pendingLayoutInvalidation = nil
 
         if urls.isEmpty {
             LogManager.shared.log("漫画图片列表为空", category: "漫画调试")
@@ -345,7 +350,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageCache.setObject(cachedImage, forKey: cacheKey)
                     self.imageAspectRatios[index] = cachedImage.size.height / max(cachedImage.size.width, 1)
                     self.imageStates[index] = .loaded
-                    self.collectionView.collectionViewLayout.invalidateLayout()
+                    self.scheduleLayoutInvalidation()
                     self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
@@ -391,7 +396,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageCache.setObject(image, forKey: cacheKey)
                     self.imageAspectRatios[index] = image.size.height / max(image.size.width, 1)
                     self.imageStates[index] = .loaded
-                    self.collectionView.collectionViewLayout.invalidateLayout()
+                    self.scheduleLayoutInvalidation()
                     self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
@@ -497,6 +502,15 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         prefetchTasks[cleanUrl] = task
     }
 
+    private func scheduleLayoutInvalidation() {
+        pendingLayoutInvalidation?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.collectionView.collectionViewLayout.invalidateLayout()
+        }
+        pendingLayoutInvalidation = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
     func scrollToIndex(_ index: Int, animated: Bool = false) {
         pendingScrollIndex = index
         guard index >= 0, index < imageUrls.count else { return }
@@ -564,8 +578,12 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             if currentVisibleIndex != first.0 {
                 currentVisibleIndex = first.0
                 onVisibleIndexChanged?(first.0)
-                prefetchAround(index: first.0)
-                prefetchNextChapterIfNeeded(currentIndex: first.0)
+                let now = Date().timeIntervalSince1970
+                if now - lastPrefetchTime > prefetchCooldown {
+                    lastPrefetchTime = now
+                    prefetchAround(index: first.0)
+                    prefetchNextChapterIfNeeded(currentIndex: first.0)
+                }
             }
         }
     }
