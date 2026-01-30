@@ -169,6 +169,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         zoomScrollView.backgroundColor = .clear
         zoomScrollView.contentInsetAdjustmentBehavior = .never
         zoomScrollView.panGestureRecognizer.isEnabled = false
+        zoomPanGesture.cancelsTouchesInView = false
         zoomPanGesture.delegate = self
         zoomScrollView.addGestureRecognizer(zoomPanGesture)
         view.addSubview(zoomScrollView)
@@ -480,6 +481,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     // MARK: - UIGestureRecognizerDelegate
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === zoomPanGesture {
+            if zoomScrollView.zoomScale <= 1.01 { return false }
             let velocity = zoomPanGesture.velocity(in: zoomScrollView)
             return abs(velocity.x) > abs(velocity.y)
         }
@@ -489,7 +491,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === zoomPanGesture || otherGestureRecognizer === zoomPanGesture {
             if otherGestureRecognizer === collectionView.panGestureRecognizer || gestureRecognizer === collectionView.panGestureRecognizer {
-                return true
+                return zoomScrollView.zoomScale > 1.01
             }
         }
         return false
