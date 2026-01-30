@@ -419,8 +419,23 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let start = min(imageUrls.count - 1, index + 1)
         let end = min(imageUrls.count - 1, index + prefetchCount)
         if start > end { return }
+        let threshold = min(5, prefetchCount)
+        var buffered = 0
         for idx in start...end {
-            startLoadImage(index: idx)
+            if idx < imageStates.count {
+                let state = imageStates[idx]
+                if state == .loading || state == .loaded {
+                    buffered += 1
+                }
+            }
+        }
+        if buffered >= threshold { return }
+        for idx in start...end {
+            if idx < imageStates.count, imageStates[idx] == .idle {
+                startLoadImage(index: idx)
+                buffered += 1
+                if buffered >= prefetchCount { break }
+            }
         }
     }
 
@@ -430,8 +445,25 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let remaining = (imageUrls.count - 1) - currentIndex
         if remaining > prefetchCount { return }
         let limit = min(prefetchCount, nextChapterPrefetchUrls.count)
+        let threshold = min(5, prefetchCount)
+        var buffered = 0
         for i in 0..<limit {
-            prefetchNextChapterImage(urlStr: nextChapterPrefetchUrls[i])
+            let urlStr = nextChapterPrefetchUrls[i]
+            let clean = sanitizedUrl(urlStr)
+            let key = NSString(string: clean)
+            if prefetchDataCache.object(forKey: key) != nil || prefetchTasks[clean] != nil {
+                buffered += 1
+            }
+        }
+        if buffered >= threshold { return }
+        for i in 0..<limit {
+            let urlStr = nextChapterPrefetchUrls[i]
+            let clean = sanitizedUrl(urlStr)
+            let key = NSString(string: clean)
+            if prefetchDataCache.object(forKey: key) != nil || prefetchTasks[clean] != nil { continue }
+            prefetchNextChapterImage(urlStr: urlStr)
+            buffered += 1
+            if buffered >= prefetchCount { break }
         }
     }
 
@@ -504,13 +536,15 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             progressLabel.text = "0%"
         }
 
-        if rawOffset < -collectionView.contentInset.top {
-            let diff = -collectionView.contentInset.top - rawOffset
-            let ty = (diff * dampingFactor) / max(currentScale, 1.0)
+        let pullThreshold = ReaderConstants.Interaction.pullThreshold
+        let topPull = -collectionView.contentInset.top - rawOffset
+        let bottomPull = rawOffset - actualMaxScrollY
+
+        if topPull > pullThreshold {
+            let ty = (topPull * dampingFactor) / max(currentScale, 1.0)
             collectionView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
-        } else if rawOffset > actualMaxScrollY {
-            let diff = rawOffset - actualMaxScrollY
-            let ty = (-diff * dampingFactor) / max(currentScale, 1.0)
+        } else if bottomPull > pullThreshold {
+            let ty = (-bottomPull * dampingFactor) / max(currentScale, 1.0)
             collectionView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
         } else if collectionView.transform.ty != 0 || collectionView.transform.a != currentScale {
             collectionView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale)
