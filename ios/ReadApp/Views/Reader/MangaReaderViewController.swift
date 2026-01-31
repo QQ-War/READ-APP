@@ -455,11 +455,14 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageStates[index] = .loaded
                     if abs(newHeight - oldHeight) > 12 {
                         self.scheduleLayoutInvalidation()
+                        LogManager.shared.log("内存缓存更新布局: index=\(index)", category: "漫画调试")
                     } else {
                         self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                        LogManager.shared.log("内存缓存刷新Cell: index=\(index)", category: "漫画调试")
                     }
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
+                        LogManager.shared.log("内存缓存滚动定位: index=\(index)", category: "漫画调试")
                     }
                 }
                 return
@@ -503,11 +506,14 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageStates[index] = .loaded
                     if abs(newHeight - oldHeight) > 12 {
                         self.scheduleLayoutInvalidation()
+                        LogManager.shared.log("预取缓存更新布局: index=\(index)", category: "漫画调试")
                     } else {
                         self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                        LogManager.shared.log("预取缓存刷新Cell: index=\(index)", category: "漫画调试")
                     }
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
+                        LogManager.shared.log("预取缓存滚动定位: index=\(index)", category: "漫画调试")
                     }
                 }
                 return
@@ -534,11 +540,14 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageStates[index] = .loaded
                     if abs(newHeight - oldHeight) > 12 {
                         self.scheduleLayoutInvalidation()
+                        LogManager.shared.log("本地缓存更新布局: index=\(index)", category: "漫画调试")
                     } else {
                         self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                        LogManager.shared.log("本地缓存刷新Cell: index=\(index)", category: "漫画调试")
                     }
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
+                        LogManager.shared.log("本地缓存滚动定位: index=\(index)", category: "漫画调试")
                     }
                 }
                 return
@@ -554,6 +563,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
             if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl),
                let image = UIImage(data: data) {
+                LogManager.shared.log("网络获取成功: index=\(index) bytes=\(data.count)", category: "漫画调试")
                 if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
                     LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)
                 }
@@ -578,14 +588,18 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageStates[index] = .loaded
                     if abs(newHeight - oldHeight) > 12 {
                         self.scheduleLayoutInvalidation()
+                        LogManager.shared.log("网络图片更新布局: index=\(index)", category: "漫画调试")
                     } else {
                         self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                        LogManager.shared.log("网络图片刷新Cell: index=\(index)", category: "漫画调试")
                     }
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
+                        LogManager.shared.log("网络图片滚动定位: index=\(index)", category: "漫画调试")
                     }
                 }
             } else {
+                LogManager.shared.log("网络获取失败: index=\(index)", category: "漫画调试")
                 await MainActor.run {
                     if Task.isCancelled { return }
                     guard index < self.imageStates.count,
