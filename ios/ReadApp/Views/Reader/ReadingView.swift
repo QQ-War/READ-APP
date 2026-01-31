@@ -93,7 +93,7 @@ struct ReadingView: View {
             .navigationBarHidden(true)
             .navigationBarBackButtonHidden(true)
             .onAppear { refreshCachedStatus() }
-            .onChange(of: chapters) { _ in refreshCachedStatus() }
+            .onChange(of: chapters.count) { _ in refreshCachedStatus() }
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .onChange(of: isForceLandscape) { newValue in updateAppOrientation(landscape: newValue) }
