@@ -29,7 +29,15 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
     var onVisibleIndexChanged: ((Int) -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?; var onImageTapped: ((URL) -> Void)?
     var onReachedBottom: (() -> Void)?; var onReachedTop: (() -> Void)?; var onChapterSwitched: ((Int) -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
-    var safeAreaTop: CGFloat = 0; var chapterUrl: String?
+    var safeAreaTop: CGFloat = 0 {
+        didSet {
+            guard isViewLoaded else { return }
+            isUpdatingLayout = true
+            updateLayoutFrames()
+            isUpdatingLayout = false
+        }
+    }
+    var chapterUrl: String?
     private struct CharDetectionConfig {
         static let minHorizontalInset: CGFloat = ReaderConstants.Interaction.minHorizontalInset
         static let minVerticalOffset: CGFloat = ReaderConstants.Interaction.minVerticalOffset

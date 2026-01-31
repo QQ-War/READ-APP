@@ -16,7 +16,12 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
     var onToggleMenu: (() -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var onVisibleIndexChanged: ((Int) -> Void)?
-    var safeAreaTop: CGFloat = 0
+    var safeAreaTop: CGFloat = 0 {
+        didSet {
+            guard isViewLoaded else { return }
+            scrollView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
+        }
+    }
     var threshold: CGFloat = 80
     var maxZoomScale: CGFloat = 3.0
     var isChapterZoomEnabled: Bool = true {

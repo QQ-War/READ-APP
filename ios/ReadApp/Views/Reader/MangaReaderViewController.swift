@@ -172,7 +172,12 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     var onToggleMenu: (() -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     var onVisibleIndexChanged: ((Int) -> Void)?
-    var safeAreaTop: CGFloat = 0
+    var safeAreaTop: CGFloat = 0 {
+        didSet {
+            guard isViewLoaded else { return }
+            collectionView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
+        }
+    }
     var threshold: CGFloat = 80
     var maxZoomScale: CGFloat = 3.0 {
         didSet {

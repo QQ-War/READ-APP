@@ -115,7 +115,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     private var lastSettingsSnapshot: ReaderSettingsSnapshot?
     private var lastReplaceRules: [ReplaceRule]?
     
-    var safeAreaTop: CGFloat = ReaderConstants.Layout.safeAreaTopDefault
+    var safeAreaTop: CGFloat = ReaderConstants.Layout.safeAreaTopDefault {
+        didSet {
+            verticalVC?.safeAreaTop = safeAreaTop
+            mangaVC?.safeAreaTop = safeAreaTop
+        }
+    }
     var safeAreaBottom: CGFloat = ReaderConstants.Layout.safeAreaBottomDefault
     var currentLayoutSpec: ReaderLayoutSpec {
         ReaderMath.layoutSpec(
