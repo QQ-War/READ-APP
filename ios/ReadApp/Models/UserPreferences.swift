@@ -51,6 +51,12 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    @Published var readingBottomInset: CGFloat {
+        didSet {
+            UserDefaults.standard.set(readingBottomInset, forKey: "readingBottomInset")
+        }
+    }
+
     @Published var readingFontName: String {
         didSet {
             UserDefaults.standard.set(readingFontName, forKey: "readingFontName")
@@ -398,6 +404,9 @@ class UserPreferences: ObservableObject {
 
         let savedProgressFontSize = CGFloat(UserDefaults.standard.float(forKey: "progressFontSize"))
         self.progressFontSize = savedProgressFontSize == 0 ? 12 : savedProgressFontSize
+
+        let savedBottomInset = CGFloat(UserDefaults.standard.float(forKey: "readingBottomInset"))
+        self.readingBottomInset = savedBottomInset == 0 ? 40 : savedBottomInset
 
         self.readingFontName = UserDefaults.standard.string(forKey: "readingFontName") ?? ""
 

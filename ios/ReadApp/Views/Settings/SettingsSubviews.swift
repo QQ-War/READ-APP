@@ -134,6 +134,12 @@ struct ReadingSettingsView: View {
                 Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
                 
                 HStack {
+                    Text("底部留白")
+                    Slider(value: $preferences.readingBottomInset, in: 0...120, step: 4)
+                    Text("\(Int(preferences.readingBottomInset))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
+                }
+
+                HStack {
                     Text("无缝切章阈值")
                     Slider(value: $preferences.infiniteScrollSwitchThreshold, in: 40...300, step: 10)
                     Text("\(Int(preferences.infiniteScrollSwitchThreshold))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)

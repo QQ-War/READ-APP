@@ -367,6 +367,15 @@ struct ReaderOptionsSheet: View {
                                     .foregroundColor(.secondary)
                                     .frame(width: 40)
                             }
+
+                            HStack {
+                                Text("底部留白").font(.body)
+                                Slider(value: $preferences.readingBottomInset, in: 0...120, step: 4)
+                                Text("\(Int(preferences.readingBottomInset))")
+                                    .font(.system(.body, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 40)
+                            }
                         }
                     }
                 }

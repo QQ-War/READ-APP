@@ -1,70 +1,4 @@
-import SwiftUI
 import UIKit
-
-// MARK: - SwiftUI 桥接组件
-struct VerticalTextReader: UIViewControllerRepresentable {
-    let sentences: [String]; let fontSize: CGFloat; let lineSpacing: CGFloat; let horizontalMargin: CGFloat; let highlightIndex: Int?; let secondaryIndices: Set<Int>; let isPlayingHighlight: Bool; let chapterUrl: String?
-    let title: String?; let nextTitle: String?; let prevTitle: String?
-    let renderStore: TextKit2RenderStore? = nil; let paragraphStarts: [Int] = []
-    let nextRenderStore: TextKit2RenderStore? = nil; let nextParagraphStarts: [Int] = []
-    let prevRenderStore: TextKit2RenderStore? = nil; let prevParagraphStarts: [Int] = []
-    let verticalThreshold: CGFloat
-    let verticalDampingFactor: CGFloat
-    @Binding var currentVisibleIndex: Int; @Binding var pendingScrollIndex: Int?
-    var forceScrollToTop: Bool = false; var onScrollFinished: (() -> Void)?; var onAddReplaceRule: ((String) -> Void)?; var onTapMenu: (() -> Void)?; var onImageTapped: ((URL) -> Void)?
-    var safeAreaTop: CGFloat = 0
-    
-    // 无限流扩展
-    var nextChapterSentences: [String]?
-    var prevChapterSentences: [String]?
-    var onReachedBottom: (() -> Void)? // 触发预载
-    var onReachedTop: (() -> Void)? // 触发上一章预载
-    var onChapterSwitched: ((Int) -> Void)? // 0: 本章, 1: 下一章
-    var onInteractionChanged: ((Bool) -> Void)?
-    
-    func makeUIViewController(context: Context) -> VerticalTextViewController {
-        let vc = VerticalTextViewController(); vc.onVisibleIndexChanged = { i in DispatchQueue.main.async { if currentVisibleIndex != i { currentVisibleIndex = i } } }; vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; return vc
-    }
-    
-    func updateUIViewController(_ vc: VerticalTextViewController, context: Context) {
-        vc.onAddReplaceRule = onAddReplaceRule; vc.onTapMenu = onTapMenu; vc.onImageTapped = onImageTapped; vc.safeAreaTop = safeAreaTop
-        vc.onReachedBottom = onReachedBottom; vc.onReachedTop = onReachedTop; vc.onChapterSwitched = onChapterSwitched
-        vc.onInteractionChanged = onInteractionChanged
-        vc.threshold = verticalThreshold
-        vc.dampingFactor = verticalDampingFactor
-        
-        let changed = vc.update(
-            sentences: sentences,
-            nextSentences: nextChapterSentences,
-            prevSentences: prevChapterSentences,
-            title: title,
-            nextTitle: nextTitle,
-            prevTitle: prevTitle,
-            fontSize: fontSize,
-            lineSpacing: lineSpacing,
-            margin: horizontalMargin,
-            highlightIndex: highlightIndex,
-            secondaryIndices: secondaryIndices,
-            isPlaying: isPlayingHighlight,
-            renderStore: renderStore,
-            paragraphStarts: paragraphStarts,
-            nextRenderStore: nextRenderStore,
-            nextParagraphStarts: nextParagraphStarts,
-            prevRenderStore: prevRenderStore,
-            prevParagraphStarts: prevParagraphStarts
-        )
-        
-        if forceScrollToTop {
-            vc.scrollToTop(animated: false); DispatchQueue.main.async { onScrollFinished?() }
-        } else if let sI = pendingScrollIndex {
-            if changed { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { vc.scrollToSentence(index: sI, animated: false) } } 
-            else { vc.scrollToSentence(index: sI, animated: true) }; DispatchQueue.main.async { self.pendingScrollIndex = nil }
-        } else if isPlayingHighlight, let hI = highlightIndex {
-            // 这里不再调用整体 update 而是确保可见
-            vc.ensureSentenceVisible(index: hI)
-        }
-    }
-}
 
 // MARK: - UIKit 核心控制器
 class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGestureRecognizerDelegate {
@@ -1025,4 +959,3 @@ class VerticalTextContentView: UIView {
         }
     }
 }
-

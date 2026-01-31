@@ -5,7 +5,7 @@ enum ReaderConstants {
         static let safeAreaTopDefault: CGFloat = 47
         static let safeAreaBottomDefault: CGFloat = 34
         static let extraTopInset: CGFloat = 15
-        static let extraBottomInset: CGFloat = 40
+        static var extraBottomInset: CGFloat { UserPreferences.shared.readingBottomInset }
         static let sideMarginPadding: CGFloat = 8
         static let horizontalInset: CGFloat = 16
         static let safeBottomPadding: CGFloat = 8
@@ -13,7 +13,7 @@ enum ReaderConstants {
         static let minLayoutWidth: CGFloat = 100
         static let minLayoutWidthFallback: CGFloat = 375
         static let extraSpacing: CGFloat = 100
-        static let verticalContentInsetBottom: CGFloat = 100
+        static var verticalContentInsetBottom: CGFloat { UserPreferences.shared.readingBottomInset }
         static let defaultMargin: CGFloat = 20
     }
 

@@ -26,6 +26,11 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.progressFontSize = newValue }
     }
 
+    var readingBottomInset: CGFloat {
+        get { preferences.readingBottomInset }
+        set { preferences.readingBottomInset = newValue }
+    }
+
     var readingFontName: String {
         get { preferences.readingFontName }
         set { preferences.readingFontName = newValue }

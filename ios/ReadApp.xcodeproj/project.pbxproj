@@ -40,7 +40,6 @@
 		1A0001F60000000000000001 /* ReaderInteractionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0001F50000000000000001 /* ReaderInteractionCoordinator.swift */; };
 		1A0001F80000000000000001 /* ReaderLayoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0001F70000000000000001 /* ReaderLayoutManager.swift */; };
 		1A0000F40000000000000001 /* TTSReadingSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000F30000000000000001 /* TTSReadingSyncCoordinator.swift */; };
-		1A0000C1000000000000001 /* MangaNativeReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B1000000000000001 /* MangaNativeReader.swift */; };
 		1A0000C2000000000000001 /* ReadingControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B2000000000000001 /* ReadingControls.swift */; };
 		1A0000C3000000000000001 /* ReadingCoreTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B3000000000000001 /* ReadingCoreTypes.swift */; };
 		1A0000C4000000000000001 /* ReadingSubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000B4000000000000001 /* ReadingSubViews.swift */; };
@@ -168,7 +167,6 @@
 		1A0001F50000000000000001 /* ReaderInteractionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderInteractionCoordinator.swift; sourceTree = "<group>"; };
 		1A0001F70000000000000001 /* ReaderLayoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderLayoutManager.swift; sourceTree = "<group>"; };
 		1A0000F30000000000000001 /* TTSReadingSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSReadingSyncCoordinator.swift; sourceTree = "<group>"; };
-		1A0000B1000000000000001 /* MangaNativeReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaNativeReader.swift; sourceTree = "<group>"; };
 		1A0000B2000000000000001 /* ReadingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingControls.swift; sourceTree = "<group>"; };
 		1A0000B3000000000000001 /* ReadingCoreTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingCoreTypes.swift; sourceTree = "<group>"; };
 		1A0000B4000000000000001 /* ReadingSubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSubViews.swift; sourceTree = "<group>"; };
@@ -339,7 +337,6 @@
 				1A0000F10000000000000001 /* ReaderPrefetchCoordinator.swift */,
 				1A0001F50000000000000001 /* ReaderInteractionCoordinator.swift */,
 				1A0001F70000000000000001 /* ReaderLayoutManager.swift */,
-				1A0000B1000000000000001 /* MangaNativeReader.swift */,
 				1A0000B2000000000000001 /* ReadingControls.swift */,
 				1A0000B3000000000000001 /* ReadingCoreTypes.swift */,
 				1A0000B4000000000000001 /* ReadingSubViews.swift */,
@@ -620,7 +617,6 @@
 				1A0001F60000000000000001 /* ReaderInteractionCoordinator.swift in Sources */,
 				1A0001F80000000000000001 /* ReaderLayoutManager.swift in Sources */,
 				1A0000F40000000000000001 /* TTSReadingSyncCoordinator.swift in Sources */,
-				1A0000C1000000000000001 /* MangaNativeReader.swift in Sources */,
 				1A0000C2000000000000001 /* ReadingControls.swift in Sources */,
 				1A0000C3000000000000001 /* ReadingCoreTypes.swift in Sources */,
 				1A0000C4000000000000001 /* ReadingSubViews in Sources */,
