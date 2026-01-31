@@ -26,7 +26,14 @@ struct BookDetailView: View {
     @State private var isReading = false
     @State private var showingSourceSwitch = false
     @State private var showingClearCacheAlert = false
+    @State private var showingClearCacheOptions = false
+    @State private var rangeActionType: RangeActionType = .download
     @State private var showingAddSuccessAlert = false
+    
+    enum RangeActionType {
+        case download
+        case clear
+    }
     @State private var showingRemoveSuccessAlert = false
     @State private var showingChapterList = false
     
@@ -63,7 +70,32 @@ struct BookDetailView: View {
                 let current = (currentBook.durChapterIndex ?? 0) + 1
                 startDownload(start: current, end: min(current + 50, chapters.count)) 
             }
-            Button("自定义范围") { withAnimation { showCustomRange = true } }
+            Button("自定义范围") { 
+                rangeActionType = .download
+                withAnimation { showCustomRange = true } 
+            }
+            Button("取消", role: .cancel) { }
+        }
+        .confirmationDialog("清除缓存选项", isPresented: $showingClearCacheOptions, titleVisibility: .visible) {
+            Button("清除已读 (1-\((currentBook.durChapterIndex ?? 0)))") {
+                let current = currentBook.durChapterIndex ?? 0
+                if current > 0 {
+                    LocalCacheManager.shared.clearChapterRange(bookUrl: book.bookUrl ?? "", start: 0, end: current - 1)
+                    refreshCachedStatus()
+                }
+            }
+            Button("清除到开头 (1-\((currentBook.durChapterIndex ?? 0) + 1))") {
+                let current = currentBook.durChapterIndex ?? 0
+                LocalCacheManager.shared.clearChapterRange(bookUrl: book.bookUrl ?? "", start: 0, end: current)
+                refreshCachedStatus()
+            }
+            Button("自定义区间") {
+                rangeActionType = .clear
+                withAnimation { showCustomRange = true }
+            }
+            Button("清空所有离线内容", role: .destructive) {
+                showingClearCacheAlert = true
+            }
             Button("取消", role: .cancel) { }
         }
         .toolbar {
@@ -103,6 +135,7 @@ struct BookDetailView: View {
                 chapters: chapters,
                 currentIndex: currentBook.durChapterIndex ?? 0,
                 bookUrl: book.bookUrl ?? "",
+                cachedChapters: $cachedChapters,
                 onSelectChapter: { index in
                     if let bookUrl = book.bookUrl {
                         bookshelfStore.updateProgress(bookUrl: bookUrl, index: index, pos: 0, title: chapters[index].title)
@@ -157,7 +190,7 @@ struct BookDetailView: View {
                                 .cornerRadius(8)
                         }
                         
-                        Button(action: { showingClearCacheAlert = true }) {
+                        Button(action: { showingClearCacheOptions = true }) {
                             Label("清除缓存", systemImage: "trash")
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
@@ -326,9 +359,13 @@ struct BookDetailView: View {
                             Text("取消").foregroundColor(.secondary)
                         }
                         Spacer()
-                        Button("开始缓存") {
+                        Button(rangeActionType == .download ? "开始缓存" : "开始清理") {
                             withAnimation { showCustomRange = false }
-                            startDownload(start: Int(startChapter), end: Int(endChapter))
+                            if rangeActionType == .download {
+                                startDownload(start: Int(startChapter), end: Int(endChapter))
+                            } else {
+                                startClearRange(start: Int(startChapter), end: Int(endChapter))
+                            }
                         }
                         .font(.system(size: 16, weight: .bold))
                     }
@@ -380,6 +417,15 @@ struct BookDetailView: View {
     
     private func clearBookCache() {
         LocalCacheManager.shared.clearCache(for: book.bookUrl ?? "")
+        refreshCachedStatus()
+    }
+    
+    private func startClearRange(start: Int?, end: Int?) {
+        guard let start = start, let end = end, start > 0, end >= start, end <= chapters.count else {
+            errorMessage = "请输入有效的章节范围 (1-\(chapters.count))"
+            return
+        }
+        LocalCacheManager.shared.clearChapterRange(bookUrl: book.bookUrl ?? "", start: start - 1, end: end - 1)
         refreshCachedStatus()
     }
     

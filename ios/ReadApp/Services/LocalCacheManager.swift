@@ -122,6 +122,24 @@ class LocalCacheManager {
         let dir = bookDir(for: bookUrl)
         try? fileManager.removeItem(at: dir)
     }
+
+    func clearChapterCache(bookUrl: String, index: Int) {
+        // Clear text cache
+        let rawFile = bookDir(for: bookUrl).appendingPathComponent("\(index).raw")
+        try? fileManager.removeItem(at: rawFile)
+
+        // Clear manga images cache
+        let mangaDir = mangaImageDir(bookUrl: bookUrl, chapterIndex: index)
+        try? fileManager.removeItem(at: mangaDir)
+    }
+
+    func clearChapterRange(bookUrl: String, start: Int, end: Int) {
+        let s = min(start, end)
+        let e = max(start, end)
+        for i in s...e {
+            clearChapterCache(bookUrl: bookUrl, index: i)
+        }
+    }
     
     func getCachedChapterCount(for bookUrl: String) -> Int {
         let dir = bookDir(for: bookUrl)

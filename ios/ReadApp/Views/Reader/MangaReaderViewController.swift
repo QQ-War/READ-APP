@@ -596,7 +596,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         if buffered >= threshold { return }
         for idx in effectiveStart...end {
             if idx < imageStates.count, imageStates[idx] == .idle {
-                LogManager.shared.log("预取触发: index=\(idx)", category: "漫画调试")
                 startLoadImage(index: idx)
                 buffered += 1
                 if buffered >= prefetchCount { break }
@@ -1007,7 +1006,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     // MARK: - UICollectionViewDataSourcePrefetching
     func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
         for indexPath in indexPaths {
-            LogManager.shared.log("系统预取回调: index=\(indexPath.item)", category: "漫画调试")
             startLoadImage(index: indexPath.item)
         }
     }
@@ -1019,7 +1017,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             guard idx < imageStates.count else { continue }
             if visible.contains(idx) { continue }
             if imageStates[idx] == .loading, let task = loadingTasks[idx] {
-                LogManager.shared.log("取消预取: index=\(idx) visible=false", category: "漫画调试")
                 task.cancel()
                 loadingTasks[idx] = nil
                 imageStates[idx] = .idle

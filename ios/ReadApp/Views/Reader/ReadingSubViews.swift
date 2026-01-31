@@ -136,6 +136,7 @@ struct ChapterListView: View {
     let chapters: [BookChapter]
     let currentIndex: Int
     let bookUrl: String
+    @Binding var cachedChapters: Set<Int>
     let onSelectChapter: (Int) -> Void
     let onRebuildChapterUrls: (() async -> Void)?
     @Environment(\.dismiss) var dismiss
@@ -147,12 +148,14 @@ struct ChapterListView: View {
         chapters: [BookChapter],
         currentIndex: Int,
         bookUrl: String,
+        cachedChapters: Binding<Set<Int>> = .constant([]),
         onSelectChapter: @escaping (Int) -> Void,
         onRebuildChapterUrls: (() async -> Void)? = nil
     ) {
         self.chapters = chapters
         self.currentIndex = currentIndex
         self.bookUrl = bookUrl
+        self._cachedChapters = cachedChapters
         self.onSelectChapter = onSelectChapter
         self.onRebuildChapterUrls = onRebuildChapterUrls
         self._selectedGroupIndex = State(initialValue: currentIndex / ReaderConstants.Text.chapterGroupSize)
@@ -208,7 +211,7 @@ struct ChapterListView: View {
                                         .foregroundColor(item.offset == currentIndex ? .blue : .primary)
                                         .fontWeight(item.offset == currentIndex ? .semibold : .regular)
                                     Spacer()
-                                    if LocalCacheManager.shared.isChapterCached(bookUrl: bookUrl, index: item.element.index) {
+                                    if cachedChapters.contains(item.element.index) {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundColor(.green)
                                             .font(.caption)
@@ -220,6 +223,16 @@ struct ChapterListView: View {
                             }
                             .id(item.offset)
                             .listRowBackground(item.offset == currentIndex ? Color.blue.opacity(0.1) : Color.clear)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if cachedChapters.contains(item.element.index) {
+                                    Button(role: .destructive) {
+                                        LocalCacheManager.shared.clearChapterCache(bookUrl: bookUrl, index: item.element.index)
+                                        cachedChapters.remove(item.element.index)
+                                    } label: {
+                                        Label("清除缓存", systemImage: "trash")
+                                    }
+                                }
+                            }
                         }
                     }
                     .navigationTitle("目录（共\(chapters.count)章）")

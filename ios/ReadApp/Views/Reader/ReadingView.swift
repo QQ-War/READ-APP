@@ -14,6 +14,7 @@ struct ReadingView: View {
     @State var currentChapterIndex: Int
     @State var currentPos: Double = 0 
     @State private var isMangaMode = false
+    @State private var cachedChapters: Set<Int> = []
     
     @State private var showUIControls = false
     @State private var showFontSettings = false
@@ -91,6 +92,8 @@ struct ReadingView: View {
             }
             .navigationBarHidden(true)
             .navigationBarBackButtonHidden(true)
+            .onAppear { refreshCachedStatus() }
+            .onChange(of: chapters) { _ in refreshCachedStatus() }
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .onChange(of: isForceLandscape) { newValue in updateAppOrientation(landscape: newValue) }
@@ -103,6 +106,7 @@ struct ReadingView: View {
                 chapters: chapters,
                 currentIndex: currentChapterIndex,
                 bookUrl: book.bookUrl ?? "",
+                cachedChapters: $cachedChapters,
                 onSelectChapter: { index in
                     currentChapterIndex = index
                     showChapterList = false
@@ -200,6 +204,16 @@ struct ReadingView: View {
             if self.timerRemaining > 1 { self.timerRemaining -= 1 }
             else { self.timerActive = false; self.sleepTimer?.invalidate(); self.ttsManager.stop() }
         }
+    }
+
+    private func refreshCachedStatus() {
+        var cached = Set<Int>()
+        for chapter in chapters {
+            if LocalCacheManager.shared.isChapterCached(bookUrl: book.bookUrl ?? "", index: chapter.index) {
+                cached.insert(chapter.index)
+            }
+        }
+        self.cachedChapters = cached
     }
 
     private func rebuildChapterUrls() async {
