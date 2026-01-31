@@ -416,17 +416,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
     private func startLoadImage(index: Int, force: Bool = false) {
         guard index >= 0, index < imageUrls.count, index < imageStates.count else { return }
-        if !force && index < minLoadIndex {
-            LogManager.shared.log("跳过加载(低于minLoadIndex): index=\(index) min=\(minLoadIndex)", category: "漫画调试")
-            return
-        }
-        if imageStates[index] == .loading {
-            LogManager.shared.log("跳过加载(已在加载): index=\(index)", category: "漫画调试")
-            return
-        }
+        if !force && index < minLoadIndex { return }
+        if imageStates[index] == .loading { return }
 
         imageStates[index] = .loading
-        LogManager.shared.log("开始加载: index=\(index) force=\(force)", category: "漫画调试")
         DispatchQueue.main.async {
             self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
         }
@@ -435,9 +428,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let cacheKey = cacheKey(for: urlStr)
 
         let task = Task {
-            LogManager.shared.log("任务启动: index=\(index)", category: "漫画调试")
             if let cachedImage = imageCache.object(forKey: cacheKey) {
-                LogManager.shared.log("命中内存缓存: index=\(index)", category: "漫画调试")
                 let decoded = MangaImageService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
@@ -455,32 +446,23 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageStates[index] = .loaded
                     if abs(newHeight - oldHeight) > 12 {
                         self.scheduleLayoutInvalidation()
-                        LogManager.shared.log("内存缓存更新布局: index=\(index)", category: "漫画调试")
-                    } else {
-                        self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
-                        LogManager.shared.log("内存缓存刷新Cell: index=\(index)", category: "漫画调试")
                     }
+                    self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
-                        LogManager.shared.log("内存缓存滚动定位: index=\(index)", category: "漫画调试")
                     }
                 }
                 return
             }
             let cleanUrl = sanitizedUrl(urlStr)
-            LogManager.shared.log("解析URL: index=\(index) url=\(cleanUrl)", category: "漫画调试")
             guard let resolved = MangaImageService.shared.resolveImageURL(cleanUrl) else {
                 await MainActor.run {
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
-                          self.imageUrls[index] == expectedToken else {
-                        LogManager.shared.log("状态跳过(目标变更): index=\(index)", category: "漫画调试")
-                        return
-                    }
+                          self.imageUrls[index] == expectedToken else { return }
                     self.imageStates[index] = .failed
                     self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                 }
-                LogManager.shared.log("漫画图片URL解析失败: \(cleanUrl)", category: "漫画调试")
                 return
             }
 
@@ -488,7 +470,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
             if let cachedData = prefetchDataCache.object(forKey: cacheKey) as Data?,
                let cachedImage = UIImage(data: cachedData) {
-                LogManager.shared.log("命中预取缓存: index=\(index)", category: "漫画调试")
                 let decoded = MangaImageService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
@@ -506,14 +487,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageStates[index] = .loaded
                     if abs(newHeight - oldHeight) > 12 {
                         self.scheduleLayoutInvalidation()
-                        LogManager.shared.log("预取缓存更新布局: index=\(index)", category: "漫画调试")
-                    } else {
-                        self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
-                        LogManager.shared.log("预取缓存刷新Cell: index=\(index)", category: "漫画调试")
                     }
+                    self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
-                        LogManager.shared.log("预取缓存滚动定位: index=\(index)", category: "漫画调试")
                     }
                 }
                 return
@@ -522,7 +499,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             if let b = bookUrl,
                let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute),
                let cachedImage = UIImage(data: cachedData) {
-                LogManager.shared.log("命中本地缓存: index=\(index)", category: "漫画调试")
                 let decoded = MangaImageService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
@@ -540,14 +516,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageStates[index] = .loaded
                     if abs(newHeight - oldHeight) > 12 {
                         self.scheduleLayoutInvalidation()
-                        LogManager.shared.log("本地缓存更新布局: index=\(index)", category: "漫画调试")
-                    } else {
-                        self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
-                        LogManager.shared.log("本地缓存刷新Cell: index=\(index)", category: "漫画调试")
                     }
+                    self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
-                        LogManager.shared.log("本地缓存滚动定位: index=\(index)", category: "漫画调试")
                     }
                 }
                 return
@@ -556,14 +528,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             await MangaImageService.shared.acquireDownloadPermit()
             defer { MangaImageService.shared.releaseDownloadPermit() }
 
-            if Task.isCancelled {
-                LogManager.shared.log("加载取消(获取许可后): index=\(index)", category: "漫画调试")
-                return
-            }
+            if Task.isCancelled { return }
 
             if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl),
                let image = UIImage(data: data) {
-                LogManager.shared.log("网络获取成功: index=\(index) bytes=\(data.count)", category: "漫画调试")
                 if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
                     LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)
                 }
@@ -572,10 +540,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     if Task.isCancelled { return }
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
-                          self.imageUrls[index] == expectedToken else {
-                        LogManager.shared.log("状态跳过(目标变更): index=\(index)", category: "漫画调试")
-                        return
-                    }
+                          self.imageUrls[index] == expectedToken else { return }
                     let cost = self.estimatedCost(for: decoded)
                     self.imageCache.setObject(decoded, forKey: cacheKey, cost: cost)
                     self.keepRecentImage(key: cacheKey as String, image: decoded)
@@ -588,26 +553,18 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     self.imageStates[index] = .loaded
                     if abs(newHeight - oldHeight) > 12 {
                         self.scheduleLayoutInvalidation()
-                        LogManager.shared.log("网络图片更新布局: index=\(index)", category: "漫画调试")
-                    } else {
-                        self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
-                        LogManager.shared.log("网络图片刷新Cell: index=\(index)", category: "漫画调试")
                     }
+                    self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
-                        LogManager.shared.log("网络图片滚动定位: index=\(index)", category: "漫画调试")
                     }
                 }
             } else {
-                LogManager.shared.log("网络获取失败: index=\(index)", category: "漫画调试")
                 await MainActor.run {
                     if Task.isCancelled { return }
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
-                          self.imageUrls[index] == expectedToken else {
-                        LogManager.shared.log("失败状态跳过(目标变更): index=\(index)", category: "漫画调试")
-                        return
-                    }
+                          self.imageUrls[index] == expectedToken else { return }
                     self.imageStates[index] = .failed
                     self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                 }

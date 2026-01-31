@@ -13,16 +13,11 @@ final class MangaImageService {
     func acquireDownloadPermit() async {
         let maxConcurrent = max(1, UserPreferences.shared.mangaImageMaxConcurrent)
         await limiter.updateMax(maxConcurrent)
-        logger.log("并发许可申请: max=\(maxConcurrent)", category: "漫画调试")
         await limiter.acquire()
-        logger.log("并发许可获取成功", category: "漫画调试")
     }
 
     func releaseDownloadPermit() {
-        Task {
-            await limiter.release()
-            logger.log("并发许可释放", category: "漫画调试")
-        }
+        Task { await limiter.release() }
     }
     
     func resolveImageURL(_ original: String) -> URL? {
@@ -121,13 +116,10 @@ final class MangaImageService {
         request.setValue(finalReferer, forHTTPHeaderField: "Referer")
 
         let startedAt = Date()
-        logger.log("图片请求开始: timeout=\(timeout)s url=\(requestURL.absoluteString)", category: "漫画调试")
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             if statusCode == 200, !data.isEmpty {
-                let elapsed = Date().timeIntervalSince(startedAt)
-                logger.log("图片请求成功: bytes=\(data.count) elapsed=\(String(format: "%.2f", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
                 return data
             }
             let elapsed = Date().timeIntervalSince(startedAt)
@@ -138,12 +130,9 @@ final class MangaImageService {
                 var retryRequest = request
                 retryRequest.setValue(fallbackReferer, forHTTPHeaderField: "Referer")
                 let retryStartedAt = Date()
-                logger.log("图片请求重试: referer=\(fallbackReferer) url=\(requestURL.absoluteString)", category: "漫画调试")
                 let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
                 let retryStatus = (retryResponse as? HTTPURLResponse)?.statusCode ?? 0
                 if retryStatus == 200, !retryData.isEmpty {
-                    let retryElapsed = Date().timeIntervalSince(retryStartedAt)
-                    logger.log("图片重试成功: bytes=\(retryData.count) elapsed=\(String(format: "%.2f", retryElapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
                     return retryData
                 }
                 let retryElapsed = Date().timeIntervalSince(retryStartedAt)
