@@ -83,7 +83,7 @@ struct ReadingSettingsView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("显示设置")) {
+            Section(header: Text("基础显示")) {
                 Picker("阅读主题", selection: $preferences.readingTheme) {
                     ForEach(ReadingTheme.allCases) { theme in
                         Text(theme.localizedName).tag(theme)
@@ -104,7 +104,7 @@ struct ReadingSettingsView: View {
                 
                 HStack {
                     Text("边距")
-                    Slider(value: $preferences.pageHorizontalMargin, in: 0...30, step: 2)
+                    Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 2)
                     Text("\(Int(preferences.pageHorizontalMargin))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
                 }
 
@@ -120,40 +120,46 @@ struct ReadingSettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+            }
 
+            Section(header: Text("左右翻页设置")) {
                 Picker("翻页方式", selection: $preferences.pageTurningMode) {
                     ForEach(PageTurningMode.allCases) { mode in
                         Text(mode.localizedName).tag(mode)
                     }
                 }
+            }
 
+            Section(header: Text("上下滚动设置")) {
                 Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
                 
                 HStack {
-                    Text("无缝切章")
+                    Text("无缝切章阈值")
                     Slider(value: $preferences.infiniteScrollSwitchThreshold, in: 40...300, step: 10)
                     Text("\(Int(preferences.infiniteScrollSwitchThreshold))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
                 }
                 
                 HStack {
-                    Text("切章拉伸")
+                    Text("切章拉伸距离")
                     Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
                     Text("\(Int(preferences.verticalThreshold))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
                 }
                 
                 HStack {
-                    Text("阻尼系数")
+                    Text("滚动阻尼系数")
                     Slider(value: $preferences.verticalDampingFactor, in: 0...0.5, step: 0.01)
                     Text(String(format: "%.2f", preferences.verticalDampingFactor)).font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
                 }
-                
+            }
+
+            Section(header: Text("漫画设置")) {
                 HStack {
-                    Text("漫画缩放")
+                    Text("漫画最大缩放")
                     Slider(value: $preferences.mangaMaxZoom, in: 1...10, step: 0.5)
                     Text(String(format: "%.1f", preferences.mangaMaxZoom)).font(.caption).monospacedDigit().frame(width: 30, alignment: .trailing)
                 }
 
-                Picker("漫画模式", selection: $preferences.mangaReaderMode) {
+                Picker("渲染引擎", selection: $preferences.mangaReaderMode) {
                     ForEach(MangaReaderMode.allCases) { mode in
                         Text(mode.localizedName).tag(mode)
                     }
@@ -275,10 +281,12 @@ struct TTSSettingsView: View {
                                         .foregroundColor(.orange)
                                         .font(.caption)
                                 } else {
-                                    Text(ttsSummary.isEmpty ? "已选择" : ttsSummary)
-                                        .foregroundColor(.secondary)
-                                        .font(.caption)
-                                        .lineLimit(1)
+                                    MarqueeText(
+                                        text: ttsSummary.isEmpty ? "已选择" : ttsSummary,
+                                        font: .caption,
+                                        color: .secondary
+                                    )
+                                    .frame(maxWidth: .infinity)
                                 }
                             }
                         }
@@ -642,6 +650,58 @@ struct PreferredSourcesView: View {
             preferences.preferredSearchSourceUrls.removeAll { $0 == url }
         } else {
             preferences.preferredSearchSourceUrls.append(url)
+        }
+    }
+}
+
+struct MarqueeText: View {
+    let text: String
+    let font: Font
+    let color: Color
+    
+    @State private var offset: CGFloat = 0
+    @State private var contentWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+    
+    var body: some View {
+        GeometryReader { containerGeometry in
+            ZStack(alignment: .leading) {
+                Text(text)
+                    .font(font)
+                    .foregroundColor(color)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .background(GeometryReader { contentGeometry in
+                        Color.clear.onAppear {
+                            contentWidth = contentGeometry.size.width
+                            containerWidth = containerGeometry.size.width
+                            startAnimation()
+                        }
+                    })
+                    .offset(x: offset)
+            }
+        }
+        .frame(height: 20) // 给定一个固定高度以配合 Form row
+        .clipped()
+        .onChange(of: text) { _ in
+            resetAndRestart()
+        }
+    }
+    
+    private func startAnimation() {
+        guard contentWidth > containerWidth else { return }
+        
+        let duration = Double(contentWidth / 40) // 速度控制
+        
+        withAnimation(Animation.linear(duration: duration).delay(1).repeatForever(autoreverses: false)) {
+            offset = -contentWidth
+        }
+    }
+    
+    private func resetAndRestart() {
+        offset = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            startAnimation()
         }
     }
 }

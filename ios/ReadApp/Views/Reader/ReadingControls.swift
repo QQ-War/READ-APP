@@ -287,9 +287,9 @@ struct ReaderOptionsSheet: View {
                         }
 
                         HStack {
-                            Text("字体").font(.subheadline)
+                            Text("字体").font(.body)
                             Spacer()
-                            Picker("字体", selection: $preferences.readingFontName) {
+                            Picker("", selection: $preferences.readingFontName) {
                                 ForEach(fontOptions, id: \.id) { font in
                                     Text(font.displayName).tag(font.id)
                                 }
@@ -304,25 +304,25 @@ struct ReaderOptionsSheet: View {
                         }
 
                         HStack {
-                            Text("字体大小").font(.subheadline)
+                            Text("字号").font(.body)
                             Slider(value: $preferences.fontSize, in: 12...30, step: 1)
                             Text("\(String(format: "%.0f", preferences.fontSize))")
-                                .font(.system(.caption, design: .monospaced))
+                                .font(.system(.body, design: .monospaced))
                                 .frame(width: 25)
                         }
 
                         HStack {
-                            Text("行间距").font(.subheadline)
+                            Text("行距").font(.body)
                             Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
                             Text("\(String(format: "%.0f", preferences.lineSpacing))")
-                                .font(.system(.caption, design: .monospaced))
+                                .font(.system(.body, design: .monospaced))
                                 .frame(width: 25)
                         }
 
                         HStack {
-                            Text("阅读主题").font(.subheadline)
+                            Text("主题").font(.body)
                             Spacer()
-                            Picker("阅读主题", selection: $preferences.readingTheme) {
+                            Picker("", selection: $preferences.readingTheme) {
                                 ForEach(ReadingTheme.allCases) { theme in
                                     Text(theme.localizedName).tag(theme)
                                 }
@@ -333,10 +333,10 @@ struct ReaderOptionsSheet: View {
 
                     Section(header: Text("页面布局")) {
                         HStack {
-                            Text("左右边距").font(.subheadline)
+                            Text("边距").font(.body)
                             Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
                             Text("\(String(format: "%.0f", preferences.pageHorizontalMargin))")
-                                .font(.system(.caption, design: .monospaced))
+                                .font(.system(.body, design: .monospaced))
                                 .frame(width: 25)
                         }
                     }
@@ -346,16 +346,26 @@ struct ReaderOptionsSheet: View {
                     Section(header: Text("上下滚动")) {
                         if !isMangaMode {
                             Toggle("开启无限流", isOn: $preferences.isInfiniteScrollEnabled)
+                                .font(.body)
                         }
 
                         if shouldShowSlider {
                             HStack {
-                                Text("切章距离").font(.subheadline)
+                                Text("切章距离").font(.body)
                                 Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
                                 Text("\(Int(preferences.verticalThreshold))")
-                                    .font(.system(.caption, design: .monospaced))
+                                    .font(.system(.body, design: .monospaced))
                                     .foregroundColor(.secondary)
                                     .frame(width: 35)
+                            }
+                            
+                            HStack {
+                                Text("阻尼系数").font(.body)
+                                Slider(value: $preferences.verticalDampingFactor, in: 0...0.5, step: 0.01)
+                                Text(String(format: "%.2f", preferences.verticalDampingFactor))
+                                    .font(.system(.body, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 40)
                             }
                         }
                     }
