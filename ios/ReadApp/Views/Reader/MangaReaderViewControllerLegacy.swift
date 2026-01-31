@@ -449,9 +449,13 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let topPullDistance = max(0, -rawOffset)
-        let bottomPullDistance = max(0, rawOffset - actualMaxScrollY)
+        let inset = scrollView.adjustedContentInset
+        let contentHeight = scrollView.contentSize.height
+        let viewportHeight = scrollView.bounds.height
+        let maxScrollY = max(-inset.top, contentHeight - viewportHeight + inset.bottom)
+        
+        let topPullDistance = -(rawOffset + inset.top)
+        let bottomPullDistance = rawOffset - maxScrollY
 
         if topPullDistance > ReaderConstants.Interaction.pullThreshold {
             if topPullDistance > threshold {

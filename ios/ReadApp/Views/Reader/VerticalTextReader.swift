@@ -436,15 +436,18 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
         
         // 当关闭无限流时，应用视觉阻尼
         if !isInfiniteScrollEnabled {
-            let actualMaxScrollY = max(-safeAreaTop, scrollView.contentSize.height - scrollView.bounds.height)
+            let inset = scrollView.adjustedContentInset
+            let contentHeight = scrollView.contentSize.height
+            let viewportHeight = scrollView.bounds.height
+            let maxScrollY = max(-inset.top, contentHeight - viewportHeight + inset.bottom)
             let currentScale = scrollView.zoomScale
             
-            if rawOffset < -safeAreaTop {
-                let diff = -safeAreaTop - rawOffset
+            if rawOffset < -inset.top {
+                let diff = -inset.top - rawOffset
                 let ty = (diff * dampingFactor) / currentScale
                 currentContentView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
-            } else if rawOffset > actualMaxScrollY {
-                let diff = rawOffset - actualMaxScrollY
+            } else if rawOffset > maxScrollY {
+                let diff = rawOffset - maxScrollY
                 let ty = (-diff * dampingFactor) / currentScale
                 currentContentView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
             } else {
@@ -838,11 +841,16 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
             return
         }
         
-        let actualMaxScrollY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+        let inset = scrollView.adjustedContentInset
+        let contentHeight = scrollView.contentSize.height
+        let viewportHeight = scrollView.bounds.height
+        let maxScrollY = max(-inset.top, contentHeight - viewportHeight + inset.bottom)
+        
+        let topPullDistance = -(rawOffset + inset.top)
+        let bottomPullDistance = rawOffset - maxScrollY
 
-        if rawOffset < -5 {
-            let pullDistance = -rawOffset
-            if pullDistance > threshold {
+        if topPullDistance > 5 {
+            if topPullDistance > threshold {
                 if !switchReady { 
                     switchReady = true; pendingSwitchDirection = -1; hapticFeedback() 
                 }
@@ -851,9 +859,8 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 if switchReady { switchReady = false }
                 updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
-        } else if rawOffset > actualMaxScrollY + 5 {
-            let pullDistance = rawOffset - actualMaxScrollY
-            if pullDistance > threshold {
+        } else if bottomPullDistance > 5 {
+            if bottomPullDistance > threshold {
                 if !switchReady { 
                     switchReady = true; pendingSwitchDirection = 1; hapticFeedback() 
                 }
