@@ -263,7 +263,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         zoomPanGesture.cancelsTouchesInView = false
         zoomPanGesture.delegate = self
         zoomScrollView.addGestureRecognizer(zoomPanGesture)
-        view.addSubview(zoomScrollView)
 
         collectionView.delegate = self
         collectionView.dataSource = self
@@ -275,7 +274,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         collectionView.register(MangaImageCell.self, forCellWithReuseIdentifier: MangaImageCell.reuseIdentifier)
         collectionView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        zoomScrollView.addSubview(collectionView)
 
         setupSwitchHint()
         setupProgressLabel()
@@ -326,8 +324,12 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             let relativeProgress = oldContentHeight > 0 ? (oldOffset / oldContentHeight) : 0
 
             lastViewSize = view.bounds.size
-            zoomScrollView.frame = view.bounds
-            collectionView.frame = isChapterZoomEnabled ? zoomScrollView.bounds : view.bounds
+            if isChapterZoomEnabled {
+                zoomScrollView.frame = view.bounds
+                collectionView.frame = zoomScrollView.bounds
+            } else {
+                collectionView.frame = view.bounds
+            }
             collectionView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
             collectionView.collectionViewLayout.invalidateLayout()
 
@@ -644,11 +646,11 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         }
 
         let contentHeight = collectionView.contentSize.height
-        let actualMaxScrollY = max(-collectionView.contentInset.top, contentHeight - collectionView.bounds.height + collectionView.contentInset.bottom)
-        let currentScale = zoomScrollView.zoomScale
+        let actualMaxScrollY = max(-safeAreaTop, contentHeight - collectionView.bounds.height)
+        let currentScale = isChapterZoomEnabled ? zoomScrollView.zoomScale : 1.0
 
-        let offset = rawOffset + collectionView.contentInset.top
-        let maxOffset = max(0, contentHeight - collectionView.bounds.height)
+        let offset = rawOffset + safeAreaTop
+        let maxOffset = contentHeight - collectionView.bounds.height
         if maxOffset > 0 {
             progressLabel.text = ReaderProgressFormatter.percentProgressText(offset: offset, maxOffset: maxOffset)
         } else {
@@ -656,7 +658,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         }
 
         let pullThreshold = ReaderConstants.Interaction.pullThreshold
-        let topPull = -collectionView.contentInset.top - rawOffset
+        let topPull = -safeAreaTop - rawOffset
         let bottomPull = rawOffset - actualMaxScrollY
 
         if topPull > pullThreshold {
@@ -732,7 +734,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     }
 
     @objc private func handleZoomPan(_ gesture: UIPanGestureRecognizer) {
-        guard zoomScrollView.zoomScale > 1.01 else { return }
+        guard isChapterZoomEnabled, zoomScrollView.zoomScale > 1.01 else { return }
         let translation = gesture.translation(in: zoomScrollView)
         let currentX = zoomScrollView.contentOffset.x
         let targetX = currentX - translation.x
@@ -765,6 +767,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     private func updateChapterZoomBehavior() {
         guard isViewLoaded else { return }
         if isChapterZoomEnabled {
+            if zoomScrollView.superview !== view {
+                view.addSubview(zoomScrollView)
+            }
             if collectionView.superview !== zoomScrollView {
                 collectionView.removeFromSuperview()
                 zoomScrollView.addSubview(collectionView)
@@ -782,6 +787,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                 collectionView.removeFromSuperview()
                 view.addSubview(collectionView)
             }
+            if zoomScrollView.superview === view {
+                zoomScrollView.removeFromSuperview()
+            }
             zoomScrollView.pinchGestureRecognizer?.isEnabled = false
             zoomScrollView.setZoomScale(1.0, animated: false)
             zoomScrollView.maximumZoomScale = 1.0
@@ -793,6 +801,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                 collectionView.addGestureRecognizer(tap)
             }
         }
+        view.bringSubviewToFront(progressOverlayView)
+        view.bringSubviewToFront(switchHintLabel)
         view.setNeedsLayout()
         collectionView.reloadData()
     }
@@ -835,8 +845,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let actualMaxScrollY = max(0, collectionView.contentSize.height - collectionView.bounds.height + collectionView.contentInset.bottom)
-        let topPullDistance = max(0, -rawOffset - collectionView.contentInset.top)
+        let actualMaxScrollY = max(0, collectionView.contentSize.height - collectionView.bounds.height)
+        let topPullDistance = max(0, -rawOffset)
         let bottomPullDistance = max(0, rawOffset - actualMaxScrollY)
 
         if topPullDistance > ReaderConstants.Interaction.pullThreshold {

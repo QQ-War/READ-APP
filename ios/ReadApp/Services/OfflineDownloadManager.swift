@@ -157,153 +157,89 @@ final class OfflineDownloadManager: ObservableObject {
 
         while true {
             guard let job = await jobSnapshot(jobId: jobId) else { return }
-            if job.status == .failed {
-                return
-            }
+            if job.status == .failed { return }
             if job.status == .paused {
                 await waitWhilePaused(jobId: jobId)
                 continue
             }
 
             let chapters = job.chapters
-            guard job.currentChapterOffset < chapters.count else {
+            let currentOffset = job.currentChapterOffset
+            guard currentOffset < chapters.count else {
                 await MainActor.run { [jobId] in
                     self.jobs.removeAll { $0.id == jobId }
                 }
                 return
             }
 
-            for chapterPos in job.currentChapterOffset..<chapters.count {
-                let chapter = chapters[chapterPos]
-                if !(await shouldContinue(jobId: jobId)) { return }
+            // 批量准备窗口大小（同时准备元数据的章节数）
+            let batchSize = 5 
+            let endOffset = min(currentOffset + batchSize, chapters.count)
+            let batchChapters = Array(chapters[currentOffset..<endOffset])
 
-                await MainActor.run {
-                    self.updateJob(jobId) { job in
-                        job.message = "Downloading: \(chapter.title) (\(chapterPos + 1)/\(chapters.count))"
-                        job.currentChapterOffset = chapterPos
-                    }
-                }
-
-                do {
-                    let contentType = job.isManga ? 2 : 0
-                    let rawContent = try await APIService.shared.fetchChapterContent(
-                        bookUrl: job.bookUrl,
-                        bookSourceUrl: job.bookSourceUrl,
-                        index: chapter.index,
-                        contentType: contentType
-                    )
-                    
-                    // 核心修复：强制保存章节正文/索引到磁盘，确保离线计数准确
-                    LocalCacheManager.shared.saveChapter(bookUrl: job.bookUrl, index: chapter.index, content: rawContent)
-
-                    await MainActor.run {
-                        self.updateJob(jobId) { job in
-                            job.completedUnits += 1
-                        }
-                    }
-
-                    if job.isManga && UserPreferences.shared.forceMangaProxy {
-                        // 使用服务端打包接口进行后台下载
-                        await MainActor.run {
-                            self.updateJob(jobId) { job in
-                                job.message = "Downloading package: \(chapter.title)"
-                            }
-                        }
-                        
+            await withTaskGroup(of: Void.self) { group in
+                for (index, chapter) in batchChapters.enumerated() {
+                    let absolutePos = currentOffset + index
+                    group.addTask {
                         do {
-                            let zipURL = try await PackageDownloadManager.shared.downloadPackage(
+                            if !(await self.shouldContinue(jobId: jobId)) { return }
+                            
+                            // 1. 获取章节元数据（图片列表）
+                            let contentType = job.isManga ? 2 : 0
+                            let rawContent = try await APIService.shared.fetchChapterContent(
                                 bookUrl: job.bookUrl,
                                 bookSourceUrl: job.bookSourceUrl,
-                                chapterIndex: chapter.index,
-                                isManga: true
+                                index: chapter.index,
+                                contentType: contentType
                             )
+                            LocalCacheManager.shared.saveChapter(bookUrl: job.bookUrl, index: chapter.index, content: rawContent)
                             
-                            // 提取 ZIP 并保存到缓存
-                            let imageUrls = extractMangaImageUrls(from: rawContent)
-                            try await unzipAndSaveImages(
-                                zipURL: zipURL,
-                                bookUrl: job.bookUrl,
-                                chapterIndex: chapter.index,
-                                imageUrls: imageUrls
-                            )
-                            
-                            // 清理临时 ZIP
-                            try? FileManager.default.removeItem(at: zipURL)
-                            
-                            await MainActor.run {
-                                self.updateJob(jobId) { job in
-                                    job.completedUnits += imageUrls.count
+                            if job.isManga {
+                                let imageUrls = extractMangaImageUrls(from: rawContent)
+                                await MainActor.run {
+                                    self.updateJob(jobId) { job in
+                                        job.message = "Enqueuing: \(chapter.title)"
+                                    }
+                                }
+                                
+                                // 2. 提交给系统后台下载
+                                // 即使此处不 await，系统也会继续下载。但我们 await 是为了保持进度条更新的顺序。
+                                _ = try await PackageDownloadManager.shared.downloadPackage(
+                                    bookUrl: job.bookUrl,
+                                    bookSourceUrl: job.bookSourceUrl,
+                                    chapterIndex: chapter.index,
+                                    isManga: true,
+                                    imageUrls: imageUrls
+                                )
+                                
+                                await MainActor.run {
+                                    self.updateJob(jobId) { job in
+                                        job.completedUnits += 1
+                                        // 只有当这一批都入队了，我们才推进主进度
+                                        if absolutePos >= job.currentChapterOffset {
+                                            job.currentChapterOffset = absolutePos + 1
+                                        }
+                                    }
+                                }
+                            } else {
+                                await MainActor.run {
+                                    self.updateJob(jobId) { job in
+                                        job.completedUnits += 1
+                                        if absolutePos >= job.currentChapterOffset {
+                                            job.currentChapterOffset = absolutePos + 1
+                                        }
+                                    }
                                 }
                             }
                         } catch {
-                            await markFailed(jobId: jobId, message: "Package download/extract failed: \(error.localizedDescription)")
-                            return
-                        }
-                    } else if job.isManga {
-                        let imageUrls = extractMangaImageUrls(from: rawContent)
-                        if !imageUrls.isEmpty {
-                            await MainActor.run {
-                                self.updateJob(jobId) { job in
-                                    job.totalUnits += imageUrls.count
-                                }
-                            }
-                        }
-
-                        let snapshot = await jobSnapshot(jobId: jobId)
-                        let startImage = (snapshot?.currentChapterOffset == chapterPos) ? (snapshot?.currentImageOffset ?? 0) : 0
-                        for imagePos in startImage..<imageUrls.count {
-                            if !(await shouldContinue(jobId: jobId)) { return }
-                            let rawUrl = imageUrls[imagePos]
-                            await MainActor.run {
-                                self.updateJob(jobId) { job in
-                                    job.currentImageOffset = imagePos
-                                    job.message = "Caching images: \(chapter.title) (\(imagePos + 1)/\(imageUrls.count))"
-                                }
-                            }
-
-                            guard let resolved = MangaImageService.shared.resolveImageURL(rawUrl) else { continue }
-                            let absolute = resolved.absoluteString
-                            if LocalCacheManager.shared.isMangaImageCached(bookUrl: job.bookUrl, chapterIndex: chapter.index, imageURL: absolute) {
-                                await MainActor.run {
-                                    self.updateJob(jobId) { job in
-                                        job.completedUnits += 1
-                                    }
-                                }
-                                await mangaDownloadDelay()
-                                continue
-                            }
-
-                            if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapter.url) {
-                                LocalCacheManager.shared.saveMangaImage(
-                                    bookUrl: job.bookUrl,
-                                    chapterIndex: chapter.index,
-                                    imageURL: absolute,
-                                    data: data
-                                )
-                                await MainActor.run {
-                                    self.updateJob(jobId) { job in
-                                        job.completedUnits += 1
-                                    }
-                                }
-                                await mangaDownloadDelay()
-                            } else {
-                                await markFailed(jobId: jobId, message: "Image download failed")
-                                return
-                            }
+                            LogManager.shared.log("章节 \(chapter.title) 准备失败: \(error.localizedDescription)", category: "下载")
                         }
                     }
-
-                    await MainActor.run {
-                        self.updateJob(jobId) { job in
-                            job.currentChapterOffset = chapterPos + 1
-                            job.currentImageOffset = 0
-                        }
-                    }
-                } catch {
-                    await markFailed(jobId: jobId, message: error.localizedDescription)
-                    return
                 }
             }
+            
+            // 稍作停顿，避免请求过快
+            try? await Task.sleep(nanoseconds: 300_000_000)
         }
     }
 

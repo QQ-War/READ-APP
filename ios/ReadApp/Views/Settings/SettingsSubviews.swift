@@ -94,32 +94,28 @@ struct ReadingSettingsView: View {
             
             Section(header: Text("显示设置")) {
                 HStack {
-                    Text("字体大小")
-                    Spacer()
-                    Text("\(Int(preferences.fontSize))")
+                    Text("字号")
+                    Slider(value: $preferences.fontSize, in: 12...30, step: 1)
+                    Text("\(Int(preferences.fontSize))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
                 }
-                Slider(value: $preferences.fontSize, in: 12...30, step: 1)
 
                 HStack {
-                    Text("行间距")
-                    Spacer()
-                    Text("\(Int(preferences.lineSpacing))")
+                    Text("行距")
+                    Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
+                    Text("\(Int(preferences.lineSpacing))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
                 }
-                Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
                 
                 HStack {
-                    Text("页边距")
-                    Spacer()
-                    Text("\(Int(preferences.pageHorizontalMargin))")
+                    Text("边距")
+                    Slider(value: $preferences.pageHorizontalMargin, in: 0...30, step: 2)
+                    Text("\(Int(preferences.pageHorizontalMargin))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
                 }
-                Slider(value: $preferences.pageHorizontalMargin, in: 0...30, step: 2)
 
                 HStack {
-                    Text("进度文字大小")
-                    Spacer()
-                    Text("\(Int(preferences.progressFontSize))")
+                    Text("进度字号")
+                    Slider(value: $preferences.progressFontSize, in: 8...20, step: 1)
+                    Text("\(Int(preferences.progressFontSize))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
                 }
-                Slider(value: $preferences.progressFontSize, in: 8...20, step: 1)
                 
                 Picker("阅读模式", selection: $preferences.readingMode) {
                     ForEach(ReadingMode.allCases.filter { $0 != .newHorizontal }) { mode in
@@ -128,94 +124,44 @@ struct ReadingSettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
-                if preferences.readingMode == .horizontal || preferences.readingMode == .newHorizontal {
-                    Picker("翻页方式", selection: $preferences.pageTurningMode) {
-                        ForEach(PageTurningMode.allCases) { mode in
-                            Text(mode.localizedName).tag(mode)
-                        }
+                Picker("翻页方式", selection: $preferences.pageTurningMode) {
+                    ForEach(PageTurningMode.allCases) { mode in
+                        Text(mode.localizedName).tag(mode)
                     }
+                }
+
+                Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
+                
+                HStack {
+                    Text("无缝切章")
+                    Slider(value: $preferences.infiniteScrollSwitchThreshold, in: 40...300, step: 10)
+                    Text("\(Int(preferences.infiniteScrollSwitchThreshold))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
                 }
                 
-                if preferences.readingMode == .vertical {
-                    Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
-                    
-                    if preferences.isInfiniteScrollEnabled {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("无缝切章触发距离")
-                                Spacer()
-                                Text("\(Int(preferences.infiniteScrollSwitchThreshold)) pt")
-                                    .foregroundColor(.secondary)
-                            }
-                            Slider(value: $preferences.infiniteScrollSwitchThreshold, in: 40...300, step: 10)
-                            Text("数值越小越容易切章，数值越大越稳")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    
-                    if !preferences.isInfiniteScrollEnabled {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("切章触发拉伸距离")
-                                Spacer()
-                                Text("\(Int(preferences.verticalThreshold)) pt")
-                                    .foregroundColor(.secondary)
-                            }
-                            Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
-                            Text("数值越小越灵敏，数值越大拉伸感越强")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("切章拉伸阻尼")
-                            Spacer()
-                            Text(String(format: "%.2f", preferences.verticalDampingFactor))
-                                .foregroundColor(.secondary)
-                        }
-                        Slider(value: $preferences.verticalDampingFactor, in: 0...0.5, step: 0.01)
-                        Text("数值越小拉伸感越强（建议 0.1-0.2）")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("漫画最大放大倍数")
-                            Spacer()
-                            Text(String(format: "%.1f x", preferences.mangaMaxZoom))
-                                .foregroundColor(.secondary)
-                        }
-                        Slider(value: $preferences.mangaMaxZoom, in: 1...10, step: 0.5)
-                        Text("控制漫画模式下的最大缩放比例")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
+                HStack {
+                    Text("切章拉伸")
+                    Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
+                    Text("\(Int(preferences.verticalThreshold))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
+                }
+                
+                HStack {
+                    Text("阻尼系数")
+                    Slider(value: $preferences.verticalDampingFactor, in: 0...0.5, step: 0.01)
+                    Text(String(format: "%.2f", preferences.verticalDampingFactor)).font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
+                }
+                
+                HStack {
+                    Text("漫画缩放")
+                    Slider(value: $preferences.mangaMaxZoom, in: 1...10, step: 0.5)
+                    Text(String(format: "%.1f", preferences.mangaMaxZoom)).font(.caption).monospacedDigit().frame(width: 30, alignment: .trailing)
+                }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("漫画渲染模式")
-                        Picker("漫画渲染模式", selection: $preferences.mangaReaderMode) {
-                            ForEach(MangaReaderMode.allCases) { mode in
-                                Text(mode.localizedName).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        Text("模式1更稳定；模式2更省内存；模式3为纯列表单图缩放")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                Picker("漫画模式", selection: $preferences.mangaReaderMode) {
+                    ForEach(MangaReaderMode.allCases) { mode in
+                        Text(mode.localizedName).tag(mode)
                     }
-                    .padding(.vertical, 4)
-
                 }
             }
-            
         }
         .navigationTitle("阅读设置")
         .onAppear {
@@ -348,14 +294,9 @@ struct TTSSettingsView: View {
             Section(header: Text("播放设置")) {
                 HStack {
                     Text("语速")
-                    Spacer()
-                    Text("\(Int(preferences.speechRate))%")
+                    Slider(value: $preferences.speechRate, in: 50...300, step: 5)
+                    Text("\(Int(preferences.speechRate))%").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
                 }
-                Slider(value: $preferences.speechRate, in: 50...300, step: 5)
-                
-                Text("语速范围 50%-300% (100% 为正常语速)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
 
                 Stepper(value: $preferences.ttsPreloadCount, in: 0...50) {
                     HStack {
@@ -365,42 +306,24 @@ struct TTSSettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                Text("提前下载接下来的音频段，减少等待时间（建议 10-20 段）")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
                 
                 Toggle("TTS 时锁定翻页", isOn: $preferences.lockPageOnTTS)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("TTS 跟随缓冲时间")
-                        Spacer()
-                        Text(String(format: "%.1f s", preferences.ttsFollowCooldown))
-                            .foregroundColor(.secondary)
-                    }
-                    Slider(value: $preferences.ttsFollowCooldown, in: 0...6, step: 0.5)
-                    Text("用户手动滚动后等待的稳定时间，时间越长越不容易被 TTS 抢回")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.vertical, 4)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("TTS 句段最大字符")
-                        Spacer()
-                        Text("\(preferences.ttsSentenceChunkLimit) 字符")
-                            .foregroundColor(.secondary)
-                    }
+                HStack {
+                    Text("跟随缓冲")
+                    Slider(value: $preferences.ttsFollowCooldown, in: 0...6, step: 0.5)
+                    Text(String(format: "%.1f s", preferences.ttsFollowCooldown)).font(.caption).monospacedDigit().frame(width: 40, alignment: .trailing)
+                }
+
+                HStack {
+                    Text("分句限制")
                     let chunkLimitBinding = Binding(
                         get: { Double(preferences.ttsSentenceChunkLimit) },
                         set: { preferences.ttsSentenceChunkLimit = Int($0) }
                     )
                     Slider(value: chunkLimitBinding, in: 300...1000, step: 50)
-                    Text("超过该长度的段落会在发送给服务端前拆分（推荐 300-800）")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    Text("\(preferences.ttsSentenceChunkLimit)").font(.caption).monospacedDigit().frame(width: 40, alignment: .trailing)
                 }
-                .padding(.vertical, 4)
             }
         }
         .navigationTitle("听书设置")
