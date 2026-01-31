@@ -221,6 +221,18 @@ final class MangaImageService {
         ]
         return components?.url
     }
+
+    /// 预解码图像，避免首次渲染时主线程解码卡顿
+    func decodeImage(_ image: UIImage) -> UIImage {
+        let size = image.size
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = true
+        format.scale = image.scale
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
 }
 
 actor ImageDownloadLimiter {

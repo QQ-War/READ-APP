@@ -200,6 +200,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     private var imageUrls: [String] = []
     private var loadingTasks: [Int: Task<Void, Never>] = [:]
     private var imageAspectRatios: [CGFloat?] = []
+    private var estimatedHeights: [CGFloat?] = []
     private var imageStates: [ImageLoadState] = []
     private let imageCache = NSCache<NSString, UIImage>()
     private let prefetchDataCache = NSCache<NSString, NSData>()
@@ -270,6 +271,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         collectionView.alwaysBounceVertical = true
         collectionView.delaysContentTouches = false
         collectionView.backgroundColor = .clear
+        collectionView.contentInsetAdjustmentBehavior = .never
         // keep collectionView pan for vertical scroll; horizontal pan handled by custom zoomPanGesture
         collectionView.register(MangaImageCell.self, forCellWithReuseIdentifier: MangaImageCell.reuseIdentifier)
         collectionView.contentInset = UIEdgeInsets(top: safeAreaTop, left: 0, bottom: ReaderConstants.Layout.verticalContentInsetBottom, right: 0)
@@ -355,6 +357,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
         self.imageUrls = urls
         self.imageAspectRatios = Array(repeating: nil, count: urls.count)
+        self.estimatedHeights = Array(repeating: 300, count: urls.count)
         self.imageStates = Array(repeating: .idle, count: urls.count)
         self.minLoadIndex = max(0, pendingScrollIndex ?? 0)
         imageCache.removeAllObjects()
@@ -425,6 +428,33 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let cacheKey = cacheKey(for: urlStr)
 
         let task = Task {
+            if let cachedImage = imageCache.object(forKey: cacheKey) {
+                let decoded = MangaImageService.shared.decodeImage(cachedImage)
+                await MainActor.run {
+                    guard index < self.imageStates.count,
+                          index < self.imageUrls.count,
+                          self.imageUrls[index] == expectedToken else { return }
+                    let cost = self.estimatedCost(for: decoded)
+                    self.imageCache.setObject(decoded, forKey: cacheKey, cost: cost)
+                    self.keepRecentImage(key: cacheKey as String, image: decoded)
+                    let ratio = decoded.size.height / max(decoded.size.width, 1)
+                    self.imageAspectRatios[index] = ratio
+                    let width = max(1, self.collectionView.bounds.width)
+                    let newHeight = width * ratio
+                    let oldHeight = self.estimatedHeights.indices.contains(index) ? (self.estimatedHeights[index] ?? newHeight) : newHeight
+                    if self.estimatedHeights.indices.contains(index) { self.estimatedHeights[index] = newHeight }
+                    self.imageStates[index] = .loaded
+                    if abs(newHeight - oldHeight) > 12 {
+                        self.scheduleLayoutInvalidation()
+                    } else {
+                        self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                    }
+                    if self.pendingScrollIndex == index {
+                        self.scrollToIndex(index, animated: false)
+                    }
+                }
+                return
+            }
             let cleanUrl = sanitizedUrl(urlStr)
             guard let resolved = MangaImageService.shared.resolveImageURL(cleanUrl) else {
                 await MainActor.run {
@@ -442,17 +472,26 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
             if let cachedData = prefetchDataCache.object(forKey: cacheKey) as Data?,
                let cachedImage = UIImage(data: cachedData) {
+                let decoded = MangaImageService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
                           self.imageUrls[index] == expectedToken else { return }
-                    let cost = self.estimatedCost(for: cachedImage)
-                    self.imageCache.setObject(cachedImage, forKey: cacheKey, cost: cost)
-                    self.keepRecentImage(key: cacheKey as String, image: cachedImage)
-                    self.imageAspectRatios[index] = cachedImage.size.height / max(cachedImage.size.width, 1)
+                    let cost = self.estimatedCost(for: decoded)
+                    self.imageCache.setObject(decoded, forKey: cacheKey, cost: cost)
+                    self.keepRecentImage(key: cacheKey as String, image: decoded)
+                    let ratio = decoded.size.height / max(decoded.size.width, 1)
+                    self.imageAspectRatios[index] = ratio
+                    let width = max(1, self.collectionView.bounds.width)
+                    let newHeight = width * ratio
+                    let oldHeight = self.estimatedHeights.indices.contains(index) ? (self.estimatedHeights[index] ?? newHeight) : newHeight
+                    if self.estimatedHeights.indices.contains(index) { self.estimatedHeights[index] = newHeight }
                     self.imageStates[index] = .loaded
-                    self.scheduleLayoutInvalidation()
-                    self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                    if abs(newHeight - oldHeight) > 12 {
+                        self.scheduleLayoutInvalidation()
+                    } else {
+                        self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                    }
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
                     }
@@ -463,17 +502,26 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             if let b = bookUrl,
                let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute),
                let cachedImage = UIImage(data: cachedData) {
+                let decoded = MangaImageService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
                           self.imageUrls[index] == expectedToken else { return }
-                    let cost = self.estimatedCost(for: cachedImage)
-                    self.imageCache.setObject(cachedImage, forKey: cacheKey, cost: cost)
-                    self.keepRecentImage(key: cacheKey as String, image: cachedImage)
-                    self.imageAspectRatios[index] = cachedImage.size.height / max(cachedImage.size.width, 1)
+                    let cost = self.estimatedCost(for: decoded)
+                    self.imageCache.setObject(decoded, forKey: cacheKey, cost: cost)
+                    self.keepRecentImage(key: cacheKey as String, image: decoded)
+                    let ratio = decoded.size.height / max(decoded.size.width, 1)
+                    self.imageAspectRatios[index] = ratio
+                    let width = max(1, self.collectionView.bounds.width)
+                    let newHeight = width * ratio
+                    let oldHeight = self.estimatedHeights.indices.contains(index) ? (self.estimatedHeights[index] ?? newHeight) : newHeight
+                    if self.estimatedHeights.indices.contains(index) { self.estimatedHeights[index] = newHeight }
                     self.imageStates[index] = .loaded
-                    self.scheduleLayoutInvalidation()
-                    self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                    if abs(newHeight - oldHeight) > 12 {
+                        self.scheduleLayoutInvalidation()
+                    } else {
+                        self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                    }
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
                     }
@@ -491,18 +539,27 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                 if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
                     LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)
                 }
+                let decoded = MangaImageService.shared.decodeImage(image)
                 await MainActor.run {
                     if Task.isCancelled { return }
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
                           self.imageUrls[index] == expectedToken else { return }
-                    let cost = self.estimatedCost(for: image)
-                    self.imageCache.setObject(image, forKey: cacheKey, cost: cost)
-                    self.keepRecentImage(key: cacheKey as String, image: image)
-                    self.imageAspectRatios[index] = image.size.height / max(image.size.width, 1)
+                    let cost = self.estimatedCost(for: decoded)
+                    self.imageCache.setObject(decoded, forKey: cacheKey, cost: cost)
+                    self.keepRecentImage(key: cacheKey as String, image: decoded)
+                    let ratio = decoded.size.height / max(decoded.size.width, 1)
+                    self.imageAspectRatios[index] = ratio
+                    let width = max(1, self.collectionView.bounds.width)
+                    let newHeight = width * ratio
+                    let oldHeight = self.estimatedHeights.indices.contains(index) ? (self.estimatedHeights[index] ?? newHeight) : newHeight
+                    if self.estimatedHeights.indices.contains(index) { self.estimatedHeights[index] = newHeight }
                     self.imageStates[index] = .loaded
-                    self.scheduleLayoutInvalidation()
-                    self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                    if abs(newHeight - oldHeight) > 12 {
+                        self.scheduleLayoutInvalidation()
+                    } else {
+                        self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
+                    }
                     if self.pendingScrollIndex == index {
                         self.scrollToIndex(index, animated: false)
                     }
@@ -598,6 +655,11 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             if Task.isCancelled { return }
             if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl) {
                 prefetchDataCache.setObject(data as NSData, forKey: key, cost: data.count)
+                if let image = UIImage(data: data) {
+                    let decoded = MangaImageService.shared.decodeImage(image)
+                    let cost = self.estimatedCost(for: decoded)
+                    self.imageCache.setObject(decoded, forKey: self.cacheKey(for: cleanUrl), cost: cost)
+                }
                 if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
                     LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex + 1, imageURL: absolute, data: data)
                 }
@@ -852,11 +914,12 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
+        let inset = collectionView.adjustedContentInset
         let contentHeight = collectionView.contentSize.height
         let viewportHeight = collectionView.bounds.height
-        let maxScrollY = max(0, contentHeight - viewportHeight)
+        let maxScrollY = max(-inset.top, contentHeight - viewportHeight + inset.bottom)
         
-        let topPullDistance = -safeAreaTop - rawOffset
+        let topPullDistance = -(rawOffset + inset.top)
         let bottomPullDistance = rawOffset - maxScrollY
 
         if topPullDistance > 5 {
@@ -969,6 +1032,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     // MARK: - UICollectionViewDelegateFlowLayout
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         let width = max(1, collectionView.bounds.width)
+        if estimatedHeights.indices.contains(indexPath.item), let height = estimatedHeights[indexPath.item] {
+            return CGSize(width: width, height: height)
+        }
         if imageAspectRatios.indices.contains(indexPath.item), let ratio = imageAspectRatios[indexPath.item] {
             return CGSize(width: width, height: width * ratio)
         }
