@@ -70,10 +70,11 @@ final class ReaderProgressCoordinator {
         verticalVC: VerticalTextViewController?,
         mangaVC: MangaReadable?
     ) -> Double {
+        if isMangaMode {
+            let total = Double(max(1, currentCache.contentSentences.count))
+            return Double(mangaVC?.currentVisibleIndex ?? 0) / total
+        }
         if readingMode == .vertical {
-            if isMangaMode {
-                return Double(mangaVC?.currentVisibleIndex ?? 0)
-            }
             let count = max(1, currentCache.contentSentences.count)
             let idx = verticalVC?.lastReportedIndex ?? 0
             return Double(idx) / Double(count)

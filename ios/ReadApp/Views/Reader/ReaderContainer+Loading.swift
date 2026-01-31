@@ -138,15 +138,9 @@ extension ReaderContainerViewController {
             } else {
                 // 漫画模式首次加载恢复
                 let pos = self.book.durChapterPos ?? 0
-                if pos > 1.0 {
-                    // 兼容旧版：pos 是图片索引
-                    self.mangaVC?.scrollToIndex(Int(pos), animated: false)
-                } else {
-                    // 新版：pos 是比例
-                    let total = self.currentCache.contentSentences.count
-                    let targetIdx = Int(pos * Double(total))
-                    self.mangaVC?.scrollToIndex(targetIdx, animated: false)
-                }
+                let total = self.currentCache.contentSentences.count
+                let targetIdx = Int(pos * Double(total))
+                self.mangaVC?.scrollToIndex(targetIdx, animated: false)
             }
         } else if startAtEnd {
             self.scrollToChapterEnd(animated: false)

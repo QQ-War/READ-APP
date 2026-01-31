@@ -621,6 +621,12 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     func scrollToIndex(_ index: Int, animated: Bool = false) {
         pendingScrollIndex = index
         guard index >= 0, index < imageUrls.count else { return }
+        
+        // 如果 CollectionView 还没准备好，先退出，靠 pendingScrollIndex 在后续 load 完成后触发
+        if collectionView.numberOfItems(inSection: 0) <= index {
+            return
+        }
+
         let indexPath = IndexPath(item: index, section: 0)
         collectionView.layoutIfNeeded()
         if let attr = collectionView.layoutAttributesForItem(at: indexPath) {
@@ -629,6 +635,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             pendingScrollIndex = nil
         } else {
             collectionView.scrollToItem(at: indexPath, at: .top, animated: animated)
+            // scrollToItem 之后可能需要更新 pendingScrollIndex 状态
+            // 但因为 scrollToItem 是异步的，我们暂时保留 pendingScrollIndex 直到下一次 visibleIndex 更新
         }
     }
 
@@ -646,8 +654,21 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         }
 
         let contentHeight = collectionView.contentSize.height
-        let actualMaxScrollY = max(-safeAreaTop, contentHeight - collectionView.bounds.height)
         let currentScale = isChapterZoomEnabled ? zoomScrollView.zoomScale : 1.0
+
+        let pullThreshold = ReaderConstants.Interaction.pullThreshold
+        let topPull = -safeAreaTop - rawOffset
+        let bottomPull = rawOffset - (contentHeight - collectionView.bounds.height)
+
+        if topPull > 0 {
+            let ty = (topPull * dampingFactor) / max(currentScale, 1.0)
+            collectionView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
+        } else if bottomPull > 0 {
+            let ty = (-bottomPull * dampingFactor) / max(currentScale, 1.0)
+            collectionView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
+        } else if collectionView.transform.ty != 0 || collectionView.transform.a != currentScale {
+            collectionView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale)
+        }
 
         let offset = rawOffset + safeAreaTop
         let maxOffset = contentHeight - collectionView.bounds.height
@@ -655,20 +676,6 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             progressLabel.text = ReaderProgressFormatter.percentProgressText(offset: offset, maxOffset: maxOffset)
         } else {
             progressLabel.text = "0%"
-        }
-
-        let pullThreshold = ReaderConstants.Interaction.pullThreshold
-        let topPull = -safeAreaTop - rawOffset
-        let bottomPull = rawOffset - actualMaxScrollY
-
-        if topPull > pullThreshold {
-            let ty = (topPull * dampingFactor) / max(currentScale, 1.0)
-            collectionView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
-        } else if bottomPull > pullThreshold {
-            let ty = (-bottomPull * dampingFactor) / max(currentScale, 1.0)
-            collectionView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale).translatedBy(x: 0, y: ty)
-        } else if collectionView.transform.ty != 0 || collectionView.transform.a != currentScale {
-            collectionView.transform = CGAffineTransform(scaleX: currentScale, y: currentScale)
         }
 
         updateVisibleIndex()
@@ -845,11 +852,14 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     }
 
     private func handleHoldSwitchIfNeeded(rawOffset: CGFloat) {
-        let actualMaxScrollY = max(0, collectionView.contentSize.height - collectionView.bounds.height)
-        let topPullDistance = max(0, -rawOffset)
-        let bottomPullDistance = max(0, rawOffset - actualMaxScrollY)
+        let contentHeight = collectionView.contentSize.height
+        let viewportHeight = collectionView.bounds.height
+        let maxScrollY = max(0, contentHeight - viewportHeight)
+        
+        let topPullDistance = -safeAreaTop - rawOffset
+        let bottomPullDistance = rawOffset - maxScrollY
 
-        if topPullDistance > ReaderConstants.Interaction.pullThreshold {
+        if topPullDistance > 5 {
             if topPullDistance > threshold {
                 if !switchReady {
                     switchReady = true
@@ -862,7 +872,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                 if switchReady { switchReady = false }
                 updateSwitchHint(text: "下拉切换上一章", isTop: true)
             }
-        } else if bottomPullDistance > ReaderConstants.Interaction.pullThreshold {
+        } else if bottomPullDistance > 5 {
             if bottomPullDistance > threshold {
                 if !switchReady {
                     switchReady = true
