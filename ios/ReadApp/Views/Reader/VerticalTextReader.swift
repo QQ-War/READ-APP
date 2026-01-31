@@ -284,6 +284,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
                 self.view.alpha = 1
                 self.scrollView.isUserInteractionEnabled = true
                 self.isTransitioning = false
+                self.isChapterSwitching = false
             } else if isInfiniteScrollEnabled {
                 if isChapterSwap {
                     if wasPrevVisible { 
