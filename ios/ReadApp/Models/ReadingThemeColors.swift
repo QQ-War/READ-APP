@@ -5,27 +5,40 @@ extension ReadingTheme {
         switch self {
         case .system:
             return .systemBackground
+        case .day:
+            return .white
+        case .night:
+            return UIColor(red: 0.12, green: 0.12, blue: 0.13, alpha: 1.0)
         case .paper:
             return UIColor(red: 0.96, green: 0.92, blue: 0.84, alpha: 1.0)
         case .eyeCare:
             return UIColor(red: 0.88, green: 0.95, blue: 0.88, alpha: 1.0)
-        case .dim:
-            return UIColor(red: 0.12, green: 0.12, blue: 0.13, alpha: 1.0)
         }
     }
 
     var textColor: UIColor {
         switch self {
-        case .dim:
+        case .night:
             return UIColor(white: 1.0, alpha: 1.0)
         case .system:
             return .label
-        case .paper, .eyeCare:
+        case .day, .paper, .eyeCare:
             return .black
         }
     }
 
     var backgroundSwiftUIColor: Color {
         Color(backgroundColor)
+    }
+
+    var interfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .day, .paper, .eyeCare:
+            return .light
+        case .night:
+            return .dark
+        case .system:
+            return .unspecified
+        }
     }
 }

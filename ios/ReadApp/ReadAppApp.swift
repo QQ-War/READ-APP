@@ -22,9 +22,9 @@ struct ReadAppApp: App {
     }
     
     private var colorScheme: ColorScheme? {
-        switch preferences.darkMode {
-        case .on: return .dark
-        case .off: return .light
+        switch preferences.readingTheme {
+        case .night: return .dark
+        case .day, .paper, .eyeCare: return .light
         case .system: return nil
         }
     }

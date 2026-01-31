@@ -37,35 +37,22 @@ enum PageTurningMode: String, CaseIterable, Identifiable {
     }
 }
 
-enum DarkModeConfig: String, CaseIterable, Identifiable {
-    case off = "Off"
-    case on = "On"
-    case system = "System"
-
-    var id: String { self.rawValue }
-    var localizedName: String {
-        switch self {
-        case .off: return "关闭"
-        case .on: return "开启"
-        case .system: return "跟随系统"
-        }
-    }
-}
-
 enum ReadingTheme: String, CaseIterable, Identifiable {
     case system = "System"
+    case day = "Day"
+    case night = "Night"
     case paper = "Paper"
     case eyeCare = "EyeCare"
-    case dim = "Dim"
 
     var id: String { self.rawValue }
 
     var localizedName: String {
         switch self {
-        case .system: return "系统默认"
+        case .system: return "跟随系统"
+        case .day: return "日间模式"
+        case .night: return "夜间模式"
         case .paper: return "牛皮纸"
         case .eyeCare: return "护眼绿"
-        case .dim: return "深色微调"
         }
     }
 }

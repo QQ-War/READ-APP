@@ -61,11 +61,6 @@ final class ReaderSettingsStore: ObservableObject {
         set { preferences.pageTurningMode = newValue }
     }
 
-    var darkMode: DarkModeConfig {
-        get { preferences.darkMode }
-        set { preferences.darkMode = newValue }
-    }
-
     var readingTheme: ReadingTheme {
         get { preferences.readingTheme }
         set { preferences.readingTheme = newValue }

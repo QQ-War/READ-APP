@@ -83,16 +83,13 @@ struct ReadingSettingsView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("夜间模式")) {
-                Picker("夜间模式", selection: $preferences.darkMode) {
-                    ForEach(DarkModeConfig.allCases) { config in
-                        Text(config.localizedName).tag(config)
+            Section(header: Text("显示设置")) {
+                Picker("阅读主题", selection: $preferences.readingTheme) {
+                    ForEach(ReadingTheme.allCases) { theme in
+                        Text(theme.localizedName).tag(theme)
                     }
                 }
-                .pickerStyle(.segmented)
-            }
-            
-            Section(header: Text("显示设置")) {
+                
                 HStack {
                     Text("字号")
                     Slider(value: $preferences.fontSize, in: 12...30, step: 1)

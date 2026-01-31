@@ -286,37 +286,58 @@ struct ReaderOptionsSheet: View {
                             }
                         }
 
-                        VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
-                            Text("字体")
-                                .font(.subheadline)
+                        HStack {
+                            Text("字体").font(.subheadline)
+                            Spacer()
                             Picker("字体", selection: $preferences.readingFontName) {
                                 ForEach(fontOptions, id: \.id) { font in
                                     Text(font.displayName).tag(font.id)
                                 }
                             }
                             .pickerStyle(.menu)
-                            Button("导入字体") { showFontImporter = true }
+                            Button("导入") { showFontImporter = true }
                                 .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(4)
                         }
 
-                        VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
-                            Text("字体大小: \(String(format: "%.0f", preferences.fontSize))")
-                                .font(.subheadline)
+                        HStack {
+                            Text("字体大小").font(.subheadline)
                             Slider(value: $preferences.fontSize, in: 12...30, step: 1)
+                            Text("\(String(format: "%.0f", preferences.fontSize))")
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(width: 25)
                         }
 
-                        VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
-                            Text("行间距: \(String(format: "%.0f", preferences.lineSpacing))")
-                                .font(.subheadline)
+                        HStack {
+                            Text("行间距").font(.subheadline)
                             Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
+                            Text("\(String(format: "%.0f", preferences.lineSpacing))")
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(width: 25)
+                        }
+
+                        HStack {
+                            Text("阅读主题").font(.subheadline)
+                            Spacer()
+                            Picker("阅读主题", selection: $preferences.readingTheme) {
+                                ForEach(ReadingTheme.allCases) { theme in
+                                    Text(theme.localizedName).tag(theme)
+                                }
+                            }
+                            .pickerStyle(.menu)
                         }
                     }
 
                     Section(header: Text("页面布局")) {
-                        VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
-                            Text("左右边距: \(String(format: "%.0f", preferences.pageHorizontalMargin))")
-                                .font(.subheadline)
+                        HStack {
+                            Text("左右边距").font(.subheadline)
                             Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
+                            Text("\(String(format: "%.0f", preferences.pageHorizontalMargin))")
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(width: 25)
                         }
                     }
                 }
@@ -328,37 +349,14 @@ struct ReaderOptionsSheet: View {
                         }
 
                         if shouldShowSlider {
-                            VStack(alignment: .leading, spacing: ReaderConstants.UI.formRowSpacing) {
-                                HStack {
-                                    Text("切章触发拉伸距离")
-                                    Spacer()
-                                    Text("\(Int(preferences.verticalThreshold)) pt")
-                                        .foregroundColor(.secondary)
-                                }
+                            HStack {
+                                Text("切章距离").font(.subheadline)
                                 Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
+                                Text("\(Int(preferences.verticalThreshold))")
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 35)
                             }
-                            .padding(.vertical, ReaderConstants.UI.formSectionPaddingVertical)
-                        }
-                    }
-                }
-
-                Section(header: Text("夜间模式")) {
-                    VStack(alignment: .leading, spacing: ReaderConstants.UI.formHeaderSpacing) {
-                        Text("模式切换").font(.subheadline).foregroundColor(.secondary)
-                        Picker("夜间模式", selection: $preferences.darkMode) {
-                            ForEach(DarkModeConfig.allCases) { config in
-                                Text(config.localizedName).tag(config)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    .padding(.vertical, ReaderConstants.UI.formSectionPaddingVertical)
-                }
-
-                Section(header: Text("主题")) {
-                    Picker("阅读主题", selection: $preferences.readingTheme) {
-                        ForEach(ReadingTheme.allCases) { theme in
-                            Text(theme.localizedName).tag(theme)
                         }
                     }
                 }

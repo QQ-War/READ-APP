@@ -28,19 +28,10 @@ struct BookDetailView: View {
     @State private var showingClearCacheAlert = false
     @State private var showingAddSuccessAlert = false
     @State private var showingRemoveSuccessAlert = false
-    @State private var selectedGroupIndex: Int = 0
+    @State private var showingChapterList = false
     
     private var isInBookshelf: Bool {
         bookshelfStore.books.contains { $0.bookUrl == book.bookUrl }
-    }
-    
-    private var chapterGroups: [Int] {
-        guard !chapters.isEmpty else { return [] }
-        return Array(0...((chapters.count - 1) / 50))
-    }
-    
-    private var groupCount: Int {
-        chapterGroups.count
     }
     
     private var isManuallyMarkedAsManga: Bool {
@@ -106,6 +97,22 @@ struct BookDetailView: View {
             SourceSwitchView(bookName: book.name ?? "", author: book.author ?? "", currentSource: book.origin ?? "") { newBook in
                 updateBookSource(with: newBook)
             }
+        }
+        .sheet(isPresented: $showingChapterList) {
+            ChapterListView(
+                chapters: chapters,
+                currentIndex: currentBook.durChapterIndex ?? 0,
+                bookUrl: book.bookUrl ?? "",
+                onSelectChapter: { index in
+                    if let bookUrl = book.bookUrl {
+                        bookshelfStore.updateProgress(bookUrl: bookUrl, index: index, pos: 0, title: chapters[index].title)
+                    }
+                    isReading = true
+                },
+                onRebuildChapterUrls: {
+                    await loadData()
+                }
+            )
         }
         .onChange(of: errorMessage) { newValue in
             guard let message = newValue, !message.isEmpty else { return }
@@ -176,79 +183,29 @@ struct BookDetailView: View {
                         .padding(.horizontal)
                     }
                     
-                    // 5. 目录预览
-                    VStack(alignment: .leading, spacing: 12) {
+                    // 5. 目录
+                    Button(action: { showingChapterList = true }) {
                         HStack {
-                            Text("目录").font(.headline)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("目录").font(.headline).foregroundColor(.primary)
+                                if !chapters.isEmpty {
+                                    let currentIdx = currentBook.durChapterIndex ?? 0
+                                    let currentTitle = chapters.indices.contains(currentIdx) ? chapters[currentIdx].title : "第一章"
+                                    Text("当前进度: \(currentTitle)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                             Spacer()
-                            Text("共 \(chapters.count) 章").font(.caption).foregroundColor(.secondary)
+                            Text("共 \(chapters.count) 章").font(.subheadline).foregroundColor(.secondary)
+                            Image(systemName: "chevron.right").font(.subheadline).foregroundColor(.secondary)
                         }
-                        .padding(.horizontal)
-                        
-                        if chapterGroups.count > 1 {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(chapterGroups, id: \.self) { index in
-                                        let start = index * 50 + 1
-                                        let end = min((index + 1) * 50, chapters.count)
-                                        Button(action: { selectedGroupIndex = index }) {
-                                            Text("\(start)-\(end)")
-                                                .font(.caption)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(selectedGroupIndex == index ? Color.blue : Color.gray.opacity(0.1))
-                                                .foregroundColor(selectedGroupIndex == index ? .white : .primary)
-                                                .cornerRadius(16)
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                        }
-                        
-                        if isLoading {
-                            HStack { Spacer(); ProgressView(); Spacer() }.padding()
-                        } else if let error = errorMessage {
-                            VStack(spacing: 12) {
-                                Text("章节加载失败")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal)
-                                Button("重试") {
-                                    Task { await loadData() }
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                        } else if chapters.isEmpty {
-                            Text("暂无章节")
-                                .foregroundColor(.secondary)
-                                .padding()
-                        } else {
-                            let startIndex = selectedGroupIndex * 50
-                            let endIndex = min(startIndex + 50, chapters.count)
-                            
-                            LazyVStack(spacing: 0) {
-                                ForEach(startIndex..<endIndex, id: \.self) { idx in
-                                    let chapter = chapters[idx]
-                                    Button(action: {
-                                        // 更新本地进度并启动阅读
-                                        if let bookUrl = book.bookUrl {
-                                            bookshelfStore.updateProgress(bookUrl: bookUrl, index: idx, pos: 0, title: chapter.title)
-                                        }
-                                        isReading = true
-                                    }) {
-                                        chapterRow(chapter)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                            }
-                        }
+                        .padding()
+                        .background(Color.gray.opacity(0.05))
+                        .cornerRadius(12)
                     }
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
                 }
             }
         )
@@ -394,20 +351,6 @@ struct BookDetailView: View {
         .padding().background(Color.gray.opacity(0.05)).cornerRadius(12).padding(.horizontal)
     }
     
-    private func chapterRow(_ chapter: BookChapter) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(chapter.title).font(.subheadline).lineLimit(1)
-                Spacer()
-                if cachedChapters.contains(chapter.index) {
-                    Image(systemName: "checkmark.circle.fill").foregroundColor(.green).font(.caption)
-                }
-            }
-            .padding(.vertical, 12).padding(.horizontal)
-            Divider().padding(.leading)
-        }
-    }
-    
     // MARK: - Logic
     
     private func loadData() async {
@@ -416,17 +359,12 @@ struct BookDetailView: View {
         do {
             chapters = try await APIService.shared.fetchChapterList(bookUrl: book.bookUrl ?? "", bookSourceUrl: book.origin)
             if endChapter.isEmpty { endChapter = "\(chapters.count)" }
-            // 自动跳转到当前章节所在的分组
-            let initialIndex = currentBook.durChapterIndex ?? 0
-            let maxGroupIndex = max(0, chapterGroups.count - 1)
-            selectedGroupIndex = min(initialIndex / 50, maxGroupIndex)
             refreshCachedStatus()
         } catch {
             if Task.isCancelled || error is CancellationError {
                 return
             }
             errorMessage = error.localizedDescription
-            selectedGroupIndex = 0
         }
     }
     

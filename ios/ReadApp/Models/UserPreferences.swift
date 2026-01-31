@@ -164,15 +164,18 @@ class UserPreferences: ObservableObject {
         }
     }
 
-    @Published var darkMode: DarkModeConfig {
-        didSet {
-            UserDefaults.standard.set(darkMode.rawValue, forKey: "darkMode")
-        }
-    }
-
     @Published var readingTheme: ReadingTheme {
         didSet {
             UserDefaults.standard.set(readingTheme.rawValue, forKey: "readingTheme")
+            updateInterfaceStyle()
+        }
+    }
+
+    private func updateInterfaceStyle() {
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            for window in windowScene.windows {
+                window.overrideUserInterfaceStyle = readingTheme.interfaceStyle
+            }
         }
     }
 
@@ -513,18 +516,14 @@ class UserPreferences: ObservableObject {
             self.mangaReaderMode = .collection
         }
 
-        if let savedDarkModeString = UserDefaults.standard.string(forKey: "darkMode"),
-           let savedDarkMode = DarkModeConfig(rawValue: savedDarkModeString) {
-            self.darkMode = savedDarkMode
-        } else {
-            self.darkMode = .system
-        }
         if let savedThemeRaw = UserDefaults.standard.string(forKey: "readingTheme"),
            let savedTheme = ReadingTheme(rawValue: savedThemeRaw) {
             self.readingTheme = savedTheme
         } else {
             self.readingTheme = .system
         }
+        
+        updateInterfaceStyle()
 
         // 兼容旧版：如果没有单独设置旁白/对话 TTS，则使用原有的 selectedTTSId
         if narrationTTSId.isEmpty { narrationTTSId = selectedTTSId }
