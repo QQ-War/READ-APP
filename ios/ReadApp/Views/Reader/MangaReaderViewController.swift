@@ -416,10 +416,17 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
     private func startLoadImage(index: Int, force: Bool = false) {
         guard index >= 0, index < imageUrls.count, index < imageStates.count else { return }
-        if !force && index < minLoadIndex { return }
-        if imageStates[index] == .loading { return }
+        if !force && index < minLoadIndex {
+            LogManager.shared.log("跳过加载(低于minLoadIndex): index=\(index) min=\(minLoadIndex)", category: "漫画调试")
+            return
+        }
+        if imageStates[index] == .loading {
+            LogManager.shared.log("跳过加载(已在加载): index=\(index)", category: "漫画调试")
+            return
+        }
 
         imageStates[index] = .loading
+        LogManager.shared.log("开始加载: index=\(index) force=\(force)", category: "漫画调试")
         DispatchQueue.main.async {
             self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
         }
@@ -460,7 +467,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                 await MainActor.run {
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
-                          self.imageUrls[index] == expectedToken else { return }
+                          self.imageUrls[index] == expectedToken else {
+                        LogManager.shared.log("状态跳过(目标变更): index=\(index)", category: "漫画调试")
+                        return
+                    }
                     self.imageStates[index] = .failed
                     self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                 }
@@ -532,7 +542,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             await MangaImageService.shared.acquireDownloadPermit()
             defer { MangaImageService.shared.releaseDownloadPermit() }
 
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                LogManager.shared.log("加载取消(获取许可后): index=\(index)", category: "漫画调试")
+                return
+            }
 
             if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl),
                let image = UIImage(data: data) {
@@ -544,7 +557,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     if Task.isCancelled { return }
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
-                          self.imageUrls[index] == expectedToken else { return }
+                          self.imageUrls[index] == expectedToken else {
+                        LogManager.shared.log("状态跳过(目标变更): index=\(index)", category: "漫画调试")
+                        return
+                    }
                     let cost = self.estimatedCost(for: decoded)
                     self.imageCache.setObject(decoded, forKey: cacheKey, cost: cost)
                     self.keepRecentImage(key: cacheKey as String, image: decoded)
@@ -569,7 +585,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                     if Task.isCancelled { return }
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
-                          self.imageUrls[index] == expectedToken else { return }
+                          self.imageUrls[index] == expectedToken else {
+                        LogManager.shared.log("失败状态跳过(目标变更): index=\(index)", category: "漫画调试")
+                        return
+                    }
                     self.imageStates[index] = .failed
                     self.collectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
                 }
