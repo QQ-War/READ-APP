@@ -26,24 +26,15 @@ struct SettingsView: View {
             }
 
             Section(header: Text("通用设置")) {
-                NavigationLink(destination: ReadingSettingsView()) {
-                    Label("阅读设置", systemImage: "book.pages")
+                ForEach(preferences.settingsOrder, id: \.self) { key in
+                    if let item = SettingItem(rawValue: key) {
+                        destinationLink(for: item)
+                            .onDrag {
+                                NSItemProvider(object: key as NSString)
+                            }
+                    }
                 }
-                
-                NavigationLink(destination: CacheManagementView()) {
-                    Label("缓存与下载管理", systemImage: "archivebox")
-                }
-
-                NavigationLink(destination: TTSSettingsView()) {
-                    Label("听书设置", systemImage: "speaker.wave.2")
-                }
-                
-                NavigationLink(destination: ContentSettingsView()) {
-                    Label("内容与净化", systemImage: "shield.checkered")
-                }
-                NavigationLink(destination: RssSourcesView()) {
-                    Label("订阅源管理", systemImage: "newspaper.fill")
-                }
+                .onMove(perform: move)
             }
 
             Section(header: Text("系统")) {
@@ -70,5 +61,40 @@ struct SettingsView: View {
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                EditButton()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func destinationLink(for item: SettingItem) -> some View {
+        switch item {
+        case .reading:
+            NavigationLink(destination: ReadingSettingsView()) {
+                Label(item.title, systemImage: item.systemImage)
+            }
+        case .cache:
+            NavigationLink(destination: CacheManagementView()) {
+                Label(item.title, systemImage: item.systemImage)
+            }
+        case .tts:
+            NavigationLink(destination: TTSSettingsView()) {
+                Label(item.title, systemImage: item.systemImage)
+            }
+        case .content:
+            NavigationLink(destination: ContentSettingsView()) {
+                Label(item.title, systemImage: item.systemImage)
+            }
+        case .rss:
+            NavigationLink(destination: RssSourcesView()) {
+                Label(item.title, systemImage: item.systemImage)
+            }
+        }
+    }
+
+    private func move(from source: IndexSet, to destination: Int) {
+        preferences.settingsOrder.move(fromOffsets: source, toOffset: destination)
     }
 }

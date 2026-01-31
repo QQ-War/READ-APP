@@ -331,6 +331,13 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 设置项顺序
+    @Published var settingsOrder: [String] {
+        didSet {
+            UserDefaults.standard.set(settingsOrder, forKey: "settingsOrder")
+        }
+    }
+
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex, sentenceOffset)
     private var ttsProgress: [String: (Int, Int, Int)] {
         get {
@@ -458,6 +465,19 @@ class UserPreferences: ObservableObject {
         self.mangaImageMaxConcurrent = savedMangaConcurrent == 0 ? 2 : max(1, savedMangaConcurrent)
         let savedMangaTimeout = UserDefaults.standard.double(forKey: "mangaImageTimeout")
         self.mangaImageTimeout = savedMangaTimeout == 0 ? 30 : max(5, savedMangaTimeout)
+
+        let defaultOrder = ["reading", "cache", "tts", "content", "rss"]
+        let savedOrder = UserDefaults.standard.stringArray(forKey: "settingsOrder") ?? defaultOrder
+        // 过滤掉不再存在的项，并追加新增的项
+        var finalOrder = savedOrder.filter { key in SettingItem(rawValue: key) != nil }
+        let allItems = SettingItem.allCases.map { $0.rawValue }
+        for item in allItems {
+            if !finalOrder.contains(item) {
+                finalOrder.append(item)
+            }
+        }
+        self.settingsOrder = finalOrder
+
         let savedChunk = UserDefaults.standard.integer(forKey: "ttsSentenceChunkLimit")
         self.ttsSentenceChunkLimit = savedChunk == 0 ? 600 : savedChunk
 
@@ -544,5 +564,35 @@ class UserPreferences: ObservableObject {
         KeychainHelper.shared.delete(service: "com.readapp.ios", account: "accessToken")
         username = ""
         isLoggedIn = false
+    }
+}
+
+enum SettingItem: String, CaseIterable, Identifiable {
+    case reading = "reading"
+    case cache = "cache"
+    case tts = "tts"
+    case content = "content"
+    case rss = "rss"
+    
+    var id: String { self.rawValue }
+    
+    var title: String {
+        switch self {
+        case .reading: return "阅读设置"
+        case .cache: return "缓存与下载管理"
+        case .tts: return "听书设置"
+        case .content: return "内容与净化"
+        case .rss: return "订阅源管理"
+        }
+    }
+    
+    var systemImage: String {
+        switch self {
+        case .reading: return "book.pages"
+        case .cache: return "archivebox"
+        case .tts: return "speaker.wave.2"
+        case .content: return "shield.checkered"
+        case .rss: return "newspaper.fill"
+        }
     }
 }
