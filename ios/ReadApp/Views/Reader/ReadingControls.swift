@@ -332,12 +332,23 @@ struct ReaderOptionsSheet: View {
                     }
 
                     Section(header: Text("页面布局")) {
+                        if !isMangaMode {
+                            HStack {
+                                Text("页边距").font(.body)
+                                Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
+                                Text("\(String(format: "%.0f", preferences.pageHorizontalMargin))")
+                                    .font(.system(.body, design: .monospaced))
+                                    .frame(width: 25)
+                            }
+                        }
+                        
                         HStack {
-                            Text("边距").font(.body)
-                            Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 1)
-                            Text("\(String(format: "%.0f", preferences.pageHorizontalMargin))")
+                            Text("底部留白").font(.body)
+                            Slider(value: $preferences.readingBottomInset, in: 0...120, step: 4)
+                            Text("\(Int(preferences.readingBottomInset))")
                                 .font(.system(.body, design: .monospaced))
-                                .frame(width: 25)
+                                .foregroundColor(.secondary)
+                                .frame(width: 40)
                         }
                     }
                 }
@@ -363,15 +374,6 @@ struct ReaderOptionsSheet: View {
                                 Text("阻尼系数").font(.body)
                                 Slider(value: $preferences.verticalDampingFactor, in: 0...0.5, step: 0.01)
                                 Text(String(format: "%.2f", preferences.verticalDampingFactor))
-                                    .font(.system(.body, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                                    .frame(width: 40)
-                            }
-
-                            HStack {
-                                Text("底部留白").font(.body)
-                                Slider(value: $preferences.readingBottomInset, in: 0...120, step: 4)
-                                Text("\(Int(preferences.readingBottomInset))")
                                     .font(.system(.body, design: .monospaced))
                                     .foregroundColor(.secondary)
                                     .frame(width: 40)

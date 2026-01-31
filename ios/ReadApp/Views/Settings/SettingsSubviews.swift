@@ -113,6 +113,12 @@ struct ReadingSettingsView: View {
                     Slider(value: $preferences.progressFontSize, in: 8...20, step: 1)
                     Text("\(Int(preferences.progressFontSize))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
                 }
+
+                HStack {
+                    Text("底部留白")
+                    Slider(value: $preferences.readingBottomInset, in: 0...120, step: 4)
+                    Text("\(Int(preferences.readingBottomInset))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
+                }
                 
                 Picker("阅读模式", selection: $preferences.readingMode) {
                     ForEach(ReadingMode.allCases.filter { $0 != .newHorizontal }) { mode in
@@ -132,12 +138,6 @@ struct ReadingSettingsView: View {
 
             Section(header: Text("上下滚动设置")) {
                 Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
-                
-                HStack {
-                    Text("底部留白")
-                    Slider(value: $preferences.readingBottomInset, in: 0...120, step: 4)
-                    Text("\(Int(preferences.readingBottomInset))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
-                }
 
                 HStack {
                     Text("无缝切章阈值")
