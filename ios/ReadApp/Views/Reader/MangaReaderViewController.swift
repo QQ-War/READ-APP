@@ -435,7 +435,9 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let cacheKey = cacheKey(for: urlStr)
 
         let task = Task {
+            LogManager.shared.log("任务启动: index=\(index)", category: "漫画调试")
             if let cachedImage = imageCache.object(forKey: cacheKey) {
+                LogManager.shared.log("命中内存缓存: index=\(index)", category: "漫画调试")
                 let decoded = MangaImageService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
@@ -463,6 +465,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                 return
             }
             let cleanUrl = sanitizedUrl(urlStr)
+            LogManager.shared.log("解析URL: index=\(index) url=\(cleanUrl)", category: "漫画调试")
             guard let resolved = MangaImageService.shared.resolveImageURL(cleanUrl) else {
                 await MainActor.run {
                     guard index < self.imageStates.count,
@@ -482,6 +485,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
             if let cachedData = prefetchDataCache.object(forKey: cacheKey) as Data?,
                let cachedImage = UIImage(data: cachedData) {
+                LogManager.shared.log("命中预取缓存: index=\(index)", category: "漫画调试")
                 let decoded = MangaImageService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
@@ -512,6 +516,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             if let b = bookUrl,
                let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute),
                let cachedImage = UIImage(data: cachedData) {
+                LogManager.shared.log("命中本地缓存: index=\(index)", category: "漫画调试")
                 let decoded = MangaImageService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
