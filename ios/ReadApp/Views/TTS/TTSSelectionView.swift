@@ -168,9 +168,19 @@ private extension TTSSelectionView {
 
     var narrationTTSSection: some View {
         Section {
-            Picker("选择旁白 TTS", selection: $preferences.narrationTTSId) {
-                ForEach(ttsList, id: \.identity) { tts in
-                    Text(tts.name).tag(tts.id)
+            HStack {
+                Text("旁白 TTS")
+                Spacer()
+                Menu {
+                    Picker("", selection: $preferences.narrationTTSId) {
+                        ForEach(ttsList, id: \.identity) { tts in
+                            Text(tts.name).tag(tts.id)
+                        }
+                    }
+                } label: {
+                    let currentName = ttsList.first(where: { $0.id == preferences.narrationTTSId })?.name ?? "未选择"
+                    MarqueeText(text: currentName, font: .body, color: .secondary)
+                        .frame(maxWidth: 150)
                 }
             }
         } header: {
@@ -183,9 +193,19 @@ private extension TTSSelectionView {
 
     var dialogueTTSSection: some View {
         Section {
-            Picker("选择对话 TTS", selection: $preferences.dialogueTTSId) {
-                ForEach(ttsList, id: \.identity) { tts in
-                    Text(tts.name).tag(tts.id)
+            HStack {
+                Text("对话 TTS")
+                Spacer()
+                Menu {
+                    Picker("", selection: $preferences.dialogueTTSId) {
+                        ForEach(ttsList, id: \.identity) { tts in
+                            Text(tts.name).tag(tts.id)
+                        }
+                    }
+                } label: {
+                    let currentName = ttsList.first(where: { $0.id == preferences.dialogueTTSId })?.name ?? "未选择"
+                    MarqueeText(text: currentName, font: .body, color: .secondary)
+                        .frame(maxWidth: 150)
                 }
             }
         } header: {
@@ -217,14 +237,24 @@ private extension TTSSelectionView {
                 .padding(.vertical, 4)
         } else {
             ForEach(speakerMappings.sorted(by: { $0.key < $1.key }), id: \.key) { speaker, ttsId in
-                Picker(speaker, selection: Binding(
-                    get: { ttsId },
-                    set: { newId in
-                        updateMapping(for: speaker, ttsId: newId)
-                    }
-                )) {
-                    ForEach(ttsList, id: \.identity) { tts in
-                        Text(tts.name).tag(tts.id)
+                HStack {
+                    Text(speaker)
+                    Spacer()
+                    Menu {
+                        Picker("", selection: Binding(
+                            get: { ttsId },
+                            set: { newId in
+                                updateMapping(for: speaker, ttsId: newId)
+                            }
+                        )) {
+                            ForEach(ttsList, id: \.identity) { tts in
+                                Text(tts.name).tag(tts.id)
+                            }
+                        }
+                    } label: {
+                        let currentName = ttsList.first(where: { $0.id == ttsId })?.name ?? "未选择"
+                        MarqueeText(text: currentName, font: .body, color: .secondary)
+                            .frame(maxWidth: 150)
                     }
                 }
             }
