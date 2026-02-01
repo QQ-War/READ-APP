@@ -113,6 +113,9 @@ struct RssSourcesView: View {
                         }
                         .disabled(viewModel.isRemoteOperationInProgress)
                     }
+                    Button(action: { importFromClipboard() }) {
+                        Label("从剪贴板导入", systemImage: "doc.on.clipboard")
+                    }
                     Button(action: { showingFilePicker = true }) {
                         Label("本地导入", systemImage: "folder")
                     }
@@ -243,6 +246,26 @@ struct RssSourcesView: View {
         } message: {
             Text(importResultMessage ?? "")
         }
+    }
+
+    private func importFromClipboard() {
+        guard let content = UIPasteboard.general.string, !content.isEmpty else {
+            importResultMessage = "剪贴板为空"
+            showingImportResult = true
+            return
+        }
+        
+        do {
+            if let data = content.data(using: .utf8) {
+                let added = try viewModel.importCustomSources(from: data)
+                importResultMessage = added.isEmpty ? "未找到有效订阅源" : "成功导入 \(added.count) 个订阅源"
+            } else {
+                importResultMessage = "剪贴板内容无效"
+            }
+        } catch {
+            importResultMessage = "导入失败: \(error.localizedDescription)"
+        }
+        showingImportResult = true
     }
 }
 

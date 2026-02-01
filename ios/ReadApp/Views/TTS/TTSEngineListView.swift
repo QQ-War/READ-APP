@@ -10,6 +10,7 @@ struct TTSEngineListView: View {
     @State private var showingURLImportDialog = false
     @State private var importURL = ""
     @State private var showingFilePicker = false
+    @State private var showingNewEngineView = false
     @State private var exportItems: [Any] = []
     @State private var showingShareSheet = false
     @State private var isExporting = false
@@ -50,8 +51,11 @@ struct TTSEngineListView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    NavigationLink(destination: TTSEngineEditView(ttsToEdit: nil)) {
+                    Button(action: { showingNewEngineView = true }) {
                         Label("新建引擎", systemImage: "pencil.and.outline")
+                    }
+                    Button(action: { importFromClipboard() }) {
+                        Label("从剪贴板导入", systemImage: "doc.on.clipboard")
                     }
                     Button(action: { showingFilePicker = true }) {
                         Label("本地导入", systemImage: "folder")
@@ -62,6 +66,16 @@ struct TTSEngineListView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+            }
+        }
+        .sheet(isPresented: $showingNewEngineView) {
+            NavigationView {
+                TTSEngineEditView(ttsToEdit: nil)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("取消") { showingNewEngineView = false }
+                        }
+                    }
             }
         }
         .sheet(isPresented: $showingFilePicker) {
@@ -129,6 +143,27 @@ struct TTSEngineListView: View {
             }
         }
         importURL = ""
+    }
+
+    private func importFromClipboard() {
+        guard let content = UIPasteboard.general.string, !content.isEmpty else {
+            errorMessage = "剪贴板为空"
+            return
+        }
+        
+        Task {
+            do {
+                try await APIService.shared.saveTTSBatch(jsonContent: content)
+                await loadTTSList()
+                await MainActor.run {
+                    errorMessage = "导入成功"
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "导入失败: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 
     private func exportEngine(_ tts: HttpTTS, toFile: Bool) async {

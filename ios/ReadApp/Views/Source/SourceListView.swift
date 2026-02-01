@@ -11,6 +11,7 @@ struct SourceListView: View {
     @State private var showingURLImportDialog = false
     @State private var importURL = ""
     @State private var showingFilePicker = false
+    @State private var showingNewSourceView = false
     
     private struct SharePayload: Identifiable {
         let id = UUID()
@@ -66,8 +67,11 @@ struct SourceListView: View {
         .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
-                        NavigationLink(destination: SourceEditView()) {
+                        Button(action: { showingNewSourceView = true }) {
                             Label("新建书源", systemImage: "pencil.and.outline")
+                        }
+                        Button(action: { importFromClipboard() }) {
+                            Label("从剪贴板导入", systemImage: "doc.on.clipboard")
                         }
                         Button(action: { showingFilePicker = true }) {
                             Label("本地导入", systemImage: "folder")
@@ -78,6 +82,16 @@ struct SourceListView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                }
+            }
+            .sheet(isPresented: $showingNewSourceView) {
+                NavigationView {
+                    SourceEditView()
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button("取消") { showingNewSourceView = false }
+                            }
+                        }
                 }
             }
             .sheet(isPresented: $showingFilePicker) {
@@ -125,6 +139,30 @@ struct SourceListView: View {
             }
         }
         importURL = ""
+    }
+
+    private func importFromClipboard() {
+        guard let content = UIPasteboard.general.string, !content.isEmpty else {
+            addResultMessage = "剪贴板为空"
+            showAddResultAlert = true
+            return
+        }
+        
+        Task {
+            do {
+                try await APIService.shared.saveBookSource(jsonContent: content)
+                await MainActor.run {
+                    viewModel.fetchSources()
+                    addResultMessage = "导入成功"
+                    showAddResultAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    addResultMessage = "导入失败: \(error.localizedDescription)"
+                    showAddResultAlert = true
+                }
+            }
+        }
     }
 
     private func exportSource(_ source: BookSource, toFile: Bool) async {

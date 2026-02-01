@@ -100,6 +100,9 @@ struct ReplaceRuleListView: View {
                     }) {
                         Label("新建规则", systemImage: "pencil.and.outline")
                     }
+                    Button(action: { importFromClipboard() }) {
+                        Label("从剪贴板导入", systemImage: "doc.on.clipboard")
+                    }
                     Button(action: { showingFilePicker = true }) {
                         Label("本地导入", systemImage: "folder")
                     }
@@ -210,6 +213,27 @@ struct ReplaceRuleListView: View {
             }
         }
         importURL = ""
+    }
+
+    private func importFromClipboard() {
+        guard let content = UIPasteboard.general.string, !content.isEmpty else {
+            errorMessageAlert = "剪贴板为空"
+            return
+        }
+        
+        Task {
+            do {
+                try await APIService.shared.saveReplaceRules(jsonContent: content)
+                await viewModel.fetchRules()
+                await MainActor.run {
+                    errorMessageAlert = "导入成功"
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessageAlert = "导入失败: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 
     private func deleteRule(at offsets: IndexSet) {
