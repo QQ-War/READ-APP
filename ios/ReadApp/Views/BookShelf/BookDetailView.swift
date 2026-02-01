@@ -66,6 +66,10 @@ struct BookDetailView: View {
             .ifAvailableHideTabBar()
         .confirmationDialog("选择缓存范围", isPresented: $showingDownloadOptions, titleVisibility: .visible) {
             Button("缓存全文") { startDownload(start: 1, end: chapters.count) }
+            Button("缓存未读") {
+                let current = (currentBook.durChapterIndex ?? 0) + 1
+                startDownload(start: current, end: chapters.count)
+            }
             Button("缓存后续 50 章") { 
                 let current = (currentBook.durChapterIndex ?? 0) + 1
                 startDownload(start: current, end: min(current + 50, chapters.count)) 
