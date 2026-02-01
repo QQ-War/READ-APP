@@ -183,7 +183,43 @@ final class OfflineDownloadManager: ObservableObject {
                     group.addTask {
                         do {
                             if !(await self.shouldContinue(jobId: jobId)) { return }
-                            
+
+                            if let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: job.bookUrl, index: chapter.index) {
+                                if job.isManga {
+                                    let imageUrls = extractMangaImageUrls(from: cachedContent)
+                                    if !imageUrls.isEmpty {
+                                        let allCached = imageUrls.allSatisfy {
+                                            LocalCacheManager.shared.isMangaImageCached(
+                                                bookUrl: job.bookUrl,
+                                                chapterIndex: chapter.index,
+                                                imageURL: $0
+                                            )
+                                        }
+                                        if allCached {
+                                            await self.markUnitCompleted(jobId: jobId, absolutePos: absolutePos)
+                                            return
+                                        }
+                                        await MainActor.run {
+                                            self.updateJob(jobId) { job in
+                                                job.message = "Enqueuing: \(chapter.title)"
+                                            }
+                                        }
+                                        _ = try await PackageDownloadManager.shared.downloadPackage(
+                                            bookUrl: job.bookUrl,
+                                            bookSourceUrl: job.bookSourceUrl,
+                                            chapterIndex: chapter.index,
+                                            isManga: true,
+                                            imageUrls: imageUrls
+                                        )
+                                        await self.markUnitCompleted(jobId: jobId, absolutePos: absolutePos)
+                                        return
+                                    }
+                                } else {
+                                    await self.markUnitCompleted(jobId: jobId, absolutePos: absolutePos)
+                                    return
+                                }
+                            }
+
                             // 1. 获取章节元数据（图片列表）
                             let contentType = job.isManga ? 2 : 0
                             let rawContent = try await APIService.shared.fetchChapterContent(
@@ -193,7 +229,7 @@ final class OfflineDownloadManager: ObservableObject {
                                 contentType: contentType
                             )
                             LocalCacheManager.shared.saveChapter(bookUrl: job.bookUrl, index: chapter.index, content: rawContent)
-                            
+
                             if job.isManga {
                                 let imageUrls = extractMangaImageUrls(from: rawContent)
                                 await MainActor.run {
@@ -201,9 +237,7 @@ final class OfflineDownloadManager: ObservableObject {
                                         job.message = "Enqueuing: \(chapter.title)"
                                     }
                                 }
-                                
-                                // 2. 提交给系统后台下载
-                                // 即使此处不 await，系统也会继续下载。但我们 await 是为了保持进度条更新的顺序。
+
                                 _ = try await PackageDownloadManager.shared.downloadPackage(
                                     bookUrl: job.bookUrl,
                                     bookSourceUrl: job.bookSourceUrl,
@@ -211,25 +245,10 @@ final class OfflineDownloadManager: ObservableObject {
                                     isManga: true,
                                     imageUrls: imageUrls
                                 )
-                                
-                                await MainActor.run {
-                                    self.updateJob(jobId) { job in
-                                        job.completedUnits += 1
-                                        // 只有当这一批都入队了，我们才推进主进度
-                                        if absolutePos >= job.currentChapterOffset {
-                                            job.currentChapterOffset = absolutePos + 1
-                                        }
-                                    }
-                                }
+
+                                await self.markUnitCompleted(jobId: jobId, absolutePos: absolutePos)
                             } else {
-                                await MainActor.run {
-                                    self.updateJob(jobId) { job in
-                                        job.completedUnits += 1
-                                        if absolutePos >= job.currentChapterOffset {
-                                            job.currentChapterOffset = absolutePos + 1
-                                        }
-                                    }
-                                }
+                                await self.markUnitCompleted(jobId: jobId, absolutePos: absolutePos)
                             }
                         } catch {
                             LogManager.shared.log("章节 \(chapter.title) 准备失败: \(error.localizedDescription)", category: "下载")
@@ -237,9 +256,20 @@ final class OfflineDownloadManager: ObservableObject {
                     }
                 }
             }
-            
+
             // 稍作停顿，避免请求过快
             try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+    }
+
+    private func markUnitCompleted(jobId: String, absolutePos: Int) async {
+        await MainActor.run {
+            self.updateJob(jobId) { job in
+                job.completedUnits += 1
+                if absolutePos >= job.currentChapterOffset {
+                    job.currentChapterOffset = absolutePos + 1
+                }
+            }
         }
     }
 

@@ -76,6 +76,7 @@ class LocalCacheManager {
         let file = mangaImageFileURL(bookUrl: bookUrl, chapterIndex: chapterIndex, imageURL: imageURL)
         return fileManager.fileExists(atPath: file.path)
     }
+
     
     // MARK: - 章节列表（目录）缓存
     
