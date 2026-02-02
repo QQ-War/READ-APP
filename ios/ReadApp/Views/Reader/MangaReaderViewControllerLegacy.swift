@@ -65,6 +65,7 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+        updateProgressStyle()
         scrollView.delegate = self
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.alwaysBounceVertical = true
@@ -118,6 +119,21 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
             progressLabel.trailingAnchor.constraint(equalTo: progressOverlayView.trailingAnchor),
             progressLabel.bottomAnchor.constraint(equalTo: progressOverlayView.bottomAnchor)
         ])
+    }
+    
+    func updateProgressStyle() {
+        let isEnabled = UserPreferences.shared.isProgressDynamicColorEnabled
+        if isEnabled {
+            progressOverlayView.layer.compositingFilter = "exclusionBlendMode"
+            progressOverlayView.backgroundColor = .clear
+            progressOverlayView.layer.cornerRadius = 0
+            progressOverlayView.clipsToBounds = false
+        } else {
+            progressOverlayView.layer.compositingFilter = nil
+            progressOverlayView.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+            progressOverlayView.layer.cornerRadius = 4
+            progressOverlayView.clipsToBounds = true
+        }
     }
     
     override func viewDidLayoutSubviews() {

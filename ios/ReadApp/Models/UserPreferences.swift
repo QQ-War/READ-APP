@@ -339,6 +339,13 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 是否开启进度条动态颜色 (exclusionBlendMode)
+    @Published var isProgressDynamicColorEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isProgressDynamicColorEnabled, forKey: "isProgressDynamicColorEnabled")
+        }
+    }
+
     /// 设置项顺序
     @Published var settingsOrder: [String] {
         didSet {
@@ -476,6 +483,8 @@ class UserPreferences: ObservableObject {
 
         let savedRefreshRate = UserDefaults.standard.float(forKey: "staticRefreshRate")
         self.staticRefreshRate = savedRefreshRate == 0 ? 30 : max(10, min(120, savedRefreshRate))
+
+        self.isProgressDynamicColorEnabled = UserDefaults.standard.object(forKey: "isProgressDynamicColorEnabled") as? Bool ?? true
 
         let defaultOrder = ["reading", "cache", "tts", "content", "rss"]
         let savedOrder = UserDefaults.standard.stringArray(forKey: "settingsOrder") ?? defaultOrder

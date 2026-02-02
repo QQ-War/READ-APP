@@ -158,12 +158,14 @@ struct ReadingSettingsView: View {
                 }
             }
 
-            Section(header: Text("显示与性能"), footer: Text("降低静态阅读时的刷新率可显著延长 ProMotion 设备（如 iPad Pro, iPhone 13 Pro+）的续航。交互时会自动恢复至 60Hz。")) {
+            Section(header: Text("显示与性能"), footer: Text("降低静态阅读时的刷新率可显著延长 ProMotion 设备的续航。关闭动态颜色可进一步减轻 GPU 渲染压力。")) {
                 HStack {
                     Text("静态刷新率")
                     Slider(value: Binding(get: { Double(preferences.staticRefreshRate) }, set: { preferences.staticRefreshRate = Float($0) }), in: 10...60, step: 10)
                     Text("\(Int(preferences.staticRefreshRate))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
                 }
+
+                Toggle("进度条动态颜色", isOn: $preferences.isProgressDynamicColorEnabled)
             }
 
             Section(header: Text("漫画设置")) {

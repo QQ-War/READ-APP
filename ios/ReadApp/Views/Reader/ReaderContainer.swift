@@ -111,6 +111,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         let ttsFollowCooldown: TimeInterval
         let verticalThreshold: CGFloat
         let progressFontSize: CGFloat
+        let isProgressDynamicColorEnabled: Bool
     }
     private var lastSettingsSnapshot: ReaderSettingsSnapshot?
     private var lastReplaceRules: [ReplaceRule]?
@@ -413,7 +414,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
                 pageTurningMode: settings.pageTurningMode,
                 ttsFollowCooldown: settings.ttsFollowCooldown,
                 verticalThreshold: settings.verticalThreshold,
-                progressFontSize: settings.progressFontSize
+                progressFontSize: settings.progressFontSize,
+                isProgressDynamicColorEnabled: UserPreferences.shared.isProgressDynamicColorEnabled
             )
             if lastSettingsSnapshot == snapshot { return }
             let previousSnapshot = lastSettingsSnapshot
@@ -447,6 +449,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             if oldSettings.mangaChapterZoomEnabled != settings.mangaChapterZoomEnabled {
                 mangaVC?.isChapterZoomEnabled = settings.mangaReaderMode == .collection ? settings.mangaChapterZoomEnabled : true
             }
+            
+            mangaVC?.updateProgressStyle()
 
             // 检测关键布局参数是否改变
             let layoutChanged = oldSettings.fontSize != settings.fontSize ||

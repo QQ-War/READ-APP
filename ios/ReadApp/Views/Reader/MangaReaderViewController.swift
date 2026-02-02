@@ -21,6 +21,7 @@ protocol MangaReadable: AnyObject {
     var chapterIndex: Int { get set }
     var chapterUrl: String? { get set }
     var progressLabel: UILabel { get }
+    func updateProgressStyle()
     func update(urls: [String])
     func updateNextChapterPrefetch(urls: [String])
     func scrollToIndex(_ index: Int, animated: Bool)
@@ -257,6 +258,8 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         super.viewDidLoad()
         view.backgroundColor = .black
 
+        updateProgressStyle()
+        
         zoomScrollView.minimumZoomScale = 1.0
         zoomScrollView.maximumZoomScale = maxZoomScale
         zoomScrollView.delegate = self
@@ -318,6 +321,21 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             progressLabel.trailingAnchor.constraint(equalTo: progressOverlayView.trailingAnchor),
             progressLabel.bottomAnchor.constraint(equalTo: progressOverlayView.bottomAnchor)
         ])
+    }
+
+    func updateProgressStyle() {
+        let isEnabled = UserPreferences.shared.isProgressDynamicColorEnabled
+        if isEnabled {
+            progressOverlayView.layer.compositingFilter = "exclusionBlendMode"
+            progressOverlayView.backgroundColor = .clear
+            progressOverlayView.layer.cornerRadius = 0
+            progressOverlayView.clipsToBounds = false
+        } else {
+            progressOverlayView.layer.compositingFilter = nil
+            progressOverlayView.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+            progressOverlayView.layer.cornerRadius = 4
+            progressOverlayView.clipsToBounds = true
+        }
     }
 
     override func viewDidLayoutSubviews() {
