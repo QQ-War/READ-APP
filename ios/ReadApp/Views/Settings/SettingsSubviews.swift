@@ -558,8 +558,13 @@ struct DebugSettingsView: View {
             Section(header: Text("存储")) {
                 Button(action: { showClearCacheAlert = true }) {
                     HStack {
-                        Image(systemName: "trash.circle")
-                        Text("清除本地缓存")
+                        Image(systemName: "memorychip")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("清除内存缓存")
+                            Text("仅清理运行内存，不影响离线下载内容")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
                         Spacer()
                     }
                     .foregroundColor(.orange)
@@ -578,7 +583,7 @@ struct DebugSettingsView: View {
             Button("取消", role: .cancel) { }
             Button("清空", role: .destructive) { LogManager.shared.clearLogs() }
         }
-        .alert("清除缓存", isPresented: $showClearCacheAlert) {
+        .alert("清除内存缓存", isPresented: $showClearCacheAlert) {
             Button("取消", role: .cancel) { }
             Button("清除", role: .destructive) { APIService.shared.clearLocalCache() }
         }
