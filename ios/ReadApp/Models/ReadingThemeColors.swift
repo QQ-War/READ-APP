@@ -8,7 +8,7 @@ extension ReadingTheme {
         case .day:
             return .white
         case .night:
-            return UIColor(red: 0.12, green: 0.12, blue: 0.13, alpha: 1.0)
+            return .black
         case .paper:
             return UIColor(red: 0.96, green: 0.92, blue: 0.84, alpha: 1.0)
         case .eyeCare:

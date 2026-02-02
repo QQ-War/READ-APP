@@ -663,7 +663,6 @@ class TTSManager: NSObject, ObservableObject {
     
     private func playAudioWithData(data: Data) {
         do {
-            stopKeepAlive()
             if speechSynthesizer.isSpeaking {
                 speechSynthesizer.stopSpeaking(at: .immediate)
             }
@@ -672,14 +671,17 @@ class TTSManager: NSObject, ObservableObject {
             audioPlayer?.delegate = self
             audioPlayer?.volume = 1.0
             if audioPlayer?.play() == true {
+                stopKeepAlive()
                 isLoading = false
                 currentSentenceDuration = audioPlayer?.duration ?? 0
                 startOffsetTimer()
                 beginBackgroundTask()
             } else {
+                startKeepAlive()
                 isLoading = false; currentSentenceIndex += 1; currentSentenceOffset = 0; speakNextSentence()
             }
         } catch {
+            startKeepAlive()
             isLoading = false; currentSentenceIndex += 1; currentSentenceOffset = 0; speakNextSentence()
         }
     }

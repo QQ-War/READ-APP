@@ -9,14 +9,19 @@ final class TTSReadingSyncCoordinator {
     private var interactionWorkItem: DispatchWorkItem?
     private let syncTrigger = PassthroughSubject<Void, Never>()
 
+    private var isAppActive = true
+
     init(reader: ReaderContainerViewController, ttsManager: TTSManager) {
         self.reader = reader
         self.ttsManager = ttsManager
     }
 
     func start() {
-        syncTrigger
+        let activePublisher = syncTrigger
+            .filter { [weak self] in self?.isAppActive ?? true }
             .debounce(for: .milliseconds(120), scheduler: RunLoop.main)
+
+        activePublisher
             .sink { [weak self] in
                 self?.reader?.syncTTSState()
             }
@@ -47,7 +52,16 @@ final class TTSReadingSyncCoordinator {
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
+                self?.isAppActive = true
                 self?.syncTrigger.send(())
+                self?.reader?.syncTTSState()
+            }
+            .store(in: &cancellables)
+            
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.isAppActive = false
             }
             .store(in: &cancellables)
     }
