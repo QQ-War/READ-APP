@@ -187,6 +187,16 @@ enum ReaderConstants {
         static let placeholderTextSize: CGFloat = 8
         static let placeholderMinHeight: CGFloat = 200
     }
+
+    enum RefreshRate {
+        static let minStatic: Float = 10
+        static let maxStatic: Float = 30
+        static let prefStatic: Float = 30
+        
+        static let minInteraction: Float = 30
+        static let maxInteraction: Float = 60
+        static let prefInteraction: Float = 60
+    }
 }
 
 // MARK: - TextKit 2 渲染存储

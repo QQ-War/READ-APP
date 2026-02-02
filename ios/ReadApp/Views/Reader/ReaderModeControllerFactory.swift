@@ -10,6 +10,14 @@ enum ReaderModeControllerFactory {
         vc.onImageTapped = { [weak owner] url in
             owner?.presentImagePreview(url: url)
         }
+        vc.onInteractionChanged = { [weak owner] interacting in
+            guard let owner = owner else { return }
+            if interacting {
+                owner.notifyUserInteractionStarted()
+            } else {
+                owner.notifyUserInteractionEnded()
+            }
+        }
         return vc
     }
 

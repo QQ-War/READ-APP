@@ -94,6 +94,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     weak var delegate: HorizontalCollectionViewDelegate?
     var onImageTapped: ((URL) -> Void)?
     var onAddReplaceRule: ((String) -> Void)?
+    var onInteractionChanged: ((Bool) -> Void)?
     
     var pages: [PaginatedPage] = []
     var pageInfos: [TK2PageInfo] = []
@@ -247,7 +248,12 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         return collectionView.bounds.size
     }
     
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        onInteractionChanged?(true)
+    }
+
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        onInteractionChanged?(false)
         let width = scrollView.bounds.width
         guard width > 0 else { return }
         let page = Int(round(scrollView.contentOffset.x / width))
@@ -269,6 +275,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
+            onInteractionChanged?(false)
             let width = scrollView.bounds.width
             guard width > 0 else { return }
             let page = Int(round(scrollView.contentOffset.x / width))

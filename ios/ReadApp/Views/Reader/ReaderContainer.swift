@@ -320,12 +320,15 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         loadChapters()
         ttsSyncCoordinator = TTSReadingSyncCoordinator(reader: self, ttsManager: ttsManager)
         ttsSyncCoordinator?.start()
+        
+        DisplayRateManager.shared.start()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         prefetchCoordinator.cancel()
         ttsSyncCoordinator?.stop()
+        DisplayRateManager.shared.stop()
         Task {
             await ReaderProgressCoordinator.saveProgress(
                 book: book,
@@ -988,6 +991,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     func notifyUserInteractionStarted() {
+        DisplayRateManager.shared.requestHighRate(true)
         ttsBridge.startUserInteraction()
         ttsSyncCoordinator?.userInteractionStarted()
     }
@@ -998,6 +1002,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
 
     func notifyUserInteractionEnded() {
+        DisplayRateManager.shared.requestHighRate(false)
         ttsBridge.endUserInteraction()
     }
 

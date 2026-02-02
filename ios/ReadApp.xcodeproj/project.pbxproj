@@ -14,6 +14,7 @@
 		CB32C6E6EEB05D59848CC517 /* MangaAntiScrapingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1D6F0B56486D3FEE732E99 /* MangaAntiScrapingService.swift */; };
 		C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000020000000000000001 /* OfflineDownloadManager.swift */; };
 		C10000060000000000000002 /* PackageDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000060000000000000001 /* PackageDownloadManager.swift */; };
+		D50000020000000000000001 /* DisplayRateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50000010000000000000001 /* DisplayRateManager.swift */; };
 		C20000000000000000000003 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = C20000000000000000000002 /* ZIPFoundation */; };
 		2A83F7C979DC464A96CE4D4C /* BookSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB63DA0BD6B444CB662FB56 /* BookSearchView.swift */; };
 		72FDB17ADA4241E9BF6A5BB9 /* BookSearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A79963738344134ACDF2305 /* BookSearchViewModel.swift */; };
@@ -244,6 +245,7 @@
 		1A00003F000000000000003 /* SourceEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceEditView.swift; sourceTree = "<group>"; };
 		1A000041000000000000004 /* BookDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDetailView.swift; sourceTree = "<group>"; };
 		1A000043000000000000004 /* LocalCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCacheManager.swift; sourceTree = "<group>"; };
+		D50000010000000000000001 /* DisplayRateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayRateManager.swift; sourceTree = "<group>"; };
 		1A000045000000000000005 /* CacheManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheManagementView.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A001 /* ViewExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewExtensions.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A002 /* TTSEngineListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngineListView.swift; sourceTree = "<group>"; };
@@ -481,6 +483,7 @@
 				A10000100000000000000001 /* ChapterContentCache.swift */,
 				A10000120000000000000001 /* Data+Append.swift */,
 				A10000140000000000000001 /* ReadingTextProcessor.swift */,
+				D50000010000000000000001 /* DisplayRateManager.swift */,
 				A10000180000000000000001 /* ApiEndpoints.swift */,
 				A10000280000000000000001 /* ApiBackend.swift */,
 				A100002A0000000000000001 /* ApiEndpointsReader.swift */,
@@ -593,6 +596,7 @@
 				C10000020000000000000002 /* OfflineDownloadManager.swift in Sources */,
 				C10000060000000000000002 /* PackageDownloadManager.swift in Sources */,
 				CB32C6E6EEB05D59848CC517 /* MangaAntiScrapingService.swift in Sources */,
+				D50000020000000000000001 /* DisplayRateManager.swift in Sources */,
 				1A000001000000000000001 /* ReadAppApp.swift in Sources */,
 				D10000010000000000000002 /* AppDelegate.swift in Sources */,
 				1A000003000000000000001 /* ContentView.swift in Sources */,

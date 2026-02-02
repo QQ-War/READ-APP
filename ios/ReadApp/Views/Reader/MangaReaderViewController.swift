@@ -804,6 +804,11 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
     @objc private func handleZoomPan(_ gesture: UIPanGestureRecognizer) {
         guard isChapterZoomEnabled, zoomScrollView.zoomScale > 1.01 else { return }
+        
+        if gesture.state == .began {
+            onInteractionChanged?(true)
+        }
+        
         let translation = gesture.translation(in: zoomScrollView)
         let currentX = zoomScrollView.contentOffset.x
         let targetX = currentX - translation.x
@@ -811,6 +816,10 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         let clampedX = min(max(targetX, 0), maxX)
         zoomScrollView.setContentOffset(CGPoint(x: clampedX, y: zoomScrollView.contentOffset.y), animated: false)
         gesture.setTranslation(.zero, in: zoomScrollView)
+        
+        if gesture.state == .ended || gesture.state == .cancelled {
+            onInteractionChanged?(false)
+        }
     }
 
     // MARK: - UIGestureRecognizerDelegate

@@ -331,6 +331,14 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 静态阅读时的刷新率限制 (iOS 15+ ProMotion)
+    @Published var staticRefreshRate: Float {
+        didSet {
+            UserDefaults.standard.set(staticRefreshRate, forKey: "staticRefreshRate")
+            DisplayRateManager.shared.refresh()
+        }
+    }
+
     /// 设置项顺序
     @Published var settingsOrder: [String] {
         didSet {
@@ -465,6 +473,9 @@ class UserPreferences: ObservableObject {
         self.mangaImageMaxConcurrent = savedMangaConcurrent == 0 ? 2 : max(1, savedMangaConcurrent)
         let savedMangaTimeout = UserDefaults.standard.double(forKey: "mangaImageTimeout")
         self.mangaImageTimeout = savedMangaTimeout == 0 ? 30 : max(5, savedMangaTimeout)
+
+        let savedRefreshRate = UserDefaults.standard.float(forKey: "staticRefreshRate")
+        self.staticRefreshRate = savedRefreshRate == 0 ? 30 : max(10, min(120, savedRefreshRate))
 
         let defaultOrder = ["reading", "cache", "tts", "content", "rss"]
         let savedOrder = UserDefaults.standard.stringArray(forKey: "settingsOrder") ?? defaultOrder
