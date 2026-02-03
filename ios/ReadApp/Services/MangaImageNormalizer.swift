@@ -2,7 +2,16 @@ import Foundation
 
 enum MangaImageNormalizer {
     static func sanitizeUrlString(_ raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("http//") {
+            trimmed = "http://" + trimmed.dropFirst(6)
+        } else if trimmed.hasPrefix("https//") {
+            trimmed = "https://" + trimmed.dropFirst(7)
+        } else if trimmed.hasPrefix("http:/") && !trimmed.hasPrefix("http://") {
+            trimmed = "http://" + trimmed.dropFirst(6)
+        } else if trimmed.hasPrefix("https:/") && !trimmed.hasPrefix("https://") {
+            trimmed = "https://" + trimmed.dropFirst(7)
+        }
         let patterns = ["\\.jpg", "\\.jpeg", "\\.png", "\\.webp", "\\.gif", "\\.bmp"]
         for pattern in patterns {
             if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
