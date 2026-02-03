@@ -96,6 +96,17 @@ final class MangaImageService {
         request.httpShouldHandleCookies = true
         request.cachePolicy = .returnCacheDataElseLoad
         
+        // 注入认证信息 (仅对自家后端)
+        if let base = URL(string: APIService.shared.baseURL),
+           let baseHost = base.host?.lowercased(),
+           let host = requestURL.host?.lowercased(),
+           host == baseHost {
+            let token = UserPreferences.shared.accessToken
+            if !token.isEmpty {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+        }
+
         // 统一移动端 User-Agent
         let defaultUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1"
         request.setValue(defaultUA, forHTTPHeaderField: "User-Agent")
@@ -166,21 +177,16 @@ final class MangaImageService {
     }
 
     private func fetchPdfImageData(_ url: URL) async -> Data? {
-        var requestURL = url
-        if !requestURL.absoluteString.contains("accessToken=") {
-            var components = URLComponents(url: requestURL, resolvingAgainstBaseURL: false)
-            var items = components?.queryItems ?? []
-            items.append(URLQueryItem(name: "accessToken", value: UserPreferences.shared.accessToken))
-            components?.queryItems = items
-            if let updated = components?.url {
-                requestURL = updated
-            }
-        }
-        var request = URLRequest(url: requestURL)
+        var request = URLRequest(url: url)
         request.timeoutInterval = max(8, UserPreferences.shared.mangaImageTimeout)
         request.httpShouldHandleCookies = true
         request.cachePolicy = .returnCacheDataElseLoad
         request.setValue("image/png,image/*;q=0.8,*/*;q=0.5", forHTTPHeaderField: "Accept")
+        
+        let token = UserPreferences.shared.accessToken
+        if !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let startedAt = Date()
         do {
@@ -244,8 +250,7 @@ final class MangaImageService {
         let baseURL = APIService.shared.baseURL
         var components = URLComponents(string: "\(baseURL)/proxypng")
         components?.queryItems = [
-            URLQueryItem(name: "url", value: original.absoluteString),
-            URLQueryItem(name: "accessToken", value: UserPreferences.shared.accessToken)
+            URLQueryItem(name: "url", value: original.absoluteString)
         ]
         return components?.url
     }
@@ -326,14 +331,9 @@ final class MangaImageService {
         }
         
         let baseURL = APIService.shared.baseURL
-        let token = UserPreferences.shared.accessToken
-        if token.isEmpty {
-            return nil
-        }
         var components = URLComponents(string: "\(baseURL)/assets")
         components?.queryItems = [
-            URLQueryItem(name: "path", value: path),
-            URLQueryItem(name: "accessToken", value: token)
+            URLQueryItem(name: "path", value: path)
         ]
         return components?.url
     }

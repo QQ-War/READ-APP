@@ -28,13 +28,14 @@ final class BookUploadService: NSObject {
         }
     }
 
-    func uploadBook(fileURL: URL, serverURL: URL) async throws -> (Data, HTTPURLResponse) {
+    func uploadBook(fileURL: URL, serverURL: URL, headers: [String: String]? = nil) async throws -> (Data, HTTPURLResponse) {
         let boundary = "Boundary-\(UUID().uuidString)"
         let tempFile = try buildMultipartFile(fileURL: fileURL, boundary: boundary)
 
         var request = URLRequest(url: serverURL)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        headers?.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
 
         let task = session.uploadTask(with: request, fromFile: tempFile)
 

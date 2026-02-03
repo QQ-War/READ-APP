@@ -152,7 +152,6 @@ class APIService {
             }
 
             var queryItems = [
-                URLQueryItem(name: "accessToken", value: self.accessToken),
                 URLQueryItem(name: "url", value: bookUrl),
                 URLQueryItem(name: "index", value: "\(index)"),
                 URLQueryItem(name: "type", value: "\(contentType)")
@@ -287,6 +286,15 @@ class APIService {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 15
+        if let base = URL(string: APIService.shared.baseURL),
+           let baseHost = base.host?.lowercased(),
+           let host = url.host?.lowercased(),
+           host == baseHost {
+            let token = APIService.shared.accessToken
+            if !token.isEmpty {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+        }
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {

@@ -7,12 +7,17 @@ final class BooksService {
         self.client = client
     }
 
+    private func applyAuthHeader(to request: inout URLRequest) {
+        let token = client.accessToken
+        guard !token.isEmpty else { return }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+
     func fetchBookshelf() async throws -> [Book] {
         guard !client.accessToken.isEmpty else {
             throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
         }
         let queryItems = [
-            URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "version", value: "1.0.0")
         ]
         let endpoint = client.backend == .reader ? ApiEndpointsReader.getBookshelf : ApiEndpoints.getBookshelf
@@ -30,7 +35,6 @@ final class BooksService {
 
     func fetchChapterList(bookUrl: String, bookSourceUrl: String?) async throws -> [BookChapter] {
         var queryItems = [
-            URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "url", value: bookUrl)
         ]
         if let bookSourceUrl = bookSourceUrl {
@@ -63,7 +67,6 @@ final class BooksService {
         case .read:
             let queryItems: [URLQueryItem] = {
                 var items = [
-                    URLQueryItem(name: "accessToken", value: client.accessToken),
                     URLQueryItem(name: "url", value: bookUrl),
                     URLQueryItem(name: "index", value: "\(index)"),
                     URLQueryItem(name: "pos", value: "\(pos)")
@@ -76,19 +79,19 @@ final class BooksService {
             let url = try client.buildURL(endpoint: ApiEndpoints.saveBookProgress, queryItems: queryItems)
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
+            applyAuthHeader(to: &request)
             let (data, _) = try await URLSession.shared.data(for: request)
             let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
             if !apiResponse.isSuccess {
                 print("保存进度失败: \(apiResponse.errorMsg ?? "未知错误")")
             }
         case .reader:
-            let queryItems = [
-                URLQueryItem(name: "accessToken", value: client.accessToken)
-            ]
+            let queryItems: [URLQueryItem] = []
             let url = try client.buildURL(endpoint: ApiEndpointsReader.saveBookProgress, queryItems: queryItems)
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            applyAuthHeader(to: &request)
             struct SaveProgressPayload: Codable {
                 let url: String
                 let index: Int
@@ -110,7 +113,6 @@ final class BooksService {
         }
 
         let queryItems = [
-            URLQueryItem(name: "accessToken", value: client.accessToken),
             URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl),
             URLQueryItem(name: "page", value: "\(page)"),
             URLQueryItem(name: "key", value: keyword)
@@ -210,6 +212,7 @@ final class BooksService {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        applyAuthHeader(to: &request)
 
         let encoder = JSONEncoder()
         request.httpBody = try encoder.encode(book)
@@ -264,6 +267,7 @@ final class BooksService {
         request.httpMethod = "POST"
         request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(DeleteBookRequest(bookUrl: bookUrl))
+        applyAuthHeader(to: &request)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
@@ -280,13 +284,15 @@ final class BooksService {
             throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
         }
 
-        let urlString = "\(client.baseURL)/importBookPreview?accessToken=\(client.accessToken)"
+        let urlString = "\(client.baseURL)/importBookPreview"
         guard let serverURL = URL(string: urlString) else {
             throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的上传URL"])
         }
 
         do {
-            let (data, httpResponse) = try await BookUploadService.shared.uploadBook(fileURL: url, serverURL: serverURL)
+            var headers: [String: String] = [:]
+            headers["Authorization"] = "Bearer \(client.accessToken)"
+            let (data, httpResponse) = try await BookUploadService.shared.uploadBook(fileURL: url, serverURL: serverURL, headers: headers)
 
             if httpResponse.statusCode != 200 {
                 let errorMsg = String(data: data, encoding: .utf8) ?? "未知服务器错误"
