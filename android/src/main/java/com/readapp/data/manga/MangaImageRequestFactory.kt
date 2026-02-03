@@ -28,12 +28,13 @@ object MangaImageRequestFactory {
         if (rawUrl.isBlank()) return null
         val base = stripApiBasePath(serverUrl)
         val resolved = MangaImageNormalizer.resolveUrl(rawUrl, base)
+        val assetUrl = buildAssetUrlIfNeeded(resolved, serverUrl, accessToken)
         val profile = MangaAntiScrapingService.resolveProfile(resolved, chapterUrl)
         val referer = MangaAntiScrapingService.resolveReferer(profile, chapterUrl, resolved)
-        val requestUrl = if (forceProxy) {
-            buildProxyUrl(resolved, serverUrl, accessToken) ?: resolved
-        } else {
-            resolved
+        val requestUrl = when {
+            assetUrl != null -> assetUrl
+            forceProxy -> buildProxyUrl(resolved, serverUrl, accessToken) ?: resolved
+            else -> resolved
         }
         val headers = buildHeaders(profile, referer)
         return MangaImageRequest(resolved, requestUrl, headers)
@@ -59,6 +60,24 @@ object MangaImageRequestFactory {
         return Uri.parse(base).buildUpon()
             .path("api/5/proxypng")
             .appendQueryParameter("url", url)
+            .appendQueryParameter("accessToken", accessToken.orEmpty())
+            .build()
+            .toString()
+    }
+
+    fun buildAssetUrlIfNeeded(url: String, serverUrl: String, accessToken: String? = null): String? {
+        val backend = detectApiBackend(serverUrl)
+        if (backend != ApiBackend.Read) return null
+        val normalized = when {
+            url.startsWith("http://assets/") || url.startsWith("https://assets/") -> "/assets/" + Uri.parse(url).path?.removePrefix("/")?.removePrefix("assets/").orEmpty()
+            url.startsWith("/assets/") -> url
+            url.startsWith("assets/") -> "/assets/" + url.removePrefix("assets/")
+            else -> return null
+        }
+        val base = stripApiBasePath(normalizeApiBaseUrl(serverUrl, backend))
+        return Uri.parse(base).buildUpon()
+            .path("api/5/assets")
+            .appendQueryParameter("path", normalized)
             .appendQueryParameter("accessToken", accessToken.orEmpty())
             .build()
             .toString()

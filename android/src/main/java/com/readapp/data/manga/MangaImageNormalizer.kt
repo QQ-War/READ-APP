@@ -4,7 +4,16 @@ import android.net.Uri
 
 object MangaImageNormalizer {
     fun sanitizeUrlString(raw: String): String {
-        val trimmed = raw.trim()
+        var trimmed = raw.trim()
+        if (trimmed.startsWith("http//")) {
+            trimmed = "http://" + trimmed.removePrefix("http//")
+        } else if (trimmed.startsWith("https//")) {
+            trimmed = "https://" + trimmed.removePrefix("https//")
+        } else if (trimmed.startsWith("http:/") && !trimmed.startsWith("http://")) {
+            trimmed = "http://" + trimmed.removePrefix("http:/")
+        } else if (trimmed.startsWith("https:/") && !trimmed.startsWith("https://")) {
+            trimmed = "https://" + trimmed.removePrefix("https:/")
+        }
         val patterns = listOf(".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
         val lower = trimmed.lowercase()
         for (pattern in patterns) {

@@ -86,7 +86,7 @@ class ReadRepository(
         }
         return result.map { list ->
             list.map { book ->
-                val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
+                val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin, accessToken)
                 book.copy(coverUrl = resolvedCover).toUiModel()
             }
         }
@@ -505,7 +505,7 @@ class ReadRepository(
                 it.exploreBook(accessToken, bookSourceUrl, ruleFindUrl, page)
             }(endpoints).map { list ->
                 list.map { book ->
-                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin, accessToken)
                     book.copy(coverUrl = resolvedCover)
                 }
             }
@@ -513,7 +513,7 @@ class ReadRepository(
                 it.exploreBook(accessToken, bookSourceUrl, ruleFindUrl, page)
             }(endpoints).map { list ->
                 list.map { book ->
-                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin, accessToken)
                     book.copy(coverUrl = resolvedCover)
                 }
             }
@@ -595,7 +595,7 @@ class ReadRepository(
                 it.searchBook(accessToken, keyword, bookSourceUrl, page)
             }(endpoints).map { list ->
                 list.map { book ->
-                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin, accessToken)
                     book.copy(coverUrl = resolvedCover)
                 }
             }
@@ -603,7 +603,7 @@ class ReadRepository(
                 it.searchBook(accessToken, keyword, bookSourceUrl, page)
             }(endpoints).map { list ->
                 list.map { book ->
-                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin)
+                    val resolvedCover = resolveCoverUrl(baseUrl, book.coverUrl, book.bookUrl, book.origin, accessToken)
                     book.copy(coverUrl = resolvedCover)
                 }
             }
@@ -727,7 +727,7 @@ class ReadRepository(
     private fun formatDecimal(value: Double): String =
         String.format(Locale.US, "%.2f", value)
 
-    private fun resolveCoverUrl(baseUrl: String, coverUrl: String?, bookUrl: String?, bookSourceUrl: String?): String? {
+    private fun resolveCoverUrl(baseUrl: String, coverUrl: String?, bookUrl: String?, bookSourceUrl: String?, accessToken: String?): String? {
         if (coverUrl.isNullOrBlank()) return buildPdfCoverUrl(baseUrl, bookUrl, bookSourceUrl)
         val trimmed = coverUrl.trim()
         if (trimmed.equals("null", true) || trimmed.equals("nil", true) || trimmed.equals("undefined", true)) {
@@ -736,10 +736,21 @@ class ReadRepository(
         val root = stripApiBasePath(baseUrl)
         return when {
             trimmed.startsWith("baseurl/") -> "$root/$trimmed"
-            trimmed.startsWith("/") -> root + trimmed
-            trimmed.startsWith("assets/") || trimmed.startsWith("book-assets/") -> "$root/$trimmed"
+            trimmed.startsWith("/") -> buildAssetUrl(baseUrl, trimmed, accessToken) ?: (root + trimmed)
+            trimmed.startsWith("assets/") || trimmed.startsWith("book-assets/") -> buildAssetUrl(baseUrl, "/$trimmed", accessToken)
             else -> trimmed
         }
+    }
+
+    private fun buildAssetUrl(baseUrl: String, path: String, accessToken: String?): String? {
+        val normalizedPath = if (path.startsWith("/")) path else "/$path"
+        val apiBase = normalizeApiBaseUrl(baseUrl, ApiBackend.Read)
+        return apiBase.toHttpUrlOrNull()?.newBuilder()
+            ?.addPathSegments("assets")
+            ?.addQueryParameter("path", normalizedPath)
+            ?.addQueryParameter("accessToken", accessToken.orEmpty())
+            ?.build()
+            ?.toString()
     }
 
     private fun buildPdfCoverUrl(baseUrl: String, bookUrl: String?, bookSourceUrl: String?): String? {

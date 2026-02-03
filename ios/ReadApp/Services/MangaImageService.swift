@@ -22,6 +22,9 @@ final class MangaImageService {
     
     func resolveImageURL(_ original: String) -> URL? {
         let cleaned = MangaImageNormalizer.sanitizeUrlString(original)
+        if let assetURL = buildAssetURLIfNeeded(cleaned) {
+            return assetURL
+        }
         if cleaned.hasPrefix("http") {
             if let url = URL(string: cleaned) {
                 return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
@@ -217,6 +220,26 @@ final class MangaImageService {
         var components = URLComponents(string: "\(baseURL)/proxypng")
         components?.queryItems = [
             URLQueryItem(name: "url", value: original.absoluteString),
+            URLQueryItem(name: "accessToken", value: UserPreferences.shared.accessToken)
+        ]
+        return components?.url
+    }
+
+    private func buildAssetURLIfNeeded(_ value: String) -> URL? {
+        var path = value
+        if value.hasPrefix("http://assets/") || value.hasPrefix("https://assets/") {
+            path = "/assets/" + value.split(separator: "/", omittingEmptySubsequences: true).dropFirst(1).joined(separator: "/")
+        } else if value.hasPrefix("assets/") {
+            path = "/assets/" + value.dropFirst("assets/".count)
+        } else if value.hasPrefix("/assets/") {
+            path = value
+        } else {
+            return nil
+        }
+        let baseURL = APIService.shared.baseURL
+        var components = URLComponents(string: "\(baseURL)/assets")
+        components?.queryItems = [
+            URLQueryItem(name: "path", value: path),
             URLQueryItem(name: "accessToken", value: UserPreferences.shared.accessToken)
         ]
         return components?.url
