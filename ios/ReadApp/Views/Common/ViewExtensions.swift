@@ -9,7 +9,8 @@ extension View {
         } else {
             self.modifier(HideTabBarModifier())
         }
-    
+    }
+
     @ViewBuilder
     func glassyListStyle() -> some View {
         if UserPreferences.shared.isLiquidGlassEnabled {
