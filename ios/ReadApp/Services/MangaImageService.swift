@@ -242,9 +242,15 @@ final class MangaImageService {
         var path = value
         if value.hasPrefix("http://assets/") || value.hasPrefix("https://assets/") {
             path = "/assets/" + value.split(separator: "/", omittingEmptySubsequences: true).dropFirst(1).joined(separator: "/")
+        } else if value.hasPrefix("../assets/") {
+            path = "/assets/" + value.dropFirst("../assets/".count)
+        } else if value.hasPrefix("../book-assets/") {
+            path = "/book-assets/" + value.dropFirst("../book-assets/".count)
         } else if value.hasPrefix("assets/") {
             path = "/assets/" + value.dropFirst("assets/".count)
-        } else if value.hasPrefix("/assets/") {
+        } else if value.hasPrefix("book-assets/") {
+            path = "/book-assets/" + value.dropFirst("book-assets/".count)
+        } else if value.hasPrefix("/assets/") || value.hasPrefix("/book-assets/") {
             path = value
         } else {
             return nil
@@ -264,7 +270,14 @@ final class MangaImageService {
 
     private func isAssetPath(_ value: String) -> Bool {
         let lower = value.lowercased()
-        return lower.hasPrefix("/assets/") || lower.hasPrefix("assets/") || lower.hasPrefix("http://assets/") || lower.hasPrefix("https://assets/")
+        return lower.hasPrefix("/assets/")
+            || lower.hasPrefix("assets/")
+            || lower.hasPrefix("../assets/")
+            || lower.hasPrefix("/book-assets/")
+            || lower.hasPrefix("book-assets/")
+            || lower.hasPrefix("../book-assets/")
+            || lower.hasPrefix("http://assets/")
+            || lower.hasPrefix("https://assets/")
     }
 
     /// 预解码图像，避免首次渲染时主线程解码卡顿
