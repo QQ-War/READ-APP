@@ -22,13 +22,19 @@ final class MangaImageService {
     
     func resolveImageURL(_ original: String) -> URL? {
         let cleaned = MangaImageNormalizer.sanitizeUrlString(original)
+        
+        // 1. 优先尝试将其作为后端资产路径处理（会补全域名和 Token）
         if let assetURL = buildAssetURLIfNeeded(cleaned) {
             return assetURL
         }
+        
+        // 2. 如果识别为资产路径但转换失败（例如配置缺失），不再尝试作为普通 URL 加载
         if isAssetPath(cleaned) {
             return nil
         }
-        if cleaned.hasPrefix("http") {
+        
+        // 3. 处理带协议的绝对 URL
+        if cleaned.hasPrefix("http://") || cleaned.hasPrefix("https://") {
             if let url = URL(string: cleaned) {
                 return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
             }
@@ -36,8 +42,14 @@ final class MangaImageService {
                let url = URL(string: encoded) {
                 return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
             }
+        }
+        
+        // 如果是类似 "http//assets/..." 这种已经损坏且 buildAssetURLIfNeeded 没抓到的，这里就不再往下走了，避免产生 unsupported URL
+        if cleaned.contains("//") && !cleaned.contains("://") {
             return nil
         }
+
+        // 4. 补全后端 Base URL（处理相对路径）
         let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
         let resolved = cleaned.hasPrefix("/") ? (baseURL + cleaned) : (baseURL + "/" + cleaned)
         if let url = URL(string: resolved) {
@@ -240,12 +252,28 @@ final class MangaImageService {
 
     private func buildAssetURLIfNeeded(_ value: String) -> URL? {
         var path = value
-        if value.hasPrefix("http://assets/") || value.hasPrefix("https://assets/") {
-            path = "/assets/" + value.split(separator: "/", omittingEmptySubsequences: true).dropFirst(1).joined(separator: "/")
-        } else if value.hasPrefix("http//assets/") {
-            path = "/assets/" + value.dropFirst("http//".count)
-        } else if value.hasPrefix("https//assets/") {
-            path = "/assets/" + value.dropFirst("https//".count)
+        let lower = value.lowercased()
+        
+        if lower.hasPrefix("http://assets/") || lower.hasPrefix("https://assets/") || lower.hasPrefix("http//assets/") || lower.hasPrefix("https//assets/") {
+            let components = value.split(separator: "/", omittingEmptySubsequences: true)
+            // 如果是 http://assets/ 或 https://assets/，components[0] 是 http: / https:，components[1] 是 assets
+            // 如果是 http//assets/ 或 https//assets/，components[0] 是 http / https，components[1] 是 assets
+            if components.count > 1 {
+                // 我们直接取 assets 之后的部分，但 buildAssetURLIfNeeded 本身会拼接 /assets
+                // 实际上 qread 后端的 /assets 接口期望的 path 参数如果包含 assets/ 前缀，通常是因为客户端代码逻辑
+                // 如果后端已经有了 /assets 路由，path 参数应该是相对于 assets 目录的路径，或者是带 assets/ 的完整相对路径
+                // 根据之前的错误日志 path=/assets/assets/covers/xxx，说明多了一个 assets
+                
+                // 这里的逻辑是：如果是从 http://assets/xxx 来的，我们要提取 assets/xxx
+                // value.split 会把 http://assets/covers/xxx 拆成 ["http:", "assets", "covers", "xxx"]
+                // dropFirst(1).joined(separator: "/") 得到 "assets/covers/xxx"
+                // 这样 path 变成 "assets/covers/xxx"
+                
+                path = components.dropFirst(1).joined(separator: "/")
+                if !path.hasPrefix("/") {
+                    path = "/" + path
+                }
+            }
         } else if value.hasPrefix("http:/assets/") || value.hasPrefix("https:/assets/") {
             path = "/assets/" + value.dropFirst(6)
         } else if value.hasPrefix("../assets/") {
@@ -291,6 +319,12 @@ final class MangaImageService {
         } else {
             return nil
         }
+        
+        // 进一步规范化 path：如果 path 是 /assets/assets/xxx，修正为 /assets/xxx
+        if path.hasPrefix("/assets/assets/") {
+            path = String(path.dropFirst(7))
+        }
+        
         let baseURL = APIService.shared.baseURL
         let token = UserPreferences.shared.accessToken
         if token.isEmpty {
@@ -314,6 +348,10 @@ final class MangaImageService {
             || lower.hasPrefix("../book-assets/")
             || lower.hasPrefix("http://assets/")
             || lower.hasPrefix("https://assets/")
+            || lower.hasPrefix("http//assets/")
+            || lower.hasPrefix("https//assets/")
+            || lower.contains("/assets/")
+            || lower.contains("/book-assets/")
     }
 
     /// 预解码图像，避免首次渲染时主线程解码卡顿

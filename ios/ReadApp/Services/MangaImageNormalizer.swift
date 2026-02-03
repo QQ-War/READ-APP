@@ -3,13 +3,15 @@ import Foundation
 enum MangaImageNormalizer {
     static func sanitizeUrlString(_ raw: String) -> String {
         var trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("http//") {
+        let lower = trimmed.lowercased()
+        
+        if lower.hasPrefix("http//") {
             trimmed = "http://" + trimmed.dropFirst(6)
-        } else if trimmed.hasPrefix("https//") {
+        } else if lower.hasPrefix("https//") {
             trimmed = "https://" + trimmed.dropFirst(7)
-        } else if trimmed.hasPrefix("http:/") && !trimmed.hasPrefix("http://") {
+        } else if lower.hasPrefix("http:/") && !lower.hasPrefix("http://") {
             trimmed = "http://" + trimmed.dropFirst(6)
-        } else if trimmed.hasPrefix("https:/") && !trimmed.hasPrefix("https://") {
+        } else if lower.hasPrefix("https:/") && !lower.hasPrefix("https://") {
             trimmed = "https://" + trimmed.dropFirst(7)
         }
         let patterns = ["\\.jpg", "\\.jpeg", "\\.png", "\\.webp", "\\.gif", "\\.bmp"]
