@@ -24,6 +24,7 @@ struct SettingsView: View {
                 }
                 .padding(.vertical, 4)
             }
+            .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
 
             Section(header: Text("通用设置")) {
                 ForEach(preferences.settingsOrder, id: \.self) { key in
@@ -32,6 +33,7 @@ struct SettingsView: View {
                             .onDrag {
                                 NSItemProvider(object: key as NSString)
                             }
+                            .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
                     }
                 }
                 .onMove(perform: move)
@@ -42,6 +44,7 @@ struct SettingsView: View {
                     Label("调试与日志", systemImage: "hammer")
                 }
             }
+            .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
             
             Section {
                 HStack {
@@ -59,6 +62,7 @@ struct SettingsView: View {
             }
             .listRowBackground(Color.clear)
         }
+        .glassyListStyle()
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -71,6 +75,10 @@ struct SettingsView: View {
     @ViewBuilder
     private func destinationLink(for item: SettingItem) -> some View {
         switch item {
+        case .display:
+            NavigationLink(destination: DisplaySettingsView()) {
+                Label(item.title, systemImage: item.systemImage)
+            }
         case .reading:
             NavigationLink(destination: ReadingSettingsView()) {
                 Label(item.title, systemImage: item.systemImage)

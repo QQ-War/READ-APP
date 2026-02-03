@@ -346,6 +346,13 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 是否开启液态玻璃效果背景
+    @Published var isLiquidGlassEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isLiquidGlassEnabled, forKey: "isLiquidGlassEnabled")
+        }
+    }
+
     /// 设置项顺序
     @Published var settingsOrder: [String] {
         didSet {
@@ -485,8 +492,9 @@ class UserPreferences: ObservableObject {
         self.staticRefreshRate = savedRefreshRate == 0 ? 30 : max(10, min(120, savedRefreshRate))
 
         self.isProgressDynamicColorEnabled = UserDefaults.standard.object(forKey: "isProgressDynamicColorEnabled") as? Bool ?? true
+        self.isLiquidGlassEnabled = UserDefaults.standard.bool(forKey: "isLiquidGlassEnabled")
 
-        let defaultOrder = ["reading", "cache", "tts", "content", "rss"]
+        let defaultOrder = ["display", "reading", "cache", "tts", "content", "rss"]
         let savedOrder = UserDefaults.standard.stringArray(forKey: "settingsOrder") ?? defaultOrder
         // 过滤掉不再存在的项，并追加新增的项
         var finalOrder = savedOrder.filter { key in SettingItem(rawValue: key) != nil }
@@ -588,6 +596,7 @@ class UserPreferences: ObservableObject {
 }
 
 enum SettingItem: String, CaseIterable, Identifiable {
+    case display = "display"
     case reading = "reading"
     case cache = "cache"
     case tts = "tts"
@@ -598,6 +607,7 @@ enum SettingItem: String, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
+        case .display: return "显示与美化"
         case .reading: return "阅读设置"
         case .cache: return "缓存与下载管理"
         case .tts: return "听书设置"
@@ -608,6 +618,7 @@ enum SettingItem: String, CaseIterable, Identifiable {
     
     var systemImage: String {
         switch self {
+        case .display: return "paintpalette"
         case .reading: return "book.pages"
         case .cache: return "archivebox"
         case .tts: return "speaker.wave.2"

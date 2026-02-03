@@ -245,6 +245,8 @@ struct BookDetailView: View {
                     .padding(.bottom, 20)
                 }
             }
+            .background(preferences.isLiquidGlassEnabled ? Color.clear : nil)
+            .liquidGlassBackground()
         )
     }
     

@@ -96,24 +96,59 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     var onToggleMenu: (() -> Void)?; var onAddReplaceRuleWithText: ((String) -> Void)?; var onProgressChanged: ((Int, Double) -> Void)?
     var onChapterIndexChanged: ((Int) -> Void)?; var onChaptersLoaded: (([BookChapter]) -> Void)?; var onModeDetected: ((Bool) -> Void)?; var onLoadingChanged: ((Bool) -> Void)?
 
-    private struct ReaderSettingsSnapshot: Equatable {
-        let fontSize: CGFloat
-        let lineSpacing: CGFloat
-        let pageHorizontalMargin: CGFloat
-        let readingFontName: String
-        let readingTheme: ReadingTheme
-        let isInfiniteScrollEnabled: Bool
-        let infiniteScrollSwitchThreshold: CGFloat
-        let verticalDampingFactor: CGFloat
-        let mangaMaxZoom: CGFloat
-        let mangaChapterZoomEnabled: Bool
-        let pageTurningMode: PageTurningMode
-        let ttsFollowCooldown: TimeInterval
-        let verticalThreshold: CGFloat
-        let progressFontSize: CGFloat
-        let isProgressDynamicColorEnabled: Bool
-    }
-    private var lastSettingsSnapshot: ReaderSettingsSnapshot?
+        private struct ReaderSettingsSnapshot: Equatable {
+
+            let fontSize: CGFloat
+
+            let lineSpacing: CGFloat
+
+            let pageHorizontalMargin: CGFloat
+
+            let readingFontName: String
+
+            let readingTheme: ReadingTheme
+
+            let isInfiniteScrollEnabled: Bool
+
+            let infiniteScrollSwitchThreshold: CGFloat
+
+            let verticalDampingFactor: CGFloat
+
+            let mangaMaxZoom: CGFloat
+
+            let mangaChapterZoomEnabled: Bool
+
+            let pageTurningMode: PageTurningMode
+
+            let ttsFollowCooldown: TimeInterval
+
+            let verticalThreshold: CGFloat
+
+            let progressFontSize: CGFloat
+
+            let isProgressDynamicColorEnabled: Bool
+
+        }
+
+        
+
+        private var currentBackgroundColor: UIColor {
+
+            if UserPreferences.shared.isLiquidGlassEnabled &&
+
+                [.system, .day, .night].contains(readerSettings.readingTheme) {
+
+                return .clear
+
+            }
+
+            return readerSettings.readingTheme.backgroundColor
+
+        }
+
+    
+
+        private var lastSettingsSnapshot: ReaderSettingsSnapshot?
     private var lastReplaceRules: [ReplaceRule]?
     
     var safeAreaTop: CGFloat = ReaderConstants.Layout.safeAreaTopDefault {
@@ -311,7 +346,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = readerSettings.readingTheme.backgroundColor
+        view.backgroundColor = currentBackgroundColor
         setupProgressLabel()
         currentChapterIndex = book.durChapterIndex ?? 0
         lastReportedChapterIndex = currentChapterIndex
@@ -428,20 +463,20 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
             guard let oldSettings = self.readerSettings else {
                 self.readerSettings = settings
                 chapterBuilder?.updateSettings(settings)
-                view.backgroundColor = settings.readingTheme.backgroundColor
-                verticalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
-                horizontalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
-                newHorizontalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
-                mangaVC?.view.backgroundColor = settings.readingTheme.backgroundColor
+                view.backgroundColor = currentBackgroundColor
+                verticalVC?.view.backgroundColor = currentBackgroundColor
+                horizontalVC?.view.backgroundColor = currentBackgroundColor
+                newHorizontalVC?.view.backgroundColor = currentBackgroundColor
+                mangaVC?.view.backgroundColor = currentBackgroundColor
                 return
             }
             self.readerSettings = settings
             chapterBuilder?.updateSettings(settings)
-            view.backgroundColor = settings.readingTheme.backgroundColor
-            verticalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
-            horizontalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
-            newHorizontalVC?.view.backgroundColor = settings.readingTheme.backgroundColor
-            mangaVC?.view.backgroundColor = settings.readingTheme.backgroundColor
+            view.backgroundColor = currentBackgroundColor
+            verticalVC?.view.backgroundColor = currentBackgroundColor
+            horizontalVC?.view.backgroundColor = currentBackgroundColor
+            newHorizontalVC?.view.backgroundColor = currentBackgroundColor
+            mangaVC?.view.backgroundColor = currentBackgroundColor
 
             if oldSettings.mangaMaxZoom != settings.mangaMaxZoom {
                 mangaVC?.maxZoomScale = settings.mangaMaxZoom

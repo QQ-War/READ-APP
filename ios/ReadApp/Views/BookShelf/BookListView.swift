@@ -35,6 +35,7 @@ struct BookListView: View {
                         Section(header: Text("书架书籍")) {
                             ForEach(filteredAndSortedBooks) { book in
                                 bookRowView(for: book)
+                                    .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
                             }
                         }
                     }
@@ -47,8 +48,10 @@ struct BookListView: View {
                                     ProgressView()
                                     Spacer()
                                 }
+                                .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
                             } else if listViewModel.onlineResults.isEmpty {
                                 Text("未找到相关书籍").foregroundColor(.secondary).font(.caption)
+                                    .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
                             } else {
                                 ForEach(listViewModel.onlineResults) { book in
                                     NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore)) {
@@ -58,6 +61,7 @@ struct BookListView: View {
                                             }
                                         }
                                     }
+                                    .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
                                 }
                             }
                         }
@@ -65,9 +69,11 @@ struct BookListView: View {
                 } else {
                     ForEach(filteredAndSortedBooks) { book in
                         bookRowView(for: book)
+                            .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
                     }
                 }
             }
+            .glassyListStyle()
             .animation(.easeInOut(duration: 0.3), value: listViewModel.isReversed)
             .navigationTitle("书架")
             .navigationBarTitleDisplayMode(.large)

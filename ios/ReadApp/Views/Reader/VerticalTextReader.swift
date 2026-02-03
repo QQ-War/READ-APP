@@ -91,6 +91,7 @@ class VerticalTextViewController: UIViewController, UIScrollViewDelegate, UIGest
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.backgroundColor = UserPreferences.shared.readingTheme.adaptiveBackgroundColor
         scrollView.delegate = self
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.showsVerticalScrollIndicator = true

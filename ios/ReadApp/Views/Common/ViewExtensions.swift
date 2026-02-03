@@ -9,6 +9,19 @@ extension View {
         } else {
             self.modifier(HideTabBarModifier())
         }
+    
+    @ViewBuilder
+    func glassyListStyle() -> some View {
+        if UserPreferences.shared.isLiquidGlassEnabled {
+            if #available(iOS 16.0, *) {
+                self.scrollContentBackground(.hidden)
+                    .liquidGlassBackground()
+            } else {
+                self.liquidGlassBackground()
+            }
+        } else {
+            self
+        }
     }
 }
 

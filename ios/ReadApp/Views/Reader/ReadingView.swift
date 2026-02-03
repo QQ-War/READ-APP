@@ -144,7 +144,16 @@ struct ReadingView: View {
         }
     }
 
-    private var backgroundView: some View { UserPreferences.shared.readingTheme.backgroundSwiftUIColor }
+    private var backgroundView: some View {
+        ZStack {
+            UserPreferences.shared.readingTheme.backgroundSwiftUIColor
+            
+            if UserPreferences.shared.isLiquidGlassEnabled &&
+                [.system, .day, .night].contains(UserPreferences.shared.readingTheme) {
+                LiquidBackgroundView()
+            }
+        }
+    }
 
     private func topBar(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 0) {

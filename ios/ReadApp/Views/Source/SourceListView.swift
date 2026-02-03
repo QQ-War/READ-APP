@@ -4,6 +4,7 @@ import UIKit
 struct SourceListView: View {
     @EnvironmentObject var bookshelfStore: BookshelfStore
     @StateObject private var viewModel = SourceListViewModel()
+    @StateObject private var preferences = UserPreferences.shared
     
     @State private var showAddResultAlert = false
     @State private var addResultMessage = ""
@@ -219,11 +220,14 @@ struct SourceListView: View {
                             if expandedGroups.contains(group.key) {
                                 ForEach(group.value) { source in
                                     sourceRow(source)
+                                        .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
                                 }
                             }
                         }
+                        .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
                     }
                 }
+                .glassyListStyle()
                 .listStyle(InsetGroupedListStyle())
                 .refreshable {
                     viewModel.fetchSources()
@@ -344,6 +348,7 @@ struct SourceListView: View {
                         }
                     }
                 }
+                .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
             }
             if viewModel.isSearching {
                 HStack {
@@ -351,8 +356,10 @@ struct SourceListView: View {
                     ProgressView()
                     Spacer()
                 }
+                .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
             }
         }
+        .glassyListStyle()
     }
     
     private func deleteSource(at offsets: IndexSet) {

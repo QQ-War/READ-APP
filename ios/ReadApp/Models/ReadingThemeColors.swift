@@ -31,6 +31,14 @@ extension ReadingTheme {
         Color(backgroundColor)
     }
 
+    var adaptiveBackgroundColor: UIColor {
+        if UserPreferences.shared.isLiquidGlassEnabled &&
+            [.system, .day, .night].contains(self) {
+            return .clear
+        }
+        return backgroundColor
+    }
+
     var interfaceStyle: UIUserInterfaceStyle {
         switch self {
         case .day, .paper, .eyeCare:
