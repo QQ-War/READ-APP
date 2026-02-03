@@ -242,12 +242,22 @@ final class MangaImageService {
         var path = value
         if value.hasPrefix("http://assets/") || value.hasPrefix("https://assets/") {
             path = "/assets/" + value.split(separator: "/", omittingEmptySubsequences: true).dropFirst(1).joined(separator: "/")
+        } else if value.hasPrefix("http//assets/") {
+            path = "/assets/" + value.dropFirst("http//".count)
+        } else if value.hasPrefix("https//assets/") {
+            path = "/assets/" + value.dropFirst("https//".count)
+        } else if value.hasPrefix("http:/assets/") || value.hasPrefix("https:/assets/") {
+            path = "/assets/" + value.dropFirst(6)
         } else if value.hasPrefix("../assets/") {
             path = "/assets/" + value.dropFirst("../assets/".count)
         } else if value.hasPrefix("../book-assets/") {
             path = "/book-assets/" + value.dropFirst("../book-assets/".count)
         } else if value.hasPrefix("assets/") {
-            path = "/assets/" + value.dropFirst("assets/".count)
+            if value.dropFirst("assets/".count).hasPrefix("assets/") {
+                path = "/" + value.dropFirst("assets/".count)
+            } else {
+                path = "/assets/" + value.dropFirst("assets/".count)
+            }
         } else if value.hasPrefix("book-assets/") {
             path = "/book-assets/" + value.dropFirst("book-assets/".count)
         } else if value.hasPrefix("/assets/") || value.hasPrefix("/book-assets/") {
@@ -266,6 +276,15 @@ final class MangaImageService {
                 } else {
                     return nil
                 }
+            } else {
+                return nil
+            }
+        } else if value.contains("/assets/") || value.contains("/book-assets/") {
+            var normalized = value.replacingOccurrences(of: "/../", with: "/")
+            if let range = normalized.range(of: "/assets/") {
+                path = String(normalized[range.lowerBound...])
+            } else if let range = normalized.range(of: "/book-assets/") {
+                path = String(normalized[range.lowerBound...])
             } else {
                 return nil
             }
