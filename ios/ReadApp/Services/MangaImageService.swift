@@ -252,6 +252,23 @@ final class MangaImageService {
             path = "/book-assets/" + value.dropFirst("book-assets/".count)
         } else if value.hasPrefix("/assets/") || value.hasPrefix("/book-assets/") {
             path = value
+        } else if let absolute = URL(string: value) {
+            let rawPath = absolute.path
+            if rawPath.contains("/assets/") || rawPath.contains("/book-assets/") {
+                var normalizedPath = rawPath.replacingOccurrences(of: "/../", with: "/")
+                if !normalizedPath.hasPrefix("/") {
+                    normalizedPath = "/" + normalizedPath
+                }
+                if let range = normalizedPath.range(of: "/assets/") {
+                    path = String(normalizedPath[range.lowerBound...])
+                } else if let range = normalizedPath.range(of: "/book-assets/") {
+                    path = String(normalizedPath[range.lowerBound...])
+                } else {
+                    return nil
+                }
+            } else {
+                return nil
+            }
         } else {
             return nil
         }
