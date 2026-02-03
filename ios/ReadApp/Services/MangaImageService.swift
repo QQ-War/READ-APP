@@ -25,6 +25,9 @@ final class MangaImageService {
         if let assetURL = buildAssetURLIfNeeded(cleaned) {
             return assetURL
         }
+        if isAssetPath(cleaned) {
+            return nil
+        }
         if cleaned.hasPrefix("http") {
             if let url = URL(string: cleaned) {
                 return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
@@ -151,7 +154,17 @@ final class MangaImageService {
     }
 
     private func fetchPdfImageData(_ url: URL) async -> Data? {
-        var request = URLRequest(url: url)
+        var requestURL = url
+        if !requestURL.absoluteString.contains("accessToken=") {
+            var components = URLComponents(url: requestURL, resolvingAgainstBaseURL: false)
+            var items = components?.queryItems ?? []
+            items.append(URLQueryItem(name: "accessToken", value: UserPreferences.shared.accessToken))
+            components?.queryItems = items
+            if let updated = components?.url {
+                requestURL = updated
+            }
+        }
+        var request = URLRequest(url: requestURL)
         request.timeoutInterval = max(8, UserPreferences.shared.mangaImageTimeout)
         request.httpShouldHandleCookies = true
         request.cachePolicy = .returnCacheDataElseLoad
@@ -165,11 +178,11 @@ final class MangaImageService {
                 return data
             }
             let elapsed = Date().timeIntervalSince(startedAt)
-            logger.log("PDF图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: "%.2f", elapsed))s url=\(url.absoluteString)", category: "漫画调试")
+            logger.log("PDF图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: "%.2f", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
         } catch {
             let elapsed = Date().timeIntervalSince(startedAt)
             let nsError = error as NSError
-            logger.log("PDF图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: "%.2f", elapsed))s url=\(url.absoluteString)", category: "漫画调试")
+            logger.log("PDF图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: "%.2f", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
         }
         return nil
     }
@@ -237,12 +250,21 @@ final class MangaImageService {
             return nil
         }
         let baseURL = APIService.shared.baseURL
+        let token = UserPreferences.shared.accessToken
+        if token.isEmpty {
+            return nil
+        }
         var components = URLComponents(string: "\(baseURL)/assets")
         components?.queryItems = [
             URLQueryItem(name: "path", value: path),
-            URLQueryItem(name: "accessToken", value: UserPreferences.shared.accessToken)
+            URLQueryItem(name: "accessToken", value: token)
         ]
         return components?.url
+    }
+
+    private func isAssetPath(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        return lower.hasPrefix("/assets/") || lower.hasPrefix("assets/") || lower.hasPrefix("http://assets/") || lower.hasPrefix("https://assets/")
     }
 
     /// 预解码图像，避免首次渲染时主线程解码卡顿

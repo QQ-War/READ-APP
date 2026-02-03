@@ -28,13 +28,20 @@ object MangaImageRequestFactory {
         if (rawUrl.isBlank()) return null
         val base = stripApiBasePath(serverUrl)
         val resolved = MangaImageNormalizer.resolveUrl(rawUrl, base)
+        val token = accessToken?.takeIf { it.isNotBlank() }
         val assetUrl = buildAssetUrlIfNeeded(resolved, serverUrl, accessToken)
         val profile = MangaAntiScrapingService.resolveProfile(resolved, chapterUrl)
         val referer = MangaAntiScrapingService.resolveReferer(profile, chapterUrl, resolved)
         val requestUrl = when {
             assetUrl != null -> assetUrl
-            forceProxy -> buildProxyUrl(resolved, serverUrl, accessToken) ?: resolved
+            forceProxy -> buildProxyUrl(resolved, serverUrl, accessToken)
             else -> resolved
+        }
+        if (requestUrl.isNullOrBlank()) {
+            return null
+        }
+        if (token == null && isAssetPath(resolved)) {
+            return null
         }
         val headers = buildHeaders(profile, referer)
         return MangaImageRequest(resolved, requestUrl, headers)
@@ -52,6 +59,7 @@ object MangaImageRequestFactory {
     }
 
     fun buildProxyUrl(url: String, serverUrl: String, accessToken: String? = null): String? {
+        val token = accessToken?.takeIf { it.isNotBlank() } ?: return null
         val backend = detectApiBackend(serverUrl)
         if (backend != ApiBackend.Read) {
             return null
@@ -60,12 +68,13 @@ object MangaImageRequestFactory {
         return Uri.parse(base).buildUpon()
             .path("api/5/proxypng")
             .appendQueryParameter("url", url)
-            .appendQueryParameter("accessToken", accessToken.orEmpty())
+            .appendQueryParameter("accessToken", token)
             .build()
             .toString()
     }
 
     fun buildAssetUrlIfNeeded(url: String, serverUrl: String, accessToken: String? = null): String? {
+        val token = accessToken?.takeIf { it.isNotBlank() } ?: return null
         val backend = detectApiBackend(serverUrl)
         if (backend != ApiBackend.Read) return null
         val normalized = when {
@@ -78,9 +87,14 @@ object MangaImageRequestFactory {
         return Uri.parse(base).buildUpon()
             .path("api/5/assets")
             .appendQueryParameter("path", normalized)
-            .appendQueryParameter("accessToken", accessToken.orEmpty())
+            .appendQueryParameter("accessToken", token)
             .build()
             .toString()
+    }
+
+    private fun isAssetPath(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.startsWith("/assets/") || lower.startsWith("assets/") || lower.startsWith("http://assets/") || lower.startsWith("https://assets/")
     }
 
     private fun buildHeaders(

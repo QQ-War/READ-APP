@@ -728,42 +728,55 @@ class ReadRepository(
         String.format(Locale.US, "%.2f", value)
 
     private fun resolveCoverUrl(baseUrl: String, coverUrl: String?, bookUrl: String?, bookSourceUrl: String?, accessToken: String?): String? {
-        if (coverUrl.isNullOrBlank()) return buildPdfCoverUrl(baseUrl, bookUrl, bookSourceUrl)
+        if (coverUrl.isNullOrBlank()) return buildPdfCoverUrl(baseUrl, bookUrl, bookSourceUrl, accessToken)
         val trimmed = coverUrl.trim()
         if (trimmed.equals("null", true) || trimmed.equals("nil", true) || trimmed.equals("undefined", true)) {
-            return buildPdfCoverUrl(baseUrl, bookUrl, bookSourceUrl)
+            return buildPdfCoverUrl(baseUrl, bookUrl, bookSourceUrl, accessToken)
         }
         val root = stripApiBasePath(baseUrl)
         return when {
             trimmed.startsWith("baseurl/") -> "$root/$trimmed"
-            trimmed.startsWith("/") -> buildAssetUrl(baseUrl, trimmed, accessToken) ?: (root + trimmed)
+            trimmed.startsWith("/") -> {
+                if (isAssetPath(trimmed)) {
+                    buildAssetUrl(baseUrl, trimmed, accessToken)
+                } else {
+                    root + trimmed
+                }
+            }
             trimmed.startsWith("assets/") || trimmed.startsWith("book-assets/") -> buildAssetUrl(baseUrl, "/$trimmed", accessToken)
             else -> trimmed
         }
     }
 
     private fun buildAssetUrl(baseUrl: String, path: String, accessToken: String?): String? {
+        val token = accessToken?.takeIf { it.isNotBlank() } ?: return null
         val normalizedPath = if (path.startsWith("/")) path else "/$path"
         val apiBase = normalizeApiBaseUrl(baseUrl, ApiBackend.Read)
         return apiBase.toHttpUrlOrNull()?.newBuilder()
             ?.addPathSegments("assets")
             ?.addQueryParameter("path", normalizedPath)
-            ?.addQueryParameter("accessToken", accessToken.orEmpty())
+            ?.addQueryParameter("accessToken", token)
             ?.build()
             ?.toString()
     }
 
-    private fun buildPdfCoverUrl(baseUrl: String, bookUrl: String?, bookSourceUrl: String?): String? {
+    private fun buildPdfCoverUrl(baseUrl: String, bookUrl: String?, bookSourceUrl: String?, accessToken: String? = null): String? {
         if (!isLocalPdf(bookUrl, bookSourceUrl)) return null
         if (bookUrl.isNullOrBlank()) return null
+        val token = accessToken?.takeIf { it.isNotBlank() } ?: return null
         val root = stripApiBasePath(baseUrl)
         val encodedPath = Uri.encode(bookUrl)
-        return "$root/api/v5/pdfImage?path=$encodedPath&page=0"
+        return "$root/api/v5/pdfImage?path=$encodedPath&page=0&accessToken=${Uri.encode(token)}"
     }
 
     private fun isLocalPdf(bookUrl: String?, bookSourceUrl: String?): Boolean {
         val url = bookUrl?.lowercase() ?: return false
         return bookSourceUrl == "loc_book" && url.endsWith(".pdf")
+    }
+
+    private fun isAssetPath(path: String): Boolean {
+        val normalized = path.lowercase()
+        return normalized.startsWith("/assets/") || normalized.startsWith("/book-assets/")
     }
 
     private suspend fun resolveReaderLocalContentIfNeeded(rawContent: String, baseUrl: String, publicUrl: String?): String {
