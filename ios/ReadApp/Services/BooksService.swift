@@ -34,10 +34,7 @@ final class BooksService {
     }
 
     func fetchChapterList(bookUrl: String, bookSourceUrl: String?) async throws -> [BookChapter] {
-        if UserPreferences.shared.isVerboseLoggingEnabled {
-            let hasToken = !client.accessToken.isEmpty
-            LogManager.shared.log("目录请求: url=\(bookUrl) source=\(bookSourceUrl ?? "nil") backend=\(client.backend.rawValue) token=\(hasToken)", category: "阅读诊断")
-        }
+        
         var queryItems = [
             URLQueryItem(name: "url", value: bookUrl)
         ]
@@ -48,9 +45,6 @@ final class BooksService {
         do {
             let endpoint = client.backend == .reader ? ApiEndpointsReader.getChapterList : ApiEndpoints.getChapterList
             let (data, httpResponse) = try await client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)
-            if UserPreferences.shared.isVerboseLoggingEnabled {
-                LogManager.shared.log("目录响应: status=\(httpResponse.statusCode) endpoint=\(endpoint)", category: "阅读诊断")
-            }
             guard httpResponse.statusCode == 200 else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
             }
@@ -59,9 +53,6 @@ final class BooksService {
                 LocalCacheManager.shared.saveChapterList(bookUrl: bookUrl, chapters: chapters)
                 return chapters
             } else {
-                if UserPreferences.shared.isVerboseLoggingEnabled {
-                    LogManager.shared.log("目录失败: \(apiResponse.errorMsg ?? "unknown")", category: "阅读诊断")
-                }
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节列表失败"])
             }
         } catch {

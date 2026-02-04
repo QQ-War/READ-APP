@@ -226,7 +226,6 @@ class APIService {
         }
 
         for urlString in candidates {
-            LogManager.shared.log("正文探测URL: \(urlString)", category: "阅读诊断")
             if let text = await fetchTextContent(urlString: urlString) {
                 return text
             }
@@ -296,15 +295,11 @@ class APIService {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
         }
-        let hasAuth = request.value(forHTTPHeaderField: "Authorization") != nil
-        LogManager.shared.log("正文请求: host=\(url.host ?? "nil") auth=\(hasAuth) url=\(url.absoluteString)", category: "阅读诊断")
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let httpResponse = response as? HTTPURLResponse else {
-            LogManager.shared.log("正文失败: 无响应 url=\(url.absoluteString)", category: "阅读诊断")
             return nil
         }
         if httpResponse.statusCode != 200 {
-            LogManager.shared.log("正文失败: status=\(httpResponse.statusCode) url=\(url.absoluteString)", category: "阅读诊断")
             return nil
         }
         return String(data: data, encoding: .utf8)

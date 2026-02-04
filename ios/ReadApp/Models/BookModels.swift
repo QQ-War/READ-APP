@@ -50,6 +50,10 @@ struct Book: Codable, Identifiable {
                 let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
                 return baseURL + "/" + url
             }
+            // /api/... 交给统一的图片解析逻辑，避免重复拼接 /api/5/api/v5
+            if url.hasPrefix("/api/") {
+                return url
+            }
             // 本地资源交给 MangaImageService 统一处理（含 /assets?path= 与 /covers/）
             if url.hasPrefix("/assets/") || url.hasPrefix("assets/") ||
                 url.hasPrefix("/book-assets/") || url.hasPrefix("book-assets/") ||
