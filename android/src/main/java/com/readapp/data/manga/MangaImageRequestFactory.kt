@@ -34,7 +34,7 @@ object MangaImageRequestFactory {
         val referer = MangaAntiScrapingService.resolveReferer(profile, chapterUrl, resolved)
         val requestUrl = when {
             assetUrl != null -> assetUrl
-            forceProxy -> buildProxyUrl(resolved, serverUrl, accessToken)
+            forceProxy && !isLocalAssetUrl(resolved, serverUrl) -> buildProxyUrl(resolved, serverUrl, accessToken)
             else -> resolved
         }
         if (requestUrl.isNullOrBlank()) {
@@ -165,5 +165,16 @@ object MangaImageRequestFactory {
             headers[key] = value
         }
         return headers
+    }
+
+    private fun isLocalAssetUrl(url: String, serverUrl: String): Boolean {
+        val lower = url.lowercase()
+        if (lower.contains("/api/5/assets") || lower.contains("/api/v5/assets")) return true
+        if (lower.startsWith("http://assets/") || lower.startsWith("https://assets/")) return true
+        if (lower.contains("/assets/") || lower.contains("/book-assets/")) {
+            val base = stripApiBasePath(serverUrl).lowercase()
+            return base.isNotBlank() && lower.startsWith(base)
+        }
+        return false
     }
 }

@@ -83,13 +83,18 @@ final class MangaImageService {
         if isPdfImageURL(url) {
             return await fetchPdfImageData(url)
         }
+
+        // 2. 本地资源永远直连 /assets（忽略 proxypng 开关）
+        if isLocalAssetURL(url) {
+            return await fetchImageData(requestURL: url, referer: referer)
+        }
         
-        // 2. 处理代理逻辑
+        // 3. 处理代理逻辑
         if UserPreferences.shared.forceMangaProxy, let proxyURL = buildProxyURL(for: url) {
             return await fetchImageData(requestURL: proxyURL, referer: referer)
         }
 
-        // 3. 普通图像抓取
+        // 4. 普通图像抓取
         return await fetchImageData(requestURL: url, referer: referer)
     }
 
@@ -211,6 +216,17 @@ final class MangaImageService {
 
     private func isPdfImageURL(_ url: URL) -> Bool {
         url.absoluteString.localizedCaseInsensitiveContains("/pdfImage")
+    }
+
+    private func isLocalAssetURL(_ url: URL) -> Bool {
+        let raw = url.absoluteString.lowercased()
+        if raw.contains("/api/5/assets") || raw.contains("/api/v5/assets") {
+            return true
+        }
+        if let host = url.host, host.lowercased() == "assets" {
+            return true
+        }
+        return url.path.lowercased().contains("/assets/") || url.path.lowercased().contains("/book-assets/")
     }
 
     private func warmupKuaikanCookies(referer: String) async {
