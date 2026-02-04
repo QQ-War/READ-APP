@@ -54,6 +54,19 @@ final class MangaImageService {
         guard !baseURL.isEmpty, baseURL.hasPrefix("http") else {
             return nil // 基础域名配置无效时，无法补全相对路径
         }
+
+        // 如果已经是 /api/... 开头，使用根域名拼接，避免 /api/5/api/v5 重复
+        if cleaned.hasPrefix("/api/") {
+            let rootBase = ApiBackendResolver.stripApiBasePath(baseURL)
+            let resolved = rootBase + cleaned
+            if let url = URL(string: resolved) {
+                return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
+            }
+            if let encoded = resolved.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+               let url = URL(string: encoded) {
+                return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
+            }
+        }
         
         let resolved = cleaned.hasPrefix("/") ? (baseURL + cleaned) : (baseURL + "/" + cleaned)
         if let url = URL(string: resolved) {
