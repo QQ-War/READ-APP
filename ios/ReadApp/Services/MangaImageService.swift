@@ -278,6 +278,17 @@ final class MangaImageService {
     private func buildAssetURLIfNeeded(_ value: String) -> URL? {
         var path = value
         let lower = value.lowercased()
+
+        // 已经是 /assets?path= 或 /api/v5/assets?path= 形式，直接解析并规范化 path
+        if lower.contains("/assets?path=") || lower.contains("/api/5/assets?path=") || lower.contains("/api/v5/assets?path=") {
+            if let components = URLComponents(string: value),
+               let rawPath = components.queryItems?.first(where: { $0.name == "path" })?.value,
+               !rawPath.isEmpty {
+                path = rawPath
+            } else if let range = value.range(of: "path=") {
+                path = String(value[range.upperBound...])
+            }
+        }
         
         if lower.hasPrefix("http://assets/") || lower.hasPrefix("https://assets/") || lower.hasPrefix("http//assets/") || lower.hasPrefix("https//assets/") {
             let components = value.split(separator: "/", omittingEmptySubsequences: true)
@@ -341,7 +352,9 @@ final class MangaImageService {
         while path.hasPrefix("/") { path = String(path.dropFirst()) }
         
         if path.isEmpty { return nil }
-        if !path.hasPrefix("assets/") && !path.hasPrefix("book-assets/") {
+        if path.hasPrefix("covers/") {
+            path = "assets/" + path
+        } else if !path.hasPrefix("assets/") && !path.hasPrefix("book-assets/") {
             path = "assets/" + path
         }
         
@@ -367,6 +380,9 @@ final class MangaImageService {
             || lower.hasPrefix("https://assets/")
             || lower.hasPrefix("http//assets/")
             || lower.hasPrefix("https//assets/")
+            || lower.contains("/assets?path=")
+            || lower.contains("/api/5/assets?path=")
+            || lower.contains("/api/v5/assets?path=")
             || lower.contains("/assets/")
             || lower.contains("/book-assets/")
     }
