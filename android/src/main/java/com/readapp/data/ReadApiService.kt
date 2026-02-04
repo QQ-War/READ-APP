@@ -285,7 +285,7 @@ interface ReadApiService {
                 val token = tokenProvider()
                 val builder = original.newBuilder()
                 if (token.isNotBlank()) {
-                    builder.header("Authorization", token)
+                    builder.header("Authorization", "Bearer $token")
                 }
                 val newRequest = builder.build()
                 chain.proceed(newRequest)

@@ -43,7 +43,7 @@ object MangaImageRequestFactory {
         if (token == null && isAssetPath(resolved)) {
             return null
         }
-        val headers = buildHeaders(profile, referer)
+        val headers = buildHeaders(profile, referer, token)
         return MangaImageRequest(resolved, requestUrl, headers)
     }
 
@@ -68,7 +68,6 @@ object MangaImageRequestFactory {
         return Uri.parse(base).buildUpon()
             .path("api/5/proxypng")
             .appendQueryParameter("url", url)
-            .appendQueryParameter("accessToken", token)
             .build()
             .toString()
     }
@@ -87,7 +86,6 @@ object MangaImageRequestFactory {
         return Uri.parse(base).buildUpon()
             .path("api/5/assets")
             .appendQueryParameter("path", normalized)
-            .appendQueryParameter("accessToken", token)
             .build()
             .toString()
     }
@@ -99,13 +97,17 @@ object MangaImageRequestFactory {
 
     private fun buildHeaders(
         profile: MangaAntiScrapingProfile?,
-        referer: String?
+        referer: String?,
+        accessToken: String?
     ): Map<String, String> {
         val headers = LinkedHashMap<String, String>()
         if (!referer.isNullOrBlank()) {
             headers["Referer"] = referer
         }
         headers["User-Agent"] = profile?.userAgent ?: defaultUserAgent
+        if (!accessToken.isNullOrBlank()) {
+            headers["Authorization"] = "Bearer $accessToken"
+        }
         profile?.extraHeaders?.forEach { (key, value) ->
             headers[key] = value
         }

@@ -130,7 +130,7 @@ class ReadRepository(
                 }(endpoints)
                 result.fold(
                     onSuccess = { raw ->
-                        val resolved = resolveReaderLocalContentIfNeeded(raw, baseUrl, publicUrl)
+                        val resolved = resolveReaderLocalContentIfNeeded(raw, baseUrl, publicUrl, accessToken)
                         Result.success(resolved)
                     },
                     onFailure = { error -> Result.failure(error) }
@@ -779,7 +779,7 @@ class ReadRepository(
         return normalized.startsWith("/assets/") || normalized.startsWith("/book-assets/")
     }
 
-    private suspend fun resolveReaderLocalContentIfNeeded(rawContent: String, baseUrl: String, publicUrl: String?): String {
+    private suspend fun resolveReaderLocalContentIfNeeded(rawContent: String, baseUrl: String, publicUrl: String?, accessToken: String?): String {
         if (rawContent.isBlank()) return rawContent
         val trimmed = rawContent.trim()
         if (trimmed.isEmpty()) return rawContent
@@ -811,7 +811,7 @@ class ReadRepository(
         }
 
         for (url in candidates.distinct()) {
-            val fetched = fetchTextContent(url)
+            val fetched = fetchTextContent(url, accessToken)
             if (!fetched.isNullOrBlank()) return fetched
         }
         return rawContent
@@ -845,9 +845,14 @@ class ReadRepository(
         return sb.toString()
     }
 
-    private suspend fun fetchTextContent(url: String): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    private suspend fun fetchTextContent(url: String, accessToken: String?): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
-            val request = okhttp3.Request.Builder().url(url).get().build()
+            val builder = okhttp3.Request.Builder().url(url).get()
+            val token = accessToken?.takeIf { it.isNotBlank() }
+            if (!token.isNullOrBlank()) {
+                builder.header("Authorization", "Bearer $token")
+            }
+            val request = builder.build()
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@use null
                 response.body?.string()
