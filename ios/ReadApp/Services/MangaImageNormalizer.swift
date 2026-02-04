@@ -3,9 +3,10 @@ import Foundation
 enum MangaImageNormalizer {
     static func sanitizeUrlString(_ raw: String) -> String {
         var trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lower = trimmed.lowercased()
         
-        // 1. 纠正协议头畸形 (http// -> http://, https// -> https://, http:/ -> http:// 等)
+        // 1. 彻底纠正协议头畸形 (http// -> http://, https// -> https://, http:/ -> http:// 等)
+        // 使用更稳健的正则表达式或前缀检查
+        let lower = trimmed.lowercased()
         if lower.hasPrefix("http//") {
             trimmed = "http://" + trimmed.dropFirst(6)
         } else if lower.hasPrefix("https//") {
@@ -14,6 +15,17 @@ enum MangaImageNormalizer {
             trimmed = "http://" + trimmed.dropFirst(6)
         } else if lower.hasPrefix("https:/") && !lower.hasPrefix("https://") {
             trimmed = "https://" + trimmed.dropFirst(7)
+        }
+        
+        // 再次检查 lower 状态，防止多次 drop 导致的逻辑错误
+        let finalLower = trimmed.lowercased()
+        if finalLower.hasPrefix("http://") || finalLower.hasPrefix("https://") {
+            // 已经是规范的了
+        } else if finalLower.contains("//") && !finalLower.contains("://") {
+            // 处理类似 custom:// 但写成 custom// 的情况，或者 http// 漏掉了的情况
+            if finalLower.hasPrefix("http") {
+                trimmed = trimmed.replacingOccurrences(of: "//", with: "://", options: .anchored, range: nil)
+            }
         }
         
         // 2. 移除常见的末尾逗号及其后的 Legado 额外参数 (如 ,{...})

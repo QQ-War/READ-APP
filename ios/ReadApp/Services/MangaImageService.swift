@@ -45,7 +45,7 @@ final class MangaImageService {
         }
         
         // 4. 补全后端 Base URL（处理相对路径）
-        // 如果是类似 "http//assets/..." 这种已经损坏且 buildAssetURLIfNeeded 没抓到的，这里返回 nil 避免产生 unsupported URL
+        // 严格拦截：如果依然包含 // 但没有 ://，说明 sanitize 没能修复它，这通常是无法使用的 URL
         if cleaned.contains("//") && !cleaned.contains("://") {
             return nil
         }
@@ -265,39 +265,28 @@ final class MangaImageService {
         
         if lower.hasPrefix("http://assets/") || lower.hasPrefix("https://assets/") || lower.hasPrefix("http//assets/") || lower.hasPrefix("https//assets/") {
             let components = value.split(separator: "/", omittingEmptySubsequences: true)
-            // 如果是 http://assets/ 或 https://assets/，components[0] 是 http: / https:，components[1] 是 assets
-            // 如果是 http//assets/ 或 https//assets/，components[0] 是 http / https，components[1] 是 assets
-            if components.count > 1 {
-                // 我们直接取 assets 之后的部分，但 buildAssetURLIfNeeded 本身会拼接 /assets
-                // 实际上 qread 后端的 /assets 接口期望的 path 参数如果包含 assets/ 前缀，通常是因为客户端代码逻辑
-                // 如果后端已经有了 /assets 路由，path 参数应该是相对于 assets 目录的路径，或者是带 assets/ 的完整相对路径
-                // 根据之前的错误日志 path=/assets/assets/covers/xxx，说明多了一个 assets
-                
-                // 这里的逻辑是：如果是从 http://assets/xxx 来的，我们要提取 assets/xxx
-                // value.split 会把 http://assets/covers/xxx 拆成 ["http:", "assets", "covers", "xxx"]
-                // dropFirst(1).joined(separator: "/") 得到 "assets/covers/xxx"
-                // 这样 path 变成 "assets/covers/xxx"
-                
-                path = components.dropFirst(1).joined(separator: "/")
-                if !path.hasPrefix("/") {
-                    path = "/" + path
-                }
+            if components.count > 2 {
+                // components[0] 是 http: 或 http, components[1] 是 assets
+                // 我们需要剩下的是 path
+                path = components.dropFirst(2).joined(separator: "/")
+            } else {
+                return nil
             }
-        } else if value.hasPrefix("http:/assets/") || value.hasPrefix("https:/assets/") {
-            path = "/assets/" + value.dropFirst(6)
+        } else if lower.hasPrefix("http:/assets/") {
+            path = String(value.dropFirst("http:/assets/".count))
+        } else if lower.hasPrefix("https:/assets/") {
+            path = String(value.dropFirst("https:/assets/".count))
         } else if value.hasPrefix("../assets/") {
-            path = "/assets/" + value.dropFirst("../assets/".count)
+            path = String(value.dropFirst("../assets/".count))
         } else if value.hasPrefix("../book-assets/") {
             path = "/book-assets/" + value.dropFirst("../book-assets/".count)
         } else if value.hasPrefix("assets/") {
-            if value.dropFirst("assets/".count).hasPrefix("assets/") {
-                path = "/" + value.dropFirst("assets/".count)
-            } else {
-                path = "/assets/" + value.dropFirst("assets/".count)
-            }
+            path = String(value.dropFirst("assets/".count))
         } else if value.hasPrefix("book-assets/") {
             path = "/book-assets/" + value.dropFirst("book-assets/".count)
-        } else if value.hasPrefix("/assets/") || value.hasPrefix("/book-assets/") {
+        } else if value.hasPrefix("/assets/") {
+            path = String(value.dropFirst("/assets/".count))
+        } else if value.hasPrefix("/book-assets/") {
             path = value
         } else if let absolute = URL(string: value) {
             let rawPath = absolute.path
@@ -307,7 +296,7 @@ final class MangaImageService {
                     normalizedPath = "/" + normalizedPath
                 }
                 if let range = normalizedPath.range(of: "/assets/") {
-                    path = String(normalizedPath[range.lowerBound...])
+                    path = String(normalizedPath[range.upperBound...])
                 } else if let range = normalizedPath.range(of: "/book-assets/") {
                     path = String(normalizedPath[range.lowerBound...])
                 } else {
@@ -319,7 +308,7 @@ final class MangaImageService {
         } else if value.contains("/assets/") || value.contains("/book-assets/") {
             var normalized = value.replacingOccurrences(of: "/../", with: "/")
             if let range = normalized.range(of: "/assets/") {
-                path = String(normalized[range.lowerBound...])
+                path = String(normalized[range.upperBound...])
             } else if let range = normalized.range(of: "/book-assets/") {
                 path = String(normalized[range.lowerBound...])
             } else {
@@ -329,17 +318,19 @@ final class MangaImageService {
             return nil
         }
         
-        // 进一步规范化 path：如果 path 是 /assets/assets/xxx，修正为 /assets/xxx
-        if path.hasPrefix("/assets/assets/") {
-            path = String(path.dropFirst(7))
-        }
+        // 彻底清理 path：去除开头可能存在的 assets/ 或 /assets/
+        while path.hasPrefix("/") { path = String(path.dropFirst()) }
+        if path.hasPrefix("assets/") { path = String(path.dropFirst(7)) }
+        while path.hasPrefix("/") { path = String(path.dropFirst()) }
+        
+        if path.isEmpty { return nil }
         
         let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
         guard !baseURL.isEmpty else { return nil }
         
         var components = URLComponents(string: "\(baseURL)/assets")
         components?.queryItems = [
-            URLQueryItem(name: "path", value: path)
+            URLQueryItem(name: "path", value: "/" + path)
         ]
         return components?.url
     }
