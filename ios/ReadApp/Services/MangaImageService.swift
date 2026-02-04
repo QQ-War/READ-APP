@@ -165,12 +165,12 @@ final class MangaImageService {
                     return retryData
                 }
                 let retryElapsed = Date().timeIntervalSince(retryStartedAt)
-                logger.log("图片重试失败: status=\(retryStatus) bytes=\(retryData.count) elapsed=\(String(format: "%.2f", retryElapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
+                logger.log("图片重试失败: status=\(retryStatus) bytes=\(retryData.count) elapsed=\(String(format: "%.2f", retryElapsed))s url=\(request.url?.absoluteString ?? "unknown")", category: "漫画调试")
             }
         } catch {
             let elapsed = Date().timeIntervalSince(startedAt)
             let nsError = error as NSError
-            logger.log("图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: "%.2f", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
+            logger.log("图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: "%.2f", elapsed))s url=\(request.url?.absoluteString ?? "unknown")", category: "漫画调试")
             return nil
         }
         return nil
@@ -196,11 +196,11 @@ final class MangaImageService {
                 return data
             }
             let elapsed = Date().timeIntervalSince(startedAt)
-            logger.log("PDF图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: "%.2f", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
+            logger.log("PDF图片请求失败: status=\(statusCode) bytes=\(data.count) elapsed=\(String(format: "%.2f", elapsed))s url=\(request.url?.absoluteString ?? "unknown")", category: "漫画调试")
         } catch {
             let elapsed = Date().timeIntervalSince(startedAt)
             let nsError = error as NSError
-            logger.log("PDF图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: "%.2f", elapsed))s url=\(requestURL.absoluteString)", category: "漫画调试")
+            logger.log("PDF图片请求异常: \(nsError.domain)#\(nsError.code) \(nsError.localizedDescription) elapsed=\(String(format: "%.2f", elapsed))s url=\(request.url?.absoluteString ?? "unknown")", category: "漫画调试")
         }
         return nil
     }
