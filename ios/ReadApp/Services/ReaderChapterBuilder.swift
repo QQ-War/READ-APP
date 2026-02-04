@@ -145,7 +145,7 @@ final class ReaderChapterBuilder {
                 sentences.append(ReadingTextProcessor.imagePlaceholder)
                 fullAttr.append(NSAttributedString(string: indent, attributes: bodyAttributes))
                 currentOffset += indent.utf16.count
-                if let url = URL(string: urlString) {
+                if let url = MangaImageService.shared.resolveImageURL(urlString) ?? URL(string: urlString) {
                     let attachment = InlineImageAttachment(imageURL: url, maxWidth: max(100, layoutWidth))
                     fullAttr.append(NSAttributedString(attachment: attachment))
                 } else {
