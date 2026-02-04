@@ -67,7 +67,14 @@ struct Book: Codable, Identifiable {
             }
             return url
         }
-        return nil
+        return localPdfCoverUrl()
+    }
+
+    private func localPdfCoverUrl() -> String? {
+        guard let bookUrl, bookUrl.lowercased().hasSuffix(".pdf") else { return nil }
+        let encoded = bookUrl.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? bookUrl
+        let rootBase = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+        return "\(rootBase)/api/v\(APIService.apiVersion)/pdfImage?path=\(encoded)&page=0"
     }
 }
 
