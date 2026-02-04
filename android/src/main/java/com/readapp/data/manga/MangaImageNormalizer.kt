@@ -16,9 +16,9 @@ object MangaImageNormalizer {
             trimmed = "https://" + trimmed.removePrefix("https:/")
         }
         val patterns = listOf(".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
-        val lower = trimmed.lowercase()
+        val normalized = trimmed.lowercase()
         for (pattern in patterns) {
-            val idx = lower.indexOf(pattern)
+            val idx = normalized.indexOf(pattern)
             if (idx >= 0) {
                 val end = idx + pattern.length
                 if (end < trimmed.length && trimmed[end] == ',') {
