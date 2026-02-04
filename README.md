@@ -29,6 +29,11 @@ Chinese README: `README_CN.md`
 - Inline images are rendered via TextKit 2 `NSTextAttachment`, keeping TTS offsets and paging behavior stable.
 - Inline images can be tapped to open a full-screen zoomable preview.
 
+## Image Fetch Rules (Read backend)
+- Local assets (`/assets`, `/book-assets`, `http(s)://assets/...`, relative `../assets`) always use `GET /api/v5/assets?path=...` with `Authorization: Bearer <token>`.
+- PDF images always use `GET /api/v5/pdfImage?path=...&page=...` with `Authorization: Bearer <token>`.
+- Only external image URLs follow the "proxy enabled" setting and may use `GET /api/v5/proxypng?url=...`.
+
 ## Build
 - iOS: open `ios/ReadApp.xcodeproj` in Xcode
 - Android: open `android/` in Android Studio

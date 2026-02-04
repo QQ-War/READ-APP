@@ -29,6 +29,11 @@ English README: `README.md`
 - 图文混排使用 TextKit2 的内联图片（`NSTextAttachment`）渲染，保持 TTS 的字符偏移与自动翻页逻辑不变。
 - 内联图片支持点击全屏预览并可缩放查看细节。
 
+## 图片请求规则（Read 后端）
+- 本地资源（`/assets`、`/book-assets`、`http(s)://assets/...`、`../assets`）始终直连 `GET /api/v5/assets?path=...`，并携带 `Authorization: Bearer <token>`。
+- PDF 图片始终直连 `GET /api/v5/pdfImage?path=...&page=...`，并携带 `Authorization: Bearer <token>`。
+- 只有外部图片 URL 才会根据“是否启用代理”决定是否走 `GET /api/v5/proxypng?url=...`。
+
 ## 构建
 - iOS：用 Xcode 打开 `ios/ReadApp.xcodeproj`
 - Android：用 Android Studio 打开 `android/`
