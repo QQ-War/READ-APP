@@ -76,12 +76,7 @@ object MangaImageRequestFactory {
         val token = accessToken?.takeIf { it.isNotBlank() } ?: return null
         val backend = detectApiBackend(serverUrl)
         if (backend != ApiBackend.Read) return null
-        val normalized = when {
-            url.startsWith("http://assets/") || url.startsWith("https://assets/") -> "/assets/" + Uri.parse(url).path?.removePrefix("/")?.removePrefix("assets/").orEmpty()
-            url.startsWith("/assets/") -> url
-            url.startsWith("assets/") -> "/assets/" + url.removePrefix("assets/")
-            else -> return null
-        }
+        val normalized = normalizeAssetPath(url) ?: return null
         val base = stripApiBasePath(normalizeApiBaseUrl(serverUrl, backend))
         return Uri.parse(base).buildUpon()
             .path("api/5/assets")
@@ -92,7 +87,65 @@ object MangaImageRequestFactory {
 
     private fun isAssetPath(url: String): Boolean {
         val lower = url.lowercase()
-        return lower.startsWith("/assets/") || lower.startsWith("assets/") || lower.startsWith("http://assets/") || lower.startsWith("https://assets/")
+        return lower.startsWith("/assets/") ||
+            lower.startsWith("assets/") ||
+            lower.startsWith("../assets/") ||
+            lower.startsWith("/book-assets/") ||
+            lower.startsWith("book-assets/") ||
+            lower.startsWith("../book-assets/") ||
+            lower.startsWith("http://assets/") ||
+            lower.startsWith("https://assets/") ||
+            lower.startsWith("http//assets/") ||
+            lower.startsWith("https//assets/") ||
+            lower.contains("/assets/") ||
+            lower.contains("/book-assets/")
+    }
+
+    private fun normalizeAssetPath(url: String): String? {
+        val lower = url.lowercase()
+        var path: String? = null
+        when {
+            lower.startsWith("http://assets/") || lower.startsWith("https://assets/") || lower.startsWith("http//assets/") || lower.startsWith("https//assets/") -> {
+                val parts = url.split("/").filter { it.isNotEmpty() }
+                if (parts.size >= 2) {
+                    // drop scheme or malformed scheme token, keep assets/...
+                    path = "/" + parts.drop(1).joinToString("/")
+                }
+            }
+            lower.startsWith("../assets/") -> path = "/assets/" + url.removePrefix("../assets/")
+            lower.startsWith("../book-assets/") -> path = "/book-assets/" + url.removePrefix("../book-assets/")
+            lower.startsWith("assets/") -> path = "/assets/" + url.removePrefix("assets/")
+            lower.startsWith("book-assets/") -> path = "/book-assets/" + url.removePrefix("book-assets/")
+            lower.startsWith("/assets/") || lower.startsWith("/book-assets/") -> path = url
+            else -> {
+                val parsed = Uri.parse(url)
+                val rawPath = parsed.path
+                if (rawPath != null && (rawPath.contains("/assets/") || rawPath.contains("/book-assets/"))) {
+                    var normalized = rawPath.replace("/../", "/")
+                    if (!normalized.startsWith("/")) {
+                        normalized = "/$normalized"
+                    }
+                    path = if (normalized.contains("/assets/")) {
+                        normalized.substring(normalized.indexOf("/assets/"))
+                    } else if (normalized.contains("/book-assets/")) {
+                        normalized.substring(normalized.indexOf("/book-assets/"))
+                    } else null
+                } else if (url.contains("/assets/") || url.contains("/book-assets/")) {
+                    val normalized = url.replace("/../", "/")
+                    path = if (normalized.contains("/assets/")) {
+                        normalized.substring(normalized.indexOf("/assets/"))
+                    } else if (normalized.contains("/book-assets/")) {
+                        normalized.substring(normalized.indexOf("/book-assets/"))
+                    } else null
+                }
+            }
+        }
+
+        if (path == null) return null
+        if (path.startsWith("/assets/assets/")) {
+            path = path.removePrefix("/assets")
+        }
+        return path
     }
 
     private fun buildHeaders(
