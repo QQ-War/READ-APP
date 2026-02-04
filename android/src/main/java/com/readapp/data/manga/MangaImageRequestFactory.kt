@@ -170,6 +170,7 @@ object MangaImageRequestFactory {
     private fun isLocalAssetUrl(url: String, serverUrl: String): Boolean {
         val lower = url.lowercase()
         if (lower.contains("/api/5/assets") || lower.contains("/api/v5/assets")) return true
+        if (lower.contains("/api/5/pdfimage") || lower.contains("/api/v5/pdfimage")) return true
         if (lower.startsWith("http://assets/") || lower.startsWith("https://assets/")) return true
         if (lower.contains("/assets/") || lower.contains("/book-assets/")) {
             val base = stripApiBasePath(serverUrl).lowercase()
