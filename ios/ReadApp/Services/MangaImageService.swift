@@ -28,7 +28,7 @@ final class MangaImageService {
             return assetURL
         }
         
-        // 2. 如果识别为资产路径但转换失败（例如配置缺失），不再尝试作为普通 URL 加载
+        // 2. 如果识别为资产路径但转换失败（例如配置缺失或 baseURL 异常），不再尝试作为普通 URL 加载
         if isAssetPath(cleaned) {
             return nil
         }
@@ -44,13 +44,17 @@ final class MangaImageService {
             }
         }
         
-        // 如果是类似 "http//assets/..." 这种已经损坏且 buildAssetURLIfNeeded 没抓到的，这里就不再往下走了，避免产生 unsupported URL
+        // 4. 补全后端 Base URL（处理相对路径）
+        // 如果是类似 "http//assets/..." 这种已经损坏且 buildAssetURLIfNeeded 没抓到的，这里返回 nil 避免产生 unsupported URL
         if cleaned.contains("//") && !cleaned.contains("://") {
             return nil
         }
 
-        // 4. 补全后端 Base URL（处理相对路径）
         let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+        guard !baseURL.isEmpty, baseURL.hasPrefix("http") else {
+            return nil // 基础域名配置无效时，无法补全相对路径
+        }
+        
         let resolved = cleaned.hasPrefix("/") ? (baseURL + cleaned) : (baseURL + "/" + cleaned)
         if let url = URL(string: resolved) {
             return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
@@ -330,7 +334,9 @@ final class MangaImageService {
             path = String(path.dropFirst(7))
         }
         
-        let baseURL = APIService.shared.baseURL
+        let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+        guard !baseURL.isEmpty else { return nil }
+        
         var components = URLComponents(string: "\(baseURL)/assets")
         components?.queryItems = [
             URLQueryItem(name: "path", value: path)

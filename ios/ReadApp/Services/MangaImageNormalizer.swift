@@ -5,6 +5,7 @@ enum MangaImageNormalizer {
         var trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = trimmed.lowercased()
         
+        // 1. 纠正协议头畸形 (http// -> http://, https// -> https://, http:/ -> http:// 等)
         if lower.hasPrefix("http//") {
             trimmed = "http://" + trimmed.dropFirst(6)
         } else if lower.hasPrefix("https//") {
@@ -14,6 +15,8 @@ enum MangaImageNormalizer {
         } else if lower.hasPrefix("https:/") && !lower.hasPrefix("https://") {
             trimmed = "https://" + trimmed.dropFirst(7)
         }
+        
+        // 2. 移除常见的末尾逗号及其后的 Legado 额外参数 (如 ,{...})
         let patterns = ["\\.jpg", "\\.jpeg", "\\.png", "\\.webp", "\\.gif", "\\.bmp"]
         for pattern in patterns {
             if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
