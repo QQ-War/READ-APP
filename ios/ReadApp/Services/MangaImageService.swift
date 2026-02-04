@@ -50,7 +50,7 @@ final class MangaImageService {
             return nil
         }
 
-        let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+        let baseURL = APIService.shared.baseURL
         guard !baseURL.isEmpty, baseURL.hasPrefix("http") else {
             return nil // 基础域名配置无效时，无法补全相对路径
         }
@@ -321,11 +321,15 @@ final class MangaImageService {
         // 彻底清理 path：去除开头可能存在的 assets/ 或 /assets/
         while path.hasPrefix("/") { path = String(path.dropFirst()) }
         if path.hasPrefix("assets/") { path = String(path.dropFirst(7)) }
+        if path.hasPrefix("book-assets/") { path = String(path.dropFirst(12)) }
         while path.hasPrefix("/") { path = String(path.dropFirst()) }
         
         if path.isEmpty { return nil }
+        if !path.hasPrefix("assets/") && !path.hasPrefix("book-assets/") {
+            path = "assets/" + path
+        }
         
-        let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
+        let baseURL = APIService.shared.baseURL
         guard !baseURL.isEmpty else { return nil }
         
         var components = URLComponents(string: "\(baseURL)/assets")
