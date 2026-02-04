@@ -50,13 +50,16 @@ struct Book: Codable, Identifiable {
                 let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
                 return baseURL + "/" + url
             }
+            // 本地资源交给 MangaImageService 统一处理（含 /assets?path= 与 /covers/）
+            if url.hasPrefix("/assets/") || url.hasPrefix("assets/") ||
+                url.hasPrefix("/book-assets/") || url.hasPrefix("book-assets/") ||
+                url.localizedCaseInsensitiveContains("/assets?path=") ||
+                url.hasPrefix("/covers/") || url.hasPrefix("covers/") {
+                return url.hasPrefix("/") ? String(url.dropFirst()) : url
+            }
             if url.hasPrefix("/") {
                 let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
                 return baseURL + url
-            }
-            if url.hasPrefix("assets/") || url.hasPrefix("book-assets/") {
-                let baseURL = ApiBackendResolver.stripApiBasePath(APIService.shared.baseURL)
-                return baseURL + "/" + url
             }
             return url
         }
