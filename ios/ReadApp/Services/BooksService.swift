@@ -35,7 +35,8 @@ final class BooksService {
 
     func fetchChapterList(bookUrl: String, bookSourceUrl: String?) async throws -> [BookChapter] {
         if UserPreferences.shared.isVerboseLoggingEnabled {
-            LogManager.shared.log("目录请求: url=\(bookUrl) source=\(bookSourceUrl ?? "nil") backend=\(client.backend.rawValue)", category: "阅读诊断")
+            let hasToken = !client.accessToken.isEmpty
+            LogManager.shared.log("目录请求: url=\(bookUrl) source=\(bookSourceUrl ?? "nil") backend=\(client.backend.rawValue) token=\(hasToken)", category: "阅读诊断")
         }
         var queryItems = [
             URLQueryItem(name: "url", value: bookUrl)

@@ -90,6 +90,10 @@ final class APIClient {
         if !accessToken.isEmpty {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
+        if UserPreferences.shared.isVerboseLoggingEnabled, urlString.contains("getChapterList") {
+            let hasAuth = request.value(forHTTPHeaderField: "Authorization") != nil
+            LogManager.shared.log("目录Header: hasAuth=\(hasAuth) url=\(url.absoluteString)", category: "阅读诊断")
+        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
