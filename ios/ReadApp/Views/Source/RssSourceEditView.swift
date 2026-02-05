@@ -73,11 +73,13 @@ struct RssSourceEditView: View {
                 Button("保存") {
                     save()
                 }
+                .glassyToolbarButton()
             }
             ToolbarItem(placement: .cancellationAction) {
                 Button("取消") {
                     dismiss()
                 }
+                .glassyToolbarButton()
             }
         }
         .alert("校验失败", isPresented: $showingError) {

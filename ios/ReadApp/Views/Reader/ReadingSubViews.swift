@@ -191,6 +191,7 @@ struct ChapterListView: View {
                                         .foregroundColor(selectedGroupIndex == index ? .white : .primary)
                                         .cornerRadius(ReaderConstants.List.groupCornerRadius)
                                 }
+                                .glassyButtonStyle()
                             }
                         }
                         .padding()

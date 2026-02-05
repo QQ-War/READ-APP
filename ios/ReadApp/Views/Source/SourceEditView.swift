@@ -59,6 +59,7 @@ struct SourceEditView: View {
                     saveSource()
                 }
                 .disabled(isLoading)
+                .glassyToolbarButton()
             }
         }
         .onAppear {
