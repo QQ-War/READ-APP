@@ -448,6 +448,7 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
         super.init(frame: frame)
         self.backgroundColor = UserPreferences.shared.readingTheme.backgroundColor
         self.isOpaque = true
+        NotificationCenter.default.addObserver(self, selector: #selector(handleInlineImageLoaded), name: InlineImageAttachment.didLoadNotification, object: nil)
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         tap.delegate = self
@@ -460,6 +461,10 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
     }
     
     required init?(coder: NSCoder) { fatalError() }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: InlineImageAttachment.didLoadNotification, object: nil)
+    }
     
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         return true
@@ -490,6 +495,10 @@ class ReadContent2View: UIView, UIGestureRecognizerDelegate {
             let txt = (store.attributedString.string as NSString).substring(with: r)
             onAddReplaceRule?(txt)
         }
+    }
+
+    @objc private func handleInlineImageLoaded() {
+        setNeedsDisplay()
     }
 
     override var canBecomeFirstResponder: Bool { true }

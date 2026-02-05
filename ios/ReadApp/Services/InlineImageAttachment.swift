@@ -1,6 +1,7 @@
 import UIKit
 
 final class InlineImageAttachment: NSTextAttachment {
+    static let didLoadNotification = Notification.Name("InlineImageAttachmentDidLoad")
     private(set) var imageURL: URL
     var onImageLoaded: (() -> Void)?
     private var isLoading = false
@@ -29,6 +30,7 @@ final class InlineImageAttachment: NSTextAttachment {
                     guard let self else { return }
                     self.image = resized
                     self.onImageLoaded?()
+                    NotificationCenter.default.post(name: InlineImageAttachment.didLoadNotification, object: self)
                 }
             }
         }
