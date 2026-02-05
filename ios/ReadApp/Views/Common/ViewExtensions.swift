@@ -7,7 +7,7 @@ extension View {
         if #available(iOS 16.0, *) {
             self.toolbar(.hidden, for: .tabBar)
         } else {
-            self.modifier(HideTabBarModifier())
+            self
         }
     }
 
