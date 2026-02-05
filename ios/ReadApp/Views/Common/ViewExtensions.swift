@@ -16,9 +16,9 @@ extension View {
         if UserPreferences.shared.isLiquidGlassEnabled {
             if #available(iOS 16.0, *) {
                 self.scrollContentBackground(.hidden)
-                    .liquidGlassBackground()
+                    .background(LiquidBackgroundView())
             } else {
-                self.liquidGlassBackground()
+                self.background(LiquidBackgroundView())
             }
         } else {
             self

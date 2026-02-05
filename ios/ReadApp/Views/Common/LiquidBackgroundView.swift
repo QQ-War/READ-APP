@@ -7,7 +7,6 @@ struct LiquidBackgroundView: View {
         ZStack {
             // 底层基础颜色
             Color(uiColor: .systemBackground)
-                .ignoresSafeArea()
             
             // 动态流动的色彩球
             GeometryReader { proxy in
@@ -38,8 +37,8 @@ struct LiquidBackgroundView: View {
             // 玻璃层
             Rectangle()
                 .fill(.ultraThinMaterial)
-                .ignoresSafeArea()
         }
+        .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .onAppear {
