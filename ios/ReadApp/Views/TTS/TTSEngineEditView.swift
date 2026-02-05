@@ -31,7 +31,7 @@ struct TTSEngineEditView: View {
     
     var body: some View {
         Form {
-            Section(header: Text("基本信息")) {
+            Section(header: GlassySectionHeader(title: "基本信息")) {
                 HStack {
                     Text("名称")
                     TextField("引擎名称", text: $name)
@@ -52,7 +52,7 @@ struct TTSEngineEditView: View {
                 }
             }
             
-            Section(header: Text("高级配置"), footer: Text("Header 请使用标准 JSON 格式，例如 {\"User-Agent\": \"...\"}")) {
+            Section(header: GlassySectionHeader(title: "高级配置"), footer: Text("Header 请使用标准 JSON 格式，例如 {\"User-Agent\": \"...\"}")) {
                 HStack {
                     Text("Content Type")
                     TextField("audio/mpeg", text: $contentType)

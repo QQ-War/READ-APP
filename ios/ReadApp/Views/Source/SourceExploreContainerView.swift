@@ -89,6 +89,7 @@ struct SourceExploreContainerView: View {
                                             .background(Color.blue.opacity(0.1))
                                             .foregroundColor(.blue)
                                             .cornerRadius(8)
+                                            .glassyButtonStyle()
                                     }
                                 }
                             }

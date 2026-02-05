@@ -37,7 +37,7 @@ struct RssSourcesView: View {
                     }
                 }
             } else {
-                Section(header: Text("官方订阅")) {
+            Section(header: GlassySectionHeader(title: "官方订阅")) {
                     ForEach(viewModel.remoteSources) { source in
                         RssSourceRow(
                             source: source,
@@ -54,7 +54,7 @@ struct RssSourcesView: View {
                 }
             }
 
-            Section(header: Text("自定义订阅"),
+            Section(header: GlassySectionHeader(title: "自定义订阅"),
                     footer: viewModel.customSources.isEmpty ? Text("添加后可在本地管理订阅。") : nil) {
                 if viewModel.customSources.isEmpty {
                     Text("尚未添加自定义订阅源，可通过上方菜单新建或导入。")

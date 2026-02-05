@@ -32,7 +32,7 @@ struct RssSourceDetailView: View {
                 }
             }
 
-            Section(header: Text("基本信息")) {
+            Section(header: GlassySectionHeader(title: "基本信息")) {
                 detailRow(title: "名称", value: source.sourceName ?? "未命名")
                 detailRow(title: "链接", value: source.sourceUrl)
                 HStack {
@@ -46,7 +46,7 @@ struct RssSourceDetailView: View {
                 }
             }
 
-            Section(header: Text("分组与备注")) {
+            Section(header: GlassySectionHeader(title: "分组与备注")) {
                 detailRow(title: "分组", value: source.sourceGroup ?? "未分组")
                 if let comment = source.variableComment, !comment.isEmpty {
                     detailRow(title: "备注", value: comment)
@@ -54,7 +54,7 @@ struct RssSourceDetailView: View {
             }
 
             if let login = source.loginUrl, !login.isEmpty || (source.loginUi?.isEmpty == false) {
-                Section(header: Text("登录配置")) {
+                Section(header: GlassySectionHeader(title: "登录配置")) {
                     if let login = source.loginUrl, !login.isEmpty {
                         detailRow(title: "登录地址", value: login)
                     }
@@ -65,7 +65,7 @@ struct RssSourceDetailView: View {
             }
 
             if canEdit {
-                Section(header: Text("管理")) {
+                Section(header: GlassySectionHeader(title: "管理")) {
                     Button("编辑订阅源") {
                         onEdit?()
                     }

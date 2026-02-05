@@ -88,7 +88,7 @@ struct SourceEditView: View {
     
     private var structuredForm: some View {
         Form {
-            Section(header: Text("基本信息")) {
+            Section(header: GlassySectionHeader(title: "基本信息")) {
                 TextField("书源名称", text: $structuredSource.bookSourceName)
                 TextField("书源分组", text: Binding(
                     get: { structuredSource.bookSourceGroup ?? "" },
@@ -105,7 +105,7 @@ struct SourceEditView: View {
                 }
             }
             
-            Section(header: Text("网络配置")) {
+            Section(header: GlassySectionHeader(title: "网络配置")) {
                 TextField("并发频率", text: Binding(
                     get: { structuredSource.concurrentRate ?? "" },
                     set: { structuredSource.concurrentRate = $0.isEmpty ? nil : $0 }
@@ -120,7 +120,7 @@ struct SourceEditView: View {
                 ))
             }
             
-            Section(header: Text("搜索配置")) {
+            Section(header: GlassySectionHeader(title: "搜索配置")) {
                 TextField("搜索地址", text: Binding(
                     get: { structuredSource.searchUrl ?? "" },
                     set: { structuredSource.searchUrl = $0.isEmpty ? nil : $0 }
@@ -131,7 +131,7 @@ struct SourceEditView: View {
                 }
             }
             
-            Section(header: Text("详情页与目录规则")) {
+            Section(header: GlassySectionHeader(title: "详情页与目录规则")) {
                 NavigationLink("详情页规则") {
                     BookInfoRuleView(rule: $structuredSource.ruleBookInfo)
                 }
@@ -140,13 +140,13 @@ struct SourceEditView: View {
                 }
             }
             
-            Section(header: Text("正文规则")) {
+            Section(header: GlassySectionHeader(title: "正文规则")) {
                 NavigationLink("正文页规则") {
                     ContentRuleView(rule: $structuredSource.ruleContent)
                 }
             }
             
-            Section(header: Text("其他")) {
+            Section(header: GlassySectionHeader(title: "其他")) {
                 Toggle("启用此书源", isOn: $structuredSource.enabled)
                 Toggle("启用发现", isOn: $structuredSource.enabledExplore)
                 TextField("书源注释", text: Binding(
@@ -273,10 +273,10 @@ struct SearchRuleView: View {
     
     var body: some View {
         Form {
-            Section(header: Text("列表规则")) {
+            Section(header: GlassySectionHeader(title: "列表规则")) {
                 TextField("列表规则 (bookList)", text: Binding(get: { rule?.bookList ?? "" }, set: { ensureRule(); rule?.bookList = $0 }))
             }
-            Section(header: Text("字段规则")) {
+            Section(header: GlassySectionHeader(title: "字段规则")) {
                 TextField("书名 (name)", text: Binding(get: { rule?.name ?? "" }, set: { ensureRule(); rule?.name = $0 }))
                 TextField("作者 (author)", text: Binding(get: { rule?.author ?? "" }, set: { ensureRule(); rule?.author = $0 }))
                 TextField("简介 (intro)", text: Binding(get: { rule?.intro ?? "" }, set: { ensureRule(); rule?.intro = $0 }))
@@ -299,7 +299,7 @@ struct BookInfoRuleView: View {
     
     var body: some View {
         Form {
-            Section(header: Text("详情页字段")) {
+            Section(header: GlassySectionHeader(title: "详情页字段")) {
                 TextField("书名", text: Binding(get: { rule?.name ?? "" }, set: { ensureRule(); rule?.name = $0 }))
                 TextField("作者", text: Binding(get: { rule?.author ?? "" }, set: { ensureRule(); rule?.author = $0 }))
                 TextField("简介", text: Binding(get: { rule?.intro ?? "" }, set: { ensureRule(); rule?.intro = $0 }))
@@ -322,10 +322,10 @@ struct TocRuleView: View {
     
     var body: some View {
         Form {
-            Section(header: Text("目录列表")) {
+            Section(header: GlassySectionHeader(title: "目录列表")) {
                 TextField("章节列表 (chapterList)", text: Binding(get: { rule?.chapterList ?? "" }, set: { ensureRule(); rule?.chapterList = $0 }))
             }
-            Section(header: Text("章节详情")) {
+            Section(header: GlassySectionHeader(title: "章节详情")) {
                 TextField("章节名称 (chapterName)", text: Binding(get: { rule?.chapterName ?? "" }, set: { ensureRule(); rule?.chapterName = $0 }))
                 TextField("章节 URL (chapterUrl)", text: Binding(get: { rule?.chapterUrl ?? "" }, set: { ensureRule(); rule?.chapterUrl = $0 }))
             }
@@ -345,11 +345,11 @@ struct ContentRuleView: View {
     
     var body: some View {
         Form {
-            Section(header: Text("正文内容")) {
+            Section(header: GlassySectionHeader(title: "正文内容")) {
                 TextField("正文规则 (content)", text: Binding(get: { rule?.content ?? "" }, set: { ensureRule(); rule?.content = $0 }))
                 TextField("下一页 URL (nextContentUrl)", text: Binding(get: { rule?.nextContentUrl ?? "" }, set: { ensureRule(); rule?.nextContentUrl = $0 }))
             }
-            Section(header: Text("净化规则")) {
+            Section(header: GlassySectionHeader(title: "净化规则")) {
                 TextField("替换正则 (replaceRegex)", text: Binding(get: { rule?.replaceRegex ?? "" }, set: { ensureRule(); rule?.replaceRegex = $0 }))
             }
         }

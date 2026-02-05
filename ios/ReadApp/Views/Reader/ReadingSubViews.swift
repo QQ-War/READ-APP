@@ -223,6 +223,7 @@ struct ChapterListView: View {
                             }
                             .id(item.offset)
                             .listRowBackground(item.offset == currentIndex ? Color.blue.opacity(0.1) : Color.clear)
+                            .glassyCard(cornerRadius: 12, padding: 6)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 if cachedChapters.contains(item.element.index) {
                                     Button(role: .destructive) {
@@ -240,6 +241,7 @@ struct ChapterListView: View {
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
                             Button("关闭") { dismiss() }
+                                .glassyToolbarButton()
                         }
                         ToolbarItemGroup(placement: .navigationBarTrailing) {
                             Button(action: {
@@ -250,6 +252,7 @@ struct ChapterListView: View {
                                     Text(isReversed ? "倒序" : "正序")
                                 }.font(.caption)
                             }
+                            .glassyToolbarButton()
                             Button(action: {
                                 guard !isRebuilding else { return }
                                 isRebuilding = true
@@ -266,6 +269,7 @@ struct ChapterListView: View {
                                 }
                                 .font(.caption)
                             }
+                            .glassyToolbarButton()
                         }
                     }
                 }

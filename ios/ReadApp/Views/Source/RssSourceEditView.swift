@@ -33,7 +33,7 @@ struct RssSourceEditView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("基础信息")) {
+            Section(header: GlassySectionHeader(title: "基础信息")) {
                 TextField("订阅名称（可选）", text: $sourceName)
                 TextField("订阅链接", text: $sourceUrl)
                     .keyboardType(.URL)
@@ -41,12 +41,12 @@ struct RssSourceEditView: View {
                 Toggle("启用该订阅", isOn: $isEnabled)
             }
 
-            Section(header: Text("分组与备注")) {
+            Section(header: GlassySectionHeader(title: "分组与备注")) {
                 TextField("分组标签", text: $sourceGroup)
                 TextField("备注", text: $variableComment)
             }
 
-            Section(header: Text("高级信息（可选）")) {
+            Section(header: GlassySectionHeader(title: "高级信息（可选）")) {
                 TextField("图标地址", text: $sourceIcon)
                     .autocapitalization(.none)
                 TextField("登录地址", text: $loginUrl)

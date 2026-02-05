@@ -16,13 +16,20 @@ final class ImagePreviewViewController: UIViewController, UIScrollViewDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+        if UserPreferences.shared.isLiquidGlassEnabled {
+            view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.2)
+            let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+            blur.frame = view.bounds
+            blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            view.insertSubview(blur, at: 0)
+        }
 
         scrollView.delegate = self
         scrollView.maximumZoomScale = 5.0
         scrollView.minimumZoomScale = 1.0
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
-        scrollView.backgroundColor = .black
+        scrollView.backgroundColor = UserPreferences.shared.isLiquidGlassEnabled ? .clear : .black
         view.addSubview(scrollView)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
