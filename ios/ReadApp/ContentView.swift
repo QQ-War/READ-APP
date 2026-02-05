@@ -97,19 +97,27 @@ struct ContentView: View {
     }
 
     private func updateSearchBarAppearance() {
-        guard #available(iOS 13.0, *) else { return }
-        let appearance = UISearchBarAppearance()
+        let searchBar = UISearchBar.appearance()
         if preferences.isLiquidGlassEnabled {
-            appearance.configureWithTransparentBackground()
-            appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
-            appearance.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.2)
-            appearance.searchTextFieldBackgroundColor = UIColor.systemBackground.withAlphaComponent(0.2)
+            searchBar.backgroundImage = UIImage()
+            searchBar.backgroundColor = UIColor.clear
+            searchBar.barTintColor = UIColor.systemBackground.withAlphaComponent(0.2)
+            if #available(iOS 13.0, *) {
+                let field = searchBar.searchTextField
+                field.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.2)
+                field.layer.cornerRadius = 10
+                field.clipsToBounds = true
+            }
         } else {
-            appearance.configureWithDefaultBackground()
-        }
-        UISearchBar.appearance().standardAppearance = appearance
-        if #available(iOS 15.0, *) {
-            UISearchBar.appearance().scrollEdgeAppearance = appearance
+            searchBar.backgroundImage = nil
+            searchBar.backgroundColor = nil
+            searchBar.barTintColor = nil
+            if #available(iOS 13.0, *) {
+                let field = searchBar.searchTextField
+                field.backgroundColor = nil
+                field.layer.cornerRadius = 0
+                field.clipsToBounds = false
+            }
         }
     }
 }
