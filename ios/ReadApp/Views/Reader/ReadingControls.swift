@@ -104,7 +104,8 @@ struct TTSControlBar: View {
             .padding(.bottom, ReaderConstants.Controls.ttsRowVerticalPadding)
         }
         .padding(.vertical, ReaderConstants.Controls.barSpacing)
-        .background(Color(UIColor.systemBackground))
+        .background(preferences.isLiquidGlassEnabled ? Color.clear : Color(UIColor.systemBackground))
+        .glassyCard(cornerRadius: 20, padding: 8)
         .shadow(color: Color.black.opacity(ReaderConstants.Controls.controlShadowOpacity), radius: ReaderConstants.Controls.controlShadowRadius, y: ReaderConstants.Controls.controlShadowYOffset)
     }
 }
@@ -245,7 +246,8 @@ struct NormalControlBar: View {
         }
         .padding(.horizontal, isForceLandscape ? ReaderConstants.Controls.controlBarHorizontalPaddingLandscape : ReaderConstants.Controls.controlBarHorizontalPaddingPortrait)
         .padding(.vertical, ReaderConstants.Controls.controlVerticalPadding)
-        .background(Color(UIColor.systemBackground))
+        .background(UserPreferences.shared.isLiquidGlassEnabled ? Color.clear : Color(UIColor.systemBackground))
+        .glassyCard(cornerRadius: 20, padding: 8)
         .shadow(color: Color.black.opacity(ReaderConstants.Controls.controlShadowOpacity), radius: ReaderConstants.Controls.controlShadowRadius, y: ReaderConstants.Controls.controlShadowYOffset)
     }
 }
@@ -390,6 +392,7 @@ struct ReaderOptionsSheet: View {
             }
             .navigationTitle("阅读选项")
             .navigationBarTitleDisplayMode(.inline)
+            .glassyListStyle()
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("完成") { dismiss() }
