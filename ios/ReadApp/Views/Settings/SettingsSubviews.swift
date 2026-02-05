@@ -663,6 +663,7 @@ struct PreferredSourcesView: View {
                     preferences.preferredSearchSourceUrls = []
                 }
                 .disabled(preferences.preferredSearchSourceUrls.isEmpty)
+                .glassyToolbarButton()
             }
         }
         .ifAvailableHideTabBar()

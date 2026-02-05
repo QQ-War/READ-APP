@@ -191,6 +191,7 @@ struct BookListView: View {
                 Text(listViewModel.isReversed ? "倒序" : "正序")
             }.font(.caption)
         }
+        .glassyToolbarButton()
     }
 
     @ViewBuilder
@@ -201,10 +202,12 @@ struct BookListView: View {
                 Image(systemName: "line.3.horizontal.decrease.circle")
                     .foregroundColor(preferences.searchSourcesFromBookshelf ? .blue : .secondary)
             }
+            .glassyToolbarButton()
             
             Button(action: { showingDocumentPicker = true }) { 
                 Image(systemName: "plus") 
             }
+            .glassyToolbarButton()
         }
     }
 

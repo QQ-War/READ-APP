@@ -55,6 +55,32 @@ extension View {
             self
         }
     }
+
+    @ViewBuilder
+    func glassyToolbarButton() -> some View {
+        if UserPreferences.shared.isLiquidGlassEnabled {
+            self
+                .padding(6)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.8))
+                .scaleEffect(1.0)
+                .animation(.easeInOut(duration: 0.15), value: UserPreferences.shared.isLiquidGlassEnabled)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func glassyPressEffect() -> some View {
+        if UserPreferences.shared.isLiquidGlassEnabled {
+            self
+                .scaleEffect(0.98)
+                .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+        } else {
+            self
+        }
+    }
 }
 
 struct HideTabBarModifier: ViewModifier {

@@ -76,6 +76,8 @@ struct TTSControlBar: View {
                             .font(.title2).foregroundColor(.white)
                     }
                 }
+                .glassyButtonStyle()
+                .glassyPressEffect()
 
                 Spacer()
                 IconButton(icon: "forward.fill", label: "下段", action: { ttsManager.nextSentence() }, enabled: ttsManager.currentSentenceIndex < ttsManager.totalSentences - 1)
@@ -396,6 +398,7 @@ struct ReaderOptionsSheet: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("完成") { dismiss() }
+                        .glassyToolbarButton()
                 }
             }
         }

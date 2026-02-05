@@ -178,6 +178,7 @@ struct ReadingView: View {
             .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding).padding(.bottom, ReaderConstants.UI.topBarBottomPadding)
         }
         .background(.thinMaterial)
+        .glassyCard(cornerRadius: 16, padding: 6)
     }
     
     private func bottomBar(safeArea: EdgeInsets) -> some View {
@@ -186,6 +187,7 @@ struct ReadingView: View {
             Color.clear.frame(height: safeArea.bottom)
         }
         .background(.thinMaterial)
+        .glassyCard(cornerRadius: 16, padding: 6)
     }
 
     @ViewBuilder private var controlBar: some View {

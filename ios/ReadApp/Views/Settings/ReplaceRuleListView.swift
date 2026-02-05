@@ -114,6 +114,7 @@ struct ReplaceRuleListView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .glassyToolbarButton()
             }
         }
         .sheet(isPresented: $showEditView) {

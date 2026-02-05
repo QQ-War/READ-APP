@@ -83,6 +83,7 @@ struct SourceListView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .glassyToolbarButton()
                 }
             }
             .sheet(isPresented: $showingNewSourceView) {

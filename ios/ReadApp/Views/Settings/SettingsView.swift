@@ -69,6 +69,7 @@ struct SettingsView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 EditButton()
+                    .glassyToolbarButton()
             }
         }
     }
