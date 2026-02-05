@@ -23,6 +23,7 @@ struct SettingsView: View {
                     }
                 }
                 .padding(.vertical, 4)
+                .glassyCard(cornerRadius: 16, padding: 6)
             }
             .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
 

@@ -64,6 +64,7 @@ struct AccountSettingsView: View {
         }
         .navigationTitle("账号管理")
         .ifAvailableHideTabBar()
+        .glassyListStyle()
         .sheet(isPresented: $showChangePasswordSheet) {
             ChangePasswordView()
         }

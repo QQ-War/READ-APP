@@ -72,5 +72,25 @@ struct ContentView: View {
                 showToast = false
             }
         }
+        .onAppear { updateTabBarAppearance() }
+        .onChange(of: preferences.isLiquidGlassEnabled) { _ in
+            updateTabBarAppearance()
+        }
+    }
+
+    private func updateTabBarAppearance() {
+        let appearance = UITabBarAppearance()
+        if preferences.isLiquidGlassEnabled {
+            appearance.configureWithTransparentBackground()
+            appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+            appearance.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.2)
+            appearance.shadowColor = UIColor.white.withAlphaComponent(0.12)
+        } else {
+            appearance.configureWithDefaultBackground()
+        }
+        UITabBar.appearance().standardAppearance = appearance
+        if #available(iOS 15.0, *) {
+            UITabBar.appearance().scrollEdgeAppearance = appearance
+        }
     }
 }
