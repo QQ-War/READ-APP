@@ -4,20 +4,19 @@ struct DisplaySettingsView: View {
     @StateObject private var preferences = UserPreferences.shared
 
     var body: some View {
-        ZStack {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-            
-            List {
-                Section(header: GlassySectionHeader(title: "视觉效果"), footer: Text("开启液态玻璃效果后，应用背景将呈现动态流动的色彩与磨砂质感。")) {
-                    Toggle("液态玻璃背景", isOn: $preferences.isLiquidGlassEnabled)
-                }
+        List {
+            Section(header: GlassySectionHeader(title: "视觉效果"), footer: Text("开启液态玻璃效果后，应用背景将呈现动态流动的色彩与磨砂质感。")) {
+                Toggle("液态玻璃背景", isOn: $preferences.isLiquidGlassEnabled)
             }
         }
         .navigationTitle("显示与美化")
         .navigationBarTitleDisplayMode(.inline)
         .glassyListStyle()
+        .background {
+            if preferences.isLiquidGlassEnabled {
+                LiquidBackgroundView()
+            }
+        }
     }
 }
 

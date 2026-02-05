@@ -9,30 +9,27 @@ struct LiquidBackgroundView: View {
             Color(uiColor: .systemBackground)
             
             // 动态流动的色彩球
-            GeometryReader { proxy in
-                let size = proxy.size
+            ZStack {
+                Circle()
+                    .fill(Color.blue.opacity(0.3))
+                    .frame(width: 400)
+                    .offset(x: startAnimation ? 100 : -100,
+                            y: startAnimation ? 50 : 200)
                 
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.3))
-                        .frame(width: size.width * 0.7)
-                        .offset(x: startAnimation ? size.width * 0.3 : -size.width * 0.1,
-                                y: startAnimation ? size.height * 0.1 : size.height * 0.4)
-                    
-                    Circle()
-                        .fill(Color.purple.opacity(0.3))
-                        .frame(width: size.width * 0.8)
-                        .offset(x: startAnimation ? -size.width * 0.2 : size.width * 0.2,
-                                y: startAnimation ? size.height * 0.5 : -size.height * 0.1)
-                    
-                    Circle()
-                        .fill(Color.cyan.opacity(0.2))
-                        .frame(width: size.width * 0.6)
-                        .offset(x: startAnimation ? size.width * 0.1 : -size.width * 0.3,
-                                y: startAnimation ? -size.height * 0.2 : size.height * 0.2)
-                }
-                .blur(radius: 60)
+                Circle()
+                    .fill(Color.purple.opacity(0.3))
+                    .frame(width: 450)
+                    .offset(x: startAnimation ? -150 : 150,
+                            y: startAnimation ? 300 : -50)
+                
+                Circle()
+                    .fill(Color.cyan.opacity(0.2))
+                    .frame(width: 350)
+                    .offset(x: startAnimation ? 80 : -180,
+                            y: startAnimation ? -100 : 100)
             }
+            .blur(radius: 60)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // 玻璃层
             Rectangle()

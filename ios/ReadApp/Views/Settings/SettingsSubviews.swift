@@ -7,63 +7,57 @@ struct AccountSettingsView: View {
     @State private var showChangePasswordSheet = false
 
     var body: some View {
-        ZStack {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-            
-            Form {
-                Section(header: GlassySectionHeader(title: "用户信息")) {
+        Form {
+            Section(header: GlassySectionHeader(title: "用户信息")) {
+                HStack {
+                    Text("用户名")
+                    Spacer()
+                    Text(preferences.username)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("用户名")
+                        Text("服务端类型")
                         Spacer()
-                        Text(preferences.username)
+                        Text(preferences.apiBackend.displayName)
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    HStack {
+                        Text("局域网服务器")
+                        Spacer()
+                        Text(preferences.serverURL)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    if !preferences.publicServerURL.isEmpty {
                         HStack {
-                            Text("服务端类型")
-                            Spacer()
-                            Text(preferences.apiBackend.displayName)
+                            Text("公网服务器")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        HStack {
-                            Text("局域网服务器")
                             Spacer()
-                            Text(preferences.serverURL)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            Text(preferences.publicServerURL)
+                                .font(.caption2)
+                                .foregroundColor(.green)
                                 .lineLimit(1)
-                        }
-
-                        if !preferences.publicServerURL.isEmpty {
-                            HStack {
-                                Text("公网服务器")
-                                    .font(.caption)
-                                Spacer()
-                                Text(preferences.publicServerURL)
-                                    .font(.caption2)
-                                    .foregroundColor(.green)
-                                    .lineLimit(1)
-                            }
                         }
                     }
                 }
+            }
+            
+            Section {
+                Button(action: { showChangePasswordSheet = true }) {
+                    Label("修改密码", systemImage: "key.viewfinder")
+                }
                 
-                Section {
-                    Button(action: { showChangePasswordSheet = true }) {
-                        Label("修改密码", systemImage: "key.viewfinder")
-                    }
-                    
-                    Button(action: { showLogoutAlert = true }) {
-                        HStack {
-                            Spacer()
-                            Text("退出登录")
-                                .foregroundColor(.red)
-                            Spacer()
-                        }
+                Button(action: { showLogoutAlert = true }) {
+                    HStack {
+                        Spacer()
+                        Text("退出登录")
+                            .foregroundColor(.red)
+                        Spacer()
                     }
                 }
             }
@@ -71,6 +65,11 @@ struct AccountSettingsView: View {
         .navigationTitle("账号管理")
         .ifAvailableHideTabBar()
         .glassyListStyle()
+        .background {
+            if preferences.isLiquidGlassEnabled {
+                LiquidBackgroundView()
+            }
+        }
         .sheet(isPresented: $showChangePasswordSheet) {
             ChangePasswordView()
         }
@@ -89,108 +88,102 @@ struct ReadingSettingsView: View {
     @StateObject private var preferences = UserPreferences.shared
 
     var body: some View {
-        ZStack {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
+        Form {
+            Section(header: GlassySectionHeader(title: "基础显示")) {
+                Picker("阅读主题", selection: $preferences.readingTheme) {
+                    ForEach(ReadingTheme.allCases) { theme in
+                        Text(theme.localizedName).tag(theme)
+                    }
+                }
+                
+                HStack {
+                    Text("字号")
+                    Slider(value: $preferences.fontSize, in: 12...30, step: 1)
+                    Text("\(Int(preferences.fontSize))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
+                }
+
+                HStack {
+                    Text("行距")
+                    Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
+                    Text("\(Int(preferences.lineSpacing))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
+                }
+                
+                HStack {
+                    Text("边距")
+                    Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 2)
+                    Text("\(Int(preferences.pageHorizontalMargin))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
+                }
+
+                HStack {
+                    Text("进度字号")
+                    Slider(value: $preferences.progressFontSize, in: 8...20, step: 1)
+                    Text("\(Int(preferences.progressFontSize))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
+                }
+
+                HStack {
+                    Text("底部留白")
+                    Slider(value: $preferences.readingBottomInset, in: 0...120, step: 4)
+                    Text("\(Int(preferences.readingBottomInset))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
+                }
+                
+                Picker("阅读模式", selection: $preferences.readingMode) {
+                    ForEach(ReadingMode.allCases.filter { $0 != .newHorizontal }) { mode in
+                        Text(mode.localizedName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
-            
-            Form {
-                Section(header: GlassySectionHeader(title: "基础显示")) {
-                    Picker("阅读主题", selection: $preferences.readingTheme) {
-                        ForEach(ReadingTheme.allCases) { theme in
-                            Text(theme.localizedName).tag(theme)
-                        }
-                    }
-                    
-                    HStack {
-                        Text("字号")
-                        Slider(value: $preferences.fontSize, in: 12...30, step: 1)
-                        Text("\(Int(preferences.fontSize))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
-                    }
 
-                    HStack {
-                        Text("行距")
-                        Slider(value: $preferences.lineSpacing, in: 4...20, step: 2)
-                        Text("\(Int(preferences.lineSpacing))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
-                    }
-                    
-                    HStack {
-                        Text("边距")
-                        Slider(value: $preferences.pageHorizontalMargin, in: 0...50, step: 2)
-                        Text("\(Int(preferences.pageHorizontalMargin))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
-                    }
-
-                    HStack {
-                        Text("进度字号")
-                        Slider(value: $preferences.progressFontSize, in: 8...20, step: 1)
-                        Text("\(Int(preferences.progressFontSize))").font(.caption).monospacedDigit().frame(width: 25, alignment: .trailing)
-                    }
-
-                    HStack {
-                        Text("底部留白")
-                        Slider(value: $preferences.readingBottomInset, in: 0...120, step: 4)
-                        Text("\(Int(preferences.readingBottomInset))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
-                    }
-                    
-                    Picker("阅读模式", selection: $preferences.readingMode) {
-                        ForEach(ReadingMode.allCases.filter { $0 != .newHorizontal }) { mode in
-                            Text(mode.localizedName).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Section(header: GlassySectionHeader(title: "左右翻页设置")) {
-                    Picker("翻页方式", selection: $preferences.pageTurningMode) {
-                        ForEach(PageTurningMode.allCases) { mode in
-                            Text(mode.localizedName).tag(mode)
-                        }
+            Section(header: GlassySectionHeader(title: "左右翻页设置")) {
+                Picker("翻页方式", selection: $preferences.pageTurningMode) {
+                    ForEach(PageTurningMode.allCases) { mode in
+                        Text(mode.localizedName).tag(mode)
                     }
                 }
+            }
 
-                Section(header: GlassySectionHeader(title: "上下滚动设置")) {
-                    Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
+            Section(header: GlassySectionHeader(title: "上下滚动设置")) {
+                Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
 
-                    HStack {
-                        Text("无缝切章阈值")
-                        Slider(value: $preferences.infiniteScrollSwitchThreshold, in: 40...300, step: 10)
-                        Text("\(Int(preferences.infiniteScrollSwitchThreshold))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
-                    }
-                    
-                    HStack {
-                        Text("切章拉伸距离")
-                        Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
-                        Text("\(Int(preferences.verticalThreshold))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
-                    }
-                    
-                    HStack {
-                        Text("滚动阻尼系数")
-                        Slider(value: $preferences.verticalDampingFactor, in: 0...0.5, step: 0.01)
-                        Text(String(format: "%.2f", preferences.verticalDampingFactor)).font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
-                    }
+                HStack {
+                    Text("无缝切章阈值")
+                    Slider(value: $preferences.infiniteScrollSwitchThreshold, in: 40...300, step: 10)
+                    Text("\(Int(preferences.infiniteScrollSwitchThreshold))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
+                }
+                
+                HStack {
+                    Text("切章拉伸距离")
+                    Slider(value: $preferences.verticalThreshold, in: 50...500, step: 10)
+                    Text("\(Int(preferences.verticalThreshold))").font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
+                }
+                
+                HStack {
+                    Text("滚动阻尼系数")
+                    Slider(value: $preferences.verticalDampingFactor, in: 0...0.5, step: 0.01)
+                    Text(String(format: "%.2f", preferences.verticalDampingFactor)).font(.caption).monospacedDigit().frame(width: 35, alignment: .trailing)
+                }
+            }
+
+            Section(header: GlassySectionHeader(title: "显示与性能"), footer: Text("降低静态阅读时的刷新率可显著延长 ProMotion 设备的续航。关闭动态颜色可进一步减轻 GPU 渲染压力。")) {
+                HStack {
+                    Text("静态刷新率")
+                    Slider(value: Binding(get: { Double(preferences.staticRefreshRate) }, set: { preferences.staticRefreshRate = Float($0) }), in: 10...60, step: 10)
+                    Text("\(Int(preferences.staticRefreshRate))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
                 }
 
-                Section(header: GlassySectionHeader(title: "显示与性能"), footer: Text("降低静态阅读时的刷新率可显著延长 ProMotion 设备的续航。关闭动态颜色可进一步减轻 GPU 渲染压力。")) {
-                    HStack {
-                        Text("静态刷新率")
-                        Slider(value: Binding(get: { Double(preferences.staticRefreshRate) }, set: { preferences.staticRefreshRate = Float($0) }), in: 10...60, step: 10)
-                        Text("\(Int(preferences.staticRefreshRate))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
-                    }
+                Toggle("进度条动态颜色", isOn: $preferences.isProgressDynamicColorEnabled)
+            }
 
-                    Toggle("进度条动态颜色", isOn: $preferences.isProgressDynamicColorEnabled)
+            Section(header: GlassySectionHeader(title: "漫画设置")) {
+                HStack {
+                    Text("漫画最大缩放")
+                    Slider(value: $preferences.mangaMaxZoom, in: 1...10, step: 0.5)
+                    Text(String(format: "%.1f", preferences.mangaMaxZoom)).font(.caption).monospacedDigit().frame(width: 30, alignment: .trailing)
                 }
 
-                Section(header: GlassySectionHeader(title: "漫画设置")) {
-                    HStack {
-                        Text("漫画最大缩放")
-                        Slider(value: $preferences.mangaMaxZoom, in: 1...10, step: 0.5)
-                        Text(String(format: "%.1f", preferences.mangaMaxZoom)).font(.caption).monospacedDigit().frame(width: 30, alignment: .trailing)
-                    }
-
-                    Picker("渲染引擎", selection: $preferences.mangaReaderMode) {
-                        ForEach(MangaReaderMode.allCases) { mode in
-                            Text(mode.localizedName).tag(mode)
-                        }
+                Picker("渲染引擎", selection: $preferences.mangaReaderMode) {
+                    ForEach(MangaReaderMode.allCases) { mode in
+                        Text(mode.localizedName).tag(mode)
                     }
                 }
             }
@@ -203,6 +196,11 @@ struct ReadingSettingsView: View {
         }
         .ifAvailableHideTabBar()
         .glassyListStyle()
+        .background {
+            if preferences.isLiquidGlassEnabled {
+                LiquidBackgroundView()
+            }
+        }
     }
 }
 
@@ -290,87 +288,86 @@ struct TTSSettingsView: View {
     @State private var ttsSummary = ""
 
     var body: some View {
-        ZStack {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-            
-            Form {
-                Section(header: GlassySectionHeader(title: "引擎管理")) {
-                    NavigationLink(destination: TTSEngineListView()) {
-                        Label("TTS 引擎管理", systemImage: "waveform.path.ecg")
-                    }
-                    
-                    NavigationLink(destination: TTSSelectionView()) {
-                        Label {
-                            HStack {
-                                Text("当前使用引擎")
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                if preferences.useSystemTTS {
-                                    Text("系统内置")
-                                        .foregroundColor(.secondary)
+        Form {
+            Section(header: GlassySectionHeader(title: "引擎管理")) {
+                NavigationLink(destination: TTSEngineListView()) {
+                    Label("TTS 引擎管理", systemImage: "waveform.path.ecg")
+                }
+                
+                NavigationLink(destination: TTSSelectionView()) {
+                    Label {
+                        HStack {
+                            Text("当前使用引擎")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if preferences.useSystemTTS {
+                                Text("系统内置")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                            } else {
+                                if preferences.selectedTTSId.isEmpty && preferences.narrationTTSId.isEmpty {
+                                    Text("未选择")
+                                        .foregroundColor(.orange)
                                         .font(.caption)
                                 } else {
-                                    if preferences.selectedTTSId.isEmpty && preferences.narrationTTSId.isEmpty {
-                                        Text("未选择")
-                                            .foregroundColor(.orange)
-                                            .font(.caption)
-                                    } else {
-                                        MarqueeText(
-                                            text: ttsSummary.isEmpty ? "已选择" : ttsSummary,
-                                            font: .caption,
-                                            color: .secondary
-                                        )
-                                        .frame(maxWidth: .infinity)
-                                    }
+                                    MarqueeText(
+                                        text: ttsSummary.isEmpty ? "已选择" : ttsSummary,
+                                        font: .caption,
+                                        color: .secondary
+                                    )
+                                    .frame(maxWidth: .infinity)
                                 }
                             }
-                        } icon: {
-                            Image(systemName: "waveform")
                         }
+                    } icon: {
+                        Image(systemName: "waveform")
                     }
                 }
+            }
 
-                Section(header: GlassySectionHeader(title: "播放设置")) {
+            Section(header: GlassySectionHeader(title: "播放设置")) {
+                HStack {
+                    Text("语速")
+                    Slider(value: $preferences.speechRate, in: 50...300, step: 5)
+                    Text("\(Int(preferences.speechRate))%").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
+                }
+
+                Stepper(value: $preferences.ttsPreloadCount, in: 0...50) {
                     HStack {
-                        Text("语速")
-                        Slider(value: $preferences.speechRate, in: 50...300, step: 5)
-                        Text("\(Int(preferences.speechRate))%").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
+                        Text("预载段数")
+                        Spacer()
+                        Text("\(preferences.ttsPreloadCount) 段")
+                            .foregroundColor(.secondary)
                     }
+                }
+                
+                Toggle("TTS 时锁定翻页", isOn: $preferences.lockPageOnTTS)
 
-                    Stepper(value: $preferences.ttsPreloadCount, in: 0...50) {
-                        HStack {
-                            Text("预载段数")
-                            Spacer()
-                            Text("\(preferences.ttsPreloadCount) 段")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    Toggle("TTS 时锁定翻页", isOn: $preferences.lockPageOnTTS)
+                HStack {
+                    Text("跟随缓冲")
+                    Slider(value: $preferences.ttsFollowCooldown, in: 0...6, step: 0.5)
+                    Text(String(format: "%.1f s", preferences.ttsFollowCooldown)).font(.caption).monospacedDigit().frame(width: 40, alignment: .trailing)
+                }
 
-                    HStack {
-                        Text("跟随缓冲")
-                        Slider(value: $preferences.ttsFollowCooldown, in: 0...6, step: 0.5)
-                        Text(String(format: "%.1f s", preferences.ttsFollowCooldown)).font(.caption).monospacedDigit().frame(width: 40, alignment: .trailing)
-                    }
-
-                    HStack {
-                        Text("分句限制")
-                        let chunkLimitBinding = Binding(
-                            get: { Double(preferences.ttsSentenceChunkLimit) },
-                            set: { preferences.ttsSentenceChunkLimit = Int($0) }
-                        )
-                        Slider(value: chunkLimitBinding, in: 300...1000, step: 50)
-                        Text("\(preferences.ttsSentenceChunkLimit)").font(.caption).monospacedDigit().frame(width: 40, alignment: .trailing)
-                    }
+                HStack {
+                    Text("分句限制")
+                    let chunkLimitBinding = Binding(
+                        get: { Double(preferences.ttsSentenceChunkLimit) },
+                        set: { preferences.ttsSentenceChunkLimit = Int($0) }
+                    )
+                    Slider(value: chunkLimitBinding, in: 300...1000, step: 50)
+                    Text("\(preferences.ttsSentenceChunkLimit)").font(.caption).monospacedDigit().frame(width: 40, alignment: .trailing)
                 }
             }
         }
         .navigationTitle("听书设置")
         .ifAvailableHideTabBar()
         .glassyListStyle()
+        .background {
+            if preferences.isLiquidGlassEnabled {
+                LiquidBackgroundView()
+            }
+        }
         .task {
             await loadTTSName()
         }
@@ -425,71 +422,70 @@ struct ContentSettingsView: View {
     @StateObject private var preferences = UserPreferences.shared
 
     var body: some View {
-        ZStack {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-            
-            Form {
-                Section(header: GlassySectionHeader(title: "搜索设置")) {
-                    Toggle("书架搜索包含书源", isOn: $preferences.searchSourcesFromBookshelf)
-                    
-                    if preferences.searchSourcesFromBookshelf {
-                        NavigationLink(destination: PreferredSourcesView()) {
-                            Label {
-                                HStack {
-                                    Text("指定搜索源")
-                                    Spacer()
-                                    Text(preferences.preferredSearchSourceUrls.isEmpty ? "全部启用源" : "已选 \(preferences.preferredSearchSourceUrls.count) 个")
-                                        .foregroundColor(.secondary)
-                                        .font(.caption)
-                                }
-                            } icon: {
-                                Image(systemName: "magnifyingglass")
-                            }
-                        }
-                    }
-                }
-
-                Section(header: GlassySectionHeader(title: "漫画图片")) {
-                    Toggle("启用反爬适配", isOn: $preferences.isMangaAntiScrapingEnabled)
-                    NavigationLink(destination: MangaAntiScrapingSitesView()) {
+        Form {
+            Section(header: GlassySectionHeader(title: "搜索设置")) {
+                Toggle("书架搜索包含书源", isOn: $preferences.searchSourcesFromBookshelf)
+                
+                if preferences.searchSourcesFromBookshelf {
+                    NavigationLink(destination: PreferredSourcesView()) {
                         Label {
                             HStack {
-                                Text("支持站点")
+                                Text("指定搜索源")
                                 Spacer()
-                                let enabledCount = preferences.mangaAntiScrapingEnabledSites.count
-                                let totalCount = MangaAntiScrapingService.profiles.count
-                                Text(enabledCount >= totalCount ? "已全部启用" : "\(enabledCount)/\(totalCount)")
+                                Text(preferences.preferredSearchSourceUrls.isEmpty ? "全部启用源" : "已选 \(preferences.preferredSearchSourceUrls.count) 个")
                                     .foregroundColor(.secondary)
                                     .font(.caption)
                             }
                         } icon: {
-                            Image(systemName: "shield.lefthalf.filled")
+                            Image(systemName: "magnifyingglass")
                         }
                     }
-                    Text("仅针对支持站点追加 Referer/请求头，其他站点仍按书源规则处理")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
                 }
+            }
 
-                Section(header: GlassySectionHeader(title: "内容净化")) {
-                    NavigationLink(destination: ReplaceRuleListView()) {
-                        Label("净化规则管理", systemImage: "broom")
+            Section(header: GlassySectionHeader(title: "漫画图片")) {
+                Toggle("启用反爬适配", isOn: $preferences.isMangaAntiScrapingEnabled)
+                NavigationLink(destination: MangaAntiScrapingSitesView()) {
+                    Label {
+                        HStack {
+                            Text("支持站点")
+                            Spacer()
+                            let enabledCount = preferences.mangaAntiScrapingEnabledSites.count
+                            let totalCount = MangaAntiScrapingService.profiles.count
+                            Text(enabledCount >= totalCount ? "已全部启用" : "\(enabledCount)/\(totalCount)")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                    } icon: {
+                        Image(systemName: "shield.lefthalf.filled")
                     }
                 }
-                
-                Section(header: GlassySectionHeader(title: "书架设置")) {
-                    Toggle("最近阅读排序", isOn: $preferences.bookshelfSortByRecent)
-                    Text("开启后按最后阅读时间排序，关闭则按加入书架时间排序")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                Text("仅针对支持站点追加 Referer/请求头，其他站点仍按书源规则处理")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            Section(header: GlassySectionHeader(title: "内容净化")) {
+                NavigationLink(destination: ReplaceRuleListView()) {
+                    Label("净化规则管理", systemImage: "broom")
                 }
+            }
+            
+            Section(header: GlassySectionHeader(title: "书架设置")) {
+                Toggle("最近阅读排序", isOn: $preferences.bookshelfSortByRecent)
+                Text("开启后按最后阅读时间排序，关闭则按加入书架时间排序")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
         .navigationTitle("内容设置")
         .ifAvailableHideTabBar()
         .glassyListStyle()
+        .background {
+            if preferences.isLiquidGlassEnabled {
+                LiquidBackgroundView()
+            }
+        }
     }
 }
 
@@ -498,33 +494,32 @@ struct MangaAntiScrapingSitesView: View {
     private let profiles = MangaAntiScrapingService.profiles
 
     var body: some View {
-        ZStack {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-            
-            List {
-                Section {
-                    ForEach(profiles) { profile in
-                        Toggle(isOn: binding(for: profile.key)) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(profile.name)
-                                if !profile.hostSuffixes.isEmpty {
-                                    Text(profile.hostSuffixes.joined(separator: ", "))
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
+        List {
+            Section {
+                ForEach(profiles) { profile in
+                    Toggle(isOn: binding(for: profile.key)) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(profile.name)
+                            if !profile.hostSuffixes.isEmpty {
+                                Text(profile.hostSuffixes.joined(separator: ", "))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
                         }
                     }
-                } footer: {
-                    Text("站点匹配按域名后缀判断，仅影响图片请求头设置。")
                 }
+            } footer: {
+                Text("站点匹配按域名后缀判断，仅影响图片请求头设置。")
             }
         }
         .navigationTitle("反爬站点")
         .ifAvailableHideTabBar()
         .glassyListStyle()
+        .background {
+            if preferences.isLiquidGlassEnabled {
+                LiquidBackgroundView()
+            }
+        }
     }
 
     private func binding(for key: String) -> Binding<Bool> {
@@ -557,75 +552,74 @@ struct DebugSettingsView: View {
     @State private var showLogViewer = false
 
     var body: some View {
-        ZStack {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
+        Form {
+            Section(header: GlassySectionHeader(title: "调试选项")) {
+                Toggle("详细日志模式", isOn: $preferences.isVerboseLoggingEnabled)
+                Text("开启后将记录更详细的内容解析与图片加载过程")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
             
-            Form {
-                Section(header: GlassySectionHeader(title: "调试选项")) {
-                    Toggle("详细日志模式", isOn: $preferences.isVerboseLoggingEnabled)
-                    Text("开启后将记录更详细的内容解析与图片加载过程")
-                        .font(.caption2)
+            Section(header: GlassySectionHeader(title: "日志")) {
+                HStack {
+                    Text("日志记录")
+                    Spacer()
+                    Text("\(LogManager.shared.getLogCount()) 条")
                         .foregroundColor(.secondary)
                 }
-                
-                Section(header: GlassySectionHeader(title: "日志")) {
+
+                Button(action: { showLogViewer = true }) {
                     HStack {
-                        Text("日志记录")
+                        Image(systemName: "list.bullet.rectangle.portrait")
+                        Text("查看日志")
                         Spacer()
-                        Text("\(LogManager.shared.getLogCount()) 条")
-                            .foregroundColor(.secondary)
                     }
-
-                    Button(action: { showLogViewer = true }) {
-                        HStack {
-                            Image(systemName: "list.bullet.rectangle.portrait")
-                            Text("查看日志")
-                            Spacer()
-                        }
-                        .foregroundColor(.blue)
-                    }
-
-                    Button(action: exportLogs) {
-                        HStack {
-                            Image(systemName: "square.and.arrow.up")
-                            Text("导出日志")
-                            Spacer()
-                        }
-                        .foregroundColor(.blue)
-                    }
-
-                    Button(action: { showClearLogsAlert = true }) {
-                        HStack {
-                            Image(systemName: "trash")
-                            Text("清空日志")
-                            Spacer()
-                        }
-                        .foregroundColor(.red)
-                    }
+                    .foregroundColor(.blue)
                 }
-                
-                Section(header: GlassySectionHeader(title: "存储")) {
-                    Button(action: { showClearCacheAlert = true }) {
-                        HStack {
-                            Image(systemName: "memorychip")
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("清除内存缓存")
-                                Text("仅清理运行内存，不影响离线下载内容")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                        }
-                        .foregroundColor(.orange)
+
+                Button(action: exportLogs) {
+                    HStack {
+                        Image(systemName: "square.and.arrow.up")
+                        Text("导出日志")
+                        Spacer()
                     }
+                    .foregroundColor(.blue)
+                }
+
+                Button(action: { showClearLogsAlert = true }) {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text("清空日志")
+                        Spacer()
+                    }
+                    .foregroundColor(.red)
+                }
+            }
+            
+            Section(header: GlassySectionHeader(title: "存储")) {
+                Button(action: { showClearCacheAlert = true }) {
+                    HStack {
+                        Image(systemName: "memorychip")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("清除内存缓存")
+                            Text("仅清理运行内存，不影响离线下载内容")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            }
+                        Spacer()
+                    }
+                    .foregroundColor(.orange)
                 }
             }
         }
         .navigationTitle("调试工具")
         .ifAvailableHideTabBar()
         .glassyListStyle()
+        .background {
+            if preferences.isLiquidGlassEnabled {
+                LiquidBackgroundView()
+            }
+        }
         .sheet(isPresented: $showLogViewer) {
             LogView()
         }
@@ -641,7 +635,6 @@ struct DebugSettingsView: View {
             Button("清除", role: .destructive) { APIService.shared.clearLocalCache() }
         }
     }
-
     private func exportLogs() {
         if let url = LogManager.shared.exportLogs() {
             self.logURLToShare = URLIdentifier(url: url)
