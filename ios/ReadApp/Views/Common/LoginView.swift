@@ -171,7 +171,7 @@ struct ServerSettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("服务端类型")) {
+                Section(header: GlassySectionHeader(title: "服务端类型")) {
                     Picker("服务端类型", selection: $preferences.apiBackend) {
                         ForEach(ApiBackend.allCases) { backend in
                             Text(backend.displayName).tag(backend)
@@ -180,7 +180,7 @@ struct ServerSettingsView: View {
                     .pickerStyle(.menu)
                 }
 
-                Section(header: Text("局域网服务器配置")) {
+                Section(header: GlassySectionHeader(title: "局域网服务器配置")) {
                     TextField("局域网服务器地址", text: serverBinding)
                         .autocapitalization(.none)
                         .keyboardType(.URL)
@@ -191,7 +191,7 @@ struct ServerSettingsView: View {
                         .foregroundColor(.secondary)
                 }
                 
-                Section(header: Text("公网服务器配置（可选）")) {
+                Section(header: GlassySectionHeader(title: "公网服务器配置（可选）")) {
                     TextField("公网服务器地址", text: publicServerBinding)
                         .autocapitalization(.none)
                         .keyboardType(.URL)
@@ -215,7 +215,7 @@ struct ServerSettingsView: View {
                         .foregroundColor(.orange)
                 }
                 
-                Section(header: Text("连接测试")) {
+                Section(header: GlassySectionHeader(title: "连接测试")) {
                     Button(action: testConnection) {
                         HStack {
                             if testingConnection {

@@ -48,6 +48,7 @@ struct BookSearchView: View {
                 }
             }
             .listStyle(.plain)
+            .glassyListStyle()
             .navigationTitle("搜索: \(viewModel.bookSource.bookSourceName)")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索书籍...")
@@ -59,6 +60,7 @@ struct BookSearchView: View {
                     Button("取消") {
                         presentationMode.wrappedValue.dismiss()
                     }
+                    .glassyToolbarButton()
                 }
             }
             .sheet(item: $errorSheet) { sheet in

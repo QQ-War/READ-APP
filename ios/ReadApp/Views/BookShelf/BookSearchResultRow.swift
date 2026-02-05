@@ -36,5 +36,6 @@ struct BookSearchResultRow: View {
             Spacer()
         }
         .padding(.vertical, 8)
+        .glassyCard(cornerRadius: 12, padding: 6)
     }
 }

@@ -578,9 +578,10 @@ struct SourceSwitchView: View {
                     }
                 }
             }
+            .glassyListStyle()
             .navigationTitle("更换来源")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("关闭") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("关闭") { dismiss() }.glassyToolbarButton() } }
             .task { await performSearch() }
         }
     }

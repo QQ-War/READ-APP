@@ -89,6 +89,7 @@ struct RssSourcesView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .glassyListStyle()
         .refreshable {
             await viewModel.refresh()
         }
@@ -103,6 +104,7 @@ struct RssSourcesView: View {
                 }) {
                     Image(systemName: "arrow.clockwise")
                 }
+                .glassyToolbarButton()
                 Menu {
                     Button(action: { showingCustomSourceEditor = true }) {
                         Label("新建本地订阅源", systemImage: "pencil.and.outline")
@@ -125,6 +127,7 @@ struct RssSourcesView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .glassyToolbarButton()
             }
         }
         .sheet(isPresented: $showingFilePicker) {

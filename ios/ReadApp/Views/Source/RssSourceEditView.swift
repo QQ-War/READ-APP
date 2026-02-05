@@ -68,6 +68,7 @@ struct RssSourceEditView: View {
         }
         .navigationTitle(initialSource == nil ? "新建订阅" : "编辑订阅")
         .navigationBarTitleDisplayMode(.inline)
+        .glassyListStyle()
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存") {

@@ -53,6 +53,7 @@ struct SourceEditView: View {
         .navigationTitle(sourceId == nil ? "新建书源" : "编辑书源")
         .navigationBarTitleDisplayMode(.inline)
         .ifAvailableHideTabBar()
+        .glassyListStyle()
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("保存") {

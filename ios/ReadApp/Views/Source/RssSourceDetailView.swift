@@ -90,5 +90,6 @@ struct RssSourceDetailView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.trailing)
         }
+        .glassyListStyle()
     }
 }

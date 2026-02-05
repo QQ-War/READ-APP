@@ -38,6 +38,7 @@ struct TTSSelectionView: View {
                         }
                     }
                     .buttonStyle(.bordered)
+                    .glassyButtonStyle()
                 }
                 .padding()
             } else {
@@ -49,6 +50,7 @@ struct TTSSelectionView: View {
                         speakerMappingSection
                     }
                 }
+                .glassyListStyle()
             }
         }
         .navigationTitle("TTS 引擎")
@@ -58,6 +60,7 @@ struct TTSSelectionView: View {
                 NavigationLink(destination: TTSEngineListView()) {
                     Text("管理")
                 }
+                .glassyToolbarButton()
             }
             ToolbarItem(placement: .navigationBarLeading) {
                 Button("刷新") {
@@ -65,6 +68,7 @@ struct TTSSelectionView: View {
                         await loadTTSList()
                     }
                 }
+                .glassyToolbarButton()
             }
         }
         .task {

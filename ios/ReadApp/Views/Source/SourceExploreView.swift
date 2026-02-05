@@ -44,6 +44,7 @@ struct SourceExploreView: View {
                 }
             }
         }
+        .glassyListStyle()
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.inline)
         .ifAvailableHideTabBar()

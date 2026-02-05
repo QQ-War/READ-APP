@@ -175,5 +175,6 @@ struct TTSEngineEditView: View {
                 }
             }
         }
+        .glassyListStyle()
     }
 }

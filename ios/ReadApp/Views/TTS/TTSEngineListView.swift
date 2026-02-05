@@ -28,6 +28,7 @@ struct TTSEngineListView: View {
                             .lineLimit(1)
                     }
                 }
+                .glassyCard(cornerRadius: 12, padding: 6)
                 .swipeActions(edge: .leading, allowsFullSwipe: false) {
                     Button {
                         Task { await exportEngine(tts, toFile: false) }
@@ -46,6 +47,7 @@ struct TTSEngineListView: View {
             }
             .onDelete(perform: deleteTTS)
         }
+        .glassyListStyle()
         .navigationTitle("TTS 引擎管理")
         .ifAvailableHideTabBar()
         .toolbar {
@@ -66,6 +68,7 @@ struct TTSEngineListView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .glassyToolbarButton()
             }
         }
         .sheet(isPresented: $showingNewEngineView) {
@@ -74,6 +77,7 @@ struct TTSEngineListView: View {
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
                             Button("取消") { showingNewEngineView = false }
+                                .glassyToolbarButton()
                         }
                     }
             }

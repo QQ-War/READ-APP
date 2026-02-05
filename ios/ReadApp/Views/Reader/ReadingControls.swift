@@ -273,7 +273,7 @@ struct ReaderOptionsSheet: View {
         NavigationView {
             Form {
                 if !isMangaMode {
-                    Section(header: Text("显示设置")) {
+                    Section(header: GlassySectionHeader(title: "显示设置")) {
                         Picker("阅读模式", selection: $preferences.readingMode) {
                             ForEach(ReadingMode.allCases.filter { $0 != .newHorizontal }) { mode in
                                 Text(mode.localizedName).tag(mode)
@@ -305,6 +305,7 @@ struct ReaderOptionsSheet: View {
                                 .padding(.vertical, 4)
                                 .background(Color.blue.opacity(0.1))
                                 .cornerRadius(4)
+                                .glassyButtonStyle()
                         }
 
                         HStack {
@@ -335,7 +336,7 @@ struct ReaderOptionsSheet: View {
                         }
                     }
 
-                    Section(header: Text("页面布局")) {
+                    Section(header: GlassySectionHeader(title: "页面布局")) {
                         if !isMangaMode {
                             HStack {
                                 Text("页边距").font(.body)
@@ -358,7 +359,7 @@ struct ReaderOptionsSheet: View {
                 }
                 
                 if verticalSettingsVisible {
-                    Section(header: Text("上下滚动")) {
+                    Section(header: GlassySectionHeader(title: "上下滚动")) {
                         if !isMangaMode {
                             Toggle("开启无限流", isOn: $preferences.isInfiniteScrollEnabled)
                                 .font(.body)
@@ -387,7 +388,7 @@ struct ReaderOptionsSheet: View {
                 }
 
                 if isMangaMode {
-                    Section(header: Text("高级设置")) {
+                    Section(header: GlassySectionHeader(title: "高级设置")) {
                         Toggle("强制服务器代理", isOn: $preferences.forceMangaProxy)
                     }
                 }
