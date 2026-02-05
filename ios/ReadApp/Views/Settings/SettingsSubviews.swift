@@ -88,7 +88,7 @@ struct ReadingSettingsView: View {
     @StateObject private var preferences = UserPreferences.shared
 
     var body: some View {
-        Form {
+        List {
             Section(header: GlassySectionHeader(title: "基础显示")) {
                 Picker("阅读主题", selection: $preferences.readingTheme) {
                     ForEach(ReadingTheme.allCases) { theme in
@@ -422,7 +422,7 @@ struct ContentSettingsView: View {
     @StateObject private var preferences = UserPreferences.shared
 
     var body: some View {
-        Form {
+        List {
             Section(header: GlassySectionHeader(title: "搜索设置")) {
                 Toggle("书架搜索包含书源", isOn: $preferences.searchSourcesFromBookshelf)
                 
@@ -552,7 +552,7 @@ struct DebugSettingsView: View {
     @State private var showLogViewer = false
 
     var body: some View {
-        Form {
+        List {
             Section(header: GlassySectionHeader(title: "调试选项")) {
                 Toggle("详细日志模式", isOn: $preferences.isVerboseLoggingEnabled)
                 Text("开启后将记录更详细的内容解析与图片加载过程")
