@@ -40,6 +40,8 @@ struct LiquidBackgroundView: View {
                 .fill(.ultraThinMaterial)
                 .ignoresSafeArea()
         }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
         .onAppear {
             withAnimation(.linear(duration: 15).repeatForever(autoreverses: true)) {
                 startAnimation.toggle()
