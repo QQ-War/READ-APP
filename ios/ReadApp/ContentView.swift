@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @StateObject private var preferences = UserPreferences.shared
@@ -96,6 +97,7 @@ struct ContentView: View {
     }
 
     private func updateSearchBarAppearance() {
+        guard #available(iOS 13.0, *) else { return }
         let appearance = UISearchBarAppearance()
         if preferences.isLiquidGlassEnabled {
             appearance.configureWithTransparentBackground()

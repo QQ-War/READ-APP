@@ -161,7 +161,6 @@ struct SourceExploreContainerView: View {
                 await MainActor.run {
                     self.isLoadingKinds = false
                 }
-                .glassyListStyle()
             }
         }
     }
