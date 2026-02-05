@@ -65,11 +65,6 @@ struct AccountSettingsView: View {
         .navigationTitle("账号管理")
         .ifAvailableHideTabBar()
         .glassyListStyle()
-        .background {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-        }
         .sheet(isPresented: $showChangePasswordSheet) {
             ChangePasswordView()
         }
@@ -196,11 +191,6 @@ struct ReadingSettingsView: View {
         }
         .ifAvailableHideTabBar()
         .glassyListStyle()
-        .background {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-        }
     }
 }
 
@@ -363,11 +353,6 @@ struct TTSSettingsView: View {
         .navigationTitle("听书设置")
         .ifAvailableHideTabBar()
         .glassyListStyle()
-        .background {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-        }
         .task {
             await loadTTSName()
         }
@@ -481,11 +466,6 @@ struct ContentSettingsView: View {
         .navigationTitle("内容设置")
         .ifAvailableHideTabBar()
         .glassyListStyle()
-        .background {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-        }
     }
 }
 
@@ -515,11 +495,6 @@ struct MangaAntiScrapingSitesView: View {
         .navigationTitle("反爬站点")
         .ifAvailableHideTabBar()
         .glassyListStyle()
-        .background {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-        }
     }
 
     private func binding(for key: String) -> Binding<Bool> {
@@ -615,11 +590,6 @@ struct DebugSettingsView: View {
         .navigationTitle("调试工具")
         .ifAvailableHideTabBar()
         .glassyListStyle()
-        .background {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-        }
         .sheet(isPresented: $showLogViewer) {
             LogView()
         }

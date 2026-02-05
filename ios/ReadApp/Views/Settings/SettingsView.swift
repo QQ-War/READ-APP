@@ -72,11 +72,6 @@ struct SettingsView: View {
             }
         }
         .glassyListStyle()
-        .background {
-            if preferences.isLiquidGlassEnabled {
-                LiquidBackgroundView()
-            }
-        }
     }
 
     @ViewBuilder

@@ -33,10 +33,15 @@ struct ContentView: View {
                         Text("书源")
                     }
 
-                    NavigationView {
-                        SettingsView()
+                    ZStack {
+                        if preferences.isLiquidGlassEnabled {
+                            LiquidBackgroundView()
+                        }
+                        NavigationView {
+                            SettingsView()
+                        }
+                        .navigationViewStyle(StackNavigationViewStyle())
                     }
-                    .navigationViewStyle(StackNavigationViewStyle())
                     .tabItem {
                         Image(systemName: "gearshape.fill")
                         Text("设置")
