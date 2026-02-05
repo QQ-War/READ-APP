@@ -5,8 +5,13 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
-        List {
-            Section {
+        ZStack {
+            if preferences.isLiquidGlassEnabled {
+                LiquidBackgroundView()
+            }
+            
+            List {
+                Section {
                 NavigationLink(destination: AccountSettingsView()) {
                     Label {
                         VStack(alignment: .leading) {
