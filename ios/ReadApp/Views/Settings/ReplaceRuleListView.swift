@@ -66,6 +66,7 @@ struct ReplaceRuleListView: View {
                         }
                     }
                     .padding(.vertical, 4)
+                    .glassyCard(cornerRadius: 12, padding: 6)
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
                         Button {
                             Task { await exportRule(rule, toFile: false) }
@@ -91,6 +92,7 @@ struct ReplaceRuleListView: View {
         }
         .navigationTitle("净化规则管理")
         .ifAvailableHideTabBar()
+        .glassyListStyle()
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {

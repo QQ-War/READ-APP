@@ -190,6 +190,7 @@ struct ReadingSettingsView: View {
             }
         }
         .ifAvailableHideTabBar()
+        .glassyListStyle()
     }
 }
 
@@ -229,6 +230,7 @@ struct ChangePasswordView: View {
             }
             .navigationTitle("修改密码")
             .navigationBarTitleDisplayMode(.inline)
+            .glassyListStyle()
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") { dismiss() }
@@ -350,6 +352,7 @@ struct TTSSettingsView: View {
         }
         .navigationTitle("听书设置")
         .ifAvailableHideTabBar()
+        .glassyListStyle()
         .task {
             await loadTTSName()
         }
@@ -462,6 +465,7 @@ struct ContentSettingsView: View {
         }
         .navigationTitle("内容设置")
         .ifAvailableHideTabBar()
+        .glassyListStyle()
     }
 }
 
@@ -490,6 +494,7 @@ struct MangaAntiScrapingSitesView: View {
         }
         .navigationTitle("反爬站点")
         .ifAvailableHideTabBar()
+        .glassyListStyle()
     }
 
     private func binding(for key: String) -> Binding<Bool> {
@@ -584,6 +589,7 @@ struct DebugSettingsView: View {
         }
         .navigationTitle("调试工具")
         .ifAvailableHideTabBar()
+        .glassyListStyle()
         .sheet(isPresented: $showLogViewer) {
             LogView()
         }
@@ -660,6 +666,7 @@ struct PreferredSourcesView: View {
             }
         }
         .ifAvailableHideTabBar()
+        .glassyListStyle()
         .task {
             if sourceStore.availableSources.isEmpty {
                 await sourceStore.refreshSources()

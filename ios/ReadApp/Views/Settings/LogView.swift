@@ -33,6 +33,7 @@ struct LogView: View {
                             .foregroundColor(.white)
                             .cornerRadius(10)
                     }
+                    .glassyButtonStyle()
                     
                     Button(action: {
                         LogManager.shared.clearLogs()
@@ -45,11 +46,13 @@ struct LogView: View {
                             .foregroundColor(.red)
                             .cornerRadius(10)
                     }
+                    .glassyButtonStyle()
                 }
                 .padding()
             }
             .navigationTitle("系统日志")
             .navigationBarTitleDisplayMode(.inline)
+            .liquidGlassBackground()
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("关闭") { dismiss() }

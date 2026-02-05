@@ -11,6 +11,7 @@ struct DisplaySettingsView: View {
         }
         .navigationTitle("显示与美化")
         .navigationBarTitleDisplayMode(.inline)
+        .glassyListStyle()
     }
 }
 

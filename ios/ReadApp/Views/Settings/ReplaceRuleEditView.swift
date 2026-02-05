@@ -52,6 +52,7 @@ struct ReplaceRuleEditView: View {
             }
             .navigationTitle(rule == nil ? "添加规则" : "编辑规则")
             .navigationBarTitleDisplayMode(.inline)
+            .glassyListStyle()
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") {

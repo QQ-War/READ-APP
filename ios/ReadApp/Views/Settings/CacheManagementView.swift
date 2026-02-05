@@ -46,6 +46,7 @@ struct CacheManagementView: View {
                 storageSection
                 cachedBooksSection
             }
+            .glassyListStyle()
         )
     }
     
