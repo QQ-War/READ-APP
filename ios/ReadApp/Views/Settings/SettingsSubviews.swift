@@ -8,7 +8,7 @@ struct AccountSettingsView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("用户信息")) {
+            Section(header: GlassySectionHeader(title: "用户信息")) {
                 HStack {
                     Text("用户名")
                     Spacer()
@@ -84,7 +84,7 @@ struct ReadingSettingsView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("基础显示")) {
+            Section(header: GlassySectionHeader(title: "基础显示")) {
                 Picker("阅读主题", selection: $preferences.readingTheme) {
                     ForEach(ReadingTheme.allCases) { theme in
                         Text(theme.localizedName).tag(theme)
@@ -129,7 +129,7 @@ struct ReadingSettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            Section(header: Text("左右翻页设置")) {
+            Section(header: GlassySectionHeader(title: "左右翻页设置")) {
                 Picker("翻页方式", selection: $preferences.pageTurningMode) {
                     ForEach(PageTurningMode.allCases) { mode in
                         Text(mode.localizedName).tag(mode)
@@ -137,7 +137,7 @@ struct ReadingSettingsView: View {
                 }
             }
 
-            Section(header: Text("上下滚动设置")) {
+            Section(header: GlassySectionHeader(title: "上下滚动设置")) {
                 Toggle("开启无限滚动", isOn: $preferences.isInfiniteScrollEnabled)
 
                 HStack {
@@ -159,7 +159,7 @@ struct ReadingSettingsView: View {
                 }
             }
 
-            Section(header: Text("显示与性能"), footer: Text("降低静态阅读时的刷新率可显著延长 ProMotion 设备的续航。关闭动态颜色可进一步减轻 GPU 渲染压力。")) {
+            Section(header: GlassySectionHeader(title: "显示与性能"), footer: Text("降低静态阅读时的刷新率可显著延长 ProMotion 设备的续航。关闭动态颜色可进一步减轻 GPU 渲染压力。")) {
                 HStack {
                     Text("静态刷新率")
                     Slider(value: Binding(get: { Double(preferences.staticRefreshRate) }, set: { preferences.staticRefreshRate = Float($0) }), in: 10...60, step: 10)
@@ -169,7 +169,7 @@ struct ReadingSettingsView: View {
                 Toggle("进度条动态颜色", isOn: $preferences.isProgressDynamicColorEnabled)
             }
 
-            Section(header: Text("漫画设置")) {
+            Section(header: GlassySectionHeader(title: "漫画设置")) {
                 HStack {
                     Text("漫画最大缩放")
                     Slider(value: $preferences.mangaMaxZoom, in: 1...10, step: 0.5)
@@ -208,7 +208,7 @@ struct ChangePasswordView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("安全信息")) {
+                Section(header: GlassySectionHeader(title: "安全信息")) {
                     SecureField("当前密码", text: $oldPassword)
                     SecureField("新密码", text: $newPassword)
                     SecureField("确认新密码", text: $confirmPassword)
@@ -279,7 +279,7 @@ struct TTSSettingsView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("引擎管理")) {
+            Section(header: GlassySectionHeader(title: "引擎管理")) {
                 NavigationLink(destination: TTSEngineListView()) {
                     Label("TTS 引擎管理", systemImage: "waveform.path.ecg")
                 }
@@ -315,7 +315,7 @@ struct TTSSettingsView: View {
                 }
             }
 
-            Section(header: Text("播放设置")) {
+            Section(header: GlassySectionHeader(title: "播放设置")) {
                 HStack {
                     Text("语速")
                     Slider(value: $preferences.speechRate, in: 50...300, step: 5)
@@ -408,7 +408,7 @@ struct ContentSettingsView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("搜索设置")) {
+            Section(header: GlassySectionHeader(title: "搜索设置")) {
                 Toggle("书架搜索包含书源", isOn: $preferences.searchSourcesFromBookshelf)
                 
                 if preferences.searchSourcesFromBookshelf {
@@ -428,7 +428,7 @@ struct ContentSettingsView: View {
                 }
             }
 
-            Section(header: Text("漫画图片")) {
+            Section(header: GlassySectionHeader(title: "漫画图片")) {
                 Toggle("启用反爬适配", isOn: $preferences.isMangaAntiScrapingEnabled)
                 NavigationLink(destination: MangaAntiScrapingSitesView()) {
                     Label {
@@ -450,13 +450,13 @@ struct ContentSettingsView: View {
                     .foregroundColor(.secondary)
             }
 
-            Section(header: Text("内容净化")) {
+            Section(header: GlassySectionHeader(title: "内容净化")) {
                 NavigationLink(destination: ReplaceRuleListView()) {
                     Label("净化规则管理", systemImage: "broom")
                 }
             }
             
-            Section(header: Text("书架设置")) {
+            Section(header: GlassySectionHeader(title: "书架设置")) {
                 Toggle("最近阅读排序", isOn: $preferences.bookshelfSortByRecent)
                 Text("开启后按最后阅读时间排序，关闭则按加入书架时间排序")
                     .font(.caption)
@@ -528,14 +528,14 @@ struct DebugSettingsView: View {
 
     var body: some View {
         Form {
-            Section(header: Text("调试选项")) {
+            Section(header: GlassySectionHeader(title: "调试选项")) {
                 Toggle("详细日志模式", isOn: $preferences.isVerboseLoggingEnabled)
                 Text("开启后将记录更详细的内容解析与图片加载过程")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
             
-            Section(header: Text("日志")) {
+            Section(header: GlassySectionHeader(title: "日志")) {
                 HStack {
                     Text("日志记录")
                     Spacer()
@@ -571,7 +571,7 @@ struct DebugSettingsView: View {
                 }
             }
             
-            Section(header: Text("存储")) {
+            Section(header: GlassySectionHeader(title: "存储")) {
                 Button(action: { showClearCacheAlert = true }) {
                     HStack {
                         Image(systemName: "memorychip")
@@ -629,11 +629,11 @@ struct PreferredSourcesView: View {
     
     var body: some View {
         List {
-            Section(header: Text("全局开关")) {
+            Section(header: GlassySectionHeader(title: "全局开关")) {
                 Toggle("搜索书架时包含全网书源", isOn: $preferences.searchSourcesFromBookshelf)
             }
             
-            Section(header: Text("指定搜索源"), footer: Text("未选择任何书源时，将默认搜索所有已启用的书源。")) {
+            Section(header: GlassySectionHeader(title: "指定搜索源"), footer: Text("未选择任何书源时，将默认搜索所有已启用的书源。")) {
                 if filterText.isEmpty {
                     Button(preferences.preferredSearchSourceUrls.isEmpty ? "✓ 全部启用源" : "全部启用源") {
                         preferences.preferredSearchSourceUrls = []

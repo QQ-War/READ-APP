@@ -538,7 +538,7 @@ struct SourceSwitchView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 40)
                 } else {
-                    Section(header: Text("完全匹配的结果 (\(searchResults.count))")) {
+                    Section(header: GlassySectionHeader(title: "完全匹配的结果 (\(searchResults.count))")) {
                         ForEach(searchResults) { book in
                             let isAuthorMatch = book.author == author
                             Button(action: { onSelect(book); dismiss() }) {

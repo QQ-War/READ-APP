@@ -28,11 +28,14 @@ struct SelectableMessageSheet: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("复制") { UIPasteboard.general.string = message }
+                        .glassyToolbarButton()
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("关闭") { onDismiss?() }
+                        .glassyToolbarButton()
                 }
             }
+            .glassyListStyle()
         }
     }
 }

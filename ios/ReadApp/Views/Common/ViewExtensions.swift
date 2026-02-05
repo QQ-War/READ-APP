@@ -51,6 +51,7 @@ extension View {
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
+                .buttonStyle(GlassyPressableButtonStyle())
         } else {
             self
         }
@@ -66,6 +67,7 @@ extension View {
                 .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.8))
                 .scaleEffect(1.0)
                 .animation(.easeInOut(duration: 0.15), value: UserPreferences.shared.isLiquidGlassEnabled)
+                .buttonStyle(GlassyPressableButtonStyle())
         } else {
             self
         }
@@ -80,6 +82,35 @@ extension View {
         } else {
             self
         }
+    }
+}
+
+struct GlassyPressableButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .shadow(color: Color.black.opacity(configuration.isPressed ? 0.2 : 0.08), radius: configuration.isPressed ? 10 : 6, x: 0, y: 4)
+            .overlay(
+                RoundedRectangle(cornerRadius: 999, style: .continuous)
+                    .stroke(Color.white.opacity(configuration.isPressed ? 0.22 : 0.12), lineWidth: 0.8)
+            )
+            .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+struct GlassySectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.caption)
+            .textCase(.uppercase)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(UserPreferences.shared.isLiquidGlassEnabled ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(UserPreferences.shared.isLiquidGlassEnabled ? 0.18 : 0.0), lineWidth: 0.8))
+            .foregroundColor(.secondary)
     }
 }
 

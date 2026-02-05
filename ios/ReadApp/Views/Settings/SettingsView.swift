@@ -27,7 +27,7 @@ struct SettingsView: View {
             }
             .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
 
-            Section(header: Text("通用设置")) {
+            Section(header: GlassySectionHeader(title: "通用设置")) {
                 ForEach(preferences.settingsOrder, id: \.self) { key in
                     if let item = SettingItem(rawValue: key) {
                         destinationLink(for: item)
@@ -40,7 +40,7 @@ struct SettingsView: View {
                 .onMove(perform: move)
             }
 
-            Section(header: Text("系统")) {
+            Section(header: GlassySectionHeader(title: "系统")) {
                 NavigationLink(destination: DebugSettingsView()) {
                     Label("调试与日志", systemImage: "hammer")
                 }

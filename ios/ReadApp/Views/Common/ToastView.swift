@@ -13,7 +13,7 @@ struct ToastView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.black.opacity(0.78))
+                    .fill(UserPreferences.shared.isLiquidGlassEnabled ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.black.opacity(0.78)))
             )
             .frame(maxWidth: 320, alignment: .leading)
             .shadow(radius: 6)

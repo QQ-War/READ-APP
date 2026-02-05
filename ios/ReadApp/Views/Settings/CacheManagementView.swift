@@ -53,7 +53,7 @@ struct CacheManagementView: View {
     // MARK: - Sections
     
     private var strategySection: some View {
-        Section(header: Text("策略设置"), footer: Text("“自动离线”会将内容永久保存在手机上。“漫画后台预载”则在阅读时提前下载下一章到内存/缓存中，不一定永久保存，但能大幅提升翻页速度。")) {
+        Section(header: GlassySectionHeader(title: "策略设置"), footer: Text("“自动离线”会将内容永久保存在手机上。“漫画后台预载”则在阅读时提前下载下一章到内存/缓存中，不一定永久保存，但能大幅提升翻页速度。")) {
             Toggle("文字章节自动离线", isOn: $preferences.isTextAutoCacheEnabled)
             Toggle("漫画图片自动离线", isOn: $preferences.isMangaAutoCacheEnabled)
             Toggle("漫画后台预载", isOn: $preferences.isMangaPreloadEnabled)
@@ -61,7 +61,7 @@ struct CacheManagementView: View {
     }
 
     private var mangaDownloadSection: some View {
-        Section(header: Text("漫画下载设置")) {
+        Section(header: GlassySectionHeader(title: "漫画下载设置")) {
             Toggle("启动代理下载", isOn: $preferences.forceMangaProxy)
 
             Stepper(value: $preferences.mangaImageMaxConcurrent, in: 1...6) {
@@ -107,7 +107,7 @@ struct CacheManagementView: View {
     }
     
     private var downloadingSection: some View {
-        Section(header: Text("正在下载")) {
+        Section(header: GlassySectionHeader(title: "正在下载")) {
             let jobs = downloadManager.activeOrFailedJobs()
             if jobs.isEmpty {
                 Text("暂无活跃任务").foregroundColor(.secondary)
@@ -120,7 +120,7 @@ struct CacheManagementView: View {
     }
     
     private var storageSection: some View {
-        Section(header: Text("空间占用")) {
+        Section(header: GlassySectionHeader(title: "空间占用")) {
             HStack {
                 Text("离线数据总量")
                 Spacer()
@@ -137,7 +137,7 @@ struct CacheManagementView: View {
     }
     
     private var cachedBooksSection: some View {
-        Section(header: Text("已下载书籍 (\(cachedBooks.count))")) {
+        Section(header: GlassySectionHeader(title: "已下载书籍 (\(cachedBooks.count))")) {
             if isLoading {
                 HStack { Spacer(); ProgressView("正在扫描磁盘..."); Spacer() }.padding()
             } else if cachedBooks.isEmpty {

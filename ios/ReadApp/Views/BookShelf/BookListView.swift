@@ -32,7 +32,7 @@ struct BookListView: View {
                 // ... rest of list content ...
                 if !listViewModel.searchText.isEmpty {
                     if !filteredAndSortedBooks.isEmpty {
-                        Section(header: Text("书架书籍")) {
+                        Section(header: GlassySectionHeader(title: "书架书籍")) {
                             ForEach(filteredAndSortedBooks) { book in
                                 bookRowView(for: book)
                                     .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
@@ -41,7 +41,7 @@ struct BookListView: View {
                     }
                     
                     if preferences.searchSourcesFromBookshelf {
-                        Section(header: Text("全网搜索")) {
+                        Section(header: GlassySectionHeader(title: "全网搜索")) {
                             if listViewModel.isSearchingOnline {
                                 HStack {
                                     Spacer()

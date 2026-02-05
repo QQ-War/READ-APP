@@ -92,5 +92,22 @@ struct ContentView: View {
         if #available(iOS 15.0, *) {
             UITabBar.appearance().scrollEdgeAppearance = appearance
         }
+        updateSearchBarAppearance()
+    }
+
+    private func updateSearchBarAppearance() {
+        let appearance = UISearchBarAppearance()
+        if preferences.isLiquidGlassEnabled {
+            appearance.configureWithTransparentBackground()
+            appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+            appearance.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.2)
+            appearance.searchTextFieldBackgroundColor = UIColor.systemBackground.withAlphaComponent(0.2)
+        } else {
+            appearance.configureWithDefaultBackground()
+        }
+        UISearchBar.appearance().standardAppearance = appearance
+        if #available(iOS 15.0, *) {
+            UISearchBar.appearance().scrollEdgeAppearance = appearance
+        }
     }
 }

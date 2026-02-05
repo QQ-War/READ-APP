@@ -22,7 +22,7 @@ struct ReplaceRuleEditView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("基本信息")) {
+                Section(header: GlassySectionHeader(title: "基本信息")) {
                     TextField("规则名称*", text: $name)
                     TextField("分组", text: $groupname)
                     TextField("匹配内容* (正则)", text: $pattern)
@@ -31,14 +31,14 @@ struct ReplaceRuleEditView: View {
                         .font(.system(.body, design: .monospaced))
                 }
                 
-                Section(header: Text("作用范围")) {
+                Section(header: GlassySectionHeader(title: "作用范围")) {
                     TextField("作用范围 (书名,逗号隔开)", text: $scope)
                     TextField("排除范围 (书名,逗号隔开)", text: $excludeScope)
                     Toggle("作用于标题", isOn: $scopeTitle)
                     Toggle("作用于正文", isOn: $scopeContent)
                 }
                 
-                Section(header: Text("选项")) {
+                Section(header: GlassySectionHeader(title: "选项")) {
                     Stepper(value: $ruleOrder, in: 0...1000) {
                         HStack {
                             Text("执行顺序")
