@@ -156,6 +156,7 @@ struct BookListView: View {
             }
             .buttonStyle(PlainButtonStyle())
         }
+        .glassyCard(cornerRadius: 14, padding: 6)
         .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {

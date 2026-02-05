@@ -24,6 +24,37 @@ extension View {
             self
         }
     }
+
+    @ViewBuilder
+    func glassyCard(cornerRadius: CGFloat = 16, padding: CGFloat = 8) -> some View {
+        if UserPreferences.shared.isLiquidGlassEnabled {
+            self
+                .padding(padding)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                )
+                .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 6)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func glassyButtonStyle() -> some View {
+        if UserPreferences.shared.isLiquidGlassEnabled {
+            self
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
+        } else {
+            self
+        }
+    }
 }
 
 struct HideTabBarModifier: ViewModifier {

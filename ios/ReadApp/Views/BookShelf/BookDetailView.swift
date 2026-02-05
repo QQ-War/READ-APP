@@ -178,8 +178,9 @@ struct BookDetailView: View {
                         }
                         .padding(.horizontal)
                         .padding(.vertical, 8)
-                        .background(Color.gray.opacity(0.05))
+                        .background(preferences.isLiquidGlassEnabled ? Color.clear : Color.gray.opacity(0.05))
                         .cornerRadius(10)
+                        .glassyCard(cornerRadius: 12, padding: 0)
                         .padding(.horizontal)
                     }
                     
@@ -238,8 +239,9 @@ struct BookDetailView: View {
                             Image(systemName: "chevron.right").font(.subheadline).foregroundColor(.secondary)
                         }
                         .padding()
-                        .background(Color.gray.opacity(0.05))
+                        .background(preferences.isLiquidGlassEnabled ? Color.clear : Color.gray.opacity(0.05))
                         .cornerRadius(12)
+                        .glassyCard(cornerRadius: 12, padding: 0)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 20)
@@ -330,6 +332,7 @@ struct BookDetailView: View {
         }
         .padding(.horizontal)
         .padding(.top)
+        .glassyCard(cornerRadius: 16, padding: 12)
     }
     
     private var downloadControls: some View {

@@ -78,6 +78,7 @@ struct LoginView: View {
                     .disabled(!canLogin || isLoading)
                 }
                 .padding(.horizontal, 30)
+                .glassyCard(cornerRadius: 18, padding: 16)
                 
                 // 服务器设置按钮
                 if preferences.serverURL.isEmpty {
@@ -97,6 +98,7 @@ struct LoginView: View {
             .sheet(isPresented: $showServerSettings) {
                 ServerSettingsView()
             }
+            .liquidGlassBackground()
         }
     }
     
@@ -364,4 +366,3 @@ struct ServerSettingsView: View {
         }
     }
 }
-

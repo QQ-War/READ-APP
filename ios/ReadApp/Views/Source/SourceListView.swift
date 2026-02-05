@@ -295,6 +295,7 @@ struct SourceListView: View {
             .scaleEffect(0.7)
         }
         .padding(.vertical, 8)
+        .glassyCard(cornerRadius: 14, padding: 6)
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
                 Task {
