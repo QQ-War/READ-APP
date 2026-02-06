@@ -96,7 +96,41 @@ extension ReaderContainerViewController {
             return
         }
 
-        if self.isFirstLoad && !resolvedManga {
+        // 尝试重用预取缓存 (方案 2：性能优化并避免重新分页导致的 1/2 Bug)
+        let chapterUrl = chapters.indices.contains(index) ? chapters[index].url : nil
+        var cacheUsed = false
+        if !resolvedManga, let url = chapterUrl {
+            if prevCache.chapterUrl == url && !prevCache.pages.isEmpty {
+                currentCache = prevCache
+                prevCache = .empty
+                cacheUsed = true
+            } else if nextCache.chapterUrl == url && !nextCache.pages.isEmpty {
+                currentCache = nextCache
+                nextCache = .empty
+                cacheUsed = true
+            }
+        }
+
+        if cacheUsed {
+            // 已从缓存加载，根据进入方向预设初始页码
+            if startAtEnd {
+                self.currentPageIndex = max(0, currentCache.pages.count - 1)
+            } else {
+                self.currentPageIndex = 0
+            }
+            
+            // 显式刷新 UI 容器，防止数据源不同步导致的“翻页撞墙”
+            if currentReadingMode == .newHorizontal {
+                updateNewHorizontalContent()
+            } else if currentReadingMode == .horizontal {
+                updateHorizontalPage(to: currentPageIndex, animated: false)
+            } else if currentReadingMode == .vertical {
+                updateVerticalAdjacent()
+            }
+            
+            setupReaderMode()
+            updateProgressUI()
+        } else if self.isFirstLoad && !resolvedManga {
             let initialOffset: Int
             if self.ttsManager.isPlaying && self.ttsManager.bookUrl == self.book.bookUrl && self.ttsManager.currentChapterIndex == index {
                 initialOffset = self.ttsManager.currentCharOffset
@@ -105,12 +139,11 @@ extension ReaderContainerViewController {
                 let durPos = self.book.durChapterPos ?? 0
                 initialOffset = Int(durPos * Double(rawContent.count))
             }
-            // 首次加载且是水平模式，使用锚点分页
+            // 首次加载且是水平模式，使用锚点分页保持位置
             reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: (currentReadingMode == .horizontal || currentReadingMode == .newHorizontal) ? initialOffset : 0)
-        } else if startAtEnd && !resolvedManga {
-            // 翻回上一章，锚点设为末尾
-            reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: rawContent.count)
         } else {
+            // 无论是翻回上一章还是正常进入，加载新章节时统一使用起点分页
+            // 这样能保持分页序列自然（1/1），后续由 scrollToChapterEnd 负责定位到末尾
             reRenderCurrentContent(rawContentOverride: rawContent, anchorOffset: 0)
         }
 

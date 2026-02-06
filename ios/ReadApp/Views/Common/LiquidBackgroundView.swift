@@ -29,6 +29,7 @@ struct LiquidBackgroundView: View {
                             y: startAnimation ? -100 : 100)
             }
             .blur(radius: 60)
+            .clipped()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // 玻璃层
