@@ -838,6 +838,10 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         if currentReadingMode == .horizontal || currentReadingMode == .newHorizontal {
             let target = offset > 0 ? 0 : max(0, currentCache.pages.count - 1)
             currentPageIndex = target
+            
+            // 核心重置：在更新内容前重置滚动状态，切断当前的拖拽/惯性
+            newHorizontalVC?.resetScrollState()
+            
             if currentReadingMode == .newHorizontal {
                 updateNewHorizontalContent()
             } else {

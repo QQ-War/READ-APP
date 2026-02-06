@@ -202,6 +202,14 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         }
     }
     
+    func resetScrollState() {
+        // 强制停止任何当前的滚动或减速动画
+        collectionView.setContentOffset(collectionView.contentOffset, animated: false)
+        // 确保 UI 处于正确的位置（第一页或最后一页由后续调用决定，此处先重置手势）
+        collectionView.isUserInteractionEnabled = false
+        collectionView.isUserInteractionEnabled = true
+    }
+    
     // MARK: - UICollectionViewDataSource
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return pages.count

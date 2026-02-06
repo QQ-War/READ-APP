@@ -119,7 +119,9 @@ extension ReaderContainerViewController {
                 self.currentPageIndex = 0
             }
             
-            // 显式刷新 UI 容器，防止数据源不同步导致的“翻页撞墙”
+            // 显式刷新 UI 容器前重置滚动状态，防止滑动撞墙
+            newHorizontalVC?.resetScrollState()
+            
             if currentReadingMode == .newHorizontal {
                 updateNewHorizontalContent()
             } else if currentReadingMode == .horizontal {
