@@ -117,8 +117,6 @@ extension ReaderContainerViewController {
     }
 
     func updateNewHorizontalContent() {
-        let prevPageInfo = prevCache.pageInfos?.last
-        let nextPageInfo = nextCache.pageInfos?.first
         newHorizontalVC?.update(
             pages: currentCache.pages,
             pageInfos: currentCache.pageInfos ?? [],
@@ -129,13 +127,7 @@ extension ReaderContainerViewController {
             topInset: currentLayoutSpec.topInset,
             anchorPageIndex: currentPageIndex,
             backgroundColor: readerSettings.readingTheme.backgroundColor,
-            turningMode: readerSettings.pageTurningMode,
-            prevPageInfo: prevPageInfo,
-            prevRenderStore: prevCache.renderStore,
-            prevParagraphStarts: prevCache.paragraphStarts,
-            nextPageInfo: nextPageInfo,
-            nextRenderStore: nextCache.renderStore,
-            nextParagraphStarts: nextCache.paragraphStarts
+            turningMode: readerSettings.pageTurningMode
         )
         updateProgressUI()
     }
