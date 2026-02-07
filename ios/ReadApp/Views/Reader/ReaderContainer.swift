@@ -210,7 +210,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     var nextCache: ChapterCache = .empty
     var prevCache: ChapterCache = .empty
     var currentPageIndex: Int = 0
-    fileprivate var pendingEdgePrefetchOffset: Int? = nil
+    var pendingEdgePrefetchOffset: Int? = nil
     
     private var visibleHorizontalPageIndex: Int? {
         guard let pageVC = horizontalVC?.viewControllers?.first as? PageContentViewController else { return nil }
