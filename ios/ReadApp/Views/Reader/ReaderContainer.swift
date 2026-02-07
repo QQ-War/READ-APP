@@ -1131,6 +1131,12 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     }
     
     func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, requestChapterSwitch offset: Int) {
+        if collectionView.isCompositeEdgeSwitch {
+            // 复合页已经展示过临近页，直接切章避免二次动画
+            self.requestChapterSwitch(offset: offset, preferSeamless: true)
+            collectionView.isCompositeEdgeSwitch = false
+            return
+        }
         if offset > 0 && !nextCache.pages.isEmpty {
             animateToAdjacentChapter(offset: 1, targetPage: 0)
         } else if offset < 0 && !prevCache.pages.isEmpty {

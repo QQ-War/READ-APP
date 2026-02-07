@@ -113,6 +113,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     private var compositePages: [CompositePage] = []
     private var hasPrevEdge: Bool = false
     private var hasNextEdge: Bool = false
+    var isCompositeEdgeSwitch: Bool = false
 
     var sideMargin: CGFloat = ReaderConstants.Layout.defaultMargin
     var topInset: CGFloat = 0
@@ -334,8 +335,10 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
             currentPageIndex = comp.pageIndex
             delegate?.horizontalCollectionView(self, didUpdatePageIndex: comp.pageIndex)
         } else if comp.source == .previous {
+            isCompositeEdgeSwitch = true
             delegate?.horizontalCollectionView(self, requestChapterSwitch: -1)
         } else if comp.source == .next {
+            isCompositeEdgeSwitch = true
             delegate?.horizontalCollectionView(self, requestChapterSwitch: 1)
         }
     }
