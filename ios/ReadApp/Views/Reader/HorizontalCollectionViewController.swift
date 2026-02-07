@@ -101,6 +101,16 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     var renderStore: TextKit2RenderStore?
     var paragraphStarts: [Int] = []
     var chapterPrefixLen: Int = 0
+    
+    // 可选的前后章“虚拟页”预览
+    private var hasPrevChapterPage: Bool = false
+    private var hasNextChapterPage: Bool = false
+    private var prevChapterPageInfo: TK2PageInfo?
+    private var prevChapterRenderStore: TextKit2RenderStore?
+    private var prevChapterParagraphStarts: [Int] = []
+    private var nextChapterPageInfo: TK2PageInfo?
+    private var nextChapterRenderStore: TextKit2RenderStore?
+    private var nextChapterParagraphStarts: [Int] = []
     var sideMargin: CGFloat = ReaderConstants.Layout.defaultMargin
     var topInset: CGFloat = 0
     var themeBackgroundColor: UIColor = .white
@@ -144,12 +154,40 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         ])
     }
     
-    func update(pages: [PaginatedPage], pageInfos: [TK2PageInfo], renderStore: TextKit2RenderStore?, paragraphStarts: [Int], prefixLen: Int, sideMargin: CGFloat, topInset: CGFloat, anchorPageIndex: Int, backgroundColor: UIColor, turningMode: PageTurningMode) {
+    func update(
+        pages: [PaginatedPage],
+        pageInfos: [TK2PageInfo],
+        renderStore: TextKit2RenderStore?,
+        paragraphStarts: [Int],
+        prefixLen: Int,
+        sideMargin: CGFloat,
+        topInset: CGFloat,
+        anchorPageIndex: Int,
+        backgroundColor: UIColor,
+        turningMode: PageTurningMode,
+        prevPageInfo: TK2PageInfo? = nil,
+        prevRenderStore: TextKit2RenderStore? = nil,
+        prevParagraphStarts: [Int] = [],
+        nextPageInfo: TK2PageInfo? = nil,
+        nextRenderStore: TextKit2RenderStore? = nil,
+        nextParagraphStarts: [Int] = []
+    ) {
         self.pages = pages
         self.pageInfos = pageInfos
         self.renderStore = renderStore
         self.paragraphStarts = paragraphStarts
         self.chapterPrefixLen = prefixLen
+        
+        self.prevChapterPageInfo = prevPageInfo
+        self.prevChapterRenderStore = prevRenderStore
+        self.prevChapterParagraphStarts = prevParagraphStarts
+        self.hasPrevChapterPage = prevPageInfo != nil && prevRenderStore != nil
+        
+        self.nextChapterPageInfo = nextPageInfo
+        self.nextChapterRenderStore = nextRenderStore
+        self.nextChapterParagraphStarts = nextParagraphStarts
+        self.hasNextChapterPage = nextPageInfo != nil && nextRenderStore != nil
+
         self.sideMargin = sideMargin
         self.topInset = topInset
         self.currentPageIndex = anchorPageIndex
@@ -168,7 +206,8 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         collectionView.backgroundColor = backgroundColor
         collectionView.reloadData()
         collectionView.layoutIfNeeded()
-        scrollToPageIndex(anchorPageIndex, animated: false)
+        let visualIndex = visualIndexForLogicalPage(anchorPageIndex)
+        scrollToVisualIndex(visualIndex, animated: false)
     }
 
     func updateHighlight(index: Int?, secondary: Set<Int>, isPlaying: Bool, highlightRange: NSRange?) {
@@ -181,13 +220,35 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         self.highlightRange = highlightRange
         for cell in collectionView.visibleCells {
             guard let readerCell = cell as? ReaderPageCell else { continue }
-            readerCell.updateHighlight(index: index, secondary: secondary, isPlaying: isPlaying, highlightRange: highlightRange)
+            if let idx = collectionView.indexPath(for: readerCell)?.item, isVirtualItemIndex(idx) {
+                readerCell.updateHighlight(index: nil, secondary: [], isPlaying: false, highlightRange: nil)
+            } else {
+                readerCell.updateHighlight(index: index, secondary: secondary, isPlaying: isPlaying, highlightRange: highlightRange)
+            }
         }
     }
     
     func scrollToPageIndex(_ index: Int, animated: Bool) {
         guard index >= 0 && index < pages.count else { return }
         currentPageIndex = index
+        let visualIndex = visualIndexForLogicalPage(index)
+        let width = collectionView.bounds.width
+        if width > 0 {
+            let targetX = CGFloat(visualIndex) * width
+            collectionView.setContentOffset(CGPoint(x: targetX, y: 0), animated: animated)
+        } else {
+            let indexPath = IndexPath(item: visualIndex, section: 0)
+            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
+        }
+        if !animated {
+            collectionView.collectionViewLayout.invalidateLayout()
+            collectionView.layoutIfNeeded()
+        }
+    }
+
+    private func scrollToVisualIndex(_ index: Int, animated: Bool) {
+        let totalItems = pages.count + (hasPrevChapterPage ? 1 : 0) + (hasNextChapterPage ? 1 : 0)
+        guard index >= 0 && index < totalItems else { return }
         let width = collectionView.bounds.width
         if width > 0 {
             let targetX = CGFloat(index) * width
@@ -212,26 +273,61 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     
     // MARK: - UICollectionViewDataSource
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return pages.count
+        var count = pages.count
+        if hasPrevChapterPage { count += 1 }
+        if hasNextChapterPage { count += 1 }
+        return count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "ReaderPageCell", for: indexPath) as! ReaderPageCell
         
-        if indexPath.item < pageInfos.count {
-            let info = pageInfos[indexPath.item]
-            cell.update(
-                renderStore: renderStore,
-                pageIndex: indexPath.item,
-                pageInfo: info,
-                paragraphStarts: paragraphStarts,
-                prefixLen: chapterPrefixLen,
-                sideMargin: sideMargin,
-                topInset: topInset,
-                backgroundColor: themeBackgroundColor
-            )
+        let itemIndex = indexPath.item
+        if hasPrevChapterPage && itemIndex == 0 {
+            if let info = prevChapterPageInfo {
+                cell.update(
+                    renderStore: prevChapterRenderStore,
+                    pageIndex: -1,
+                    pageInfo: info,
+                    paragraphStarts: prevChapterParagraphStarts,
+                    prefixLen: 0,
+                    sideMargin: sideMargin,
+                    topInset: topInset,
+                    backgroundColor: themeBackgroundColor
+                )
+            }
+            cell.updateHighlight(index: nil, secondary: [], isPlaying: false, highlightRange: nil)
+        } else if hasNextChapterPage && itemIndex == (pages.count + (hasPrevChapterPage ? 1 : 0)) {
+            if let info = nextChapterPageInfo {
+                cell.update(
+                    renderStore: nextChapterRenderStore,
+                    pageIndex: 9999,
+                    pageInfo: info,
+                    paragraphStarts: nextChapterParagraphStarts,
+                    prefixLen: 0,
+                    sideMargin: sideMargin,
+                    topInset: topInset,
+                    backgroundColor: themeBackgroundColor
+                )
+            }
+            cell.updateHighlight(index: nil, secondary: [], isPlaying: false, highlightRange: nil)
+        } else {
+            let actualIndex = hasPrevChapterPage ? (itemIndex - 1) : itemIndex
+            if actualIndex >= 0 && actualIndex < pageInfos.count {
+                let info = pageInfos[actualIndex]
+                cell.update(
+                    renderStore: renderStore,
+                    pageIndex: actualIndex,
+                    pageInfo: info,
+                    paragraphStarts: paragraphStarts,
+                    prefixLen: chapterPrefixLen,
+                    sideMargin: sideMargin,
+                    topInset: topInset,
+                    backgroundColor: themeBackgroundColor
+                )
+                cell.updateHighlight(index: highlightIndex, secondary: secondaryIndices, isPlaying: isPlayingHighlight, highlightRange: highlightRange)
+            }
         }
-        cell.updateHighlight(index: highlightIndex, secondary: secondaryIndices, isPlaying: isPlayingHighlight, highlightRange: highlightRange)
         
         cell.onTapLocation = { [weak self] location in
             guard let self = self else { return }
@@ -262,35 +358,17 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         onInteractionChanged?(false)
-        let width = scrollView.bounds.width
-        guard width > 0 else { return }
-        let page = Int(round(scrollView.contentOffset.x / width))
-        if page >= 0 && page < pages.count {
-            currentPageIndex = page
-            delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
-        }
+        notifyPageIndexChange()
     }
     
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-        let width = scrollView.bounds.width
-        guard width > 0 else { return }
-        let page = Int(round(scrollView.contentOffset.x / width))
-        if page >= 0 && page < pages.count {
-            currentPageIndex = page
-            delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
-        }
+        notifyPageIndexChange()
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
             onInteractionChanged?(false)
-            let width = scrollView.bounds.width
-            guard width > 0 else { return }
-            let page = Int(round(scrollView.contentOffset.x / width))
-            if page >= 0 && page < pages.count {
-                currentPageIndex = page
-                delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
-            }
+            notifyPageIndexChange()
         }
     }
 
@@ -310,11 +388,12 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
             targetPage = Int(round(estimatedPage))
         }
         
-        // 边界保护：限制在当前章节范围内
-        targetPage = max(0, min(pages.count - 1, targetPage))
+        // 边界保护：包含虚拟页
+        let totalItems = pages.count + (hasPrevChapterPage ? 1 : 0) + (hasNextChapterPage ? 1 : 0)
+        targetPage = max(0, min(totalItems - 1, targetPage))
         
-        // 统一使用 scrollToPageIndex 触发动画，确保点击和滑动动画一致
-        scrollToPageIndex(targetPage, animated: true)
+        // 使用 visual index 触发动画，确保手势一致
+        scrollToVisualIndex(targetPage, animated: true)
         
         // 阻止系统自动吸附，让我们的动画控制位置
         targetContentOffset.pointee = scrollView.contentOffset
@@ -350,6 +429,41 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
             return -1
         }
         return 0
+    }
+
+    private func notifyPageIndexChange() {
+        let width = collectionView.bounds.width
+        guard width > 0 else { return }
+        let itemIndex = Int(round(collectionView.contentOffset.x / width))
+        let totalItems = pages.count + (hasPrevChapterPage ? 1 : 0) + (hasNextChapterPage ? 1 : 0)
+        if itemIndex < 0 || itemIndex >= totalItems { return }
+        
+        if hasPrevChapterPage && itemIndex == 0 {
+            delegate?.horizontalCollectionView(self, requestChapterSwitch: -1)
+            return
+        }
+        
+        if hasNextChapterPage && itemIndex == totalItems - 1 {
+            delegate?.horizontalCollectionView(self, requestChapterSwitch: 1)
+            return
+        }
+        
+        let actualIndex = hasPrevChapterPage ? (itemIndex - 1) : itemIndex
+        if actualIndex >= 0 && actualIndex < pages.count {
+            currentPageIndex = actualIndex
+            delegate?.horizontalCollectionView(self, didUpdatePageIndex: actualIndex)
+        }
+    }
+
+    private func isVirtualItemIndex(_ index: Int) -> Bool {
+        if hasPrevChapterPage && index == 0 { return true }
+        let totalItems = pages.count + (hasPrevChapterPage ? 1 : 0) + (hasNextChapterPage ? 1 : 0)
+        if hasNextChapterPage && index == totalItems - 1 { return true }
+        return false
+    }
+
+    private func visualIndexForLogicalPage(_ index: Int) -> Int {
+        return hasPrevChapterPage ? (index + 1) : index
     }
 }
 
