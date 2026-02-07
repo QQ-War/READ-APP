@@ -365,6 +365,8 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     private let switchRequestCooldown: TimeInterval = ReaderConstants.Interaction.switchRequestCooldown
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // 有复合页时，由复合页落点触发切章，避免双触发
+        if hasPrevEdge || hasNextEdge { return }
         let offsetX = scrollView.contentOffset.x
         let width = scrollView.bounds.width
         let contentWidth = scrollView.contentSize.width
