@@ -113,6 +113,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     private var compositePages: [CompositePage] = []
     private var hasPrevEdge: Bool = false
     private var hasNextEdge: Bool = false
+    private var edgeSwitchTriggered: Bool = false
     var isCompositeEdgeSwitch: Bool = false
 
     var sideMargin: CGFloat = ReaderConstants.Layout.defaultMargin
@@ -327,6 +328,10 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     private func syncCurrentPageAfterScroll(_ scrollView: UIScrollView) {
         let width = scrollView.bounds.width
         guard width > 0 else { return }
+        if edgeSwitchTriggered {
+            edgeSwitchTriggered = false
+            return
+        }
         let compositeIdx = Int(round(scrollView.contentOffset.x / width))
         guard compositeIdx >= 0 && compositeIdx < compositePages.count else { return }
         
@@ -368,8 +373,6 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     private let switchRequestCooldown: TimeInterval = ReaderConstants.Interaction.switchRequestCooldown
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        // 有复合页时，由复合页落点触发切章，避免双触发
-        if hasPrevEdge || hasNextEdge { return }
         let offsetX = scrollView.contentOffset.x
         let width = scrollView.bounds.width
         let contentWidth = scrollView.contentSize.width
@@ -383,6 +386,7 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         let switchOffset = detectChapterSwitchOffset(offsetX: offsetX, width: width, contentWidth: contentWidth)
         if switchOffset != 0 {
             lastSwitchRequestTime = now
+            edgeSwitchTriggered = true
             delegate?.horizontalCollectionView(self, requestChapterSwitch: switchOffset)
         }
     }
