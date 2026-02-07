@@ -210,6 +210,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     var nextCache: ChapterCache = .empty
     var prevCache: ChapterCache = .empty
     var currentPageIndex: Int = 0
+    private var pendingEdgePrefetchOffset: Int? = nil
     
     private var visibleHorizontalPageIndex: Int? {
         guard let pageVC = horizontalVC?.viewControllers?.first as? PageContentViewController else { return nil }
@@ -1129,7 +1130,31 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, didTapRight: Bool) {
         handlePageTap(isNext: true)
     }
-    
+
+    func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, requestPrefetch offset: Int) {
+        guard offset != 0 else { return }
+        if pendingEdgePrefetchOffset == offset { return }
+        pendingEdgePrefetchOffset = offset
+        onLoadingChanged?(true)
+        if offset > 0 {
+            if nextCache.renderStore != nil, let infos = nextCache.pageInfos, !infos.isEmpty {
+                onLoadingChanged?(false)
+                pendingEdgePrefetchOffset = nil
+                if currentReadingMode == .newHorizontal { updateNewHorizontalContent() }
+                return
+            }
+            prefetchNextChapterOnly(index: currentChapterIndex)
+        } else {
+            if prevCache.renderStore != nil, let infos = prevCache.pageInfos, !infos.isEmpty {
+                onLoadingChanged?(false)
+                pendingEdgePrefetchOffset = nil
+                if currentReadingMode == .newHorizontal { updateNewHorizontalContent() }
+                return
+            }
+            prefetchPrevChapterOnly(index: currentChapterIndex)
+        }
+    }
+
     func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, requestChapterSwitch offset: Int) {
         if collectionView.isCompositeEdgeSwitch {
             // 复合页已经展示过临近页，直接切章避免二次动画

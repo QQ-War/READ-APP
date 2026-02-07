@@ -21,6 +21,10 @@ extension ReaderContainerViewController {
                 if self.currentReadingMode == .newHorizontal {
                     self.updateNewHorizontalContent()
                 }
+                if self.pendingEdgePrefetchOffset == 1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
+                }
                 if self.isMangaMode {
                     self.prefetchedMangaNextIndex = index + 1
                     self.prefetchedMangaNextContent = cache.rawContent
@@ -36,14 +40,26 @@ extension ReaderContainerViewController {
                 if self.currentReadingMode == .newHorizontal {
                     self.updateNewHorizontalContent()
                 }
+                if self.pendingEdgePrefetchOffset == -1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
+                }
             },
             onResetNext: { [weak self] in
                 guard let self = self else { return }
                 Task { @MainActor in self.resetMangaPrefetchedContent() }
+                if self.pendingEdgePrefetchOffset == 1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
+                }
             },
             onResetPrev: { [weak self] in
                 guard let self = self else { return }
                 Task { @MainActor in self.prevCache = .empty }
+                if self.pendingEdgePrefetchOffset == -1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
+                }
             }
         )
     }
@@ -67,10 +83,18 @@ extension ReaderContainerViewController {
                 if self.currentReadingMode == .newHorizontal {
                     self.updateNewHorizontalContent()
                 }
+                if self.pendingEdgePrefetchOffset == 1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
+                }
             },
             onResetNext: { [weak self] in
                 guard let self = self else { return }
                 Task { @MainActor in self.nextCache = .empty }
+                if self.pendingEdgePrefetchOffset == 1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
+                }
             }
         )
     }
@@ -94,10 +118,18 @@ extension ReaderContainerViewController {
                 if self.currentReadingMode == .newHorizontal {
                     self.updateNewHorizontalContent()
                 }
+                if self.pendingEdgePrefetchOffset == -1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
+                }
             },
             onResetPrev: { [weak self] in
                 guard let self = self else { return }
                 Task { @MainActor in self.prevCache = .empty }
+                if self.pendingEdgePrefetchOffset == -1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
+                }
             }
         )
     }

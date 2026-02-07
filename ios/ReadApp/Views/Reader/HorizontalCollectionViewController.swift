@@ -6,6 +6,7 @@ protocol HorizontalCollectionViewDelegate: AnyObject {
     func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, didTapLeft: Bool)
     func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, didTapRight: Bool)
     func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, requestChapterSwitch offset: Int)
+    func horizontalCollectionView(_ collectionView: HorizontalCollectionViewController, requestPrefetch offset: Int)
 }
 
 class AnimatedPageLayout: UICollectionViewFlowLayout {
@@ -113,7 +114,6 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     private var compositePages: [CompositePage] = []
     private var hasPrevEdge: Bool = false
     private var hasNextEdge: Bool = false
-    private var edgeSwitchTriggered: Bool = false
     var isCompositeEdgeSwitch: Bool = false
 
     var sideMargin: CGFloat = ReaderConstants.Layout.defaultMargin
@@ -328,10 +328,6 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     private func syncCurrentPageAfterScroll(_ scrollView: UIScrollView) {
         let width = scrollView.bounds.width
         guard width > 0 else { return }
-        if edgeSwitchTriggered {
-            edgeSwitchTriggered = false
-            return
-        }
         let compositeIdx = Int(round(scrollView.contentOffset.x / width))
         guard compositeIdx >= 0 && compositeIdx < compositePages.count else { return }
         
@@ -373,6 +369,8 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
     private let switchRequestCooldown: TimeInterval = ReaderConstants.Interaction.switchRequestCooldown
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // 有复合页时由复合页落点切章，无需边缘检测
+        if hasPrevEdge || hasNextEdge { return }
         let offsetX = scrollView.contentOffset.x
         let width = scrollView.bounds.width
         let contentWidth = scrollView.contentSize.width
@@ -386,8 +384,8 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         let switchOffset = detectChapterSwitchOffset(offsetX: offsetX, width: width, contentWidth: contentWidth)
         if switchOffset != 0 {
             lastSwitchRequestTime = now
-            edgeSwitchTriggered = true
-            delegate?.horizontalCollectionView(self, requestChapterSwitch: switchOffset)
+            // 没有复合页时仅触发预取，等待虚拟页出现
+            delegate?.horizontalCollectionView(self, requestPrefetch: switchOffset)
         }
     }
     
