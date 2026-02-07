@@ -117,6 +117,16 @@ extension ReaderContainerViewController {
     }
 
     func updateNewHorizontalContent() {
+        var prevEdge: (TK2PageInfo, TextKit2RenderStore)? = nil
+        if let pInfos = prevCache.pageInfos, !pInfos.isEmpty, let pStore = prevCache.renderStore {
+            prevEdge = (pInfos.last!, pStore)
+        }
+        
+        var nextEdge: (TK2PageInfo, TextKit2RenderStore)? = nil
+        if let nInfos = nextCache.pageInfos, !nInfos.isEmpty, let nStore = nextCache.renderStore {
+            nextEdge = (nInfos.first!, nStore)
+        }
+
         newHorizontalVC?.update(
             pages: currentCache.pages,
             pageInfos: currentCache.pageInfos ?? [],
@@ -127,7 +137,9 @@ extension ReaderContainerViewController {
             topInset: currentLayoutSpec.topInset,
             anchorPageIndex: currentPageIndex,
             backgroundColor: readerSettings.readingTheme.backgroundColor,
-            turningMode: readerSettings.pageTurningMode
+            turningMode: readerSettings.pageTurningMode,
+            prevEdge: prevEdge,
+            nextEdge: nextEdge
         )
         updateProgressUI()
     }

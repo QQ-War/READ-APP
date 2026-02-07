@@ -18,6 +18,9 @@ extension ReaderContainerViewController {
                 guard self.currentChapterIndex == index else { return }
                 self.nextCache = cache
                 self.updateVerticalAdjacent()
+                if self.currentReadingMode == .newHorizontal {
+                    self.updateNewHorizontalContent()
+                }
                 if self.isMangaMode {
                     self.prefetchedMangaNextIndex = index + 1
                     self.prefetchedMangaNextContent = cache.rawContent
@@ -30,6 +33,9 @@ extension ReaderContainerViewController {
                 guard self.currentChapterIndex == index else { return }
                 self.prevCache = cache
                 self.updateVerticalAdjacent()
+                if self.currentReadingMode == .newHorizontal {
+                    self.updateNewHorizontalContent()
+                }
             },
             onResetNext: { [weak self] in
                 guard let self = self else { return }
@@ -58,6 +64,9 @@ extension ReaderContainerViewController {
                 guard self.currentChapterIndex == index else { return }
                 self.nextCache = cache
                 self.updateVerticalAdjacent()
+                if self.currentReadingMode == .newHorizontal {
+                    self.updateNewHorizontalContent()
+                }
             },
             onResetNext: { [weak self] in
                 guard let self = self else { return }
@@ -82,6 +91,9 @@ extension ReaderContainerViewController {
                 guard self.currentChapterIndex == index else { return }
                 self.prevCache = cache
                 self.updateVerticalAdjacent()
+                if self.currentReadingMode == .newHorizontal {
+                    self.updateNewHorizontalContent()
+                }
             },
             onResetPrev: { [weak self] in
                 guard let self = self else { return }

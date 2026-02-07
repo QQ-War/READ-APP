@@ -91,16 +91,29 @@ class AnimatedPageLayout: UICollectionViewFlowLayout {
 
 class HorizontalCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     
+    struct CompositePage {
+        enum Source {
+            case previous
+            case current
+            case next
+        }
+        let source: Source
+        let pageIndex: Int
+        let pageInfo: TK2PageInfo?
+        let renderStore: TextKit2RenderStore?
+        let paragraphStarts: [Int]
+        let prefixLen: Int
+    }
+
     weak var delegate: HorizontalCollectionViewDelegate?
     var onImageTapped: ((URL) -> Void)?
     var onAddReplaceRule: ((String) -> Void)?
     var onInteractionChanged: ((Bool) -> Void)?
     
-    var pages: [PaginatedPage] = []
-    var pageInfos: [TK2PageInfo] = []
-    var renderStore: TextKit2RenderStore?
-    var paragraphStarts: [Int] = []
-    var chapterPrefixLen: Int = 0
+    private var compositePages: [CompositePage] = []
+    private var hasPrevEdge: Bool = false
+    private var hasNextEdge: Bool = false
+
     var sideMargin: CGFloat = ReaderConstants.Layout.defaultMargin
     var topInset: CGFloat = 0
     var themeBackgroundColor: UIColor = .white
@@ -144,23 +157,47 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         ])
     }
     
-    func update(pages: [PaginatedPage], pageInfos: [TK2PageInfo], renderStore: TextKit2RenderStore?, paragraphStarts: [Int], prefixLen: Int, sideMargin: CGFloat, topInset: CGFloat, anchorPageIndex: Int, backgroundColor: UIColor, turningMode: PageTurningMode) {
-        self.pages = pages
-        self.pageInfos = pageInfos
-        self.renderStore = renderStore
-        self.paragraphStarts = paragraphStarts
-        self.chapterPrefixLen = prefixLen
+    func update(
+        pages: [PaginatedPage],
+        pageInfos: [TK2PageInfo],
+        renderStore: TextKit2RenderStore?,
+        paragraphStarts: [Int],
+        prefixLen: Int,
+        sideMargin: CGFloat,
+        topInset: CGFloat,
+        anchorPageIndex: Int,
+        backgroundColor: UIColor,
+        turningMode: PageTurningMode,
+        prevEdge: (TK2PageInfo, TextKit2RenderStore)? = nil,
+        nextEdge: (TK2PageInfo, TextKit2RenderStore)? = nil
+    ) {
         self.sideMargin = sideMargin
         self.topInset = topInset
-        self.currentPageIndex = anchorPageIndex
         self.themeBackgroundColor = backgroundColor
         self.turningMode = turningMode
+        
+        var newComposite: [CompositePage] = []
+        hasPrevEdge = prevEdge != nil
+        if let prev = prevEdge {
+            newComposite.append(CompositePage(source: .previous, pageIndex: 9999, pageInfo: prev.0, renderStore: prev.1, paragraphStarts: [], prefixLen: 0))
+        }
+        
+        for (idx, info) in pageInfos.enumerated() {
+            newComposite.append(CompositePage(source: .current, pageIndex: idx, pageInfo: info, renderStore: renderStore, paragraphStarts: paragraphStarts, prefixLen: prefixLen))
+        }
+        
+        hasNextEdge = nextEdge != nil
+        if let next = nextEdge {
+            newComposite.append(CompositePage(source: .next, pageIndex: 0, pageInfo: next.0, renderStore: next.1, paragraphStarts: [], prefixLen: 0))
+        }
+        
+        self.compositePages = newComposite
+        self.currentPageIndex = anchorPageIndex
         
         if let layout = collectionView.collectionViewLayout as? AnimatedPageLayout {
             layout.turningMode = turningMode
         }
         
-        // 优化：非平滑滚动模式下关闭系统分页，改用自定义吸附，以支持更精细的动画控制
         collectionView.isPagingEnabled = (turningMode == .scroll || turningMode == .none)
         collectionView.decelerationRate = (turningMode == .scroll || turningMode == .none) ? .normal : .fast
         
@@ -168,7 +205,9 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         collectionView.backgroundColor = backgroundColor
         collectionView.reloadData()
         collectionView.layoutIfNeeded()
-        scrollToPageIndex(anchorPageIndex, animated: false)
+        
+        let targetCompositeIndex = hasPrevEdge ? (anchorPageIndex + 1) : anchorPageIndex
+        scrollToCompositeIndex(targetCompositeIndex, animated: false)
     }
 
     func updateHighlight(index: Int?, secondary: Set<Int>, isPlaying: Bool, highlightRange: NSRange?) {
@@ -185,9 +224,8 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         }
     }
     
-    func scrollToPageIndex(_ index: Int, animated: Bool) {
-        guard index >= 0 && index < pages.count else { return }
-        currentPageIndex = index
+    private func scrollToCompositeIndex(_ index: Int, animated: Bool) {
+        guard index >= 0 && index < compositePages.count else { return }
         let width = collectionView.bounds.width
         if width > 0 {
             let targetX = CGFloat(index) * width
@@ -201,37 +239,46 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
             collectionView.layoutIfNeeded()
         }
     }
+
+    func scrollToPageIndex(_ index: Int, animated: Bool) {
+        let compositeIdx = hasPrevEdge ? (index + 1) : index
+        currentPageIndex = index
+        scrollToCompositeIndex(compositeIdx, animated: animated)
+    }
     
     func resetScrollState() {
-        // 强制停止任何当前的滚动或减速动画
         collectionView.setContentOffset(collectionView.contentOffset, animated: false)
-        // 确保 UI 处于正确的位置（第一页或最后一页由后续调用决定，此处先重置手势）
         collectionView.isUserInteractionEnabled = false
         collectionView.isUserInteractionEnabled = true
     }
     
     // MARK: - UICollectionViewDataSource
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return pages.count
+        return compositePages.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "ReaderPageCell", for: indexPath) as! ReaderPageCell
+        let comp = compositePages[indexPath.item]
         
-        if indexPath.item < pageInfos.count {
-            let info = pageInfos[indexPath.item]
+        if let info = comp.pageInfo {
             cell.update(
-                renderStore: renderStore,
-                pageIndex: indexPath.item,
+                renderStore: comp.renderStore,
+                pageIndex: comp.pageIndex,
                 pageInfo: info,
-                paragraphStarts: paragraphStarts,
-                prefixLen: chapterPrefixLen,
+                paragraphStarts: comp.paragraphStarts,
+                prefixLen: comp.prefixLen,
                 sideMargin: sideMargin,
                 topInset: topInset,
                 backgroundColor: themeBackgroundColor
             )
         }
-        cell.updateHighlight(index: highlightIndex, secondary: secondaryIndices, isPlaying: isPlayingHighlight, highlightRange: highlightRange)
+        
+        if comp.source == .current {
+            cell.updateHighlight(index: highlightIndex, secondary: secondaryIndices, isPlaying: isPlayingHighlight, highlightRange: highlightRange)
+        } else {
+            cell.updateHighlight(index: nil, secondary: [], isPlaying: false, highlightRange: nil)
+        }
         
         cell.onTapLocation = { [weak self] location in
             guard let self = self else { return }
@@ -262,35 +309,34 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         onInteractionChanged?(false)
-        let width = scrollView.bounds.width
-        guard width > 0 else { return }
-        let page = Int(round(scrollView.contentOffset.x / width))
-        if page >= 0 && page < pages.count {
-            currentPageIndex = page
-            delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
-        }
+        syncCurrentPageAfterScroll(scrollView)
     }
     
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-        let width = scrollView.bounds.width
-        guard width > 0 else { return }
-        let page = Int(round(scrollView.contentOffset.x / width))
-        if page >= 0 && page < pages.count {
-            currentPageIndex = page
-            delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
-        }
+        syncCurrentPageAfterScroll(scrollView)
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
             onInteractionChanged?(false)
-            let width = scrollView.bounds.width
-            guard width > 0 else { return }
-            let page = Int(round(scrollView.contentOffset.x / width))
-            if page >= 0 && page < pages.count {
-                currentPageIndex = page
-                delegate?.horizontalCollectionView(self, didUpdatePageIndex: page)
-            }
+            syncCurrentPageAfterScroll(scrollView)
+        }
+    }
+    
+    private func syncCurrentPageAfterScroll(_ scrollView: UIScrollView) {
+        let width = scrollView.bounds.width
+        guard width > 0 else { return }
+        let compositeIdx = Int(round(scrollView.contentOffset.x / width))
+        guard compositeIdx >= 0 && compositeIdx < compositePages.count else { return }
+        
+        let comp = compositePages[compositeIdx]
+        if comp.source == .current {
+            currentPageIndex = comp.pageIndex
+            delegate?.horizontalCollectionView(self, didUpdatePageIndex: comp.pageIndex)
+        } else if comp.source == .previous {
+            delegate?.horizontalCollectionView(self, requestChapterSwitch: -1)
+        } else if comp.source == .next {
+            delegate?.horizontalCollectionView(self, requestChapterSwitch: 1)
         }
     }
 
@@ -310,13 +356,8 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
             targetPage = Int(round(estimatedPage))
         }
         
-        // 边界保护：限制在当前章节范围内
-        targetPage = max(0, min(pages.count - 1, targetPage))
-        
-        // 统一使用 scrollToPageIndex 触发动画，确保点击和滑动动画一致
-        scrollToPageIndex(targetPage, animated: true)
-        
-        // 阻止系统自动吸附，让我们的动画控制位置
+        targetPage = max(0, min(compositePages.count - 1, targetPage))
+        scrollToCompositeIndex(targetPage, animated: true)
         targetContentOffset.pointee = scrollView.contentOffset
     }
 
@@ -334,7 +375,6 @@ class HorizontalCollectionViewController: UIViewController, UICollectionViewData
         let now = Date().timeIntervalSince1970
         guard now - lastSwitchRequestTime > switchRequestCooldown else { return }
         
-        // 统一检测跨章边界
         let switchOffset = detectChapterSwitchOffset(offsetX: offsetX, width: width, contentWidth: contentWidth)
         if switchOffset != 0 {
             lastSwitchRequestTime = now
