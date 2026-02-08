@@ -774,6 +774,8 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         guard offset != 0 else { return }
         let targetIndex = currentChapterIndex + offset
         guard targetIndex >= 0 && targetIndex < chapters.count else { return }
+        // 无论是否无缝切换，都先保留当前章节用于虚拟页回退/前进
+        preserveCurrentCacheForEdgeSwitch(offset: offset)
         if preferSeamless, attemptSeamlessSwitch(offset: offset) {
             applyChapterLandingPage(offset: offset)
             return
@@ -817,6 +819,19 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
 
         applyChapterState(afterSeamlessOffset: offset)
         return true
+    }
+
+    private func preserveCurrentCacheForEdgeSwitch(offset: Int) {
+        guard offset != 0 else { return }
+        if offset > 0 {
+            if prevCache.chapterUrl != currentCache.chapterUrl {
+                prevCache = currentCache
+            }
+        } else {
+            if nextCache.chapterUrl != currentCache.chapterUrl {
+                nextCache = currentCache
+            }
+        }
     }
 
     private func applyChapterState(afterSeamlessOffset offset: Int) {

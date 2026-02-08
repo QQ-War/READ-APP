@@ -66,6 +66,28 @@ extension ReaderContainerViewController {
 
     func prefetchNextChapterOnly(index: Int) {
         guard let builder = chapterBuilder else { return }
+        if nextCache.renderStore == nil,
+           let content = nextCache.rawContent,
+           !content.isEmpty,
+           let url = nextCache.chapterUrl {
+            let title = chapters.indices.contains(index + 1) ? chapters[index + 1].title : nil
+            let expectedIndex = index
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                guard self.currentChapterIndex == expectedIndex else { return }
+                self.nextCache = self.layoutManager.buildCache(
+                    rawContent: content,
+                    title: title,
+                    layoutSpec: self.currentLayoutSpec,
+                    reuseStore: self.nextCache.renderStore,
+                    chapterUrl: url
+                )
+                if self.currentReadingMode == .newHorizontal {
+                    self.updateNewHorizontalContent()
+                }
+            }
+            return
+        }
         prefetchCoordinator.prefetchNextOnly(
             book: book,
             chapters: chapters,
@@ -101,6 +123,28 @@ extension ReaderContainerViewController {
 
     func prefetchPrevChapterOnly(index: Int) {
         guard let builder = chapterBuilder else { return }
+        if prevCache.renderStore == nil,
+           let content = prevCache.rawContent,
+           !content.isEmpty,
+           let url = prevCache.chapterUrl {
+            let title = chapters.indices.contains(index - 1) ? chapters[index - 1].title : nil
+            let expectedIndex = index
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                guard self.currentChapterIndex == expectedIndex else { return }
+                self.prevCache = self.layoutManager.buildCache(
+                    rawContent: content,
+                    title: title,
+                    layoutSpec: self.currentLayoutSpec,
+                    reuseStore: self.prevCache.renderStore,
+                    chapterUrl: url
+                )
+                if self.currentReadingMode == .newHorizontal {
+                    self.updateNewHorizontalContent()
+                }
+            }
+            return
+        }
         prefetchCoordinator.prefetchPrevOnly(
             book: book,
             chapters: chapters,
