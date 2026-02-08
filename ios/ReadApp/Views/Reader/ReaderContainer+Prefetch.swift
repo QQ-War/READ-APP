@@ -67,23 +67,30 @@ extension ReaderContainerViewController {
     func prefetchNextChapterOnly(index: Int) {
         guard let builder = chapterBuilder else { return }
         if nextCache.renderStore == nil,
-           let content = nextCache.rawContent,
-           !content.isEmpty,
-           let url = nextCache.chapterUrl {
-            let title = chapters.indices.contains(index + 1) ? chapters[index + 1].title : nil
+           !nextCache.rawContent.isEmpty {
+            let content = nextCache.rawContent
+            let title = chapters.indices.contains(index + 1) ? chapters[index + 1].title : ""
+            let url = nextCache.chapterUrl
             let expectedIndex = index
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 guard self.currentChapterIndex == expectedIndex else { return }
                 self.nextCache = self.layoutManager.buildCache(
+                    isMangaMode: self.isMangaMode,
                     rawContent: content,
                     title: title,
+                    chapterUrl: url,
                     layoutSpec: self.currentLayoutSpec,
+                    builder: builder,
                     reuseStore: self.nextCache.renderStore,
-                    chapterUrl: url
+                    anchorOffset: 0
                 )
                 if self.currentReadingMode == .newHorizontal {
                     self.updateNewHorizontalContent()
+                }
+                if self.pendingEdgePrefetchOffset == 1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
                 }
             }
             return
@@ -124,23 +131,30 @@ extension ReaderContainerViewController {
     func prefetchPrevChapterOnly(index: Int) {
         guard let builder = chapterBuilder else { return }
         if prevCache.renderStore == nil,
-           let content = prevCache.rawContent,
-           !content.isEmpty,
-           let url = prevCache.chapterUrl {
-            let title = chapters.indices.contains(index - 1) ? chapters[index - 1].title : nil
+           !prevCache.rawContent.isEmpty {
+            let content = prevCache.rawContent
+            let title = chapters.indices.contains(index - 1) ? chapters[index - 1].title : ""
+            let url = prevCache.chapterUrl
             let expectedIndex = index
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 guard self.currentChapterIndex == expectedIndex else { return }
                 self.prevCache = self.layoutManager.buildCache(
+                    isMangaMode: self.isMangaMode,
                     rawContent: content,
                     title: title,
+                    chapterUrl: url,
                     layoutSpec: self.currentLayoutSpec,
+                    builder: builder,
                     reuseStore: self.prevCache.renderStore,
-                    chapterUrl: url
+                    anchorOffset: 0
                 )
                 if self.currentReadingMode == .newHorizontal {
                     self.updateNewHorizontalContent()
+                }
+                if self.pendingEdgePrefetchOffset == -1 {
+                    self.pendingEdgePrefetchOffset = nil
+                    self.onLoadingChanged?(false)
                 }
             }
             return
