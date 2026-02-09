@@ -98,11 +98,7 @@ struct ContentView: View {
         if #available(iOS 15.0, *) {
             UITabBar.appearance().scrollEdgeAppearance = appearance
         }
-        if preferences.isLiquidGlassEnabled {
-            applyFloatingTabBarIfNeeded()
-        } else {
-            resetTabBarToDefault()
-        }
+        applyFloatingTabBarIfNeeded()
         updateSearchBarAppearance()
     }
 
@@ -158,29 +154,6 @@ struct ContentView: View {
 
             container.addSubview(blurView)
             tabBar.insertSubview(container, at: 0)
-        }
-    }
-
-    private func resetTabBarToDefault() {
-        DispatchQueue.main.async {
-            guard let tabBarController = UIApplication.shared.findTabBarController() else { return }
-            let tabBar = tabBarController.tabBar
-            let container = tabBar.superview ?? tabBarController.view
-            let bounds = container?.bounds ?? tabBarController.view?.bounds ?? .zero
-
-            let backgroundTag = 901
-            tabBar.viewWithTag(backgroundTag)?.removeFromSuperview()
-
-            let size = tabBar.sizeThatFits(bounds.size)
-            tabBar.frame = CGRect(x: 0, y: bounds.height - size.height, width: bounds.width, height: size.height)
-            tabBar.isTranslucent = false
-            tabBar.layer.cornerRadius = 0
-            tabBar.layer.cornerCurve = .continuous
-            tabBar.layer.masksToBounds = true
-            tabBar.clipsToBounds = true
-
-            tabBarController.view.setNeedsLayout()
-            tabBarController.view.layoutIfNeeded()
         }
     }
 
