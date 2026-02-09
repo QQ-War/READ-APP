@@ -373,7 +373,11 @@ class APIService {
             return buildEncodedAbsoluteURL(trimmed)
         }
         let base = ApiBackendResolver.stripApiBasePath(client.baseURL)
-        let rootPath = bookUrl.replacingOccurrences(of: "storage/data/", with: "/epub/") + "/index/" + trimmed
+        var rootPath = bookUrl.replacingOccurrences(of: "storage/data/", with: "/epub/")
+        if rootPath.hasPrefix("/assets/") {
+            rootPath = rootPath.replacingOccurrences(of: "/assets/", with: "/epub/")
+        }
+        rootPath = rootPath + "/index/" + trimmed
         let path = rootPath.hasPrefix("/") ? rootPath : "/" + rootPath
         return base + customURLEncodePath(path)
     }
