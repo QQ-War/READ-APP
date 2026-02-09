@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import CryptoKit
 
 final class ImageGatewayService {
     static let shared = ImageGatewayService()
@@ -9,6 +10,43 @@ final class ImageGatewayService {
     private let limiter = ImageDownloadLimiter()
     
     private init() {}
+
+    func rewriteLocalEpubImageSourcesIfNeeded(_ rawContent: String, book: Book) -> String {
+        guard APIClient.shared.backend == .read else { return rawContent }
+        guard isLocalEpubBook(book) else { return rawContent }
+        guard rawContent.localizedCaseInsensitiveContains("<img") else { return rawContent }
+        guard let bookUrl = book.bookUrl, !bookUrl.isEmpty else { return rawContent }
+
+        guard let namespace = extractAssetNamespace(from: book.coverUrl),
+              !namespace.isEmpty
+        else {
+            return rawContent
+        }
+        let nsSegment = "\(namespace)/"
+
+        let pattern = "(?i)\\bsrc\\s*=\\s*(['\"])(.*?)\\1"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return rawContent }
+        let nsText = rawContent as NSString
+        let matches = regex.matches(in: rawContent, options: [], range: NSRange(location: 0, length: nsText.length))
+        guard !matches.isEmpty else { return rawContent }
+
+        var result = rawContent
+        for match in matches.reversed() {
+            guard match.numberOfRanges >= 3 else { continue }
+            let valueRange = match.range(at: 2)
+            let original = nsText.substring(with: valueRange)
+            let trimmed = original.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            if shouldSkipLocalEpubRewrite(trimmed) { continue }
+            if !looksLikeImagePath(trimmed) { continue }
+
+            let md5 = md5Encode16(bookUrl + trimmed)
+            let rewritten = "/assets?path=/assets/\(nsSegment)covers/\(md5).jpg"
+            result = (result as NSString).replacingCharacters(in: valueRange, with: rewritten)
+        }
+
+        return result
+    }
 
     func acquireDownloadPermit() async {
         let maxConcurrent = max(1, UserPreferences.shared.mangaImageMaxConcurrent)
@@ -131,6 +169,60 @@ final class ImageGatewayService {
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.scheme = "https"
         return components?.url ?? url
+    }
+
+    private func isLocalEpubBook(_ book: Book) -> Bool {
+        let urlLower = book.bookUrl?.lowercased() ?? ""
+        if !urlLower.hasSuffix(".epub") { return false }
+        if let origin = book.origin?.lowercased(), origin == "local" { return true }
+        if let originName = book.originName?.lowercased(), originName.hasSuffix(".epub") { return true }
+        return false
+    }
+
+    private func shouldSkipLocalEpubRewrite(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") { return true }
+        if lower.hasPrefix("data:") || lower.hasPrefix("about:") || lower.hasPrefix("mailto:") { return true }
+        if lower.hasPrefix("tel:") || lower.hasPrefix("javascript:") || lower.hasPrefix("blob:") { return true }
+        if lower.hasPrefix("__api_root__") { return true }
+        if lower.hasPrefix("/assets/") || lower.hasPrefix("assets/") { return true }
+        if lower.hasPrefix("/book-assets/") || lower.hasPrefix("book-assets/") { return true }
+        if lower.contains("/assets?path=") || lower.contains("/api/5/assets?path=") || lower.contains("/api/v5/assets?path=") {
+            return true
+        }
+        if lower.hasPrefix("/api/") { return true }
+        return false
+    }
+
+    private func looksLikeImagePath(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        return lower.contains(".jpg") || lower.contains(".jpeg") || lower.contains(".png")
+            || lower.contains(".webp") || lower.contains(".gif") || lower.contains(".bmp")
+    }
+
+    private func extractAssetNamespace(from coverUrl: String?) -> String? {
+        guard let coverUrl, !coverUrl.isEmpty else { return nil }
+        let lower = coverUrl.lowercased()
+        guard let assetsRange = lower.range(of: "/assets/"),
+              let coversRange = lower.range(of: "/covers/") else {
+            return nil
+        }
+        let nsStart = assetsRange.upperBound
+        let nsEnd = coversRange.lowerBound
+        if nsStart >= nsEnd { return nil }
+        let namespace = String(coverUrl[nsStart..<nsEnd])
+        let trimmed = namespace.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func md5Encode16(_ input: String) -> String {
+        let data = Data(input.utf8)
+        let digest = Insecure.MD5.hash(data: data)
+        let full = digest.map { String(format: "%02hhx", $0) }.joined()
+        guard full.count >= 24 else { return full }
+        let start = full.index(full.startIndex, offsetBy: 8)
+        let end = full.index(full.startIndex, offsetBy: 24)
+        return String(full[start..<end])
     }
     
     func fetchImageData(for url: URL, referer: String?) async -> Data? {
