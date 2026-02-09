@@ -88,9 +88,9 @@ struct ContentView: View {
         let appearance = UITabBarAppearance()
         if preferences.isLiquidGlassEnabled {
             appearance.configureWithTransparentBackground()
-            appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
-            appearance.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.2)
-            appearance.shadowColor = UIColor.white.withAlphaComponent(0.12)
+            appearance.backgroundEffect = nil
+            appearance.backgroundColor = .clear
+            appearance.shadowColor = .clear
         } else {
             appearance.configureWithDefaultBackground()
         }
@@ -108,8 +108,8 @@ struct ContentView: View {
             guard let tabBarController = UIApplication.shared.findTabBarController() else { return }
             let tabBar = tabBarController.tabBar
             let view = tabBarController.view
-            let horizontalInset: CGFloat = 18
-            let verticalInset: CGFloat = 10
+            let horizontalInset: CGFloat = 20
+            let verticalInset: CGFloat = 16
             let safeBottom = view?.safeAreaInsets.bottom ?? 0
             var frame = tabBar.frame
             frame.size.width = (view?.bounds.width ?? frame.size.width) - horizontalInset * 2
@@ -119,7 +119,36 @@ struct ContentView: View {
             tabBar.isTranslucent = true
             tabBar.layer.cornerRadius = 24
             tabBar.layer.cornerCurve = .continuous
-            tabBar.layer.masksToBounds = true
+            tabBar.layer.masksToBounds = false
+            tabBar.clipsToBounds = false
+
+            let backgroundTag = 901
+            if let existing = tabBar.viewWithTag(backgroundTag) {
+                existing.frame = tabBar.bounds
+                return
+            }
+
+            let container = UIView(frame: tabBar.bounds)
+            container.tag = backgroundTag
+            container.isUserInteractionEnabled = false
+            container.layer.cornerRadius = 24
+            container.layer.cornerCurve = .continuous
+            container.layer.shadowColor = UIColor.black.withAlphaComponent(0.18).cgColor
+            container.layer.shadowOpacity = 1
+            container.layer.shadowRadius = 18
+            container.layer.shadowOffset = CGSize(width: 0, height: 10)
+            container.layer.masksToBounds = false
+
+            let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+            blurView.frame = container.bounds
+            blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            blurView.layer.cornerRadius = 24
+            blurView.layer.cornerCurve = .continuous
+            blurView.layer.masksToBounds = true
+            blurView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.18)
+
+            container.addSubview(blurView)
+            tabBar.insertSubview(container, at: 0)
         }
     }
 
