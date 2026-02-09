@@ -28,57 +28,33 @@ struct BookListView: View {
                 ) { EmptyView() }
             }
 
-            List {
-                // ... rest of list content ...
-                if !listViewModel.searchText.isEmpty {
-                    if !filteredAndSortedBooks.isEmpty {
-                        Section(header: GlassySectionHeader(title: "书架书籍")) {
-                            ForEach(filteredAndSortedBooks) { book in
-                                bookRowView(for: book)
-                                    .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
-                            }
+            if preferences.isLiquidGlassEnabled {
+                listContent
+                    .glassyListStyle()
+                    .animation(.easeInOut(duration: 0.3), value: listViewModel.isReversed)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        floatingHeader
+                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        Color.clear.frame(height: 16)
+                    }
+                    .navigationBarHidden(true)
+            } else {
+                listContent
+                    .glassyListStyle()
+                    .animation(.easeInOut(duration: 0.3), value: listViewModel.isReversed)
+                    .navigationTitle("书架")
+                    .navigationBarTitleDisplayMode(.large)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            listToolbarLeadingItems
+                        }
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            listToolbarTrailingItems
                         }
                     }
-                    
-                    if preferences.searchSourcesFromBookshelf {
-                        Section(header: GlassySectionHeader(title: "全网搜索")) {
-                            if listViewModel.isSearchingOnline {
-                                HStack {
-                                    Spacer()
-                                    ProgressView()
-                                    Spacer()
-                                }
-                                .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
-                            } else if listViewModel.onlineResults.isEmpty {
-                                Text("未找到相关书籍").foregroundColor(.secondary).font(.caption)
-                                    .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
-                            } else {
-                                ForEach(listViewModel.onlineResults) { book in
-                                    NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore)) {
-                                        BookSearchResultRow(book: book) {
-                                            Task {
-                                                await addBookToBookshelf(book: book)
-                                            }
-                                        }
-                                    }
-                                    .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    ForEach(filteredAndSortedBooks) { book in
-                        bookRowView(for: book)
-                            .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
-                    }
-                }
+                    .searchable(text: $listViewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索书名或作者")
             }
-            .glassyListStyle()
-            .animation(.easeInOut(duration: 0.3), value: listViewModel.isReversed)
-            .navigationTitle("书架")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar(content: listToolbarContent)
-            .searchable(text: $listViewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索书名或作者")
         }
         .onChange(of: listViewModel.searchText) { _ in
             listViewModel.handleSearchChange()
@@ -128,6 +104,54 @@ struct BookListView: View {
             }
         } message: {
             Text("确定要将《\(bookToDelete?.name ?? "未知书名")》从书架移除吗？")
+        }
+    }
+
+    private var listContent: some View {
+        List {
+            // ... rest of list content ...
+            if !listViewModel.searchText.isEmpty {
+                if !filteredAndSortedBooks.isEmpty {
+                    Section(header: GlassySectionHeader(title: "书架书籍")) {
+                        ForEach(filteredAndSortedBooks) { book in
+                            bookRowView(for: book)
+                                .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
+                        }
+                    }
+                }
+                
+                if preferences.searchSourcesFromBookshelf {
+                    Section(header: GlassySectionHeader(title: "全网搜索")) {
+                        if listViewModel.isSearchingOnline {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                Spacer()
+                            }
+                            .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
+                        } else if listViewModel.onlineResults.isEmpty {
+                            Text("未找到相关书籍").foregroundColor(.secondary).font(.caption)
+                                .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
+                        } else {
+                            ForEach(listViewModel.onlineResults) { book in
+                                NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore)) {
+                                    BookSearchResultRow(book: book) {
+                                        Task {
+                                            await addBookToBookshelf(book: book)
+                                        }
+                                    }
+                                }
+                                .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
+                            }
+                        }
+                    }
+                }
+            } else {
+                ForEach(filteredAndSortedBooks) { book in
+                    bookRowView(for: book)
+                        .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
+                }
+            }
         }
     }
 
@@ -211,6 +235,48 @@ struct BookListView: View {
         }
     }
 
+    private var floatingHeader: some View {
+        VStack(spacing: 10) {
+            HStack {
+                listToolbarLeadingItems
+                Spacer()
+                Text("书架")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+                listToolbarTrailingItems
+            }
+            .foregroundColor(.primary)
+
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("搜索书名或作者", text: $listViewModel.searchText)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                if !listViewModel.searchText.isEmpty {
+                    Button(action: { listViewModel.searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(preferences.isLiquidGlassEnabled ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color(UIColor.systemBackground)))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(preferences.isLiquidGlassEnabled ? 0.18 : 0.0), lineWidth: 0.8)
+            )
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
+        .glassyFloatingBar(cornerRadius: 20, padding: 0)
+    }
+
     private func togglePreferredSource(_ url: String) {
         if preferences.preferredSearchSourceUrls.contains(url) {
             preferences.preferredSearchSourceUrls.removeAll { $0 == url }
@@ -219,16 +285,6 @@ struct BookListView: View {
         }
     }
 
-    @ToolbarContentBuilder
-    private func listToolbarContent() -> some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
-            listToolbarLeadingItems
-        }
-        ToolbarItem(placement: .navigationBarTrailing) {
-            listToolbarTrailingItems
-        }
-    }
-    
     private func loadBooks() async {
         await listViewModel.loadBooks()
     }

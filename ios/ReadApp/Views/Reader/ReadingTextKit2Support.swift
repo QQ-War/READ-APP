@@ -160,6 +160,12 @@ enum ReaderConstants {
         static let topBarHorizontalPadding: CGFloat = 16
         static let topBarBottomPadding: CGFloat = 10
         static let topBarSpacing: CGFloat = 12
+        static let topBarOuterPadding: CGFloat = 14
+        static let topBarSafeInset: CGFloat = 6
+        static let topBarVerticalPadding: CGFloat = 8
+        static let topBarCornerRadius: CGFloat = 20
+        static let bottomBarOuterPadding: CGFloat = 14
+        static let bottomBarSafeInset: CGFloat = 8
         static let formRowSpacing: CGFloat = 8
         static let formSectionPaddingVertical: CGFloat = 4
         static let formHeaderSpacing: CGFloat = 10
