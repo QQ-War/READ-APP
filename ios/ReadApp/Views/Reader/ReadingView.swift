@@ -182,12 +182,21 @@ struct ReadingView: View {
     }
     
     private func bottomBar(safeArea: EdgeInsets) -> some View {
-        VStack(spacing: 0) {
-            controlBar
-            Color.clear.frame(height: safeArea.bottom)
+        if preferences.isLiquidGlassEnabled {
+            VStack(spacing: 0) {
+                controlBar
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 6)
+            .padding(.bottom, safeArea.bottom + 8)
+        } else {
+            VStack(spacing: 0) {
+                controlBar
+                Color.clear.frame(height: safeArea.bottom)
+            }
+            .background(.thinMaterial)
+            .glassyCard(cornerRadius: 16, padding: 6)
         }
-        .background(.thinMaterial)
-        .glassyCard(cornerRadius: 16, padding: 6)
     }
 
     @ViewBuilder private var controlBar: some View {
