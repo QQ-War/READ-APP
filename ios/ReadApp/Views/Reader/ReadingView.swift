@@ -181,6 +181,7 @@ struct ReadingView: View {
         .glassyCard(cornerRadius: 16, padding: 6)
     }
     
+    @ViewBuilder
     private func bottomBar(safeArea: EdgeInsets) -> some View {
         if preferences.isLiquidGlassEnabled {
             VStack(spacing: 0) {
