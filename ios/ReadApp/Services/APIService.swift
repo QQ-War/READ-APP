@@ -135,7 +135,11 @@ class APIService {
         // 1. 优先尝试从本地磁盘缓存读取
         if cachePolicy.useDiskCache, let cachedContent = LocalCacheManager.shared.loadChapter(bookUrl: bookUrl, index: index) {
             if shouldUseCachedContent(cachedContent) {
-                return cachedContent
+                return normalizeReaderEpubHtmlIfNeeded(
+                    cachedContent,
+                    bookUrl: bookUrl,
+                    chapterUrl: cachedChapterUrl(bookUrl: bookUrl, index: index)
+                )
             } else {
             }
         }
@@ -146,7 +150,11 @@ class APIService {
             let cacheKey = "\(bookUrl)_\(index)_\(contentType)"
             if cachePolicy.useMemoryCache, let cachedContent = await self.chapterCache.value(for: cacheKey) {
                 if shouldUseCachedContent(cachedContent) {
-                    return cachedContent
+                    return normalizeReaderEpubHtmlIfNeeded(
+                        cachedContent,
+                        bookUrl: bookUrl,
+                        chapterUrl: cachedChapterUrl(bookUrl: bookUrl, index: index)
+                    )
                 } else {
                 }
             }
@@ -178,7 +186,11 @@ class APIService {
                     } else {
                     }
                 }
-                return resolvedContent
+                return normalizeReaderEpubHtmlIfNeeded(
+                    resolvedContent,
+                    bookUrl: bookUrl,
+                    chapterUrl: cachedChapterUrl(bookUrl: bookUrl, index: index)
+                )
             } else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节内容失败"])
             }
@@ -340,6 +352,38 @@ class APIService {
         if lower.hasPrefix("tel:") || lower.hasPrefix("javascript:") || lower.hasPrefix("blob:") { return true }
         if lower.hasPrefix("#") || lower.hasPrefix("__api_root__") { return true }
         return false
+    }
+
+    private func normalizeReaderEpubHtmlIfNeeded(_ content: String, bookUrl: String, chapterUrl: String?) -> String {
+        guard client.backend == .reader else { return content }
+        guard content.contains("<"), (content.localizedCaseInsensitiveContains("src=") || content.localizedCaseInsensitiveContains("href=")) else {
+            return content
+        }
+        guard let chapterUrl = chapterUrl, !chapterUrl.isEmpty else { return content }
+        guard let baseURLString = buildReaderEpubChapterURL(bookUrl: bookUrl, chapterUrl: chapterUrl) else {
+            return content
+        }
+        return resolveRelativeResourceUrls(in: content, baseURLString: baseURLString)
+    }
+
+    private func buildReaderEpubChapterURL(bookUrl: String, chapterUrl: String) -> String? {
+        let trimmed = chapterUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.contains("://") {
+            return buildEncodedAbsoluteURL(trimmed)
+        }
+        let base = ApiBackendResolver.stripApiBasePath(client.baseURL)
+        let rootPath = bookUrl.replacingOccurrences(of: "storage/data/", with: "/epub/") + "/index/" + trimmed
+        let path = rootPath.hasPrefix("/") ? rootPath : "/" + rootPath
+        return base + customURLEncodePath(path)
+    }
+
+    private func cachedChapterUrl(bookUrl: String, index: Int) -> String? {
+        guard let chapters = LocalCacheManager.shared.loadChapterList(bookUrl: bookUrl),
+              index >= 0, index < chapters.count else {
+            return nil
+        }
+        return chapters[index].url
     }
 
     private func withTimeout<T>(seconds: TimeInterval, operation: @escaping @Sendable () async throws -> T) async throws -> T {
