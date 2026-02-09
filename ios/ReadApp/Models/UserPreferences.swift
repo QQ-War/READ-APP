@@ -353,6 +353,41 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 浮动 Tab Bar 水平内边距
+    @Published var floatingTabBarHorizontalInset: CGFloat {
+        didSet {
+            UserDefaults.standard.set(Float(floatingTabBarHorizontalInset), forKey: "floatingTabBarHorizontalInset")
+        }
+    }
+
+    /// 浮动 Tab Bar 垂直内边距
+    @Published var floatingTabBarVerticalInset: CGFloat {
+        didSet {
+            UserDefaults.standard.set(Float(floatingTabBarVerticalInset), forKey: "floatingTabBarVerticalInset")
+        }
+    }
+
+    /// 浮动 Tab Bar 圆角
+    @Published var floatingTabBarCornerRadius: CGFloat {
+        didSet {
+            UserDefaults.standard.set(Float(floatingTabBarCornerRadius), forKey: "floatingTabBarCornerRadius")
+        }
+    }
+
+    /// 浮动 Tab Bar 阴影透明度
+    @Published var floatingTabBarShadowOpacity: CGFloat {
+        didSet {
+            UserDefaults.standard.set(Float(floatingTabBarShadowOpacity), forKey: "floatingTabBarShadowOpacity")
+        }
+    }
+
+    /// 浮动 Tab Bar 阴影模糊半径
+    @Published var floatingTabBarShadowRadius: CGFloat {
+        didSet {
+            UserDefaults.standard.set(Float(floatingTabBarShadowRadius), forKey: "floatingTabBarShadowRadius")
+        }
+    }
+
     /// 设置项顺序
     @Published var settingsOrder: [String] {
         didSet {
@@ -493,6 +528,32 @@ class UserPreferences: ObservableObject {
 
         self.isProgressDynamicColorEnabled = UserDefaults.standard.object(forKey: "isProgressDynamicColorEnabled") as? Bool ?? true
         self.isLiquidGlassEnabled = UserDefaults.standard.bool(forKey: "isLiquidGlassEnabled")
+
+        if let savedFloatingHorizontal = UserDefaults.standard.object(forKey: "floatingTabBarHorizontalInset") as? Float {
+            self.floatingTabBarHorizontalInset = CGFloat(savedFloatingHorizontal)
+        } else {
+            self.floatingTabBarHorizontalInset = 20
+        }
+        if let savedFloatingVertical = UserDefaults.standard.object(forKey: "floatingTabBarVerticalInset") as? Float {
+            self.floatingTabBarVerticalInset = CGFloat(savedFloatingVertical)
+        } else {
+            self.floatingTabBarVerticalInset = 16
+        }
+        if let savedFloatingCorner = UserDefaults.standard.object(forKey: "floatingTabBarCornerRadius") as? Float {
+            self.floatingTabBarCornerRadius = CGFloat(savedFloatingCorner)
+        } else {
+            self.floatingTabBarCornerRadius = 24
+        }
+        if let savedShadowOpacity = UserDefaults.standard.object(forKey: "floatingTabBarShadowOpacity") as? Float {
+            self.floatingTabBarShadowOpacity = CGFloat(savedShadowOpacity)
+        } else {
+            self.floatingTabBarShadowOpacity = 0.18
+        }
+        if let savedShadowRadius = UserDefaults.standard.object(forKey: "floatingTabBarShadowRadius") as? Float {
+            self.floatingTabBarShadowRadius = CGFloat(savedShadowRadius)
+        } else {
+            self.floatingTabBarShadowRadius = 18
+        }
 
         let defaultOrder = ["display", "reading", "cache", "tts", "content", "rss"]
         let savedOrder = UserDefaults.standard.stringArray(forKey: "settingsOrder") ?? defaultOrder

@@ -47,6 +47,11 @@ struct ContentView: View {
                         Text("设置")
                     }
                 }
+                .background(
+                    TabBarControllerAccessor { tabBarController in
+                        updateTabBarAppearance(for: tabBarController)
+                    }
+                )
             }
 
             if showToast, let message = toastMessage {
@@ -82,9 +87,24 @@ struct ContentView: View {
         .onChange(of: preferences.isLiquidGlassEnabled) { _ in
             updateTabBarAppearance()
         }
+        .onChange(of: preferences.floatingTabBarHorizontalInset) { _ in
+            updateTabBarAppearance()
+        }
+        .onChange(of: preferences.floatingTabBarVerticalInset) { _ in
+            updateTabBarAppearance()
+        }
+        .onChange(of: preferences.floatingTabBarCornerRadius) { _ in
+            updateTabBarAppearance()
+        }
+        .onChange(of: preferences.floatingTabBarShadowOpacity) { _ in
+            updateTabBarAppearance()
+        }
+        .onChange(of: preferences.floatingTabBarShadowRadius) { _ in
+            updateTabBarAppearance()
+        }
     }
 
-    private func updateTabBarAppearance() {
+    private func updateTabBarAppearance(for tabBarController: UITabBarController? = nil) {
         let appearance = UITabBarAppearance()
         if preferences.isLiquidGlassEnabled {
             appearance.configureWithTransparentBackground()
@@ -94,94 +114,109 @@ struct ContentView: View {
         } else {
             appearance.configureWithDefaultBackground()
         }
-        UITabBar.appearance().standardAppearance = appearance
-        if #available(iOS 15.0, *) {
-            UITabBar.appearance().scrollEdgeAppearance = appearance
-        }
-        if preferences.isLiquidGlassEnabled {
-            applyFloatingTabBarIfNeeded()
+        if let tabBarController = tabBarController ?? UIApplication.shared.findTabBarController() {
+            let tabBar = tabBarController.tabBar
+            tabBar.standardAppearance = appearance
+            if #available(iOS 15.0, *) {
+                tabBar.scrollEdgeAppearance = appearance
+            }
+            if preferences.isLiquidGlassEnabled {
+                applyFloatingTabBarIfNeeded(tabBarController: tabBarController)
+            } else {
+                resetTabBarToDefault(tabBarController: tabBarController)
+            }
         } else {
-            resetTabBarToDefault()
+            DispatchQueue.main.async {
+                updateTabBarAppearance(for: UIApplication.shared.findTabBarController())
+            }
         }
         updateSearchBarAppearance()
     }
 
-    private func applyFloatingTabBarIfNeeded() {
+    private func applyFloatingTabBarIfNeeded(tabBarController: UITabBarController) {
         guard preferences.isLiquidGlassEnabled else { return }
-        DispatchQueue.main.async {
-            guard let tabBarController = UIApplication.shared.findTabBarController() else { return }
-            let tabBar = tabBarController.tabBar
-            let view = tabBarController.view
-            let horizontalInset: CGFloat = 20
-            let verticalInset: CGFloat = 16
-            let safeBottom = view?.safeAreaInsets.bottom ?? 0
-            var frame = tabBar.frame
-            let viewWidth = view?.bounds.width ?? frame.size.width
-            let viewHeight = view?.bounds.height ?? frame.maxY
-            frame.size.width = viewWidth - horizontalInset * 2
-            frame.origin.x = (viewWidth - frame.size.width) / 2
-            frame.origin.y = viewHeight - safeBottom - frame.height - verticalInset
-            tabBar.frame = frame
-            tabBar.isTranslucent = true
-            tabBar.layer.cornerRadius = 24
-            tabBar.layer.cornerCurve = .continuous
-            tabBar.layer.masksToBounds = false
-            tabBar.clipsToBounds = false
+        let tabBar = tabBarController.tabBar
+        let view = tabBarController.view
+        let horizontalInset = preferences.floatingTabBarHorizontalInset
+        let verticalInset = preferences.floatingTabBarVerticalInset
+        let cornerRadius = preferences.floatingTabBarCornerRadius
+        let shadowOpacity = preferences.floatingTabBarShadowOpacity
+        let shadowRadius = preferences.floatingTabBarShadowRadius
+        let safeBottom = view?.safeAreaInsets.bottom ?? 0
+        var frame = tabBar.frame
+        let viewWidth = view?.bounds.width ?? frame.size.width
+        let viewHeight = view?.bounds.height ?? frame.maxY
+        frame.size.width = viewWidth - horizontalInset * 2
+        frame.origin.x = (viewWidth - frame.size.width) / 2
+        frame.origin.y = viewHeight - safeBottom - frame.height - verticalInset
+        tabBar.frame = frame
+        tabBar.isTranslucent = true
+        tabBar.layer.cornerRadius = cornerRadius
+        tabBar.layer.cornerCurve = .continuous
+        tabBar.layer.masksToBounds = false
+        tabBar.clipsToBounds = false
+        tabBar.backgroundImage = UIImage()
+        tabBar.shadowImage = UIImage()
 
-            let backgroundTag = 901
-            if let existing = tabBar.viewWithTag(backgroundTag) {
-                existing.frame = tabBar.bounds
-                if let blurView = existing.subviews.first as? UIVisualEffectView {
-                    blurView.frame = existing.bounds
-                }
-                return
+        tabBarController.additionalSafeAreaInsets.bottom = -verticalInset
+
+        let backgroundTag = 901
+        if let existing = tabBar.viewWithTag(backgroundTag) {
+            existing.frame = tabBar.bounds
+            if let blurView = existing.subviews.first as? UIVisualEffectView {
+                blurView.frame = existing.bounds
             }
-
-            let container = UIView(frame: tabBar.bounds)
-            container.tag = backgroundTag
-            container.isUserInteractionEnabled = false
-            container.layer.cornerRadius = 24
-            container.layer.cornerCurve = .continuous
-            container.layer.shadowColor = UIColor.black.withAlphaComponent(0.18).cgColor
-            container.layer.shadowOpacity = 1
-            container.layer.shadowRadius = 18
-            container.layer.shadowOffset = CGSize(width: 0, height: 10)
-            container.layer.masksToBounds = false
-
-            let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
-            blurView.frame = container.bounds
-            blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            blurView.layer.cornerRadius = 24
-            blurView.layer.cornerCurve = .continuous
-            blurView.layer.masksToBounds = true
-            blurView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.18)
-
-            container.addSubview(blurView)
-            tabBar.insertSubview(container, at: 0)
+            tabBar.setNeedsLayout()
+            tabBar.layoutIfNeeded()
+            return
         }
+
+        let container = UIView(frame: tabBar.bounds)
+        container.tag = backgroundTag
+        container.isUserInteractionEnabled = false
+        container.layer.cornerRadius = cornerRadius
+        container.layer.cornerCurve = .continuous
+        container.layer.shadowColor = UIColor.black.withAlphaComponent(shadowOpacity).cgColor
+        container.layer.shadowOpacity = 1
+        container.layer.shadowRadius = shadowRadius
+        container.layer.shadowOffset = CGSize(width: 0, height: 10)
+        container.layer.masksToBounds = false
+
+        let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+        blurView.frame = container.bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        blurView.layer.cornerRadius = cornerRadius
+        blurView.layer.cornerCurve = .continuous
+        blurView.layer.masksToBounds = true
+        blurView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.18)
+
+        container.addSubview(blurView)
+        tabBar.insertSubview(container, at: 0)
+        tabBar.setNeedsLayout()
+        tabBar.layoutIfNeeded()
     }
 
-    private func resetTabBarToDefault() {
-        DispatchQueue.main.async {
-            guard let tabBarController = UIApplication.shared.findTabBarController() else { return }
-            let tabBar = tabBarController.tabBar
-            let container = tabBar.superview ?? tabBarController.view
-            let bounds = container?.bounds ?? tabBarController.view?.bounds ?? .zero
+    private func resetTabBarToDefault(tabBarController: UITabBarController) {
+        let tabBar = tabBarController.tabBar
+        let container = tabBar.superview ?? tabBarController.view
+        let bounds = container?.bounds ?? tabBarController.view?.bounds ?? .zero
 
-            let backgroundTag = 901
-            tabBar.viewWithTag(backgroundTag)?.removeFromSuperview()
+        let backgroundTag = 901
+        tabBar.viewWithTag(backgroundTag)?.removeFromSuperview()
 
-            let size = tabBar.sizeThatFits(bounds.size)
-            tabBar.frame = CGRect(x: 0, y: bounds.height - size.height, width: bounds.width, height: size.height)
-            tabBar.isTranslucent = false
-            tabBar.layer.cornerRadius = 0
-            tabBar.layer.cornerCurve = .continuous
-            tabBar.layer.masksToBounds = true
-            tabBar.clipsToBounds = true
+        let size = tabBar.sizeThatFits(bounds.size)
+        tabBar.frame = CGRect(x: 0, y: bounds.height - size.height, width: bounds.width, height: size.height)
+        tabBar.isTranslucent = false
+        tabBar.layer.cornerRadius = 0
+        tabBar.layer.cornerCurve = .continuous
+        tabBar.layer.masksToBounds = true
+        tabBar.clipsToBounds = true
+        tabBar.backgroundImage = nil
+        tabBar.shadowImage = nil
 
-            tabBarController.view.setNeedsLayout()
-            tabBarController.view.layoutIfNeeded()
-        }
+        tabBarController.additionalSafeAreaInsets.bottom = 0
+        tabBarController.view.setNeedsLayout()
+        tabBarController.view.layoutIfNeeded()
     }
 
     private func updateSearchBarAppearance() {
