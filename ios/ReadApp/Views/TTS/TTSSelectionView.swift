@@ -93,7 +93,10 @@ struct TTSSelectionView: View {
     private func loadTTSList() async {
         isLoading = true
         errorMessage = nil
-        
+        let cached = LocalTTSEngineStore.shared.loadEngines()
+        if !cached.isEmpty {
+            ttsList = cached
+        }
         do {
             ttsList = try await APIService.shared.fetchTTSList()
             

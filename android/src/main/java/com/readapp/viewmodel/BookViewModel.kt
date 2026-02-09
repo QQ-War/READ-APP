@@ -967,6 +967,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { loadChapters(book) }
     }
 
+    fun refreshChapters() {
+        val book = _selectedBook.value ?: return
+        viewModelScope.launch { loadChapters(book) }
+    }
+
     fun setCurrentChapter(index: Int) {
         if (index !in _chapters.value.indices) return
         val shouldContinuePlaying = _keepPlaying.value
@@ -1343,11 +1348,16 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     private suspend fun loadTtsEnginesInternal() {
         if (_accessToken.value.isBlank()) return
+        val cachedEngines = preferences.loadCachedTtsEngines()
+        if (cachedEngines.isNotEmpty()) {
+            _availableTtsEngines.value = cachedEngines
+        }
         var engines: List<HttpTTS> = emptyList()
         val enginesResult = ttsRepository.fetchTtsEngines(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value)
         enginesResult.onSuccess { list ->
             engines = list
             _availableTtsEngines.value = list
+            viewModelScope.launch { preferences.saveCachedTtsEngines(list) }
         }.onFailure { error -> _errorMessage.value = error.message }
         val defaultResult = ttsRepository.fetchDefaultTts(currentServerEndpoint(), _publicServerAddress.value.ifBlank { null }, _accessToken.value)
         val defaultId = defaultResult.getOrNull()

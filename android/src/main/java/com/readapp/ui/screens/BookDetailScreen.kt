@@ -7,6 +7,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Book
@@ -44,7 +47,8 @@ fun BookDetailScreen(
     onNavigateBack: () -> Unit,
     onStartReading: () -> Unit,
     onChapterClick: (Int) -> Unit,
-    onDownloadChapters: (Int, Int) -> Unit
+    onDownloadChapters: (Int, Int) -> Unit,
+    onRefresh: () -> Unit
 ) {
     var showDownloadDialog by remember { mutableStateOf(false) }
     var showCustomRangeDialog by remember { mutableStateOf(false) }
@@ -54,25 +58,33 @@ fun BookDetailScreen(
         manualMangaUrls.contains(book.bookUrl)
     }
     val isAudioBook = book.type == 1
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isChaptersLoading,
+        onRefresh = onRefresh
+    )
 
     Scaffold(
         // ... topBar ...
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .pullRefresh(pullRefreshState)
         ) {
-            // Book Header Info
-            item {
-                BookHeaderSection(
-                    book = book,
-                    isInBookshelf = isInBookshelf,
-                    onAddToBookshelf = onAddToBookshelf,
-                    onRemoveFromBookshelf = onRemoveFromBookshelf,
-                    onShowSourceSwitch = { showSourceSwitchDialog = true }
-                )
-            }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Book Header Info
+                item {
+                    BookHeaderSection(
+                        book = book,
+                        isInBookshelf = isInBookshelf,
+                        onAddToBookshelf = onAddToBookshelf,
+                        onRemoveFromBookshelf = onRemoveFromBookshelf,
+                        onShowSourceSwitch = { showSourceSwitchDialog = true }
+                    )
+                }
 
             if (!isAudioBook) {
                 // Manga Mode Toggle
@@ -195,9 +207,15 @@ fun BookDetailScreen(
                 }
             }
             
-            item {
-                Spacer(Modifier.height(80.dp))
+                item {
+                    Spacer(Modifier.height(80.dp))
+                }
             }
+            PullRefreshIndicator(
+                refreshing = isChaptersLoading,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
 
         if (showDownloadDialog) {

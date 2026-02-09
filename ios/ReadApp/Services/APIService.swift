@@ -368,6 +368,7 @@ class APIService {
     func fetchTTSList() async throws -> [HttpTTS] {
         let list = try await ttsService.fetchTTSList()
         updateTtsCache(with: list)
+        LocalTTSEngineStore.shared.saveEngines(list)
         return list
     }
 

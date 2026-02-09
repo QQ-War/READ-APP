@@ -65,12 +65,6 @@ struct SettingsView: View {
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                EditButton()
-                    .glassyToolbarButton()
-            }
-        }
         .glassyListStyle()
     }
 

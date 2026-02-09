@@ -247,6 +247,9 @@ struct BookDetailView: View {
                     .padding(.bottom, 20)
                 }
             }
+            .refreshable {
+                await loadData()
+            }
             .background(preferences.isLiquidGlassEnabled ? Color.clear : nil)
             .liquidGlassBackground()
         )

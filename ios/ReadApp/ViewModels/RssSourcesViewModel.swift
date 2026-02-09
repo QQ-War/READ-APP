@@ -12,9 +12,11 @@ final class RssSourcesViewModel: ObservableObject {
 
     private let service: APIService
     private let localStore = LocalRssSourceStore.shared
+    private let remoteStore = LocalRemoteRssSourceStore.shared
 
     init(service: APIService = APIService.shared) {
         self.service = service
+        self.remoteSources = remoteStore.loadSources()
         Task {
             await refresh()
         }
@@ -31,6 +33,7 @@ final class RssSourcesViewModel: ObservableObject {
             let response = try await service.fetchRssSources()
             remoteSources = response.sources
             canEdit = response.can
+            remoteStore.saveSources(response.sources)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -74,6 +77,7 @@ final class RssSourcesViewModel: ObservableObject {
             try await service.toggleRssSource(id: source.id, isEnabled: enable)
             if let index = remoteSources.firstIndex(where: { $0.id == source.id }) {
                 remoteSources[index].enabled = enable
+                remoteStore.saveSources(remoteSources)
             }
         } catch {
             errorMessage = error.localizedDescription

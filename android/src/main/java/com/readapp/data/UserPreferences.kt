@@ -9,6 +9,11 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.google.gson.GsonBuilder
+import com.google.gson.reflect.TypeToken
+import com.readapp.data.model.HttpTTS
+import com.readapp.data.model.RssSourceItem
+import com.readapp.data.model.HttpTtsAdapter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
@@ -33,6 +38,9 @@ enum class DarkModeConfig {
 
 class UserPreferences(private val context: Context) {
     private val secureStorage = SecureStorage(context)
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(HttpTTS::class.java, HttpTtsAdapter())
+        .create()
 
     private object Keys {
         val ServerUrl = stringPreferencesKey("serverUrl")
@@ -69,6 +77,8 @@ class UserPreferences(private val context: Context) {
         val MangaSwitchThreshold = intPreferencesKey("mangaSwitchThreshold")
         val VerticalDampingFactor = floatPreferencesKey("verticalDampingFactor")
         val MangaMaxZoom = floatPreferencesKey("mangaMaxZoom")
+        val CachedTtsEngines = stringPreferencesKey("cachedTtsEngines")
+        val CachedRssSources = stringPreferencesKey("cachedRssSources")
     }
 
     val serverUrl: Flow<String> = context.dataStore.data.map { it[Keys.ServerUrl] ?: "http://127.0.0.1:8080" }
@@ -95,6 +105,30 @@ class UserPreferences(private val context: Context) {
     val mangaSwitchThreshold: Flow<Int> = context.dataStore.data.map { it[Keys.MangaSwitchThreshold] ?: 80 }
     val verticalDampingFactor: Flow<Float> = context.dataStore.data.map { it[Keys.VerticalDampingFactor] ?: 0.15f }
     val mangaMaxZoom: Flow<Float> = context.dataStore.data.map { it[Keys.MangaMaxZoom] ?: 3.0f }
+
+    suspend fun saveCachedTtsEngines(engines: List<HttpTTS>) {
+        val json = gson.toJson(engines)
+        context.dataStore.edit { prefs -> prefs[Keys.CachedTtsEngines] = json }
+    }
+
+    suspend fun loadCachedTtsEngines(): List<HttpTTS> {
+        val json = context.dataStore.data.first()[Keys.CachedTtsEngines].orEmpty()
+        if (json.isBlank()) return emptyList()
+        val type = object : TypeToken<List<HttpTTS>>() {}.type
+        return runCatching { gson.fromJson<List<HttpTTS>>(json, type) }.getOrElse { emptyList() }
+    }
+
+    suspend fun saveCachedRssSources(sources: List<RssSourceItem>) {
+        val json = gson.toJson(sources)
+        context.dataStore.edit { prefs -> prefs[Keys.CachedRssSources] = json }
+    }
+
+    suspend fun loadCachedRssSources(): List<RssSourceItem> {
+        val json = context.dataStore.data.first()[Keys.CachedRssSources].orEmpty()
+        if (json.isBlank()) return emptyList()
+        val type = object : TypeToken<List<RssSourceItem>>() {}.type
+        return runCatching { gson.fromJson<List<RssSourceItem>>(json, type) }.getOrElse { emptyList() }
+    }
     val narrationTtsId: Flow<String> = context.dataStore.data.map { it[Keys.NarrationTtsId] ?: "" }
     val dialogueTtsId: Flow<String> = context.dataStore.data.map { it[Keys.DialogueTtsId] ?: "" }
     val speakerTtsMapping: Flow<String> = context.dataStore.data.map { it[Keys.SpeakerTtsMapping] ?: "" }

@@ -27,24 +27,38 @@ object MangaImageRequestFactory {
     ): MangaImageRequest? {
         if (rawUrl.isBlank()) return null
         val base = stripApiBasePath(serverUrl)
+        val backend = detectApiBackend(serverUrl)
         val resolved = MangaImageNormalizer.resolveUrl(rawUrl, base)
+        val normalized = if (backend == ApiBackend.Reader) {
+            rewriteReaderEpubAssetUrlIfNeeded(resolved)
+        } else {
+            resolved
+        }
         val token = accessToken?.takeIf { it.isNotBlank() }
-        val assetUrl = buildAssetUrlIfNeeded(resolved, serverUrl, accessToken)
-        val profile = MangaAntiScrapingService.resolveProfile(resolved, chapterUrl)
-        val referer = MangaAntiScrapingService.resolveReferer(profile, chapterUrl, resolved)
+        val assetUrl = buildAssetUrlIfNeeded(normalized, serverUrl, accessToken)
+        val profile = MangaAntiScrapingService.resolveProfile(normalized, chapterUrl)
+        val referer = MangaAntiScrapingService.resolveReferer(profile, chapterUrl, normalized)
         val requestUrl = when {
             assetUrl != null -> assetUrl
-            forceProxy && !isLocalAssetUrl(resolved, serverUrl) -> buildProxyUrl(resolved, serverUrl, accessToken)
-            else -> resolved
+            forceProxy && !isLocalAssetUrl(normalized, serverUrl) -> buildProxyUrl(normalized, serverUrl, accessToken)
+            else -> normalized
         }
         if (requestUrl.isNullOrBlank()) {
             return null
         }
-        if (token == null && isAssetPath(resolved)) {
+        if (token == null && isAssetPath(normalized)) {
             return null
         }
         val headers = buildHeaders(profile, referer, token)
-        return MangaImageRequest(resolved, requestUrl, headers)
+        return MangaImageRequest(normalized, requestUrl, headers)
+    }
+
+    private fun rewriteReaderEpubAssetUrlIfNeeded(url: String): String {
+        val lower = url.lowercase()
+        if (!lower.contains("/assets/") || !lower.contains("/index/") || !lower.contains(".epub")) {
+            return url
+        }
+        return url.replace("/assets/", "/epub/")
     }
 
     fun buildImageRequest(context: Context, request: MangaImageRequest): ImageRequest {

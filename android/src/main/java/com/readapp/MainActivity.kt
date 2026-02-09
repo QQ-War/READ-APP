@@ -173,7 +173,8 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                         },
                         onDownloadChapters = { start, end ->
                             bookViewModel.downloadChapters(start, end)
-                        }
+                        },
+                        onRefresh = { bookViewModel.refreshChapters() }
                     )
                 }
             }

@@ -376,7 +376,10 @@ struct TTSSettingsView: View {
         }
 
         do {
-            let ttsList = try await APIService.shared.fetchTTSList()
+            var ttsList = LocalTTSEngineStore.shared.loadEngines()
+            if ttsList.isEmpty {
+                ttsList = try await APIService.shared.fetchTTSList()
+            }
 
             func name(for id: String) -> String? {
                 ttsList.first(where: { $0.id == id })?.name

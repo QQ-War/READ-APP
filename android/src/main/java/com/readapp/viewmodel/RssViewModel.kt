@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class RssViewModel(
-    private val remoteManager: RemoteRssSourceManager
+    private val remoteManager: RemoteRssSourceManager,
+    private val preferences: UserPreferences
 ) : ViewModel() {
 
     private val _rssSources = MutableStateFlow<List<RssSourceItem>>(emptyList())
@@ -34,6 +35,12 @@ class RssViewModel(
     private val _remoteOperationInProgress = MutableStateFlow(false)
     val remoteOperationInProgress: StateFlow<Boolean> = _remoteOperationInProgress.asStateFlow()
     init {
+        viewModelScope.launch {
+            val cached = preferences.loadCachedRssSources()
+            if (cached.isNotEmpty()) {
+                _rssSources.value = cached
+            }
+        }
         refreshSources()
     }
 
@@ -85,6 +92,7 @@ class RssViewModel(
                 _rssSources.value = _rssSources.value.map { item ->
                     if (item.sourceUrl == sourceUrl) item.copy(enabled = enable) else item
                 }
+                preferences.saveCachedRssSources(_rssSources.value)
             }.onFailure { error ->
                 _errorMessage.value = error.message ?: "切换订阅源失败"
             }
@@ -95,6 +103,7 @@ class RssViewModel(
     private fun updateSources(response: RssSourcesResponse) {
         _rssSources.value = response.sources
         _canEdit.value = response.can
+        viewModelScope.launch { preferences.saveCachedRssSources(response.sources) }
     }
 
     class Factory(
@@ -105,7 +114,7 @@ class RssViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(RssViewModel::class.java)) {
                 val manager = RemoteRssSourceManager(remoteDataSourceFactory, preferences)
-                return RssViewModel(manager) as T
+                return RssViewModel(manager, preferences) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: $modelClass")
         }
