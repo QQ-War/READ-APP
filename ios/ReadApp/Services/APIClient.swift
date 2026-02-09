@@ -27,6 +27,14 @@ final class APIClient {
 
     private init() {}
 
+    private func appendAccessTokenIfNeeded(_ queryItems: [URLQueryItem]) -> [URLQueryItem] {
+        guard backend == .reader, !accessToken.isEmpty else { return queryItems }
+        if queryItems.contains(where: { $0.name == "accessToken" }) {
+            return queryItems
+        }
+        return queryItems + [URLQueryItem(name: "accessToken", value: accessToken)]
+    }
+
     func requestWithFailback(endpoint: String, queryItems: [URLQueryItem], timeoutInterval: TimeInterval = 15) async throws -> (Data, HTTPURLResponse) {
         let localURL = "\(baseURL)/\(endpoint)"
         do {
@@ -47,10 +55,11 @@ final class APIClient {
     }
 
     func buildURL(endpoint: String, queryItems: [URLQueryItem]? = nil) throws -> URL {
+        let resolvedQueryItems = appendAccessTokenIfNeeded(queryItems ?? [])
         guard var components = URLComponents(string: "\(baseURL)/\(endpoint)") else {
             throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL: \(baseURL)/\(endpoint)"])
         }
-        components.queryItems = queryItems
+        components.queryItems = resolvedQueryItems.isEmpty ? nil : resolvedQueryItems
         guard let url = components.url else {
             throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无法构建URL"])
         }
@@ -58,10 +67,11 @@ final class APIClient {
     }
 
     func buildURL(urlString: String, queryItems: [URLQueryItem]? = nil) throws -> URL {
+        let resolvedQueryItems = appendAccessTokenIfNeeded(queryItems ?? [])
         guard var components = URLComponents(string: urlString) else {
             throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL: \(urlString)"])
         }
-        components.queryItems = queryItems
+        components.queryItems = resolvedQueryItems.isEmpty ? nil : resolvedQueryItems
         guard let url = components.url else {
             throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无法构建URL"])
         }

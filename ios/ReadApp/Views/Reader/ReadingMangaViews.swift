@@ -102,7 +102,7 @@ struct RemoteImageView: View {
         isLoading = true
         errorMessage = nil
         Task {
-            let data = await MangaImageService.shared.fetchImageData(for: url, referer: refererOverride)
+            let data = await ImageGatewayService.shared.fetchImageData(for: url, referer: refererOverride)
             await MainActor.run {
                 if let data = data, let loadedImage = UIImage(data: data) {
                     self.image = loadedImage

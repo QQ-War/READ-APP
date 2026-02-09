@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C10000010000000000000002 /* MangaImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000010000000000000001 /* MangaImageService.swift */; };
+		C10000010000000000000002 /* ImageGatewayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000010000000000000001 /* ImageGatewayService.swift */; };
 		C10000030000000000000002 /* MangaImageExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000030000000000000001 /* MangaImageExtractor.swift */; };
 		C10000040000000000000002 /* MangaImageNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000040000000000000001 /* MangaImageNormalizer.swift */; };
 		C10000050000000000000002 /* MangaImageNormalizationRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000050000000000000001 /* MangaImageNormalizationRules.swift */; };
@@ -138,7 +138,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		C10000010000000000000001 /* MangaImageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaImageService.swift; sourceTree = "<group>"; };
+		C10000010000000000000001 /* ImageGatewayService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGatewayService.swift; sourceTree = "<group>"; };
 		C10000030000000000000001 /* MangaImageExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaImageExtractor.swift; sourceTree = "<group>"; };
 		C10000040000000000000001 /* MangaImageNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaImageNormalizer.swift; sourceTree = "<group>"; };
 		C10000050000000000000001 /* MangaImageNormalizationRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaImageNormalizationRules.swift; sourceTree = "<group>"; };
@@ -465,7 +465,7 @@
 			isa = PBXGroup;
 			children = (
 				1A00110000000000000001 /* KeychainHelper.swift */,
-				C10000010000000000000001 /* MangaImageService.swift */,
+				C10000010000000000000001 /* ImageGatewayService.swift */,
 				C10000030000000000000001 /* MangaImageExtractor.swift */,
 				C10000040000000000000001 /* MangaImageNormalizer.swift */,
 				C10000050000000000000001 /* MangaImageNormalizationRules.swift */,
@@ -595,7 +595,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C10000010000000000000002 /* MangaImageService.swift in Sources */,
+				C10000010000000000000002 /* ImageGatewayService.swift in Sources */,
 				C10000030000000000000002 /* MangaImageExtractor.swift in Sources */,
 				C10000040000000000000002 /* MangaImageNormalizer.swift in Sources */,
 				C10000050000000000000002 /* MangaImageNormalizationRules.swift in Sources */,

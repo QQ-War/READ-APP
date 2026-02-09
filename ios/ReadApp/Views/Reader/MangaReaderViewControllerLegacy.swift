@@ -197,7 +197,7 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
                 }
                 
                 let cleanUrl = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
-                guard let resolved = MangaImageService.shared.resolveImageURL(cleanUrl) else {
+                guard let resolved = ImageGatewayService.shared.resolveImageURL(cleanUrl) else {
                     await MainActor.run {
                         spinner.stopAnimating()
                         retryButton.isHidden = false
@@ -210,12 +210,12 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
                 let absolute = resolved.absoluteString
                 
                 // 并发排队期间持续显示进度环
-                await MangaImageService.shared.acquireDownloadPermit()
-                defer { MangaImageService.shared.releaseDownloadPermit() }
+                await ImageGatewayService.shared.acquireDownloadPermit()
+                defer { ImageGatewayService.shared.releaseDownloadPermit() }
                 
                 if Task.isCancelled { return }
 
-                if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl),
+                if let data = await ImageGatewayService.shared.fetchImageData(for: resolved, referer: chapterUrl),
                    let image = UIImage(data: data) {
                     if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
                         LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)
@@ -301,7 +301,7 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
             ])
             
             let urlStr2 = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
-            let resolvedForCache = MangaImageService.shared.resolveImageURL(urlStr2)
+            let resolvedForCache = ImageGatewayService.shared.resolveImageURL(urlStr2)
             let absoluteForCache = resolvedForCache?.absoluteString
             if resolvedForCache == nil {
                 spinner.stopAnimating()

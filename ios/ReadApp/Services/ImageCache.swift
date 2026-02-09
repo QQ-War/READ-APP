@@ -25,10 +25,10 @@ final class ImageCache {
             return image
         }
 
-        // 统一使用 MangaImageService 获取数据，它内部已处理 Referer、UA、代理及 /pdfImage 逻辑
-        await MangaImageService.shared.acquireDownloadPermit()
-        defer { MangaImageService.shared.releaseDownloadPermit() }
-        guard let data = await MangaImageService.shared.fetchImageData(for: url, referer: nil),
+        // 统一使用 ImageGatewayService 获取数据，它内部已处理 Referer、UA、代理及 /pdfImage 逻辑
+        await ImageGatewayService.shared.acquireDownloadPermit()
+        defer { ImageGatewayService.shared.releaseDownloadPermit() }
+        guard let data = await ImageGatewayService.shared.fetchImageData(for: url, referer: nil),
               let image = UIImage(data: data) else {
             return nil
         }

@@ -48,12 +48,18 @@ final class BooksService {
             guard httpResponse.statusCode == 200 else {
                 throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "服务器错误"])
             }
-            let apiResponse = try JSONDecoder().decode(APIResponse<[BookChapter]>.self, from: data)
-            if apiResponse.isSuccess, let chapters = apiResponse.data {
-                LocalCacheManager.shared.saveChapterList(bookUrl: bookUrl, chapters: chapters)
-                return chapters
+            let raw = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+            let isSuccess = raw?["isSuccess"] as? Bool ?? false
+            if isSuccess {
+                let apiResponse = try JSONDecoder().decode(APIResponse<[BookChapter]>.self, from: data)
+                if let chapters = apiResponse.data {
+                    LocalCacheManager.shared.saveChapterList(bookUrl: bookUrl, chapters: chapters)
+                    return chapters
+                }
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "获取章节列表失败"])
             } else {
-                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "获取章节列表失败"])
+                let errorMsg = raw?["errorMsg"] as? String
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: errorMsg ?? "获取章节列表失败"])
             }
         } catch {
             if let cachedChapters = LocalCacheManager.shared.loadChapterList(bookUrl: bookUrl) {

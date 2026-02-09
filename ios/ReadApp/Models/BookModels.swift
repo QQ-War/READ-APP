@@ -54,7 +54,7 @@ struct Book: Codable, Identifiable {
             if url.hasPrefix("/api/") {
                 return url
             }
-            // 本地资源交给 MangaImageService 统一处理（含 /assets?path= 与 /covers/）
+            // 本地资源交给 ImageGatewayService 统一处理（含 /assets?path= 与 /covers/）
             if url.hasPrefix("/assets/") || url.hasPrefix("assets/") ||
                 url.hasPrefix("/book-assets/") || url.hasPrefix("book-assets/") ||
                 url.localizedCaseInsensitiveContains("/assets?path=") ||

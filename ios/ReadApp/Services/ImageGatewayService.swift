@@ -1,8 +1,8 @@
 import Foundation
 import UIKit
 
-final class MangaImageService {
-    static let shared = MangaImageService()
+final class ImageGatewayService {
+    static let shared = ImageGatewayService()
     private let logger = LogManager.shared
     private var lastKuaikanWarmupReferer: String?
     private var lastKuaikanWarmupAt: Date?
@@ -373,12 +373,19 @@ final class MangaImageService {
         
         let baseURL = APIService.shared.baseURL
         guard !baseURL.isEmpty else { return nil }
-        
-        var components = URLComponents(string: "\(baseURL)/assets")
-        components?.queryItems = [
-            URLQueryItem(name: "path", value: "/" + path)
-        ]
-        return components?.url
+        if APIClient.shared.backend == .reader {
+            let assetBase = ApiBackendResolver.stripApiBasePath(baseURL)
+            let normalized = path.hasPrefix("/") ? String(path.dropFirst()) : path
+            let resolved = assetBase.hasSuffix("/") ? (assetBase + normalized) : (assetBase + "/" + normalized)
+            return URL(string: resolved)
+        } else {
+            let assetBase = baseURL
+            var components = URLComponents(string: "\(assetBase)/assets")
+            components?.queryItems = [
+                URLQueryItem(name: "path", value: "/" + path)
+            ]
+            return components?.url
+        }
     }
 
     private func isAssetPath(_ value: String) -> Bool {

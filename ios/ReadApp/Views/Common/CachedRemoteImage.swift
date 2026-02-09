@@ -7,7 +7,7 @@ final class CachedImageLoader: ObservableObject {
     func load(urlString: String?) {
         task?.cancel()
         image = nil
-        guard let urlString, let url = MangaImageService.shared.resolveImageURL(urlString) else { return }
+        guard let urlString, let url = ImageGatewayService.shared.resolveImageURL(urlString) else { return }
         task = Task {
             let fetched = await ImageCache.shared.image(for: url)
             guard !Task.isCancelled else { return }

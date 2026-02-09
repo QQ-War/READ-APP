@@ -452,7 +452,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
         let task = Task {
             if let cachedImage = imageCache.object(forKey: cacheKey) {
-                let decoded = MangaImageService.shared.decodeImage(cachedImage)
+                let decoded = ImageGatewayService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
@@ -478,7 +478,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                 return
             }
             let cleanUrl = sanitizedUrl(urlStr)
-            guard let resolved = MangaImageService.shared.resolveImageURL(cleanUrl) else {
+            guard let resolved = ImageGatewayService.shared.resolveImageURL(cleanUrl) else {
                 await MainActor.run {
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
@@ -493,7 +493,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
             if let cachedData = prefetchDataCache.object(forKey: cacheKey) as Data?,
                let cachedImage = UIImage(data: cachedData) {
-                let decoded = MangaImageService.shared.decodeImage(cachedImage)
+                let decoded = ImageGatewayService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
@@ -522,7 +522,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
             if let b = bookUrl,
                let cachedData = LocalCacheManager.shared.loadMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute),
                let cachedImage = UIImage(data: cachedData) {
-                let decoded = MangaImageService.shared.decodeImage(cachedImage)
+                let decoded = ImageGatewayService.shared.decodeImage(cachedImage)
                 await MainActor.run {
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
@@ -548,17 +548,17 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                 return
             }
 
-            await MangaImageService.shared.acquireDownloadPermit()
-            defer { MangaImageService.shared.releaseDownloadPermit() }
+            await ImageGatewayService.shared.acquireDownloadPermit()
+            defer { ImageGatewayService.shared.releaseDownloadPermit() }
 
             if Task.isCancelled { return }
 
-            if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl),
+            if let data = await ImageGatewayService.shared.fetchImageData(for: resolved, referer: chapterUrl),
                let image = UIImage(data: data) {
                 if let b = bookUrl, UserPreferences.shared.isMangaAutoCacheEnabled {
                     LocalCacheManager.shared.saveMangaImage(bookUrl: b, chapterIndex: chapterIndex, imageURL: absolute, data: data)
                 }
-                let decoded = MangaImageService.shared.decodeImage(image)
+                let decoded = ImageGatewayService.shared.decodeImage(image)
                 await MainActor.run {
                     if Task.isCancelled { return }
                     guard index < self.imageStates.count,
@@ -656,7 +656,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
     private func prefetchNextChapterImage(urlStr: String) {
         let cleanUrl = sanitizedUrl(urlStr)
-        guard let resolved = MangaImageService.shared.resolveImageURL(cleanUrl) else { return }
+        guard let resolved = ImageGatewayService.shared.resolveImageURL(cleanUrl) else { return }
         let absolute = resolved.absoluteString
         let key = NSString(string: cleanUrl)
 
@@ -668,13 +668,13 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         }
 
         let task = Task {
-            await MangaImageService.shared.acquireDownloadPermit()
-            defer { MangaImageService.shared.releaseDownloadPermit() }
+            await ImageGatewayService.shared.acquireDownloadPermit()
+            defer { ImageGatewayService.shared.releaseDownloadPermit() }
             if Task.isCancelled { return }
-            if let data = await MangaImageService.shared.fetchImageData(for: resolved, referer: chapterUrl) {
+            if let data = await ImageGatewayService.shared.fetchImageData(for: resolved, referer: chapterUrl) {
                 prefetchDataCache.setObject(data as NSData, forKey: key, cost: data.count)
                 if let image = UIImage(data: data) {
-                    let decoded = MangaImageService.shared.decodeImage(image)
+                    let decoded = ImageGatewayService.shared.decodeImage(image)
                     let cost = self.estimatedCost(for: decoded)
                     self.imageCache.setObject(decoded, forKey: self.cacheKey(for: cleanUrl), cost: cost)
                 }
