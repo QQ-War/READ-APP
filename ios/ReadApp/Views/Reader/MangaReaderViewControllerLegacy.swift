@@ -197,7 +197,7 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
                 }
                 
                 let cleanUrl = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
-                guard let resolved = ImageGatewayService.shared.resolveImageURL(cleanUrl) else {
+                guard let resolved = ImageGatewayService.shared.resolveImageURL(cleanUrl, baseURLString: chapterUrl) else {
                     await MainActor.run {
                         spinner.stopAnimating()
                         retryButton.isHidden = false
@@ -301,7 +301,7 @@ class MangaLegacyReaderViewController: UIViewController, UIScrollViewDelegate, M
             ])
             
             let urlStr2 = urlStr.replacingOccurrences(of: "__IMG__", with: "").trimmingCharacters(in: .whitespaces)
-            let resolvedForCache = ImageGatewayService.shared.resolveImageURL(urlStr2)
+            let resolvedForCache = ImageGatewayService.shared.resolveImageURL(urlStr2, baseURLString: chapterUrl)
             let absoluteForCache = resolvedForCache?.absoluteString
             if resolvedForCache == nil {
                 spinner.stopAnimating()
