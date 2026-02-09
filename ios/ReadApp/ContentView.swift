@@ -107,19 +107,16 @@ struct ContentView: View {
         DispatchQueue.main.async {
             guard let tabBarController = UIApplication.shared.findTabBarController() else { return }
             let tabBar = tabBarController.tabBar
-            let containerView = tabBar.superview ?? tabBarController.view
-            let bounds = containerView?.bounds ?? tabBarController.view?.bounds ?? .zero
-            let safeInsets = containerView?.safeAreaInsets ?? tabBarController.view?.safeAreaInsets ?? .zero
-
+            let view = tabBarController.view
             let horizontalInset: CGFloat = 20
-            let verticalInset: CGFloat = 12
-
+            let verticalInset: CGFloat = 16
+            let safeBottom = view?.safeAreaInsets.bottom ?? 0
             var frame = tabBar.frame
-            let barHeight = max(frame.size.height, 49)
-            frame.size.width = bounds.width - horizontalInset * 2
-            frame.size.height = barHeight
-            frame.origin.x = (bounds.width - frame.size.width) / 2
-            frame.origin.y = bounds.height - safeInsets.bottom - barHeight - verticalInset
+            let viewWidth = view?.bounds.width ?? frame.size.width
+            let viewHeight = view?.bounds.height ?? frame.maxY
+            frame.size.width = viewWidth - horizontalInset * 2
+            frame.origin.x = (viewWidth - frame.size.width) / 2
+            frame.origin.y = viewHeight - safeBottom - frame.height - verticalInset
             tabBar.frame = frame
             tabBar.isTranslucent = true
             tabBar.layer.cornerRadius = 24
@@ -130,8 +127,6 @@ struct ContentView: View {
             let backgroundTag = 901
             if let existing = tabBar.viewWithTag(backgroundTag) {
                 existing.frame = tabBar.bounds
-                existing.layer.cornerRadius = tabBar.layer.cornerRadius
-                existing.layer.cornerCurve = tabBar.layer.cornerCurve
                 if let blurView = existing.subviews.first as? UIVisualEffectView {
                     blurView.frame = existing.bounds
                 }
