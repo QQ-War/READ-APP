@@ -105,6 +105,22 @@ final class ImageGatewayService {
         return value.replacingOccurrences(of: "/assets/", with: "/epub/")
     }
 
+    private func rewriteReaderEpubAssetURLIfNeeded(_ url: URL) -> URL {
+        guard APIClient.shared.backend == .reader else { return url }
+        let lowerPath = url.path.lowercased()
+        guard lowerPath.contains("/assets/"),
+              lowerPath.contains("/index/"),
+              lowerPath.contains(".epub") else {
+            return url
+        }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        if var path = components?.path, path.hasPrefix("/assets/") {
+            path = path.replacingOccurrences(of: "/assets/", with: "/epub/")
+            components?.path = path
+        }
+        return components?.url ?? url
+    }
+
     private func normalizeSchemeIfNeeded(_ url: URL) -> URL {
         guard url.scheme?.lowercased() == "http" else { return url }
         guard let base = URL(string: APIService.shared.baseURL),
@@ -118,23 +134,24 @@ final class ImageGatewayService {
     }
     
     func fetchImageData(for url: URL, referer: String?) async -> Data? {
+        let rewrittenURL = rewriteReaderEpubAssetURLIfNeeded(url)
         // 1. 优先处理特殊路径：本地上传的 PDF 图片缩略图
-        if isPdfImageURL(url) {
-            return await fetchPdfImageData(url)
+        if isPdfImageURL(rewrittenURL) {
+            return await fetchPdfImageData(rewrittenURL)
         }
 
         // 2. 本地资源永远直连 /assets（忽略 proxypng 开关）
-        if isLocalAssetURL(url) {
-            return await fetchImageData(requestURL: url, referer: referer)
+        if isLocalAssetURL(rewrittenURL) {
+            return await fetchImageData(requestURL: rewrittenURL, referer: referer)
         }
         
         // 3. 处理代理逻辑
-        if UserPreferences.shared.forceMangaProxy, let proxyURL = buildProxyURL(for: url) {
+        if UserPreferences.shared.forceMangaProxy, let proxyURL = buildProxyURL(for: rewrittenURL) {
             return await fetchImageData(requestURL: proxyURL, referer: referer)
         }
 
         // 4. 普通图像抓取
-        return await fetchImageData(requestURL: url, referer: referer)
+        return await fetchImageData(requestURL: rewrittenURL, referer: referer)
     }
 
     private func fetchImageData(requestURL: URL, referer: String?) async -> Data? {
