@@ -198,7 +198,8 @@ struct ContentView: View {
 
     private func resetTabBarToDefault(tabBarController: UITabBarController) {
         let tabBar = tabBarController.tabBar
-        let bounds = tabBarController.view?.bounds ?? .zero
+        let container = tabBar.superview ?? tabBarController.view
+        let bounds = container?.bounds ?? tabBarController.view?.bounds ?? .zero
 
         let backgroundTag = 901
         tabBar.viewWithTag(backgroundTag)?.removeFromSuperview()
