@@ -22,15 +22,6 @@ final class ImageGatewayService {
     
     func resolveImageURL(_ original: String) -> URL? {
         let cleaned = MangaImageNormalizer.sanitizeUrlString(original)
-
-        // reader 后端：EPUB 解压资源实际挂在 /epub 下，避免落到 /assets/.../index/...
-        if APIClient.shared.backend == .reader,
-           let rewritten = rewriteReaderEpubAssetURLIfNeeded(cleaned),
-           rewritten != cleaned {
-            if let url = URL(string: rewritten) {
-                return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
-            }
-        }
         
         // 1. 优先尝试将其作为后端资产路径处理（会补全域名和 Token）
         if let assetURL = buildAssetURLIfNeeded(cleaned) {
@@ -86,23 +77,6 @@ final class ImageGatewayService {
             return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
         }
         return nil
-    }
-
-    private func rewriteReaderEpubAssetURLIfNeeded(_ value: String) -> String? {
-        let lower = value.lowercased()
-        guard lower.contains("/assets/"), lower.contains("/index/"), lower.contains(".epub") else {
-            return nil
-        }
-        if let url = URL(string: value) {
-            var path = url.path
-            if path.hasPrefix("/assets/") {
-                path = path.replacingOccurrences(of: "/assets/", with: "/epub/")
-            }
-            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            components?.path = path
-            return components?.url?.absoluteString ?? value
-        }
-        return value.replacingOccurrences(of: "/assets/", with: "/epub/")
     }
 
     private func normalizeSchemeIfNeeded(_ url: URL) -> URL {
