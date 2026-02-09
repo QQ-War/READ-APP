@@ -227,6 +227,9 @@ class APIService {
 
         for urlString in candidates {
             if let text = await fetchTextContent(urlString: urlString) {
+                if text.contains("<") {
+                    return resolveRelativeResourceUrls(in: text, baseURLString: urlString)
+                }
                 return text
             }
         }
@@ -303,6 +306,40 @@ class APIService {
             return nil
         }
         return String(data: data, encoding: .utf8)
+    }
+
+    private func resolveRelativeResourceUrls(in html: String, baseURLString: String) -> String {
+        guard let baseURL = URL(string: baseURLString) else { return html }
+        let baseDir = baseURL.deletingLastPathComponent()
+        let pattern = "(?i)\\b(src|href)\\s*=\\s*(['\"])(.*?)\\2"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return html }
+        let nsHtml = html as NSString
+        let matches = regex.matches(in: html, options: [], range: NSRange(location: 0, length: nsHtml.length))
+        guard !matches.isEmpty else { return html }
+
+        var result = html
+        for match in matches.reversed() {
+            guard match.numberOfRanges >= 4 else { continue }
+            let valueRange = match.range(at: 3)
+            let original = nsHtml.substring(with: valueRange)
+            let trimmed = original.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            if shouldSkipRelativeRewrite(trimmed) { continue }
+            guard let resolved = URL(string: trimmed, relativeTo: baseDir)?.absoluteURL else { continue }
+            let resolvedString = resolved.absoluteString
+            if resolvedString == original { continue }
+            result = (result as NSString).replacingCharacters(in: valueRange, with: resolvedString)
+        }
+        return result
+    }
+
+    private func shouldSkipRelativeRewrite(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") { return true }
+        if lower.hasPrefix("data:") || lower.hasPrefix("about:") || lower.hasPrefix("mailto:") { return true }
+        if lower.hasPrefix("tel:") || lower.hasPrefix("javascript:") || lower.hasPrefix("blob:") { return true }
+        if lower.hasPrefix("#") || lower.hasPrefix("__api_root__") { return true }
+        return false
     }
 
     private func withTimeout<T>(seconds: TimeInterval, operation: @escaping @Sendable () async throws -> T) async throws -> T {
