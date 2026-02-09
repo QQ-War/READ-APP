@@ -5,6 +5,7 @@ struct SourceExploreContainerView: View {
     @EnvironmentObject var bookshelfStore: BookshelfStore
     @StateObject private var viewModel: BookSearchViewModel
     @Environment(\.presentationMode) var presentationMode
+    @StateObject private var exploreStore = SourceExploreStore()
     
     @State private var exploreKinds: [BookSource.ExploreKind] = []
     @State private var isLoadingKinds = false
@@ -80,7 +81,7 @@ struct SourceExploreContainerView: View {
                             
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 12) {
                                 ForEach(exploreKinds) { kind in
-                                    NavigationLink(destination: SourceExploreView(source: source, kind: kind)) {
+                                    NavigationLink(destination: SourceExploreView(viewModel: exploreStore.viewModel(for: source, kind: kind))) {
                                         Text(kind.title)
                                             .font(.subheadline)
                                             .padding(.horizontal, 10)

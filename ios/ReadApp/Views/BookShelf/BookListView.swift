@@ -43,16 +43,22 @@ struct BookListView: View {
                     if preferences.searchSourcesFromBookshelf {
                         Section(header: GlassySectionHeader(title: "全网搜索")) {
                             if listViewModel.isSearchingOnline {
-                                HStack {
-                                    Spacer()
+                                VStack(spacing: 6) {
                                     ProgressView()
-                                    Spacer()
+                                    if listViewModel.onlineSearchTotal > 0 {
+                                        Text("搜索中 \(listViewModel.onlineSearchCompleted)/\(listViewModel.onlineSearchTotal)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
+                                .frame(maxWidth: .infinity)
                                 .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
-                            } else if listViewModel.onlineResults.isEmpty {
+                            }
+
+                            if listViewModel.onlineResults.isEmpty && !listViewModel.isSearchingOnline {
                                 Text("未找到相关书籍").foregroundColor(.secondary).font(.caption)
                                     .listRowBackground(preferences.isLiquidGlassEnabled ? Color.clear : nil)
-                            } else {
+                            } else if !listViewModel.onlineResults.isEmpty {
                                 ForEach(listViewModel.onlineResults) { book in
                                     NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore)) {
                                         BookSearchResultRow(book: book) {

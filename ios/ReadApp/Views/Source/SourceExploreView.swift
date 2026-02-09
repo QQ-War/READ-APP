@@ -1,15 +1,8 @@
 import SwiftUI
 
 struct SourceExploreView: View {
-    let source: BookSource
-    let kind: BookSource.ExploreKind
-
+    @ObservedObject var viewModel: SourceExploreViewModel
     @EnvironmentObject var bookshelfStore: BookshelfStore
-    @State private var books: [Book] = []
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var currentPage = 1
-    @State private var canLoadMore = true
     
     @State private var showAddSuccessAlert = false
     @State private var showAddFailureAlert = false
@@ -17,7 +10,7 @@ struct SourceExploreView: View {
 
     var body: some View {
         List {
-            ForEach(books) { book in
+            ForEach(viewModel.books) { book in
                 NavigationLink(destination: BookDetailView(book: book)) {
                     BookSearchResultRow(book: book) {
                         Task {
@@ -27,17 +20,17 @@ struct SourceExploreView: View {
                 }
             }
             
-            if canLoadMore {
+            if viewModel.canLoadMore {
                 HStack {
                     Spacer()
-                    if isLoading {
+                    if viewModel.isLoading {
                         ProgressView()
                     } else {
                         Text("上拉或点击加载更多")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .onAppear {
-                                Task { await loadBooks(loadMore: true) }
+                                Task { await viewModel.loadBooks(loadMore: true) }
                             }
                     }
                     Spacer()
@@ -45,11 +38,11 @@ struct SourceExploreView: View {
             }
         }
         .glassyListStyle()
-        .navigationTitle(kind.title)
+        .navigationTitle(viewModel.kind.title)
         .navigationBarTitleDisplayMode(.inline)
         .ifAvailableHideTabBar()
         .task {
-            await loadBooks()
+            await viewModel.loadIfNeeded()
         }
         .alert("添加书架", isPresented: $showAddSuccessAlert) {
             Button("确定", role: .cancel) { }
@@ -60,38 +53,6 @@ struct SourceExploreView: View {
             Button("确定", role: .cancel) { }
         } message: {
             Text(alertMessage)
-        }
-    }
-    
-    private func loadBooks(loadMore: Bool = false) async {
-        guard !isLoading && (canLoadMore || !loadMore) else { return }
-        
-        if loadMore {
-            currentPage += 1
-        } else {
-            currentPage = 1
-            books = []
-        }
-        
-        isLoading = true
-        do {
-            let newBooks = try await APIService.shared.exploreBook(bookSourceUrl: source.bookSourceUrl, ruleFindUrl: kind.url, page: currentPage)
-            await MainActor.run {
-                if newBooks.isEmpty {
-                    canLoadMore = false
-                } else {
-                    self.books.append(contentsOf: newBooks)
-                    if newBooks.count < 20 { // Simple heuristic for last page
-                        canLoadMore = false
-                    }
-                }
-                isLoading = false
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
-            }
         }
     }
     

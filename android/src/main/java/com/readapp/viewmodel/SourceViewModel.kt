@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.StateFlow
 
 @OptIn(FlowPreview::class)
 class SourceViewModel(application: Application) : AndroidViewModel(application) {
@@ -67,6 +68,16 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
     private val _isGlobalSearching = MutableStateFlow(false)
     val isGlobalSearching = _isGlobalSearching.asStateFlow()
 
+    data class ExploreState(
+        val books: List<Book> = emptyList(),
+        val isLoading: Boolean = false,
+        val currentPage: Int = 1,
+        val canLoadMore: Boolean = true,
+        val hasLoaded: Boolean = false
+    )
+
+    private val exploreStates = mutableMapOf<String, MutableStateFlow<ExploreState>>()
+
     init {
         viewModelScope.launch {
             userPreferences.accessToken.collect { token ->
@@ -91,6 +102,48 @@ class SourceViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onSearchTextChanged(text: String) {
         _searchText.value = text
+    }
+
+    fun getExploreState(key: String): StateFlow<ExploreState> {
+        return exploreStates.getOrPut(key) { MutableStateFlow(ExploreState()) }.asStateFlow()
+    }
+
+    fun loadExploreIfNeeded(key: String, bookSourceUrl: String, ruleFindUrl: String) {
+        val stateFlow = exploreStates.getOrPut(key) { MutableStateFlow(ExploreState()) }
+        if (stateFlow.value.hasLoaded || stateFlow.value.isLoading) return
+        loadExplore(key, bookSourceUrl, ruleFindUrl, loadMore = false)
+    }
+
+    fun loadMoreExplore(key: String, bookSourceUrl: String, ruleFindUrl: String) {
+        val stateFlow = exploreStates.getOrPut(key) { MutableStateFlow(ExploreState()) }
+        val state = stateFlow.value
+        if (state.isLoading || !state.canLoadMore) return
+        loadExplore(key, bookSourceUrl, ruleFindUrl, loadMore = true)
+    }
+
+    private fun loadExplore(key: String, bookSourceUrl: String, ruleFindUrl: String, loadMore: Boolean) {
+        val stateFlow = exploreStates.getOrPut(key) { MutableStateFlow(ExploreState()) }
+        val state = stateFlow.value
+        val nextPage = if (loadMore) state.currentPage + 1 else 1
+        val startBooks = if (loadMore) state.books else emptyList()
+
+        stateFlow.value = state.copy(isLoading = true)
+        viewModelScope.launch {
+            val result = exploreBook(bookSourceUrl, ruleFindUrl, nextPage)
+            result.onSuccess { newBooks ->
+                val merged = startBooks + newBooks
+                val canLoadMore = newBooks.isNotEmpty() && newBooks.size >= 20
+                stateFlow.value = stateFlow.value.copy(
+                    books = merged,
+                    isLoading = false,
+                    currentPage = nextPage,
+                    canLoadMore = canLoadMore,
+                    hasLoaded = true
+                )
+            }.onFailure {
+                stateFlow.value = stateFlow.value.copy(isLoading = false)
+            }
+        }
     }
 
     private fun performGlobalSearch(query: String) {

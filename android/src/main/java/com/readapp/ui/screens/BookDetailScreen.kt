@@ -315,23 +315,37 @@ fun SourceSwitchDialog(
     onDismiss: () -> Unit
 ) {
     val bookViewModel: com.readapp.viewmodel.BookViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.readapp.viewmodel.BookViewModel.Factory)
-    val results by bookViewModel.searchNewSource(bookName, author).collectAsState(initial = emptyList())
+    val switchState by bookViewModel.sourceSwitchState.collectAsState()
+
+    LaunchedEffect(bookName, author) {
+        bookViewModel.ensureSourceSwitchSearch(bookName, author)
+    }
     
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("更换来源 (书名完全一致)") },
         text = {
-            if (results.isEmpty()) {
-                Box(Modifier.fillMaxWidth().height(100.dp), Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(Modifier.size(24.dp))
-                        Spacer(Modifier.height(8.dp))
-                        Text("正在搜索书名一致的源...", style = MaterialTheme.typography.labelSmall)
+            Column(Modifier.fillMaxWidth()) {
+                if (switchState.isSearching) {
+                    Box(Modifier.fillMaxWidth().height(100.dp), Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(Modifier.size(24.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text("正在搜索书名一致的源...", style = MaterialTheme.typography.labelSmall)
+                            if (switchState.total > 0) {
+                                Text("进度 ${switchState.completed}/${switchState.total}", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
                 }
-            } else {
-                LazyColumn(Modifier.heightIn(max = 400.dp)) {
-                    items(results) { resBook ->
+
+                if (!switchState.isSearching && switchState.results.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().height(100.dp), Alignment.Center) {
+                        Text("未找到匹配结果", style = MaterialTheme.typography.labelSmall)
+                    }
+                } else if (switchState.results.isNotEmpty()) {
+                    LazyColumn(Modifier.heightIn(max = 400.dp)) {
+                        items(switchState.results) { resBook ->
                         val isAuthorMatch = resBook.author == author
                         ListItem(
                             headlineContent = { 
@@ -356,6 +370,7 @@ fun SourceSwitchDialog(
                             modifier = Modifier.clickable { onSelect(resBook) }
                         )
                         Divider()
+                    }
                     }
                 }
             }

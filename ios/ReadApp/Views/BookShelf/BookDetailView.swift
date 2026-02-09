@@ -29,6 +29,7 @@ struct BookDetailView: View {
     @State private var showingClearCacheOptions = false
     @State private var rangeActionType: RangeActionType = .download
     @State private var showingAddSuccessAlert = false
+    @StateObject private var sourceSwitchViewModel = SourceSwitchViewModel()
     
     enum RangeActionType {
         case download
@@ -130,7 +131,12 @@ struct BookDetailView: View {
             Button("确定", role: .cancel) { }
         }
         .sheet(isPresented: $showingSourceSwitch) {
-            SourceSwitchView(bookName: book.name ?? "", author: book.author ?? "", currentSource: book.origin ?? "") { newBook in
+            SourceSwitchView(
+                bookName: book.name ?? "",
+                author: book.author ?? "",
+                currentSource: book.origin ?? "",
+                viewModel: sourceSwitchViewModel
+            ) { newBook in
                 updateBookSource(with: newBook)
             }
         }
@@ -523,26 +529,35 @@ struct SourceSwitchView: View {
     let bookName: String
     let author: String
     let currentSource: String
+    @ObservedObject var viewModel: SourceSwitchViewModel
     let onSelect: (Book) -> Void
     @Environment(\.dismiss) var dismiss
-    @State private var searchResults: [Book] = []
-    @State private var isSearching = false
     
     var body: some View {
         NavigationView {
             List {
-                if isSearching {
-                    HStack { Spacer(); ProgressView("正在全网匹配来源..."); Spacer() }
-                } else if searchResults.isEmpty {
+                if viewModel.isSearching {
+                    VStack(spacing: 8) {
+                        ProgressView("正在全网匹配来源...")
+                        if viewModel.totalCount > 0 {
+                            Text("进度 \(viewModel.completedCount)/\(viewModel.totalCount)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+
+                if !viewModel.isSearching && viewModel.searchResults.isEmpty {
                     VStack(spacing: 12) {
                         Text("未找到书名完全一致的备选源").foregroundColor(.secondary)
                         Text("建议：检查书源是否启用或书籍是否更名").font(.caption2).foregroundColor(.gray)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 40)
-                } else {
-                    Section(header: GlassySectionHeader(title: "完全匹配的结果 (\(searchResults.count))")) {
-                        ForEach(searchResults) { book in
+                } else if !viewModel.searchResults.isEmpty {
+                    Section(header: GlassySectionHeader(title: "完全匹配的结果 (\(viewModel.searchResults.count))")) {
+                        ForEach(viewModel.searchResults) { book in
                             let isAuthorMatch = book.author == author
                             Button(action: { onSelect(book); dismiss() }) {
                                 VStack(alignment: .leading, spacing: 6) {
@@ -585,43 +600,7 @@ struct SourceSwitchView: View {
             .navigationTitle("更换来源")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("关闭") { dismiss() }.glassyToolbarButton() } }
-            .task { await performSearch() }
-        }
-    }
-    
-    private func performSearch() async {
-        isSearching = true
-        let sources = (try? await APIService.shared.fetchBookSources()) ?? []
-        let enabledSources = sources.filter { $0.enabled }
-        
-        var allMatches: [Book] = []
-        
-        await withTaskGroup(of: [Book]?.self) { group in
-            for source in enabledSources { 
-                group.addTask { 
-                    // 仅使用书名搜索，确保搜得到
-                    return try? await APIService.shared.searchBook(keyword: bookName, bookSourceUrl: source.bookSourceUrl)
-                } 
-            }
-            for await result in group {
-                if let books = result {
-                    // 本地进行严格书名过滤
-                    let exactMatches = books.filter { $0.name == bookName }
-                    allMatches.append(contentsOf: exactMatches)
-                }
-            }
-        }
-        
-        // 排序逻辑：作者一致的排最前面
-        allMatches.sort { b1, b2 in
-            let match1 = (b1.author == author) ? 1 : 0
-            let match2 = (b2.author == author) ? 1 : 0
-            return match1 > match2
-        }
-        
-        await MainActor.run {
-            self.searchResults = allMatches
-            isSearching = false
+            .task { await viewModel.performSearchIfNeeded(bookName: bookName, author: author) }
         }
     }
 }

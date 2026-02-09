@@ -29,20 +29,11 @@ fun SourceExploreScreen(
     sourceViewModel: SourceViewModel = viewModel(factory = SourceViewModel.Factory),
     bookViewModel: com.readapp.viewmodel.BookViewModel = viewModel(factory = com.readapp.viewmodel.BookViewModel.Factory)
 ) {
-    var books by remember { mutableStateOf<List<Book>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var currentPage by remember { mutableStateOf(1) }
-    var canLoadMore by remember { mutableStateOf(true) }
-    val scope = rememberCoroutineScope()
+    val exploreKey = remember(sourceUrl, ruleFindUrl) { "$sourceUrl|$ruleFindUrl" }
+    val exploreState by sourceViewModel.getExploreState(exploreKey).collectAsState()
 
-    LaunchedEffect(Unit) {
-        isLoading = true
-        val result = sourceViewModel.exploreBook(sourceUrl, ruleFindUrl, 1)
-        result.onSuccess {
-            books = it
-            if (it.size < 20) canLoadMore = false
-        }
-        isLoading = false
+    LaunchedEffect(exploreKey) {
+        sourceViewModel.loadExploreIfNeeded(exploreKey, sourceUrl, ruleFindUrl)
     }
 
     Scaffold(
@@ -63,11 +54,11 @@ fun SourceExploreScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (isLoading && books.isEmpty()) {
+            if (exploreState.isLoading && exploreState.books.isEmpty()) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(books) { index, book ->
+                    itemsIndexed(exploreState.books) { index, book ->
                         BookSearchResultRow(
                             book = book.copy(sourceDisplayName = sourceName),
                             onAdd = { sourceViewModel.saveBookToBookshelf(book) },
@@ -79,23 +70,14 @@ fun SourceExploreScreen(
                         Divider(modifier = Modifier.padding(horizontal = 16.dp))
                         
                         // Load more
-                        if (index == books.lastIndex && canLoadMore && !isLoading) {
-                            LaunchedEffect(Unit) {
-                                scope.launch {
-                                    isLoading = true
-                                    currentPage++
-                                    val nextResult = sourceViewModel.exploreBook(sourceUrl, ruleFindUrl, currentPage)
-                                    nextResult.onSuccess {
-                                        if (it.isEmpty()) canLoadMore = false
-                                        else books = books + it
-                                    }.onFailure { canLoadMore = false }
-                                    isLoading = false
-                                }
+                        if (index == exploreState.books.lastIndex && exploreState.canLoadMore && !exploreState.isLoading) {
+                            LaunchedEffect(exploreKey) {
+                                sourceViewModel.loadMoreExplore(exploreKey, sourceUrl, ruleFindUrl)
                             }
                         }
                     }
                     
-                    if (isLoading && books.isNotEmpty()) {
+                    if (exploreState.isLoading && exploreState.books.isNotEmpty()) {
                         item {
                             Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp))

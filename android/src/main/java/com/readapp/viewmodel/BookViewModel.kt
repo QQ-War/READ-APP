@@ -40,6 +40,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -230,6 +233,21 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val onlineSearchResults: StateFlow<List<Book>> = _onlineSearchResults.asStateFlow()
     private val _isOnlineSearching = MutableStateFlow(false)
     val isOnlineSearching: StateFlow<Boolean> = _isOnlineSearching.asStateFlow()
+    private val _onlineSearchCompleted = MutableStateFlow(0)
+    val onlineSearchCompleted: StateFlow<Int> = _onlineSearchCompleted.asStateFlow()
+    private val _onlineSearchTotal = MutableStateFlow(0)
+    val onlineSearchTotal: StateFlow<Int> = _onlineSearchTotal.asStateFlow()
+
+    data class SourceSwitchState(
+        val results: List<Book> = emptyList(),
+        val isSearching: Boolean = false,
+        val completed: Int = 0,
+        val total: Int = 0,
+        val queryKey: String = ""
+    )
+
+    private val _sourceSwitchState = MutableStateFlow(SourceSwitchState())
+    val sourceSwitchState: StateFlow<SourceSwitchState> = _sourceSwitchState.asStateFlow()
     internal val _isChapterListLoading = MutableStateFlow(false)
     val isChapterListLoading: StateFlow<Boolean> = _isChapterListLoading.asStateFlow()
     internal val _isChapterContentLoading = MutableStateFlow(false)
@@ -812,6 +830,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             _onlineSearchResults.value = emptyList()
             _isOnlineSearching.value = false
+            _onlineSearchCompleted.value = 0
+            _onlineSearchTotal.value = 0
         }
     }
 
@@ -824,15 +844,19 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private var onlineSearchJob: Job? = null
+    private var onlineSearchToken: String = ""
     private fun performOnlineSearch(query: String) {
         onlineSearchJob?.cancel()
         onlineSearchJob = viewModelScope.launch {
             delay(800) // Debounce
+            val searchToken = System.currentTimeMillis().toString()
+            onlineSearchToken = searchToken
             _isOnlineSearching.value = true
             _onlineSearchResults.value = emptyList()
+            _onlineSearchCompleted.value = 0
 
-            val (baseUrl, publicUrl, token) = preferences.getCredentials()
-            if (token == null) {
+            val (baseUrl, publicUrl, accessToken) = preferences.getCredentials()
+            if (accessToken == null) {
                 _isOnlineSearching.value = false
                 return@launch
             }
@@ -844,22 +868,38 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 enabledSources.filter { _preferredSearchSourceUrls.value.contains(it.bookSourceUrl) }
             }
 
-            val deferredResults = targetSources.map { source ->
-                async {
-                    bookRepository.searchBook(
+            _onlineSearchTotal.value = targetSources.size
+            if (targetSources.isEmpty()) {
+                _isOnlineSearching.value = false
+                return@launch
+            }
+
+            val results = mutableListOf<Book>()
+            val mutex = Mutex()
+            val jobs = targetSources.map { source ->
+                async(Dispatchers.IO) {
+                    val books = bookRepository.searchBook(
                         baseUrl = baseUrl,
                         publicUrl = publicUrl,
-                        accessToken = token,
+                        accessToken = accessToken,
                         keyword = query,
                         bookSourceUrl = source.bookSourceUrl,
                         page = 1
                     ).getOrNull()?.map { it.copy(sourceDisplayName = source.bookSourceName) } ?: emptyList()
+
+                    mutex.withLock {
+                        if (onlineSearchToken != searchToken) return@withLock
+                        results.addAll(books)
+                        _onlineSearchResults.value = results.toList()
+                        _onlineSearchCompleted.value = _onlineSearchCompleted.value + 1
+                    }
                 }
             }
 
-            val allResults = deferredResults.awaitAll().flatten()
-            _onlineSearchResults.value = allResults
-            _isOnlineSearching.value = false
+            jobs.awaitAll()
+            if (onlineSearchToken == searchToken) {
+                _isOnlineSearching.value = false
+            }
         }
     }
 
@@ -930,25 +970,72 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun searchNewSource(bookName: String, author: String): Flow<List<Book>> = flow {
-        val (baseUrl, publicUrl, token) = preferences.getCredentials()
-        if (token == null) return@flow
+    private var sourceSwitchToken: String = ""
 
-        val sources = _availableBookSources.value.filter { it.enabled }
-        val allResults = mutableListOf<Book>()
-        
-        sources.forEach { source ->
-            // 仅使用书名搜索
-            bookRepository.searchBook(baseUrl, publicUrl, token, bookName, source.bookSourceUrl, 1)
-                .onSuccess { books ->
-                    // 本地精滤：书名必须完全一致
-                    val exactMatches = books.filter { it.name == bookName }
-                    allResults.addAll(exactMatches.map { it.copy(sourceDisplayName = source.bookSourceName) })
-                    
-                    // 排序逻辑：作者一致的排最前面
-                    allResults.sortByDescending { it.author == author }
-                    emit(allResults.toList())
+    fun ensureSourceSwitchSearch(bookName: String, author: String) {
+        val key = "$bookName|$author"
+        val current = _sourceSwitchState.value
+        if (current.queryKey == key && (current.isSearching || current.results.isNotEmpty())) return
+        startSourceSwitchSearch(bookName, author)
+    }
+
+    fun startSourceSwitchSearch(bookName: String, author: String) {
+        val key = "$bookName|$author"
+        val searchToken = System.currentTimeMillis().toString()
+        sourceSwitchToken = searchToken
+        _sourceSwitchState.value = SourceSwitchState(
+            results = emptyList(),
+            isSearching = true,
+            completed = 0,
+            total = 0,
+            queryKey = key
+        )
+
+        viewModelScope.launch {
+            val (baseUrl, publicUrl, accessToken) = preferences.getCredentials()
+            if (accessToken == null) {
+                _sourceSwitchState.value = _sourceSwitchState.value.copy(isSearching = false)
+                return@launch
+            }
+
+            val sources = _availableBookSources.value.filter { it.enabled }
+            _sourceSwitchState.value = _sourceSwitchState.value.copy(total = sources.size)
+            if (sources.isEmpty()) {
+                _sourceSwitchState.value = _sourceSwitchState.value.copy(isSearching = false)
+                return@launch
+            }
+
+            val results = mutableListOf<Book>()
+            val mutex = Mutex()
+            val jobs = sources.map { source ->
+                async(Dispatchers.IO) {
+                    val books = bookRepository.searchBook(
+                        baseUrl = baseUrl,
+                        publicUrl = publicUrl,
+                        accessToken = accessToken,
+                        keyword = bookName,
+                        bookSourceUrl = source.bookSourceUrl,
+                        page = 1
+                    ).getOrNull()?.filter { it.name == bookName }
+                        ?.map { it.copy(sourceDisplayName = source.bookSourceName) } ?: emptyList()
+
+                    mutex.withLock {
+                        if (sourceSwitchToken != this@BookViewModel.sourceSwitchToken) return@withLock
+                        results.addAll(books)
+                        results.sortByDescending { it.author == author }
+                        val currentState = _sourceSwitchState.value
+                        _sourceSwitchState.value = currentState.copy(
+                            results = results.toList(),
+                            completed = currentState.completed + 1
+                        )
+                    }
                 }
+            }
+
+            jobs.awaitAll()
+            if (sourceSwitchToken == this@BookViewModel.sourceSwitchToken) {
+                _sourceSwitchState.value = _sourceSwitchState.value.copy(isSearching = false)
+            }
         }
     }
 

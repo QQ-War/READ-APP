@@ -56,6 +56,8 @@ fun BookshelfScreen(
     val isLoading by bookViewModel.isLoading.collectAsState()
     val onlineResults by bookViewModel.onlineSearchResults.collectAsState()
     val isOnlineSearching by bookViewModel.isOnlineSearching.collectAsState()
+    val onlineSearchCompleted by bookViewModel.onlineSearchCompleted.collectAsState()
+    val onlineSearchTotal by bookViewModel.onlineSearchTotal.collectAsState()
     val searchOnlineEnabled by bookViewModel.searchSourcesFromBookshelf.collectAsState()
     val preferredSources by bookViewModel.preferredSearchSourceUrls.collectAsState()
     val availableSources by bookViewModel.availableBookSources.collectAsState()
@@ -211,10 +213,21 @@ fun BookshelfScreen(
                     if (searchOnlineEnabled) {
                         item { SectionHeader("全网搜索结果") }
                         if (isOnlineSearching) {
-                            item { Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
-                        } else if (onlineResults.isEmpty()) {
+                            item {
+                                Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        CircularProgressIndicator(Modifier.size(24.dp))
+                                        if (onlineSearchTotal > 0) {
+                                            Spacer(Modifier.height(6.dp))
+                                            Text("搜索中 $onlineSearchCompleted/$onlineSearchTotal", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (onlineResults.isEmpty() && !isOnlineSearching) {
                             item { Text("未找到相关书籍", style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(16.dp)) }
-                        } else {
+                        } else if (onlineResults.isNotEmpty()) {
                             items(onlineResults) { book ->
                                 BookSearchResultRow(
                                     book = book,

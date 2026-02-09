@@ -6,11 +6,14 @@ final class BookshelfListViewModel: ObservableObject {
     @Published var isReversed = false
     @Published private(set) var onlineResults: [Book] = []
     @Published private(set) var isSearchingOnline = false
+    @Published private(set) var onlineSearchCompleted = 0
+    @Published private(set) var onlineSearchTotal = 0
     @Published var isRefreshing = false
     @Published var addResultMessage = ""
     @Published var showAddResultAlert = false
 
     private var searchTask: Task<Void, Never>?
+    private var currentSearchToken = UUID()
     private weak var bookshelfStore: BookshelfStore?
     private weak var sourceStore: SourceStore?
     private var preferences: UserPreferences?
@@ -52,6 +55,9 @@ final class BookshelfListViewModel: ObservableObject {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty && preferences.searchSourcesFromBookshelf else {
             onlineResults = []
+            onlineSearchCompleted = 0
+            onlineSearchTotal = 0
+            isSearchingOnline = false
             return
         }
 
@@ -82,6 +88,8 @@ final class BookshelfListViewModel: ObservableObject {
 
     private func performOnlineSearch(query: String) async {
         guard let sourceStore, let preferences else { return }
+        let token = UUID()
+        currentSearchToken = token
         isSearchingOnline = true
 
         let sources = sourceStore.availableSources.isEmpty ? (await refreshSources()) : sourceStore.availableSources
@@ -90,7 +98,16 @@ final class BookshelfListViewModel: ObservableObject {
             enabledSources :
             enabledSources.filter { preferences.preferredSearchSourceUrls.contains($0.bookSourceUrl) }
 
-        var allResults: [Book] = []
+        onlineResults = []
+        onlineSearchCompleted = 0
+        onlineSearchTotal = targetSources.count
+
+        guard !targetSources.isEmpty else {
+            isSearchingOnline = false
+            return
+        }
+
+        var aggregate: [Book] = []
         await withTaskGroup(of: [Book]?.self) { group in
             for source in targetSources {
                 group.addTask {
@@ -99,14 +116,20 @@ final class BookshelfListViewModel: ObservableObject {
             }
 
             for await result in group {
-                if let books = result {
-                    allResults.append(contentsOf: books)
+                guard token == currentSearchToken else { return }
+                await MainActor.run {
+                    if let books = result {
+                        aggregate.append(contentsOf: books)
+                        onlineResults = aggregate
+                    }
+                    onlineSearchCompleted += 1
                 }
             }
         }
 
-        onlineResults = allResults
-        isSearchingOnline = false
+        if token == currentSearchToken {
+            isSearchingOnline = false
+        }
     }
 
     private func refreshSources() async -> [BookSource] {
