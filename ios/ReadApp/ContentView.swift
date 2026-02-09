@@ -112,9 +112,11 @@ struct ContentView: View {
             let verticalInset: CGFloat = 16
             let safeBottom = view?.safeAreaInsets.bottom ?? 0
             var frame = tabBar.frame
-            frame.size.width = (view?.bounds.width ?? frame.size.width) - horizontalInset * 2
-            frame.origin.x = horizontalInset
-            frame.origin.y = (view?.bounds.height ?? frame.maxY) - frame.height - max(verticalInset, safeBottom / 2)
+            let viewWidth = view?.bounds.width ?? frame.size.width
+            let viewHeight = view?.bounds.height ?? frame.maxY
+            frame.size.width = viewWidth - horizontalInset * 2
+            frame.origin.x = (viewWidth - frame.size.width) / 2
+            frame.origin.y = viewHeight - safeBottom - frame.height - verticalInset
             tabBar.frame = frame
             tabBar.isTranslucent = true
             tabBar.layer.cornerRadius = 24
@@ -125,6 +127,9 @@ struct ContentView: View {
             let backgroundTag = 901
             if let existing = tabBar.viewWithTag(backgroundTag) {
                 existing.frame = tabBar.bounds
+                if let blurView = existing.subviews.first as? UIVisualEffectView {
+                    blurView.frame = existing.bounds
+                }
                 return
             }
 
