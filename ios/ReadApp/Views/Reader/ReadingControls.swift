@@ -107,8 +107,10 @@ struct TTSControlBar: View {
         }
         .padding(.vertical, ReaderConstants.Controls.barSpacing)
         .background(preferences.isLiquidGlassEnabled ? Color.clear : Color(UIColor.systemBackground))
-        .glassyCard(cornerRadius: 20, padding: 8)
-        .shadow(color: Color.black.opacity(ReaderConstants.Controls.controlShadowOpacity), radius: ReaderConstants.Controls.controlShadowRadius, y: ReaderConstants.Controls.controlShadowYOffset)
+        .glassyFloatingBar(cornerRadius: 22, padding: 8)
+        .shadow(color: Color.black.opacity(preferences.isLiquidGlassEnabled ? 0.0 : ReaderConstants.Controls.controlShadowOpacity),
+                radius: preferences.isLiquidGlassEnabled ? 0 : ReaderConstants.Controls.controlShadowRadius,
+                y: preferences.isLiquidGlassEnabled ? 0 : ReaderConstants.Controls.controlShadowYOffset)
     }
 }
 
@@ -249,8 +251,10 @@ struct NormalControlBar: View {
         .padding(.horizontal, isForceLandscape ? ReaderConstants.Controls.controlBarHorizontalPaddingLandscape : ReaderConstants.Controls.controlBarHorizontalPaddingPortrait)
         .padding(.vertical, ReaderConstants.Controls.controlVerticalPadding)
         .background(UserPreferences.shared.isLiquidGlassEnabled ? Color.clear : Color(UIColor.systemBackground))
-        .glassyCard(cornerRadius: 20, padding: 8)
-        .shadow(color: Color.black.opacity(ReaderConstants.Controls.controlShadowOpacity), radius: ReaderConstants.Controls.controlShadowRadius, y: ReaderConstants.Controls.controlShadowYOffset)
+        .glassyFloatingBar(cornerRadius: 22, padding: 8)
+        .shadow(color: Color.black.opacity(UserPreferences.shared.isLiquidGlassEnabled ? 0.0 : ReaderConstants.Controls.controlShadowOpacity),
+                radius: UserPreferences.shared.isLiquidGlassEnabled ? 0 : ReaderConstants.Controls.controlShadowRadius,
+                y: UserPreferences.shared.isLiquidGlassEnabled ? 0 : ReaderConstants.Controls.controlShadowYOffset)
     }
 }
 

@@ -98,7 +98,29 @@ struct ContentView: View {
         if #available(iOS 15.0, *) {
             UITabBar.appearance().scrollEdgeAppearance = appearance
         }
+        applyFloatingTabBarIfNeeded()
         updateSearchBarAppearance()
+    }
+
+    private func applyFloatingTabBarIfNeeded() {
+        guard preferences.isLiquidGlassEnabled else { return }
+        DispatchQueue.main.async {
+            guard let tabBarController = UIApplication.shared.findTabBarController() else { return }
+            let tabBar = tabBarController.tabBar
+            let view = tabBarController.view
+            let horizontalInset: CGFloat = 18
+            let verticalInset: CGFloat = 10
+            let safeBottom = view?.safeAreaInsets.bottom ?? 0
+            var frame = tabBar.frame
+            frame.size.width = (view?.bounds.width ?? frame.size.width) - horizontalInset * 2
+            frame.origin.x = horizontalInset
+            frame.origin.y = (view?.bounds.height ?? frame.maxY) - frame.height - max(verticalInset, safeBottom / 2)
+            tabBar.frame = frame
+            tabBar.isTranslucent = true
+            tabBar.layer.cornerRadius = 24
+            tabBar.layer.cornerCurve = .continuous
+            tabBar.layer.masksToBounds = true
+        }
     }
 
     private func updateSearchBarAppearance() {
