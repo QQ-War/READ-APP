@@ -356,6 +356,6 @@ struct MangaImageView: View {
     }
     
     private func resolveURL(_ original: String) -> URL? {
-        ImageGatewayService.shared.resolveImageURL(original, baseURLString: referer)
+        ImageGatewayService.shared.resolveImageURL(original)
     }
 }
