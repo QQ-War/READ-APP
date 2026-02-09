@@ -123,7 +123,6 @@
 		1A000046000000000000005 /* CacheManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000045000000000000005 /* CacheManagementView.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B001 /* ViewExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A001 /* ViewExtensions.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B008 /* LiquidBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A008 /* LiquidBackgroundView.swift */; };
-		7B4B2D6E5A2A4C7AA1F0B00A /* TabBarControllerAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A00A /* TabBarControllerAccessor.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B009 /* DisplaySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A009 /* DisplaySettingsView.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B002 /* TTSEngineListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A002 /* TTSEngineListView.swift */; };
 		7B4B2D6E5A2A4C7AA1F0B003 /* TTSEngineEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4B2D6E5A2A4C7AA1F0A003 /* TTSEngineEditView.swift */; };
@@ -258,7 +257,6 @@
 		1A000045000000000000005 /* CacheManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheManagementView.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A001 /* ViewExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewExtensions.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A008 /* LiquidBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidBackgroundView.swift; sourceTree = "<group>"; };
-		7B4B2D6E5A2A4C7AA1F0A00A /* TabBarControllerAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarControllerAccessor.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A009 /* DisplaySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplaySettingsView.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A002 /* TTSEngineListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngineListView.swift; sourceTree = "<group>"; };
 		7B4B2D6E5A2A4C7AA1F0A003 /* TTSEngineEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngineEditView.swift; sourceTree = "<group>"; };
@@ -446,7 +444,6 @@
 				A20000070000000000000001 /* CachedRemoteImage.swift */,
 				7B4B2D6E5A2A4C7AA1F0A001 /* ViewExtensions.swift */,
 				7B4B2D6E5A2A4C7AA1F0A008 /* LiquidBackgroundView.swift */,
-				7B4B2D6E5A2A4C7AA1F0A00A /* TabBarControllerAccessor.swift */,
 			);
 			path = Common;
 			sourceTree = "<group>";
@@ -712,7 +709,6 @@
 				7B4B2D6E5A2A4C7AA1F0B003 /* TTSEngineEditView.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B001 /* ViewExtensions.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B008 /* LiquidBackgroundView.swift in Sources */,
-				7B4B2D6E5A2A4C7AA1F0B00A /* TabBarControllerAccessor.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B004 /* BookSearchResultRow.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B005 /* SourceExploreView.swift in Sources */,
 				7B4B2D6E5A2A4C7AA1F0B006 /* FullBookSource.swift in Sources */,
