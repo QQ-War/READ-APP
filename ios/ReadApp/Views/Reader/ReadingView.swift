@@ -157,7 +157,7 @@ struct ReadingView: View {
 
     private func topBar(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 0) {
-            Color.clear.frame(height: safeArea.top + ReaderConstants.UI.topBarSafeInset)
+            Color.clear.frame(height: safeArea.top)
             HStack(spacing: ReaderConstants.UI.topBarSpacing) {
                 Button(action: { dismiss() }) { Image(systemName: "chevron.left").font(.system(size: ReaderConstants.UI.topBarButtonSize, weight: .semibold)).padding(ReaderConstants.UI.topBarButtonPadding) }
                 Button(action: { showDetailFromHeader = true }) {
@@ -175,20 +175,19 @@ struct ReadingView: View {
                         .padding(ReaderConstants.UI.topBarButtonPadding)
                 }
             }
-            .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding)
-            .padding(.vertical, ReaderConstants.UI.topBarVerticalPadding)
-            .background(preferences.isLiquidGlassEnabled ? Color.clear : Color(UIColor.systemBackground).opacity(0.95))
-            .glassyFloatingBar(cornerRadius: ReaderConstants.UI.topBarCornerRadius, padding: 0)
-            .padding(.horizontal, ReaderConstants.UI.topBarOuterPadding)
+            .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding).padding(.bottom, ReaderConstants.UI.topBarBottomPadding)
         }
+        .background(.thinMaterial)
+        .glassyCard(cornerRadius: 16, padding: 6)
     }
     
     private func bottomBar(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 0) {
             controlBar
-                .padding(.horizontal, ReaderConstants.UI.bottomBarOuterPadding)
-            Color.clear.frame(height: safeArea.bottom + ReaderConstants.UI.bottomBarSafeInset)
+            Color.clear.frame(height: safeArea.bottom)
         }
+        .background(.thinMaterial)
+        .glassyCard(cornerRadius: 16, padding: 6)
     }
 
     @ViewBuilder private var controlBar: some View {
