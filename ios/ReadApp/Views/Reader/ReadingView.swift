@@ -51,11 +51,8 @@ struct ReadingView: View {
             GeometryReader { fullScreenProxy in
                 let size = fullScreenProxy.size
                 ZStack {
-                    // 背景层
-                    backgroundView
-                        .ignoresSafeArea()
+                    backgroundView.ignoresSafeArea()
                     
-                    // 内容层：强制全屏以获得沉浸式体验
                     ReaderContainerRepresentable(
                         book: book,
                         readerSettings: readerSettings,
@@ -74,7 +71,6 @@ struct ReadingView: View {
                         safeAreaInsets: fullScreenProxy.safeAreaInsets
                     )
                     .frame(width: size.width, height: size.height)
-                    .ignoresSafeArea()
                     .animation(nil, value: showUIControls)
 
                     NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore), isActive: $showDetailFromHeader) {
@@ -85,23 +81,19 @@ struct ReadingView: View {
                     if showUIControls {
                         VStack(spacing: 0) {
                             topBar(safeArea: fullScreenProxy.safeAreaInsets)
+                                .frame(width: size.width)
                                 .transition(.move(edge: .top).combined(with: .opacity))
-                            
                             Spacer()
-                            
                             bottomBar(safeArea: fullScreenProxy.safeAreaInsets)
+                                .frame(width: size.width)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        .ignoresSafeArea() // 关键：让控制栏容器也忽略安全区域，以便我们手动控制其位置
+                        .ignoresSafeArea(edges: .vertical)
                     }
-                    
-                    if isLoading { 
-                        ProgressView()
-                            .padding()
-                            .background(.ultraThinMaterial)
-                            .cornerRadius(ReaderConstants.UI.overlayCornerRadius) 
-                    }
+                    if isLoading { ProgressView().padding().background(.ultraThinMaterial).cornerRadius(ReaderConstants.UI.overlayCornerRadius) }
                 }
+                .frame(width: size.width, height: size.height)
+                .position(x: size.width / 2, y: size.height / 2)
             }
             .ignoresSafeArea()
             .navigationBarHidden(true)
