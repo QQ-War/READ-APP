@@ -97,6 +97,7 @@ struct ReadingView: View {
             .onChange(of: chapters.count) { _ in refreshCachedStatus() }
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .id(preferences.isLiquidGlassEnabled)
         .onChange(of: isForceLandscape) { newValue in updateAppOrientation(landscape: newValue) }
         .onDisappear {
             if isForceLandscape { updateAppOrientation(landscape: false) }
@@ -173,7 +174,7 @@ struct ReadingView: View {
             }
             .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding).padding(.bottom, ReaderConstants.UI.topBarBottomPadding)
         }
-        .background(.thinMaterial)
+        .background(preferences.isLiquidGlassEnabled ? AnyView(Color.clear) : AnyView(Color.black.opacity(0.001).background(.thinMaterial)))
         .glassyCard(cornerRadius: 16, padding: 0)
     }
     
@@ -182,7 +183,7 @@ struct ReadingView: View {
             controlBar
             Color.clear.frame(height: safeArea.bottom)
         }
-        .background(.thinMaterial)
+        .background(preferences.isLiquidGlassEnabled ? AnyView(Color.clear) : AnyView(Color.black.opacity(0.001).background(.thinMaterial)))
         .glassyCard(cornerRadius: 16, padding: 0)
     }
 
