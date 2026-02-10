@@ -14,37 +14,38 @@ struct ContentView: View {
             if !preferences.isLoggedIn {
                 LoginView()
             } else {
-                TabView {
-                    NavigationView {
-                        BookListView()
-                    }
-                    .navigationViewStyle(StackNavigationViewStyle())
-                    .tabItem {
-                        Image(systemName: "book.fill")
-                        Text("书架")
+                ZStack {
+                    if preferences.isLiquidGlassEnabled {
+                        LiquidBackgroundView()
                     }
                     
-                    NavigationView {
-                        SourceListView()
-                    }
-                    .navigationViewStyle(StackNavigationViewStyle())
-                    .tabItem {
-                        Image(systemName: "list.bullet")
-                        Text("书源")
-                    }
-
-                    NavigationView {
-                        SettingsView()
-                    }
-                    .navigationViewStyle(StackNavigationViewStyle())
-                    .background {
-                        if preferences.isLiquidGlassEnabled {
-                            LiquidBackgroundView()
+                    TabView {
+                        NavigationView {
+                            BookListView()
                         }
-                    }
-                    .tabItem {
-                        Image(systemName: "gearshape.fill")
-                        Text("设置")
+                        .navigationViewStyle(StackNavigationViewStyle())
+                        .tabItem {
+                            Image(systemName: "book.fill")
+                            Text("书架")
+                        }
+                        
+                        NavigationView {
+                            SourceListView()
+                        }
+                        .navigationViewStyle(StackNavigationViewStyle())
+                        .tabItem {
+                            Image(systemName: "list.bullet")
+                            Text("书源")
+                        }
+
+                        NavigationView {
+                            SettingsView()
+                        }
+                        .navigationViewStyle(StackNavigationViewStyle())
+                        .tabItem {
+                            Image(systemName: "gearshape.fill")
+                            Text("设置")
+                        }
                     }
                 }
             }
@@ -88,44 +89,64 @@ struct ContentView: View {
         let appearance = UITabBarAppearance()
         if preferences.isLiquidGlassEnabled {
             appearance.configureWithTransparentBackground()
-            appearance.backgroundEffect = nil
             appearance.backgroundColor = .clear
             appearance.shadowColor = .clear
         } else {
             appearance.configureWithDefaultBackground()
         }
+        
+        // 全局配置
         UITabBar.appearance().standardAppearance = appearance
         if #available(iOS 15.0, *) {
             UITabBar.appearance().scrollEdgeAppearance = appearance
         }
-        applyFloatingTabBarIfNeeded()
+        
+        // 强制刷新当前实例
+        DispatchQueue.main.async {
+            if let tabBarController = UIApplication.shared.findTabBarController() {
+                let tabBar = tabBarController.tabBar
+                
+                // 处理 901 视图（悬浮玻璃层）
+                if preferences.isLiquidGlassEnabled {
+                    applyFloatingTabBar(to: tabBar)
+                } else {
+                    tabBar.viewWithTag(901)?.removeFromSuperview()
+                    // 恢复系统默认层级
+                    tabBar.isTranslucent = true
+                    tabBar.layer.cornerRadius = 0
+                    tabBar.layer.shadowOpacity = 0
+                }
+                
+                // 强制应用 Appearance 以清除或恢复背景
+                tabBar.standardAppearance = appearance
+                if #available(iOS 15.0, *) {
+                    tabBar.scrollEdgeAppearance = appearance
+                }
+                tabBar.setNeedsLayout()
+                tabBar.layoutIfNeeded()
+            }
+        }
         updateSearchBarAppearance()
     }
 
-    private func applyFloatingTabBarIfNeeded() {
-        guard preferences.isLiquidGlassEnabled else { return }
-        DispatchQueue.main.async {
-            guard let tabBarController = UIApplication.shared.findTabBarController() else { return }
-            let tabBar = tabBarController.tabBar
-            tabBar.isTranslucent = true
-            tabBar.layer.cornerRadius = 24
-            tabBar.layer.cornerCurve = .continuous
-            tabBar.layer.masksToBounds = false
-            tabBar.clipsToBounds = false
+    private func applyFloatingTabBar(to tabBar: UITabBar) {
+        let backgroundTag = 901
+        tabBar.isTranslucent = true
+        tabBar.layer.cornerRadius = 24
+        tabBar.layer.cornerCurve = .continuous
+        tabBar.layer.masksToBounds = false
+        tabBar.clipsToBounds = false
 
-            let backgroundTag = 901
-            let horizontalInset: CGFloat = 16
-            let verticalInset: CGFloat = 6
-            let backgroundFrame = tabBar.bounds.insetBy(dx: horizontalInset, dy: verticalInset)
-            if let existing = tabBar.viewWithTag(backgroundTag) {
-                existing.frame = backgroundFrame
-                if let blurView = existing.subviews.first as? UIVisualEffectView {
-                    blurView.frame = existing.bounds
-                }
-                return
-            }
-
-            let container = UIView(frame: backgroundFrame)
+        let horizontalInset: CGFloat = 16
+        let verticalInset: CGFloat = 6
+        let backgroundFrame = tabBar.bounds.insetBy(dx: horizontalInset, dy: verticalInset)
+        
+        let container: UIView
+        if let existing = tabBar.viewWithTag(backgroundTag) {
+            container = existing
+            container.frame = backgroundFrame
+        } else {
+            container = UIView(frame: backgroundFrame)
             container.tag = backgroundTag
             container.isUserInteractionEnabled = false
             container.layer.cornerRadius = 24
@@ -136,18 +157,19 @@ struct ContentView: View {
             container.layer.shadowOffset = CGSize(width: 0, height: 10)
             container.layer.masksToBounds = false
             container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-
-            let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
-            blurView.frame = container.bounds
-            blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            blurView.layer.cornerRadius = 24
-            blurView.layer.cornerCurve = .continuous
-            blurView.layer.masksToBounds = true
-            blurView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.18)
-
-            container.addSubview(blurView)
             tabBar.insertSubview(container, at: 0)
         }
+
+        // 更新或创建模糊层
+        container.subviews.forEach { $0.removeFromSuperview() }
+        let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+        blurView.frame = container.bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        blurView.layer.cornerRadius = 24
+        blurView.layer.cornerCurve = .continuous
+        blurView.layer.masksToBounds = true
+        blurView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.18)
+        container.addSubview(blurView)
     }
 
     private func updateSearchBarAppearance() {
