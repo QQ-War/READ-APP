@@ -132,8 +132,15 @@ struct ContentView: View {
         tabBar.clipsToBounds = false
 
         let horizontalInset: CGFloat = 16
-        let verticalInset: CGFloat = 12 // 增加底部缩进，使其悬浮
-        let backgroundFrame = tabBar.bounds.insetBy(dx: horizontalInset, dy: verticalInset)
+        let bottomPadding: CGFloat = 12 // 底部悬浮距离
+        let topExtend: CGFloat = 2 // 向上微调，确保盖住图标
+        
+        let backgroundFrame = CGRect(
+            x: horizontalInset,
+            y: -topExtend,
+            width: tabBar.bounds.width - horizontalInset * 2,
+            height: tabBar.bounds.height - bottomPadding + topExtend
+        )
         
         let container: UIView
         if let existing = tabBar.viewWithTag(backgroundTag) {

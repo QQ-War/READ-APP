@@ -153,46 +153,81 @@ struct ReadingView: View {
     }
 
     private func topBar(safeArea: EdgeInsets) -> some View {
-        HStack(spacing: ReaderConstants.UI.topBarSpacing) {
-            Button(action: { dismiss() }) { 
-                Image(systemName: "chevron.left")
-                    .font(.system(size: ReaderConstants.UI.topBarButtonSize, weight: .semibold))
-                    .padding(ReaderConstants.UI.topBarButtonPadding) 
-            }
-            
-            Button(action: { showDetailFromHeader = true }) {
-                VStack(alignment: .leading, spacing: ReaderConstants.UI.selectionHeaderSpacing) {
-                    Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
-                    Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "正在加载...").font(.caption).foregroundColor(.secondary).lineLimit(1)
+        if preferences.isLiquidGlassEnabled {
+            // 液态玻璃模式：悬浮胶囊
+            HStack(spacing: ReaderConstants.UI.topBarSpacing) {
+                Button(action: { dismiss() }) { 
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: ReaderConstants.UI.topBarButtonSize, weight: .semibold))
+                        .padding(ReaderConstants.UI.topBarButtonPadding) 
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                
+                Button(action: { showDetailFromHeader = true }) {
+                    VStack(alignment: .leading, spacing: ReaderConstants.UI.selectionHeaderSpacing) {
+                        Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
+                        Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "正在加载...").font(.caption).foregroundColor(.secondary).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Button(action: { refreshChapterAction?() }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: ReaderConstants.UI.topBarSecondaryButtonSize, weight: .semibold))
+                        .padding(ReaderConstants.UI.topBarButtonPadding)
+                }
             }
-            .buttonStyle(PlainButtonStyle())
-            
-            Button(action: { refreshChapterAction?() }) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: ReaderConstants.UI.topBarSecondaryButtonSize, weight: .semibold))
-                    .padding(ReaderConstants.UI.topBarButtonPadding)
+            .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding)
+            .padding(.vertical, 8)
+            .glassyCard(cornerRadius: 20, padding: 0)
+            .padding(.horizontal, 12)
+            .padding(.top, safeArea.top + 8)
+        } else {
+            // 普通模式：原始贴边布局
+            VStack(spacing: 0) {
+                Color.clear.frame(height: safeArea.top)
+                HStack(spacing: ReaderConstants.UI.topBarSpacing) {
+                    Button(action: { dismiss() }) { Image(systemName: "chevron.left").font(.system(size: ReaderConstants.UI.topBarButtonSize, weight: .semibold)).padding(ReaderConstants.UI.topBarButtonPadding) }
+                    Button(action: { showDetailFromHeader = true }) {
+                        VStack(alignment: .leading, spacing: ReaderConstants.UI.selectionHeaderSpacing) {
+                            Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
+                            Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "正在加载...").font(.caption).foregroundColor(.secondary).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    Button(action: { refreshChapterAction?() }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: ReaderConstants.UI.topBarSecondaryButtonSize, weight: .semibold))
+                            .padding(ReaderConstants.UI.topBarButtonPadding)
+                    }
+                }
+                .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding).padding(.bottom, ReaderConstants.UI.topBarBottomPadding)
             }
+            .background(.thinMaterial)
         }
-        .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding)
-        .padding(.vertical, 8)
-        .background(preferences.isLiquidGlassEnabled ? AnyView(Color.clear) : AnyView(Color.black.opacity(0.001).background(.thinMaterial)))
-        .glassyCard(cornerRadius: 20, padding: 0)
-        .padding(.horizontal, 12)
-        .padding(.top, safeArea.top + 8)
     }
     
     private func bottomBar(safeArea: EdgeInsets) -> some View {
-        VStack(spacing: 0) {
-            controlBar
+        if preferences.isLiquidGlassEnabled {
+            // 液态玻璃模式：悬浮胶囊
+            VStack(spacing: 0) {
+                controlBar
+            }
+            .padding(.vertical, 8)
+            .glassyCard(cornerRadius: 24, padding: 0)
+            .padding(.horizontal, 12)
+            .padding(.bottom, safeArea.bottom + 12)
+        } else {
+            // 普通模式：原始贴边布局
+            VStack(spacing: 0) {
+                controlBar
+                Color.clear.frame(height: safeArea.bottom)
+            }
+            .background(.thinMaterial)
         }
-        .padding(.vertical, 8)
-        .background(preferences.isLiquidGlassEnabled ? AnyView(Color.clear) : AnyView(Color.black.opacity(0.001).background(.thinMaterial)))
-        .glassyCard(cornerRadius: 24, padding: 0)
-        .padding(.horizontal, 12)
-        .padding(.bottom, safeArea.bottom + 12)
     }
 
     @ViewBuilder private var controlBar: some View {
