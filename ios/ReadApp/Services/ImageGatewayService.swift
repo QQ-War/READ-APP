@@ -17,46 +17,25 @@ final class ImageGatewayService {
         guard rawContent.localizedCaseInsensitiveContains("<img") else { return rawContent }
         guard let bookUrl = book.bookUrl, !bookUrl.isEmpty else { return rawContent }
 
+        let pattern = "(?i)\\bsrc\\s*=\\s*(['\"])(.*?)\\1"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return rawContent }
+        let nsText = rawContent as NSString
+        let matches = regex.matches(in: rawContent, options: [], range: NSRange(location: 0, length: nsText.length))
+        guard !matches.isEmpty else { return rawContent }
+
         var result = rawContent
+        for match in matches.reversed() {
+            guard match.numberOfRanges >= 3 else { continue }
+            let valueRange = match.range(at: 2)
+            let original = nsText.substring(with: valueRange)
+            let trimmed = original.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            if shouldSkipLocalEpubRewrite(trimmed) { continue }
+            if !looksLikeImagePath(trimmed) { continue }
 
-        // 1) rewrite img src="..."
-        let srcPattern = "(?i)\\bsrc\\s*=\\s*(['\"])(.*?)\\1"
-        if let regex = try? NSRegularExpression(pattern: srcPattern, options: []) {
-            let nsText = result as NSString
-            let matches = regex.matches(in: result, options: [], range: NSRange(location: 0, length: nsText.length))
-            for match in matches.reversed() {
-                guard match.numberOfRanges >= 3 else { continue }
-                let valueRange = match.range(at: 2)
-                let original = nsText.substring(with: valueRange)
-                let trimmed = original.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty { continue }
-                if shouldSkipLocalEpubRewrite(trimmed) { continue }
-                if !looksLikeImagePath(trimmed) { continue }
-
-                let md5 = md5Encode16(bookUrl + trimmed)
-                let rewritten = "/assets?path=/assets/covers/\(md5).jpg"
-                result = (result as NSString).replacingCharacters(in: valueRange, with: rewritten)
-            }
-        }
-
-        // 2) rewrite plain relative image paths (not in src attr)
-        let plainPattern = #"(?i)(\.\./|\./|/)?[^\s"'<>]+\.(jpg|jpeg|png|webp|gif|bmp)"#
-        if let regex = try? NSRegularExpression(pattern: plainPattern, options: []) {
-            let nsText = result as NSString
-            let matches = regex.matches(in: result, options: [], range: NSRange(location: 0, length: nsText.length))
-            for match in matches.reversed() {
-                guard match.numberOfRanges >= 1 else { continue }
-                let valueRange = match.range(at: 0)
-                let original = nsText.substring(with: valueRange)
-                let trimmed = original.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty { continue }
-                if shouldSkipLocalEpubRewrite(trimmed) { continue }
-                if !looksLikeImagePath(trimmed) { continue }
-
-                let md5 = md5Encode16(bookUrl + trimmed)
-                let rewritten = "/assets?path=/assets/covers/\(md5).jpg"
-                result = (result as NSString).replacingCharacters(in: valueRange, with: rewritten)
-            }
+            let md5 = md5Encode16(bookUrl + trimmed)
+            let rewritten = "/assets?path=/assets/covers/\(md5).jpg"
+            result = (result as NSString).replacingCharacters(in: valueRange, with: rewritten)
         }
 
         return result
