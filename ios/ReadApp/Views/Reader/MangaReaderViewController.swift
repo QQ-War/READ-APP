@@ -478,7 +478,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
                 return
             }
             let cleanUrl = sanitizedUrl(urlStr)
-            guard let resolved = ImageGatewayService.shared.resolveImageURL(cleanUrl, baseURLString: chapterUrl) else {
+            guard let resolved = ImageGatewayService.shared.resolveImageURL(cleanUrl) else {
                 await MainActor.run {
                     guard index < self.imageStates.count,
                           index < self.imageUrls.count,
@@ -656,7 +656,7 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
 
     private func prefetchNextChapterImage(urlStr: String) {
         let cleanUrl = sanitizedUrl(urlStr)
-        guard let resolved = ImageGatewayService.shared.resolveImageURL(cleanUrl, baseURLString: chapterUrl) else { return }
+        guard let resolved = ImageGatewayService.shared.resolveImageURL(cleanUrl) else { return }
         let absolute = resolved.absoluteString
         let key = NSString(string: cleanUrl)
 
