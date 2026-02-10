@@ -49,10 +49,11 @@ struct ReadingView: View {
     var body: some View {
         NavigationView {
             GeometryReader { fullScreenProxy in
+                let size = fullScreenProxy.size
                 ZStack {
                     backgroundView.ignoresSafeArea()
                     
-                    let readerView = ReaderContainerRepresentable(
+                    ReaderContainerRepresentable(
                         book: book,
                         readerSettings: readerSettings,
                         ttsManager: ttsManager,
@@ -61,24 +62,16 @@ struct ReadingView: View {
                         currentChapterIndex: $currentChapterIndex,
                         isMangaMode: $isMangaMode,
                         isLoading: $isLoading,
-                                            onToggleMenu: { withAnimation { showUIControls.toggle() } },
-                                            onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
-                                            onProgressChanged: { _, pos in self.currentPos = pos },
-                                            onToggleTTS: { action in self.toggleTTSAction = action },
-                                            onRefreshChapter: { action in self.refreshChapterAction = action },
-                                            readingMode: readerSettings.readingMode,
-                                            safeAreaInsets: fullScreenProxy.safeAreaInsets
-                                        )
-                    if preferences.isLiquidGlassEnabled {
-                        readerView
-                            .frame(width: fullScreenProxy.size.width, height: fullScreenProxy.size.height)
-                            .ignoresSafeArea()
-                            .animation(nil, value: showUIControls)
-                    } else {
-                        readerView
-                            .ignoresSafeArea()
-                            .animation(nil, value: showUIControls)
-                    }
+                        onToggleMenu: { withAnimation { showUIControls.toggle() } },
+                        onAddReplaceRule: { text in presentReplaceRuleEditor(selectedText: text) },
+                        onProgressChanged: { _, pos in self.currentPos = pos },
+                        onToggleTTS: { action in self.toggleTTSAction = action },
+                        onRefreshChapter: { action in self.refreshChapterAction = action },
+                        readingMode: readerSettings.readingMode,
+                        safeAreaInsets: fullScreenProxy.safeAreaInsets
+                    )
+                    .frame(width: size.width, height: size.height)
+                    .animation(nil, value: showUIControls)
 
                     NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore), isActive: $showDetailFromHeader) {
                         EmptyView()
@@ -88,18 +81,21 @@ struct ReadingView: View {
                     if showUIControls {
                         VStack(spacing: 0) {
                             topBar(safeArea: fullScreenProxy.safeAreaInsets)
-                                .frame(width: preferences.isLiquidGlassEnabled ? fullScreenProxy.size.width : nil)
+                                .frame(width: size.width)
                                 .transition(.move(edge: .top).combined(with: .opacity))
                             Spacer()
                             bottomBar(safeArea: fullScreenProxy.safeAreaInsets)
-                                .frame(width: preferences.isLiquidGlassEnabled ? fullScreenProxy.size.width : nil)
+                                .frame(width: size.width)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         .ignoresSafeArea(edges: .vertical)
                     }
                     if isLoading { ProgressView().padding().background(.ultraThinMaterial).cornerRadius(ReaderConstants.UI.overlayCornerRadius) }
                 }
+                .frame(width: size.width, height: size.height)
+                .position(x: size.width / 2, y: size.height / 2)
             }
+            .ignoresSafeArea()
             .navigationBarHidden(true)
             .navigationBarBackButtonHidden(true)
             .onAppear { refreshCachedStatus() }
