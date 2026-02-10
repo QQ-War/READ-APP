@@ -45,7 +45,6 @@ extension View {
     func glassyFloatingBar(cornerRadius: CGFloat = 24, padding: CGFloat = 10) -> some View {
         if UserPreferences.shared.isLiquidGlassEnabled {
             self
-                .padding(padding)
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(
