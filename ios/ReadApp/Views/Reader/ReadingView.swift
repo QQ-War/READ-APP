@@ -70,11 +70,6 @@ struct ReadingView: View {
                                             safeAreaInsets: fullScreenProxy.safeAreaInsets
                                         )
                     readerView
-                        .frame(
-                            width: fullScreenProxy.size.width,
-                            height: fullScreenProxy.size.height,
-                            alignment: .topLeading
-                        )
                         .ignoresSafeArea()
                         .animation(nil, value: showUIControls)
 
