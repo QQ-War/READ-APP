@@ -30,10 +30,7 @@ extension View {
             self
                 .padding(padding)
                 .background {
-                    ZStack {
-                        LiquidBackgroundView() // 注入液态背景
-                        Color.clear.background(.ultraThinMaterial)
-                    }
+                    LiquidBackgroundView() // 注入液态背景（内部已含超薄材质）
                 }
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(

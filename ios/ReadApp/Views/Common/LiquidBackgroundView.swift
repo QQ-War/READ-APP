@@ -5,9 +5,6 @@ struct LiquidBackgroundView: View {
     
     var body: some View {
         ZStack {
-            // 底层基础颜色
-            Color(uiColor: .systemBackground)
-            
             // 动态流动的色彩球：提高透明度
             ZStack {
                 Circle()
@@ -30,10 +27,10 @@ struct LiquidBackgroundView: View {
             }
             .blur(radius: 50)
             
-            // 玻璃层：减弱遮挡感
+            // 玻璃层：保持轻微的模糊感，但不遮挡动态球
             Rectangle()
                 .fill(.ultraThinMaterial)
-                .opacity(0.95)
+                .opacity(0.4)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
