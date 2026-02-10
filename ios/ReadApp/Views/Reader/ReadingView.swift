@@ -69,16 +69,9 @@ struct ReadingView: View {
                                             readingMode: readerSettings.readingMode,
                                             safeAreaInsets: fullScreenProxy.safeAreaInsets
                                         )
-                    if preferences.isLiquidGlassEnabled {
-                        readerView
-                            .frame(width: fullScreenProxy.size.width, height: fullScreenProxy.size.height)
-                            .ignoresSafeArea()
-                            .animation(nil, value: showUIControls)
-                    } else {
-                        readerView
-                            .ignoresSafeArea()
-                            .animation(nil, value: showUIControls)
-                    }
+                    readerView
+                        .ignoresSafeArea()
+                        .animation(nil, value: showUIControls)
 
                     NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore), isActive: $showDetailFromHeader) {
                         EmptyView()
