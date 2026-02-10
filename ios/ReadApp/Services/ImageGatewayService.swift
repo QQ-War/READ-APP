@@ -17,12 +17,10 @@ final class ImageGatewayService {
         guard rawContent.localizedCaseInsensitiveContains("<img") else { return rawContent }
         guard let bookUrl = book.bookUrl, !bookUrl.isEmpty else { return rawContent }
 
-        guard let namespace = extractAssetNamespace(from: book.coverUrl),
-              !namespace.isEmpty
-        else {
+        guard let namespace = resolveLocalEpubNamespace(book: book) else {
             return rawContent
         }
-        let nsSegment = "\(namespace)/"
+        let nsSegment = namespace.isEmpty ? "" : "\(namespace)/"
 
         let pattern = "(?i)\\bsrc\\s*=\\s*(['\"])(.*?)\\1"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return rawContent }
@@ -200,19 +198,39 @@ final class ImageGatewayService {
             || lower.contains(".webp") || lower.contains(".gif") || lower.contains(".bmp")
     }
 
+    private func resolveLocalEpubNamespace(book: Book) -> String? {
+        if let fromCover = extractAssetNamespace(from: book.coverUrl) {
+            return fromCover
+        }
+        let fallback = UserPreferences.shared.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        return fallback.isEmpty ? nil : fallback
+    }
+
     private func extractAssetNamespace(from coverUrl: String?) -> String? {
         guard let coverUrl, !coverUrl.isEmpty else { return nil }
         let lower = coverUrl.lowercased()
-        guard let assetsRange = lower.range(of: "/assets/"),
-              let coversRange = lower.range(of: "/covers/") else {
-            return nil
+
+        if let assetsRange = lower.range(of: "/assets/"),
+           let coversRange = lower.range(of: "/covers/") {
+            let nsStart = assetsRange.upperBound
+            let nsEnd = coversRange.lowerBound
+            if nsStart >= nsEnd { return nil }
+            let namespace = String(coverUrl[nsStart..<nsEnd])
+            let trimmed = namespace.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            return trimmed.isEmpty ? nil : trimmed
         }
-        let nsStart = assetsRange.upperBound
-        let nsEnd = coversRange.lowerBound
-        if nsStart >= nsEnd { return nil }
-        let namespace = String(coverUrl[nsStart..<nsEnd])
-        let trimmed = namespace.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        return trimmed.isEmpty ? nil : trimmed
+
+        if let assetsRange = lower.range(of: "assets/"),
+           let coversRange = lower.range(of: "/covers/") {
+            let nsStart = assetsRange.upperBound
+            let nsEnd = coversRange.lowerBound
+            if nsStart >= nsEnd { return nil }
+            let namespace = String(coverUrl[nsStart..<nsEnd])
+            let trimmed = namespace.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            return trimmed.isEmpty ? nil : trimmed
+        }
+
+        return nil
     }
 
     private func md5Encode16(_ input: String) -> String {
