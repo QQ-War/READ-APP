@@ -17,6 +17,13 @@ final class ImageGatewayService {
         guard rawContent.localizedCaseInsensitiveContains("<img") else { return rawContent }
         guard let bookUrl = book.bookUrl, !bookUrl.isEmpty else { return rawContent }
 
+        guard let namespace = extractAssetNamespace(from: book.coverUrl),
+              !namespace.isEmpty
+        else {
+            return rawContent
+        }
+        let nsSegment = "\(namespace)/"
+
         let pattern = "(?i)\\bsrc\\s*=\\s*(['\"])(.*?)\\1"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return rawContent }
         let nsText = rawContent as NSString
@@ -34,7 +41,7 @@ final class ImageGatewayService {
             if !looksLikeImagePath(trimmed) { continue }
 
             let md5 = md5Encode16(bookUrl + trimmed)
-            let rewritten = "/assets?path=/assets/covers/\(md5).jpg"
+            let rewritten = "/assets?path=/assets/\(nsSegment)covers/\(md5).jpg"
             result = (result as NSString).replacingCharacters(in: valueRange, with: rewritten)
         }
 
@@ -191,6 +198,21 @@ final class ImageGatewayService {
         let lower = value.lowercased()
         return lower.contains(".jpg") || lower.contains(".jpeg") || lower.contains(".png")
             || lower.contains(".webp") || lower.contains(".gif") || lower.contains(".bmp")
+    }
+
+    private func extractAssetNamespace(from coverUrl: String?) -> String? {
+        guard let coverUrl, !coverUrl.isEmpty else { return nil }
+        let lower = coverUrl.lowercased()
+        guard let assetsRange = lower.range(of: "/assets/"),
+              let coversRange = lower.range(of: "/covers/") else {
+            return nil
+        }
+        let nsStart = assetsRange.upperBound
+        let nsEnd = coversRange.lowerBound
+        if nsStart >= nsEnd { return nil }
+        let namespace = String(coverUrl[nsStart..<nsEnd])
+        let trimmed = namespace.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func md5Encode16(_ input: String) -> String {
