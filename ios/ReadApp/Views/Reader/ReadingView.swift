@@ -153,38 +153,46 @@ struct ReadingView: View {
     }
 
     private func topBar(safeArea: EdgeInsets) -> some View {
-        VStack(spacing: 0) {
-            Color.clear.frame(height: safeArea.top)
-            HStack(spacing: ReaderConstants.UI.topBarSpacing) {
-                Button(action: { dismiss() }) { Image(systemName: "chevron.left").font(.system(size: ReaderConstants.UI.topBarButtonSize, weight: .semibold)).padding(ReaderConstants.UI.topBarButtonPadding) }
-                Button(action: { showDetailFromHeader = true }) {
-                    VStack(alignment: .leading, spacing: ReaderConstants.UI.selectionHeaderSpacing) {
-                        Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
-                        Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "正在加载...").font(.caption).foregroundColor(.secondary).lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(PlainButtonStyle())
-                Button(action: { refreshChapterAction?() }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: ReaderConstants.UI.topBarSecondaryButtonSize, weight: .semibold))
-                        .padding(ReaderConstants.UI.topBarButtonPadding)
-                }
+        HStack(spacing: ReaderConstants.UI.topBarSpacing) {
+            Button(action: { dismiss() }) { 
+                Image(systemName: "chevron.left")
+                    .font(.system(size: ReaderConstants.UI.topBarButtonSize, weight: .semibold))
+                    .padding(ReaderConstants.UI.topBarButtonPadding) 
             }
-            .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding).padding(.bottom, ReaderConstants.UI.topBarBottomPadding)
+            
+            Button(action: { showDetailFromHeader = true }) {
+                VStack(alignment: .leading, spacing: ReaderConstants.UI.selectionHeaderSpacing) {
+                    Text(book.name ?? "阅读").font(.headline).fontWeight(.bold).lineLimit(1)
+                    Text(chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : "正在加载...").font(.caption).foregroundColor(.secondary).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            Button(action: { refreshChapterAction?() }) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: ReaderConstants.UI.topBarSecondaryButtonSize, weight: .semibold))
+                    .padding(ReaderConstants.UI.topBarButtonPadding)
+            }
         }
+        .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding)
+        .padding(.vertical, 8)
         .background(preferences.isLiquidGlassEnabled ? AnyView(Color.clear) : AnyView(Color.black.opacity(0.001).background(.thinMaterial)))
-        .glassyCard(cornerRadius: 16, padding: 0)
+        .glassyCard(cornerRadius: 20, padding: 0)
+        .padding(.horizontal, 12)
+        .padding(.top, safeArea.top + 8)
     }
     
     private func bottomBar(safeArea: EdgeInsets) -> some View {
         VStack(spacing: 0) {
             controlBar
-            Color.clear.frame(height: safeArea.bottom)
         }
+        .padding(.vertical, 8)
         .background(preferences.isLiquidGlassEnabled ? AnyView(Color.clear) : AnyView(Color.black.opacity(0.001).background(.thinMaterial)))
-        .glassyCard(cornerRadius: 16, padding: 0)
+        .glassyCard(cornerRadius: 24, padding: 0)
+        .padding(.horizontal, 12)
+        .padding(.bottom, safeArea.bottom + 12)
     }
 
     @ViewBuilder private var controlBar: some View {

@@ -29,7 +29,12 @@ extension View {
         if UserPreferences.shared.isLiquidGlassEnabled {
             self
                 .padding(padding)
-                .background(.ultraThinMaterial)
+                .background {
+                    ZStack {
+                        LiquidBackgroundView() // 注入液态背景
+                        Color.clear.background(.ultraThinMaterial)
+                    }
+                }
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

@@ -132,7 +132,7 @@ struct ContentView: View {
         tabBar.clipsToBounds = false
 
         let horizontalInset: CGFloat = 16
-        let verticalInset: CGFloat = 6
+        let verticalInset: CGFloat = 12 // 增加底部缩进，使其悬浮
         let backgroundFrame = tabBar.bounds.insetBy(dx: horizontalInset, dy: verticalInset)
         
         let container: UIView
