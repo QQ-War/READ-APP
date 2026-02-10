@@ -81,11 +81,9 @@ struct ReadingView: View {
                     if showUIControls {
                         VStack(spacing: 0) {
                             topBar(safeArea: fullScreenProxy.safeAreaInsets)
-                                .frame(width: preferences.isLiquidGlassEnabled ? fullScreenProxy.size.width : nil)
                                 .transition(.move(edge: .top).combined(with: .opacity))
                             Spacer()
                             bottomBar(safeArea: fullScreenProxy.safeAreaInsets)
-                                .frame(width: preferences.isLiquidGlassEnabled ? fullScreenProxy.size.width : nil)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         .ignoresSafeArea(edges: .vertical)
