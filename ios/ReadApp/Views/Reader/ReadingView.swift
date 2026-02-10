@@ -152,6 +152,7 @@ struct ReadingView: View {
         }
     }
 
+    @ViewBuilder
     private func topBar(safeArea: EdgeInsets) -> some View {
         if preferences.isLiquidGlassEnabled {
             // 液态玻璃模式：悬浮胶囊
@@ -210,6 +211,7 @@ struct ReadingView: View {
         }
     }
     
+    @ViewBuilder
     private func bottomBar(safeArea: EdgeInsets) -> some View {
         if preferences.isLiquidGlassEnabled {
             // 液态玻璃模式：悬浮胶囊
