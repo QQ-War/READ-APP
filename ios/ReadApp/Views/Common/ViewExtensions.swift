@@ -29,15 +29,13 @@ extension View {
         if UserPreferences.shared.isLiquidGlassEnabled {
             self
                 .padding(padding)
-                .background(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 6)
-                )
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
                 )
+                .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 6)
         } else {
             self
         }
@@ -47,15 +45,13 @@ extension View {
     func glassyFloatingBar(cornerRadius: CGFloat = 24, padding: CGFloat = 10) -> some View {
         if UserPreferences.shared.isLiquidGlassEnabled {
             self
-                .background(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .shadow(color: Color.black.opacity(0.16), radius: 18, x: 0, y: 8)
-                )
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
                 )
+                .shadow(color: Color.black.opacity(0.16), radius: 18, x: 0, y: 8)
         } else {
             self
         }
