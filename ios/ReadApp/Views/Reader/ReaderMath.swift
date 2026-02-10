@@ -25,14 +25,9 @@ enum ReaderMath {
     ) -> ReaderLayoutSpec {
         let topInsetValue = safeAreaTop > 0 ? safeAreaTop : viewSafeArea.top
         let bottomInsetValue = safeAreaBottom > 0 ? safeAreaBottom : viewSafeArea.bottom
-        
-        // 修正：如果外部传入了明确的 Top，优先使用它。在全屏模式下，这能解决撞状态栏的问题。
-        let finalTop = max(topInsetValue, viewSafeArea.top)
-        let finalBottom = max(bottomInsetValue, viewSafeArea.bottom)
-
         return ReaderLayoutSpec(
-            topInset: finalTop + ReaderConstants.Layout.extraTopInset,
-            bottomInset: finalBottom + ReaderConstants.Layout.extraBottomInset,
+            topInset: topInsetValue + ReaderConstants.Layout.extraTopInset,
+            bottomInset: bottomInsetValue + ReaderConstants.Layout.extraBottomInset,
             sideMargin: pageHorizontalMargin + ReaderConstants.Layout.sideMarginPadding,
             pageSize: bounds.size
         )
