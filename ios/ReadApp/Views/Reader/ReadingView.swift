@@ -52,7 +52,7 @@ struct ReadingView: View {
                 ZStack {
                     backgroundView.ignoresSafeArea()
                     
-                    ReaderContainerRepresentable(
+                    let readerView = ReaderContainerRepresentable(
                         book: book,
                         readerSettings: readerSettings,
                         ttsManager: ttsManager,
@@ -69,8 +69,16 @@ struct ReadingView: View {
                                             readingMode: readerSettings.readingMode,
                                             safeAreaInsets: fullScreenProxy.safeAreaInsets
                                         )
-                    .ignoresSafeArea()
-                    .animation(nil, value: showUIControls)
+                    if preferences.isLiquidGlassEnabled {
+                        readerView
+                            .frame(width: fullScreenProxy.size.width, height: fullScreenProxy.size.height)
+                            .ignoresSafeArea()
+                            .animation(nil, value: showUIControls)
+                    } else {
+                        readerView
+                            .ignoresSafeArea()
+                            .animation(nil, value: showUIControls)
+                    }
 
                     NavigationLink(destination: BookDetailView(book: book).environmentObject(bookshelfStore), isActive: $showDetailFromHeader) {
                         EmptyView()
@@ -80,9 +88,11 @@ struct ReadingView: View {
                     if showUIControls {
                         VStack(spacing: 0) {
                             topBar(safeArea: fullScreenProxy.safeAreaInsets)
+                                .frame(width: preferences.isLiquidGlassEnabled ? fullScreenProxy.size.width : nil)
                                 .transition(.move(edge: .top).combined(with: .opacity))
                             Spacer()
                             bottomBar(safeArea: fullScreenProxy.safeAreaInsets)
+                                .frame(width: preferences.isLiquidGlassEnabled ? fullScreenProxy.size.width : nil)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         .ignoresSafeArea(edges: .vertical)
