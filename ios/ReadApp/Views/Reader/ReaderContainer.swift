@@ -270,6 +270,7 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
     
     var isMangaMode = false
     var latestVisibleFragmentLines: [String] = []
+    private var hasTriggeredInitialLoad = false
 
     var verticalVC: VerticalTextViewController?
     var horizontalVC: UIPageViewController?
@@ -354,7 +355,6 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         currentReadingMode = readerSettings.readingMode
         
         chapterBuilder = ReaderChapterBuilder(readerSettings: readerSettings, replaceRules: replaceRuleViewModel?.rules)
-        loadChapters()
         ttsSyncCoordinator = TTSReadingSyncCoordinator(reader: self, ttsManager: ttsManager)
         ttsSyncCoordinator?.start()
         
@@ -400,6 +400,11 @@ class ReaderContainerViewController: UIViewController, UIPageViewControllerDataS
         super.viewDidLayoutSubviews()
         guard !isInternalTransitioning else { return }
         let b = view.bounds; verticalVC?.view.frame = b; horizontalVC?.view.frame = b; mangaVC?.view.frame = b; newHorizontalVC?.view.frame = b
+
+        if !hasTriggeredInitialLoad, view.window != nil, b.width > 0, b.height > 0 {
+            hasTriggeredInitialLoad = true
+            loadChapters()
+        }
         
         if b.size != lastKnownSize {
             let spec = currentLayoutSpec
