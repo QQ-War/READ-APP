@@ -107,17 +107,6 @@ struct ContentView: View {
         DispatchQueue.main.async {
             guard let tabBarController = UIApplication.shared.findTabBarController() else { return }
             let tabBar = tabBarController.tabBar
-            let view = tabBarController.view
-            let horizontalInset: CGFloat = 20
-            let verticalInset: CGFloat = 16
-            let safeBottom = view?.safeAreaInsets.bottom ?? 0
-            var frame = tabBar.frame
-            let viewWidth = view?.bounds.width ?? frame.size.width
-            let viewHeight = view?.bounds.height ?? frame.maxY
-            frame.size.width = viewWidth - horizontalInset * 2
-            frame.origin.x = (viewWidth - frame.size.width) / 2
-            frame.origin.y = viewHeight - safeBottom - frame.height - verticalInset
-            tabBar.frame = frame
             tabBar.isTranslucent = true
             tabBar.layer.cornerRadius = 24
             tabBar.layer.cornerCurve = .continuous
@@ -125,15 +114,18 @@ struct ContentView: View {
             tabBar.clipsToBounds = false
 
             let backgroundTag = 901
+            let horizontalInset: CGFloat = 16
+            let verticalInset: CGFloat = 6
+            let backgroundFrame = tabBar.bounds.insetBy(dx: horizontalInset, dy: verticalInset)
             if let existing = tabBar.viewWithTag(backgroundTag) {
-                existing.frame = tabBar.bounds
+                existing.frame = backgroundFrame
                 if let blurView = existing.subviews.first as? UIVisualEffectView {
                     blurView.frame = existing.bounds
                 }
                 return
             }
 
-            let container = UIView(frame: tabBar.bounds)
+            let container = UIView(frame: backgroundFrame)
             container.tag = backgroundTag
             container.isUserInteractionEnabled = false
             container.layer.cornerRadius = 24
@@ -143,6 +135,7 @@ struct ContentView: View {
             container.layer.shadowRadius = 18
             container.layer.shadowOffset = CGSize(width: 0, height: 10)
             container.layer.masksToBounds = false
+            container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
             let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
             blurView.frame = container.bounds
