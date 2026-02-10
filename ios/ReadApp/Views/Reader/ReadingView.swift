@@ -148,11 +148,6 @@ struct ReadingView: View {
     private var backgroundView: some View {
         ZStack {
             UserPreferences.shared.readingTheme.backgroundSwiftUIColor
-            
-            if UserPreferences.shared.isLiquidGlassEnabled &&
-                [.system, .day, .night].contains(UserPreferences.shared.readingTheme) {
-                LiquidBackgroundView()
-            }
         }
     }
 

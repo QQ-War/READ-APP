@@ -14,38 +14,32 @@ struct ContentView: View {
             if !preferences.isLoggedIn {
                 LoginView()
             } else {
-                ZStack {
-                    if preferences.isLiquidGlassEnabled {
-                        LiquidBackgroundView()
+                TabView {
+                    NavigationView {
+                        BookListView()
+                    }
+                    .navigationViewStyle(StackNavigationViewStyle())
+                    .tabItem {
+                        Image(systemName: "book.fill")
+                        Text("书架")
                     }
                     
-                    TabView {
-                        NavigationView {
-                            BookListView()
-                        }
-                        .navigationViewStyle(StackNavigationViewStyle())
-                        .tabItem {
-                            Image(systemName: "book.fill")
-                            Text("书架")
-                        }
-                        
-                        NavigationView {
-                            SourceListView()
-                        }
-                        .navigationViewStyle(StackNavigationViewStyle())
-                        .tabItem {
-                            Image(systemName: "list.bullet")
-                            Text("书源")
-                        }
+                    NavigationView {
+                        SourceListView()
+                    }
+                    .navigationViewStyle(StackNavigationViewStyle())
+                    .tabItem {
+                        Image(systemName: "list.bullet")
+                        Text("书源")
+                    }
 
-                        NavigationView {
-                            SettingsView()
-                        }
-                        .navigationViewStyle(StackNavigationViewStyle())
-                        .tabItem {
-                            Image(systemName: "gearshape.fill")
-                            Text("设置")
-                        }
+                    NavigationView {
+                        SettingsView()
+                    }
+                    .navigationViewStyle(StackNavigationViewStyle())
+                    .tabItem {
+                        Image(systemName: "gearshape.fill")
+                        Text("设置")
                     }
                 }
             }
