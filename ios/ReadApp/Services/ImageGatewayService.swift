@@ -20,7 +20,7 @@ final class ImageGatewayService {
         Task { await limiter.release() }
     }
     
-    func resolveImageURL(_ original: String) -> URL? {
+    func resolveImageURL(_ original: String, baseURLString: String? = nil) -> URL? {
         let cleaned = MangaImageNormalizer.sanitizeUrlString(original)
 
         // reader 后端：EPUB 解压资源实际挂在 /epub 下，避免使用 /assets/.../index/...
@@ -51,6 +51,11 @@ final class ImageGatewayService {
                let url = URL(string: encoded) {
                 return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
             }
+        }
+
+        // 4. 基于参考 URL 解析相对路径，自动归一化 ../ 等路径
+        if let resolved = resolveRelativeURL(cleaned, baseURLString: baseURLString) {
+            return resolved
         }
         
         // 4. 补全后端 Base URL（处理相对路径）
@@ -83,6 +88,28 @@ final class ImageGatewayService {
         }
         if let encoded = resolved.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
            let url = URL(string: encoded) {
+            return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
+        }
+        return nil
+    }
+
+    private func resolveRelativeURL(_ cleaned: String, baseURLString: String?) -> URL? {
+        if let baseURLString,
+           !baseURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let baseURL = URL(string: baseURLString),
+           baseURL.scheme != nil {
+            let baseForRelative = baseURLString.hasSuffix("/") ? baseURL : baseURL.deletingLastPathComponent()
+            if let url = URL(string: cleaned, relativeTo: baseForRelative)?.absoluteURL {
+                return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
+            }
+            return nil
+        }
+
+        let base = APIService.shared.baseURL
+        guard !base.isEmpty else { return nil }
+        let withSlash = base.hasSuffix("/") ? base : (base + "/")
+        guard let baseURL = URL(string: withSlash) else { return nil }
+        if let url = URL(string: cleaned, relativeTo: baseURL)?.absoluteURL {
             return normalizeSchemeIfNeeded(MangaImageNormalizer.normalizeHost(url))
         }
         return nil
