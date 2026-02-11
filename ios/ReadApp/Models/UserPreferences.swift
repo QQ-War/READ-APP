@@ -553,8 +553,9 @@ class UserPreferences: ObservableObject {
 
         let savedRefreshRate = UserDefaults.standard.float(forKey: "staticRefreshRate")
         let savedRefreshRateMax = UserDefaults.standard.float(forKey: "staticRefreshRateMax")
-        self.staticRefreshRateMax = savedRefreshRateMax == 0 ? 30 : max(10, min(120, savedRefreshRateMax))
-        self.staticRefreshRate = savedRefreshRate == 0 ? 30 : max(10, min(self.staticRefreshRateMax, savedRefreshRate))
+        let initialStaticRefreshRateMax: Float = savedRefreshRateMax == 0 ? 30 : max(10, min(120, savedRefreshRateMax))
+        self.staticRefreshRateMax = initialStaticRefreshRateMax
+        self.staticRefreshRate = savedRefreshRate == 0 ? 30 : max(10, min(initialStaticRefreshRateMax, savedRefreshRate))
 
         self.isProgressDynamicColorEnabled = UserDefaults.standard.object(forKey: "isProgressDynamicColorEnabled") as? Bool ?? true
         self.isLiquidGlassEnabled = UserDefaults.standard.bool(forKey: "isLiquidGlassEnabled")
