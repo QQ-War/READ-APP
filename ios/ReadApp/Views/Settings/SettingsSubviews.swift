@@ -159,9 +159,9 @@ struct ReadingSettingsView: View {
                 }
             }
 
-            Section(header: GlassySectionHeader(title: "显示与性能"), footer: Text("降低静态阅读时的刷新率可显著延长 ProMotion 设备的续航。关闭动态颜色可进一步减轻 GPU 渲染压力。")) {
+            Section(header: GlassySectionHeader(title: "显示与性能"), footer: Text("降低静态阅读时的刷新率可显著延长 ProMotion 设备的续航。静态刷新率是目标值，超过上限时会自动按上限生效。关闭动态颜色可进一步减轻 GPU 渲染压力。")) {
                 HStack {
-                    Text("静态刷新率")
+                    Text("静态刷新率（目标值）")
                     Slider(
                         value: Binding(
                             get: {
@@ -185,7 +185,7 @@ struct ReadingSettingsView: View {
                 }
 
                 HStack {
-                    Text("静态刷新率上限")
+                    Text("静态刷新率上限（省电建议 20-30Hz）")
                     Slider(
                         value: Binding(
                             get: {
