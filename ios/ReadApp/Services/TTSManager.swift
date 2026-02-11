@@ -551,6 +551,7 @@ class TTSManager: NSObject, ObservableObject {
         isLoading = false
         stopKeepAlive()
         stopHTTPPlaybackIfNeeded()
+        playbackStartOffset = currentSentenceOffset
         activePlaybackEngine = .systemSpeech
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = preferredSystemVoice(for: text)
@@ -979,7 +980,10 @@ extension TTSManager: AVSpeechSynthesizerDelegate {
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
-            self.currentSentenceOffset = characterRange.location
+            let utteranceLength = max(0, utterance.speechString.utf16.count)
+            let absoluteOffset = self.playbackStartOffset + characterRange.location
+            let maxOffset = self.playbackStartOffset + utteranceLength
+            self.currentSentenceOffset = min(max(self.playbackStartOffset, absoluteOffset), maxOffset)
         }
     }
 }
