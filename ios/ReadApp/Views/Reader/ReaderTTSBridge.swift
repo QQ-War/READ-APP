@@ -230,7 +230,10 @@ final class ReaderTTSBridge {
         }
 
         let highlightRange: NSRange?
-        if let hi = highlightIdx, hi >= 0, !ttsManager.isReadingChapterTitle {
+        if let hi = highlightIdx,
+           hi >= 0,
+           hi < context.currentCache.contentSentences.count,
+           !ttsManager.isReadingChapterTitle {
             highlightRange = Self.highlightRange(
                 sentence: context.currentCache.contentSentences[hi],
                 sentenceIndex: hi,
@@ -240,6 +243,9 @@ final class ReaderTTSBridge {
                 totalLength: context.currentCache.attributedText.length
             )
         } else {
+            if let hi = highlightIdx, hi < 0 || hi >= context.currentCache.contentSentences.count {
+                highlightIdx = nil
+            }
             highlightRange = nil
         }
 
