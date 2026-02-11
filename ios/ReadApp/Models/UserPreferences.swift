@@ -3,7 +3,12 @@ import SwiftUI
 
 class UserPreferences: ObservableObject {
     static let shared = UserPreferences()
-    private let progressQueue = DispatchQueue(label: "com.readapp.userprefs.progress", qos: .utility)
+    private static let progressQueueKey = DispatchSpecificKey<Void>()
+    private let progressQueue: DispatchQueue = {
+        let queue = DispatchQueue(label: "com.readapp.userprefs.progress", qos: .utility)
+        queue.setSpecific(key: UserPreferences.progressQueueKey, value: ())
+        return queue
+    }()
     private var ttsProgressCache: [String: (Int, Int, Int)] = [:]
     private var ttsProgressFlushWorkItem: DispatchWorkItem?
 
@@ -338,7 +343,28 @@ class UserPreferences: ObservableObject {
     /// 静态阅读时的刷新率限制 (iOS 15+ ProMotion)
     @Published var staticRefreshRate: Float {
         didSet {
+            let clamped = max(10, min(staticRefreshRateMax, staticRefreshRate))
+            if clamped != staticRefreshRate {
+                staticRefreshRate = clamped
+                return
+            }
             UserDefaults.standard.set(staticRefreshRate, forKey: "staticRefreshRate")
+            DisplayRateManager.shared.refresh()
+        }
+    }
+
+    /// 静态阅读时的刷新率上限 (iOS 15+ ProMotion)
+    @Published var staticRefreshRateMax: Float {
+        didSet {
+            let clamped = max(10, min(120, staticRefreshRateMax))
+            if clamped != staticRefreshRateMax {
+                staticRefreshRateMax = clamped
+                return
+            }
+            if staticRefreshRate > staticRefreshRateMax {
+                staticRefreshRate = staticRefreshRateMax
+            }
+            UserDefaults.standard.set(staticRefreshRateMax, forKey: "staticRefreshRateMax")
             DisplayRateManager.shared.refresh()
         }
     }
@@ -402,6 +428,14 @@ class UserPreferences: ObservableObject {
         progressQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
+    private func syncOnProgressQueue(_ block: () -> Void) {
+        if DispatchQueue.getSpecific(key: Self.progressQueueKey) != nil {
+            block()
+        } else {
+            progressQueue.sync(execute: block)
+        }
+    }
+
     // 阅读进度记录：bookUrl -> (chapterIndex, pageIndex, bodyCharIndex, timestamp)
     private var readingProgress: [String: (Int, Int, Int, Int)] {
         get {
@@ -426,18 +460,17 @@ class UserPreferences: ObservableObject {
         }
     }
 
-    func saveTTSProgress(bookUrl: String, chapterIndex: Int, sentenceIndex: Int, sentenceOffset: Int = 0, immediate: Bool = false) {
+    func saveTTSProgress(bookUrl: String, chapterIndex: Int, sentenceIndex: Int, sentenceOffset: Int = 0) {
         guard !bookUrl.isEmpty else { return }
-        if immediate {
-            progressQueue.sync {
-                ttsProgressCache[bookUrl] = (chapterIndex, sentenceIndex, sentenceOffset)
-                flushTTSProgressLocked()
-            }
-            return
-        }
         progressQueue.async {
             self.ttsProgressCache[bookUrl] = (chapterIndex, sentenceIndex, sentenceOffset)
             self.scheduleTTSProgressFlushLocked()
+        }
+    }
+
+    func flushTTSProgressNow() {
+        syncOnProgressQueue {
+            flushTTSProgressLocked()
         }
     }
 
@@ -519,7 +552,9 @@ class UserPreferences: ObservableObject {
         self.mangaImageTimeout = savedMangaTimeout == 0 ? 30 : max(5, savedMangaTimeout)
 
         let savedRefreshRate = UserDefaults.standard.float(forKey: "staticRefreshRate")
-        self.staticRefreshRate = savedRefreshRate == 0 ? 30 : max(10, min(120, savedRefreshRate))
+        let savedRefreshRateMax = UserDefaults.standard.float(forKey: "staticRefreshRateMax")
+        self.staticRefreshRateMax = savedRefreshRateMax == 0 ? 30 : max(10, min(120, savedRefreshRateMax))
+        self.staticRefreshRate = savedRefreshRate == 0 ? 30 : max(10, min(self.staticRefreshRateMax, savedRefreshRate))
 
         self.isProgressDynamicColorEnabled = UserDefaults.standard.object(forKey: "isProgressDynamicColorEnabled") as? Bool ?? true
         self.isLiquidGlassEnabled = UserDefaults.standard.bool(forKey: "isLiquidGlassEnabled")

@@ -2,6 +2,18 @@ import SwiftUI
 import UIKit
 
 struct ContentView: View {
+    private enum TabBarGlassMetrics {
+        static let containerTag = 901
+        static let blurTag = 902
+        static let cornerRadius: CGFloat = 24
+        static let horizontalInset: CGFloat = 16
+        static let bottomPadding: CGFloat = 12
+        static let topExtend: CGFloat = 2
+        static let shadowOpacity: Float = 1
+        static let shadowRadius: CGFloat = 18
+        static let shadowYOffset: CGFloat = 10
+    }
+
     @StateObject private var preferences = UserPreferences.shared
     @EnvironmentObject var bookshelfStore: BookshelfStore
     @State private var toastMessage: String?
@@ -107,7 +119,7 @@ struct ContentView: View {
                 if preferences.isLiquidGlassEnabled {
                     applyFloatingTabBar(to: tabBar)
                 } else {
-                    tabBar.viewWithTag(901)?.removeFromSuperview()
+                    tabBar.viewWithTag(TabBarGlassMetrics.containerTag)?.removeFromSuperview()
                     // 恢复系统默认层级
                     tabBar.isTranslucent = true
                     tabBar.layer.cornerRadius = 0
@@ -127,65 +139,67 @@ struct ContentView: View {
     }
 
     private func applyFloatingTabBar(to tabBar: UITabBar) {
-        let backgroundTag = 901
-        let blurTag = 902
         tabBar.isTranslucent = true
-        tabBar.layer.cornerRadius = 24
+        tabBar.layer.cornerRadius = TabBarGlassMetrics.cornerRadius
         tabBar.layer.cornerCurve = .continuous
         tabBar.layer.masksToBounds = false
         tabBar.clipsToBounds = false
 
-        let horizontalInset: CGFloat = 16
-        let bottomPadding: CGFloat = 12 // 底部悬浮距离
-        let topExtend: CGFloat = 2 // 向上微调，确保盖住图标
-        
-        let backgroundFrame = CGRect(
-            x: horizontalInset,
-            y: -topExtend,
-            width: tabBar.bounds.width - horizontalInset * 2,
-            height: tabBar.bounds.height - bottomPadding + topExtend
-        )
-        
-        let container: UIView
-        if let existing = tabBar.viewWithTag(backgroundTag) {
-            container = existing
-            container.frame = backgroundFrame
-        } else {
-            container = UIView(frame: backgroundFrame)
-            container.tag = backgroundTag
-            container.isUserInteractionEnabled = false
-            container.layer.cornerRadius = 24
-            container.layer.cornerCurve = .continuous
-            container.layer.shadowColor = UIColor.black.withAlphaComponent(0.18).cgColor
-            container.layer.shadowOpacity = 1
-            container.layer.shadowRadius = 18
-            container.layer.shadowOffset = CGSize(width: 0, height: 10)
-            container.layer.masksToBounds = false
-            container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            tabBar.insertSubview(container, at: 0)
-        }
+        let backgroundFrame = tabBarBackgroundFrame(for: tabBar.bounds)
+        let container = ensureFloatingBackgroundContainer(in: tabBar, frame: backgroundFrame)
 
         // 复用模糊层，避免频繁销毁重建导致额外开销
-        let blurView: UIVisualEffectView
-        if let existing = container.viewWithTag(blurTag) as? UIVisualEffectView {
-            blurView = existing
-            blurView.frame = container.bounds
-        } else {
-            let created = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
-            created.tag = blurTag
-            created.frame = container.bounds
-            created.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            created.layer.cornerRadius = 24
-            created.layer.cornerCurve = .continuous
-            created.layer.masksToBounds = true
-            container.addSubview(created)
-            blurView = created
-        }
+        let blurView = ensureFloatingBlurView(in: container)
         
         // 关键：将不透明度滑块应用到背景颜色和整体透明度上
         let opacity = CGFloat(preferences.liquidGlassOpacity)
         blurView.backgroundColor = UIColor.systemBackground.withAlphaComponent(max(0.05, opacity * 0.4))
         blurView.alpha = opacity
+    }
+
+    private func tabBarBackgroundFrame(for bounds: CGRect) -> CGRect {
+        CGRect(
+            x: TabBarGlassMetrics.horizontalInset,
+            y: -TabBarGlassMetrics.topExtend,
+            width: bounds.width - TabBarGlassMetrics.horizontalInset * 2,
+            height: bounds.height - TabBarGlassMetrics.bottomPadding + TabBarGlassMetrics.topExtend
+        )
+    }
+
+    private func ensureFloatingBackgroundContainer(in tabBar: UITabBar, frame: CGRect) -> UIView {
+        if let existing = tabBar.viewWithTag(TabBarGlassMetrics.containerTag) {
+            existing.frame = frame
+            return existing
+        }
+        let container = UIView(frame: frame)
+        container.tag = TabBarGlassMetrics.containerTag
+        container.isUserInteractionEnabled = false
+        container.layer.cornerRadius = TabBarGlassMetrics.cornerRadius
+        container.layer.cornerCurve = .continuous
+        container.layer.shadowColor = UIColor.black.withAlphaComponent(0.18).cgColor
+        container.layer.shadowOpacity = TabBarGlassMetrics.shadowOpacity
+        container.layer.shadowRadius = TabBarGlassMetrics.shadowRadius
+        container.layer.shadowOffset = CGSize(width: 0, height: TabBarGlassMetrics.shadowYOffset)
+        container.layer.masksToBounds = false
+        container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        tabBar.insertSubview(container, at: 0)
+        return container
+    }
+
+    private func ensureFloatingBlurView(in container: UIView) -> UIVisualEffectView {
+        if let existing = container.viewWithTag(TabBarGlassMetrics.blurTag) as? UIVisualEffectView {
+            existing.frame = container.bounds
+            return existing
+        }
+        let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+        blurView.tag = TabBarGlassMetrics.blurTag
+        blurView.frame = container.bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        blurView.layer.cornerRadius = TabBarGlassMetrics.cornerRadius
+        blurView.layer.cornerCurve = .continuous
+        blurView.layer.masksToBounds = true
+        container.addSubview(blurView)
+        return blurView
     }
 
     private func updateSearchBarAppearance() {

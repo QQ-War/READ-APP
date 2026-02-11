@@ -50,10 +50,12 @@ final class DisplayRateManager {
                 )
             } else {
                 // 静态阅读时：根据用户设置降低刷新率
-                let rate = UserPreferences.shared.staticRefreshRate
+                let staticMin = ReaderConstants.RefreshRate.minStatic
+                let staticMax = max(staticMin, UserPreferences.shared.staticRefreshRateMax)
+                let rate = min(max(staticMin, UserPreferences.shared.staticRefreshRate), staticMax)
                 range = CAFrameRateRange(
-                    minimum: ReaderConstants.RefreshRate.minStatic,
-                    maximum: max(ReaderConstants.RefreshRate.maxStatic, rate),
+                    minimum: staticMin,
+                    maximum: staticMax,
                     preferred: rate
                 )
             }

@@ -69,6 +69,10 @@ class TTSManager: NSObject, ObservableObject {
     // 后台保活
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var keepAlivePlayer: AVAudioPlayer?
+    private var keepAliveWorkItem: DispatchWorkItem?
+    private var isWaitingForHTTPAudio = false
+    private var isAppInBackground = UIApplication.shared.applicationState != .active
+    private let keepAliveDelay: TimeInterval = 0.6
 
     // MARK: - 预载状态封装
     private func cachedAudio(for index: Int) -> Data? {
@@ -277,13 +281,23 @@ class TTSManager: NSObject, ObservableObject {
     }
 
     @objc private func handleAppDidEnterBackground() {
+        isAppInBackground = true
         guard isPlaying else { return }
+        saveCurrentProgress()
+        UserPreferences.shared.flushTTSProgressNow()
+        stopOffsetTimer()
         beginBackgroundTask()
+        scheduleKeepAliveIfNeeded()
     }
 
     @objc private func handleAppDidBecomeActive() {
+        isAppInBackground = false
+        cancelKeepAliveSchedule()
         stopKeepAlive()
         endBackgroundTask()
+        if activePlaybackEngine == .httpAudio, audioPlayer?.isPlaying == true, isPlaying, !isPaused {
+            startOffsetTimer()
+        }
     }
     
     private func updateNowPlayingInfo(chapterTitle: String) {
@@ -453,6 +467,23 @@ class TTSManager: NSObject, ObservableObject {
         keepAlivePlayer = nil
     }
 
+    private func cancelKeepAliveSchedule() {
+        keepAliveWorkItem?.cancel()
+        keepAliveWorkItem = nil
+    }
+
+    private func scheduleKeepAliveIfNeeded() {
+        cancelKeepAliveSchedule()
+        guard isAppInBackground, isPlaying, !isPaused, isWaitingForHTTPAudio else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self.isAppInBackground, self.isPlaying, !self.isPaused, self.isWaitingForHTTPAudio else { return }
+            self.startKeepAlive()
+        }
+        keepAliveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + keepAliveDelay, execute: workItem)
+    }
+
     private func beginBackgroundTask() {
         guard UIApplication.shared.applicationState != .active else { return }
         endBackgroundTask()
@@ -509,6 +540,8 @@ class TTSManager: NSObject, ObservableObject {
     private func speakNextSentence() {
         guard isPlaying else { return }
         stopOffsetTimer()
+        isWaitingForHTTPAudio = false
+        cancelKeepAliveSchedule()
         if currentSentenceIndex >= sentences.count { nextChapter(); return }
         let sentence = sentences[currentSentenceIndex]
         if isPunctuationOnly(sentence) { currentSentenceIndex += 1; speakNextSentence(); return }
@@ -531,21 +564,32 @@ class TTSManager: NSObject, ObservableObject {
             speakNextSentence()
             return
         }
-        if UserPreferences.shared.useSystemTTS { speakWithSystemTTS(text: sentenceToSpeak); return }
+        if UserPreferences.shared.useSystemTTS {
+            speakWithSystemTTS(text: sentenceToSpeak)
+            return
+        }
         startPreloading()
         
         let targetIdx = currentSentenceIndex
         if let cachedData = cachedAudio(for: targetIdx) {
+            isWaitingForHTTPAudio = false
+            cancelKeepAliveSchedule()
             playAudioWithData(data: cachedData); return
         }
         if isFallbackIndex(targetIdx) {
+            isWaitingForHTTPAudio = false
+            cancelKeepAliveSchedule()
             speakWithSystemTTS(text: sentenceToSpeak)
             return
         }
 
+        isWaitingForHTTPAudio = true
+        scheduleKeepAliveIfNeeded()
         Task {
             if let data = await fetchAudioData(for: sentenceToSpeak, isChapterTitle: isReadingChapterTitle) {
                 await MainActor.run {
+                    self.isWaitingForHTTPAudio = false
+                    self.cancelKeepAliveSchedule()
                     cacheAudio(data, for: targetIdx)
                     playAudioWithData(data: data)
                     startPreloading()
@@ -555,13 +599,19 @@ class TTSManager: NSObject, ObservableObject {
                 }
             } else {
                 markFallbackIndex(targetIdx)
-                await MainActor.run { speakWithSystemTTS(text: sentenceToSpeak) }
+                await MainActor.run {
+                    self.isWaitingForHTTPAudio = false
+                    self.cancelKeepAliveSchedule()
+                    speakWithSystemTTS(text: sentenceToSpeak)
+                }
             }
         }
     }
     
     private func speakWithSystemTTS(text: String) {
         isLoading = false
+        isWaitingForHTTPAudio = false
+        cancelKeepAliveSchedule()
         stopKeepAlive()
         stopHTTPPlaybackIfNeeded()
         playbackStartOffset = currentSentenceOffset
@@ -696,26 +746,32 @@ class TTSManager: NSObject, ObservableObject {
             audioPlayer?.volume = 1.0
             if audioPlayer?.play() == true {
                 activePlaybackEngine = .httpAudio
+                isWaitingForHTTPAudio = false
+                cancelKeepAliveSchedule()
                 stopKeepAlive()
                 isLoading = false
                 currentSentenceDuration = audioPlayer?.duration ?? 0
                 startOffsetTimer()
                 beginBackgroundTask()
             } else {
-                startKeepAlive()
+                isWaitingForHTTPAudio = false
+                cancelKeepAliveSchedule()
                 isLoading = false; currentSentenceIndex += 1; currentSentenceOffset = 0; speakNextSentence()
             }
         } catch {
-            startKeepAlive()
+            isWaitingForHTTPAudio = false
+            cancelKeepAliveSchedule()
             isLoading = false; currentSentenceIndex += 1; currentSentenceOffset = 0; speakNextSentence()
         }
     }
     
     private func startOffsetTimer() {
         stopOffsetTimer()
+        guard !isAppInBackground else { return }
         guard !UserPreferences.shared.useSystemTTS else { return }
         offsetTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
             guard let self = self, let player = self.audioPlayer, player.isPlaying, player.duration > 0 else { return }
+            guard !self.isAppInBackground else { return }
             let progress = player.currentTime / player.duration
             let sentenceLen = self.sentences.indices.contains(self.currentSentenceIndex) ? self.sentences[self.currentSentenceIndex].utf16.count : 0
             let remainingLen = max(0, sentenceLen - self.playbackStartOffset)
@@ -734,6 +790,8 @@ class TTSManager: NSObject, ObservableObject {
     func pause() {
         if isPlaying && !isPaused {
             isPaused = true
+            isWaitingForHTTPAudio = false
+            cancelKeepAliveSchedule()
             stopOffsetTimer()
             if speechSynthesizer.isSpeaking || speechSynthesizer.isPaused {
                 speechSynthesizer.pauseSpeaking(at: .immediate)
@@ -815,6 +873,9 @@ class TTSManager: NSObject, ObservableObject {
     
     func stop() {
         saveCurrentProgress()
+        UserPreferences.shared.flushTTSProgressNow()
+        isWaitingForHTTPAudio = false
+        cancelKeepAliveSchedule()
         stopKeepAlive()
         audioPlayer?.stop()
         audioPlayer = nil
@@ -959,7 +1020,8 @@ class TTSManager: NSObject, ObservableObject {
         let snapshotOffset = self.currentSentenceOffset
         let snapshotTitle = snapshotChapterIdx < chapters.count ? chapters[snapshotChapterIdx].title : nil
         let absoluteSentenceIdx = snapshotSentenceIdx + snapshotBaseIdx
-        UserPreferences.shared.saveTTSProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, sentenceIndex: absoluteSentenceIdx, sentenceOffset: snapshotOffset, immediate: true)
+        UserPreferences.shared.saveTTSProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, sentenceIndex: absoluteSentenceIdx, sentenceOffset: snapshotOffset)
+        UserPreferences.shared.flushTTSProgressNow()
         Task {
             guard !snapshotSentences.isEmpty else { return }
             var bodyIndex = 0
@@ -978,6 +1040,8 @@ class TTSManager: NSObject, ObservableObject {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        UserPreferences.shared.flushTTSProgressNow()
+        cancelKeepAliveSchedule()
         endBackgroundTask()
     }
 }
@@ -986,7 +1050,6 @@ extension TTSManager: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
             guard self.isPlaying else { return }
-            self.startKeepAlive()
             self.currentSentenceIndex += 1; self.currentSentenceOffset = 0; self.speakNextSentence()
         }
     }
@@ -1006,7 +1069,6 @@ extension TTSManager: AVAudioPlayerDelegate {
         DispatchQueue.main.async {
             guard self.isPlaying else { return }
             self.stopOffsetTimer()
-            self.startKeepAlive()
             self.currentSentenceIndex += 1; self.currentSentenceOffset = 0; self.speakNextSentence()
         }
     }

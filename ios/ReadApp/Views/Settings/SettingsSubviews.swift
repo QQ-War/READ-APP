@@ -162,8 +162,28 @@ struct ReadingSettingsView: View {
             Section(header: GlassySectionHeader(title: "显示与性能"), footer: Text("降低静态阅读时的刷新率可显著延长 ProMotion 设备的续航。关闭动态颜色可进一步减轻 GPU 渲染压力。")) {
                 HStack {
                     Text("静态刷新率")
-                    Slider(value: Binding(get: { Double(preferences.staticRefreshRate) }, set: { preferences.staticRefreshRate = Float($0) }), in: 10...60, step: 10)
+                    Slider(
+                        value: Binding(
+                            get: { Double(preferences.staticRefreshRate) },
+                            set: { preferences.staticRefreshRate = Float($0) }
+                        ),
+                        in: 10...Double(preferences.staticRefreshRateMax),
+                        step: 10
+                    )
                     Text("\(Int(preferences.staticRefreshRate))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
+                }
+
+                HStack {
+                    Text("静态刷新率上限")
+                    Slider(
+                        value: Binding(
+                            get: { Double(preferences.staticRefreshRateMax) },
+                            set: { preferences.staticRefreshRateMax = Float($0) }
+                        ),
+                        in: 10...60,
+                        step: 10
+                    )
+                    Text("\(Int(preferences.staticRefreshRateMax))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
                 }
 
                 Toggle("进度条动态颜色", isOn: $preferences.isProgressDynamicColorEnabled)

@@ -1,6 +1,23 @@
 import SwiftUI
 import UIKit
 
+private enum LiquidGlassTokens {
+    static let cardStrokeOpacity = 0.18
+    static let floatingStrokeOpacity = 0.2
+    static let toolbarStrokeOpacity = 0.18
+    static let buttonStrokeOpacity = 0.2
+    static let strokeWidth: CGFloat = 0.8
+    static let cardShadowOpacity = 0.12
+    static let floatingShadowOpacity = 0.16
+    static let pressShadowOpacity = 0.12
+    static let cardShadowRadius: CGFloat = 10
+    static let floatingShadowRadius: CGFloat = 18
+    static let pressShadowRadius: CGFloat = 8
+    static let cardShadowYOffset: CGFloat = 6
+    static let floatingShadowYOffset: CGFloat = 8
+    static let pressShadowYOffset: CGFloat = 4
+}
+
 private struct GlassyListStyleModifier: ViewModifier {
     @AppStorage("isLiquidGlassEnabled") private var isEnabled = false
 
@@ -32,9 +49,14 @@ private struct GlassyCardModifier: ViewModifier {
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                        .stroke(Color.white.opacity(LiquidGlassTokens.cardStrokeOpacity), lineWidth: LiquidGlassTokens.strokeWidth)
                 )
-                .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 6)
+                .shadow(
+                    color: Color.black.opacity(LiquidGlassTokens.cardShadowOpacity),
+                    radius: LiquidGlassTokens.cardShadowRadius,
+                    x: 0,
+                    y: LiquidGlassTokens.cardShadowYOffset
+                )
         } else {
             content
         }
@@ -43,19 +65,26 @@ private struct GlassyCardModifier: ViewModifier {
 
 private struct GlassyFloatingBarModifier: ViewModifier {
     let cornerRadius: CGFloat
+    let padding: CGFloat
     @AppStorage("isLiquidGlassEnabled") private var isEnabled = false
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if isEnabled {
             content
+                .padding(padding)
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
+                        .stroke(Color.white.opacity(LiquidGlassTokens.floatingStrokeOpacity), lineWidth: LiquidGlassTokens.strokeWidth)
                 )
-                .shadow(color: Color.black.opacity(0.16), radius: 18, x: 0, y: 8)
+                .shadow(
+                    color: Color.black.opacity(LiquidGlassTokens.floatingShadowOpacity),
+                    radius: LiquidGlassTokens.floatingShadowRadius,
+                    x: 0,
+                    y: LiquidGlassTokens.floatingShadowYOffset
+                )
         } else {
             content
         }
@@ -77,7 +106,7 @@ private struct GlassyButtonStyleModifier: ViewModifier {
                         .opacity(opacity)
                 )
                 .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
+                .overlay(Capsule().stroke(Color.white.opacity(LiquidGlassTokens.buttonStrokeOpacity), lineWidth: LiquidGlassTokens.strokeWidth))
                 .buttonStyle(GlassyPressableButtonStyle())
         } else {
             content
@@ -99,7 +128,7 @@ private struct GlassyToolbarButtonModifier: ViewModifier {
                         .opacity(opacity)
                 )
                 .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.8))
+                .overlay(Capsule().stroke(Color.white.opacity(LiquidGlassTokens.toolbarStrokeOpacity), lineWidth: LiquidGlassTokens.strokeWidth))
                 .scaleEffect(1.0)
                 .animation(.easeInOut(duration: 0.15), value: isEnabled)
                 .buttonStyle(GlassyPressableButtonStyle())
@@ -117,7 +146,12 @@ private struct GlassyPressEffectModifier: ViewModifier {
         if isEnabled {
             content
                 .scaleEffect(0.98)
-                .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+                .shadow(
+                    color: Color.black.opacity(LiquidGlassTokens.pressShadowOpacity),
+                    radius: LiquidGlassTokens.pressShadowRadius,
+                    x: 0,
+                    y: LiquidGlassTokens.pressShadowYOffset
+                )
         } else {
             content
         }
@@ -145,8 +179,8 @@ extension View {
     }
 
     @ViewBuilder
-    func glassyFloatingBar(cornerRadius: CGFloat = 24, padding _: CGFloat = 10) -> some View {
-        self.modifier(GlassyFloatingBarModifier(cornerRadius: cornerRadius))
+    func glassyFloatingBar(cornerRadius: CGFloat = 24, padding: CGFloat = 10) -> some View {
+        self.modifier(GlassyFloatingBarModifier(cornerRadius: cornerRadius, padding: padding))
     }
 
     @ViewBuilder
