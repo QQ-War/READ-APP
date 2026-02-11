@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LiquidBackgroundView: View {
     @State private var startAnimation: Bool = false
+    @ObservedObject private var preferences = UserPreferences.shared
     
     var body: some View {
         ZStack {
@@ -30,7 +31,8 @@ struct LiquidBackgroundView: View {
             // 玻璃层：保持轻微的模糊感，但不遮挡动态球
             Rectangle()
                 .fill(.ultraThinMaterial)
-                .opacity(0.4)
+                .opacity(preferences.liquidGlassOpacity)
+                .animation(.easeInOut(duration: 0.3), value: preferences.liquidGlassOpacity)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)

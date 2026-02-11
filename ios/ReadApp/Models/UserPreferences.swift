@@ -353,6 +353,13 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 液态玻璃材质不透明度 (0.0 - 1.0)
+    @Published var liquidGlassOpacity: Double {
+        didSet {
+            UserDefaults.standard.set(liquidGlassOpacity, forKey: "liquidGlassOpacity")
+        }
+    }
+
     /// 设置项顺序
     @Published var settingsOrder: [String] {
         didSet {
@@ -493,6 +500,9 @@ class UserPreferences: ObservableObject {
 
         self.isProgressDynamicColorEnabled = UserDefaults.standard.object(forKey: "isProgressDynamicColorEnabled") as? Bool ?? true
         self.isLiquidGlassEnabled = UserDefaults.standard.bool(forKey: "isLiquidGlassEnabled")
+        
+        let savedLiquidOpacity = UserDefaults.standard.double(forKey: "liquidGlassOpacity")
+        self.liquidGlassOpacity = (savedLiquidOpacity == 0) ? 0.8 : savedLiquidOpacity
 
         let defaultOrder = ["display", "reading", "cache", "tts", "content", "rss"]
         let savedOrder = UserDefaults.standard.stringArray(forKey: "settingsOrder") ?? defaultOrder
