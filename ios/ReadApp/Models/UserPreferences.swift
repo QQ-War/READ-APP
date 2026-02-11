@@ -356,7 +356,7 @@ class UserPreferences: ObservableObject {
     /// 静态阅读时的刷新率上限 (iOS 15+ ProMotion)
     @Published var staticRefreshRateMax: Float {
         didSet {
-            let clamped = max(10, min(120, staticRefreshRateMax))
+            let clamped = max(10, min(60, staticRefreshRateMax))
             if clamped != staticRefreshRateMax {
                 staticRefreshRateMax = clamped
                 return
@@ -553,7 +553,7 @@ class UserPreferences: ObservableObject {
 
         let savedRefreshRate = UserDefaults.standard.float(forKey: "staticRefreshRate")
         let savedRefreshRateMax = UserDefaults.standard.float(forKey: "staticRefreshRateMax")
-        let initialStaticRefreshRateMax: Float = savedRefreshRateMax == 0 ? 30 : max(10, min(120, savedRefreshRateMax))
+        let initialStaticRefreshRateMax: Float = savedRefreshRateMax == 0 ? 30 : max(10, min(60, savedRefreshRateMax))
         self.staticRefreshRateMax = initialStaticRefreshRateMax
         let defaultStaticRate: Float = min(30, initialStaticRefreshRateMax)
         self.staticRefreshRate = savedRefreshRate == 0 ? defaultStaticRate : max(10, min(initialStaticRefreshRateMax, savedRefreshRate))

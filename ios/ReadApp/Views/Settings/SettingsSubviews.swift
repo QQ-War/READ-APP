@@ -164,10 +164,14 @@ struct ReadingSettingsView: View {
                     Text("静态刷新率")
                     Slider(
                         value: Binding(
-                            get: { Double(preferences.staticRefreshRate) },
+                            get: {
+                                let safeMax = max(10, min(60, preferences.staticRefreshRateMax))
+                                let safeRate = max(10, min(safeMax, preferences.staticRefreshRate))
+                                return Double(safeRate)
+                            },
                             set: { preferences.staticRefreshRate = Float($0) }
                         ),
-                        in: 10...Double(preferences.staticRefreshRateMax),
+                        in: 10...Double(max(10, min(60, preferences.staticRefreshRateMax))),
                         step: 10
                     )
                     Text("\(Int(preferences.staticRefreshRate))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
@@ -177,7 +181,7 @@ struct ReadingSettingsView: View {
                     Text("静态刷新率上限")
                     Slider(
                         value: Binding(
-                            get: { Double(preferences.staticRefreshRateMax) },
+                            get: { Double(max(10, min(60, preferences.staticRefreshRateMax))) },
                             set: { preferences.staticRefreshRateMax = Float($0) }
                         ),
                         in: 10...60,
