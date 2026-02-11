@@ -1,7 +1,11 @@
+import Foundation
 import SwiftUI
 
 class UserPreferences: ObservableObject {
     static let shared = UserPreferences()
+    private let progressQueue = DispatchQueue(label: "com.readapp.userprefs.progress", qos: .utility)
+    private var ttsProgressCache: [String: (Int, Int, Int)] = [:]
+    private var ttsProgressFlushWorkItem: DispatchWorkItem?
 
     @Published var apiBackend: ApiBackend {
         didSet {
@@ -368,24 +372,34 @@ class UserPreferences: ObservableObject {
     }
 
     // TTS进度记录：bookUrl -> (chapterIndex, sentenceIndex, sentenceOffset)
-    private var ttsProgress: [String: (Int, Int, Int)] {
-        get {
-            if let data = UserDefaults.standard.data(forKey: "ttsProgress"),
-               let dict = try? JSONDecoder().decode([String: [Int]].self, from: data) {
-                return dict.mapValues {
-                    if $0.count >= 3 { return ($0[0], $0[1], $0[2]) }
-                    if $0.count >= 2 { return ($0[0], $0[1], 0) }
-                    return ($0.first ?? 0, 0, 0)
-                }
-            }
+    private static func decodeTTSProgress(from data: Data?) -> [String: (Int, Int, Int)] {
+        guard let data,
+              let dict = try? JSONDecoder().decode([String: [Int]].self, from: data) else {
             return [:]
         }
-        set {
-            let dict = newValue.mapValues { [$0.0, $0.1, $0.2] }
-            if let data = try? JSONEncoder().encode(dict) {
-                UserDefaults.standard.set(data, forKey: "ttsProgress")
-            }
+        return dict.mapValues {
+            if $0.count >= 3 { return ($0[0], $0[1], $0[2]) }
+            if $0.count >= 2 { return ($0[0], $0[1], 0) }
+            return ($0.first ?? 0, 0, 0)
         }
+    }
+
+    private func flushTTSProgressLocked() {
+        ttsProgressFlushWorkItem?.cancel()
+        ttsProgressFlushWorkItem = nil
+        let dict = ttsProgressCache.mapValues { [$0.0, $0.1, $0.2] }
+        if let data = try? JSONEncoder().encode(dict) {
+            UserDefaults.standard.set(data, forKey: "ttsProgress")
+        }
+    }
+
+    private func scheduleTTSProgressFlushLocked(delay: TimeInterval = 1.5) {
+        ttsProgressFlushWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.flushTTSProgressLocked()
+        }
+        ttsProgressFlushWorkItem = workItem
+        progressQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     // 阅读进度记录：bookUrl -> (chapterIndex, pageIndex, bodyCharIndex, timestamp)
@@ -412,14 +426,23 @@ class UserPreferences: ObservableObject {
         }
     }
 
-    func saveTTSProgress(bookUrl: String, chapterIndex: Int, sentenceIndex: Int, sentenceOffset: Int = 0) {
-        var progress = ttsProgress
-        progress[bookUrl] = (chapterIndex, sentenceIndex, sentenceOffset)
-        ttsProgress = progress
+    func saveTTSProgress(bookUrl: String, chapterIndex: Int, sentenceIndex: Int, sentenceOffset: Int = 0, immediate: Bool = false) {
+        guard !bookUrl.isEmpty else { return }
+        if immediate {
+            progressQueue.sync {
+                ttsProgressCache[bookUrl] = (chapterIndex, sentenceIndex, sentenceOffset)
+                flushTTSProgressLocked()
+            }
+            return
+        }
+        progressQueue.async {
+            self.ttsProgressCache[bookUrl] = (chapterIndex, sentenceIndex, sentenceOffset)
+            self.scheduleTTSProgressFlushLocked()
+        }
     }
 
     func getTTSProgress(bookUrl: String) -> (chapterIndex: Int, sentenceIndex: Int, sentenceOffset: Int)? {
-        return ttsProgress[bookUrl]
+        progressQueue.sync { ttsProgressCache[bookUrl] }
     }
 
     func saveReadingProgress(bookUrl: String, chapterIndex: Int, pageIndex: Int, bodyCharIndex: Int) {
@@ -595,6 +618,7 @@ class UserPreferences: ObservableObject {
         // 兼容旧版：如果没有单独设置旁白/对话 TTS，则使用原有的 selectedTTSId
         if narrationTTSId.isEmpty { narrationTTSId = selectedTTSId }
         if dialogueTTSId.isEmpty { dialogueTTSId = selectedTTSId }
+        self.ttsProgressCache = Self.decodeTTSProgress(from: UserDefaults.standard.data(forKey: "ttsProgress"))
     }
 
     func logout() {

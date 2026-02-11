@@ -1,6 +1,129 @@
 import SwiftUI
 import UIKit
 
+private struct GlassyListStyleModifier: ViewModifier {
+    @AppStorage("isLiquidGlassEnabled") private var isEnabled = false
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            if #available(iOS 16.0, *) {
+                content.scrollContentBackground(.hidden)
+            } else {
+                content
+            }
+        } else {
+            content
+        }
+    }
+}
+
+private struct GlassyCardModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    let padding: CGFloat
+    @AppStorage("isLiquidGlassEnabled") private var isEnabled = false
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .padding(padding)
+                .liquidGlassBackground()
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                )
+                .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 6)
+        } else {
+            content
+        }
+    }
+}
+
+private struct GlassyFloatingBarModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    @AppStorage("isLiquidGlassEnabled") private var isEnabled = false
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
+                )
+                .shadow(color: Color.black.opacity(0.16), radius: 18, x: 0, y: 8)
+        } else {
+            content
+        }
+    }
+}
+
+private struct GlassyButtonStyleModifier: ViewModifier {
+    @AppStorage("isLiquidGlassEnabled") private var isEnabled = false
+    @AppStorage("liquidGlassOpacity") private var opacity = 0.8
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Color.clear.background(.ultraThinMaterial)
+                        .opacity(opacity)
+                )
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
+                .buttonStyle(GlassyPressableButtonStyle())
+        } else {
+            content
+        }
+    }
+}
+
+private struct GlassyToolbarButtonModifier: ViewModifier {
+    @AppStorage("isLiquidGlassEnabled") private var isEnabled = false
+    @AppStorage("liquidGlassOpacity") private var opacity = 0.8
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .padding(6)
+                .background(
+                    Color.clear.background(.ultraThinMaterial)
+                        .opacity(opacity)
+                )
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.8))
+                .scaleEffect(1.0)
+                .animation(.easeInOut(duration: 0.15), value: isEnabled)
+                .buttonStyle(GlassyPressableButtonStyle())
+        } else {
+            content
+        }
+    }
+}
+
+private struct GlassyPressEffectModifier: ViewModifier {
+    @AppStorage("isLiquidGlassEnabled") private var isEnabled = false
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .scaleEffect(0.98)
+                .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+        } else {
+            content
+        }
+    }
+}
+
 extension View {
     @ViewBuilder
     func ifAvailableHideTabBar() -> some View {
@@ -13,96 +136,32 @@ extension View {
 
     @ViewBuilder
     func glassyListStyle() -> some View {
-        if UserPreferences.shared.isLiquidGlassEnabled {
-            if #available(iOS 16.0, *) {
-                self.scrollContentBackground(.hidden)
-            } else {
-                self
-            }
-        } else {
-            self
-        }
+        self.modifier(GlassyListStyleModifier())
     }
 
     @ViewBuilder
     func glassyCard(cornerRadius: CGFloat = 16, padding: CGFloat = 8) -> some View {
-        if UserPreferences.shared.isLiquidGlassEnabled {
-            self
-                .padding(padding)
-                .liquidGlassBackground()
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                )
-                .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 6)
-        } else {
-            self
-        }
+        self.modifier(GlassyCardModifier(cornerRadius: cornerRadius, padding: padding))
     }
 
     @ViewBuilder
-    func glassyFloatingBar(cornerRadius: CGFloat = 24, padding: CGFloat = 10) -> some View {
-        if UserPreferences.shared.isLiquidGlassEnabled {
-            self
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
-                )
-                .shadow(color: Color.black.opacity(0.16), radius: 18, x: 0, y: 8)
-        } else {
-            self
-        }
+    func glassyFloatingBar(cornerRadius: CGFloat = 24, padding _: CGFloat = 10) -> some View {
+        self.modifier(GlassyFloatingBarModifier(cornerRadius: cornerRadius))
     }
 
     @ViewBuilder
     func glassyButtonStyle() -> some View {
-        if UserPreferences.shared.isLiquidGlassEnabled {
-            self
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    Color.clear.background(.ultraThinMaterial)
-                        .opacity(UserPreferences.shared.liquidGlassOpacity)
-                )
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
-                .buttonStyle(GlassyPressableButtonStyle())
-        } else {
-            self
-        }
+        self.modifier(GlassyButtonStyleModifier())
     }
 
     @ViewBuilder
     func glassyToolbarButton() -> some View {
-        if UserPreferences.shared.isLiquidGlassEnabled {
-            self
-                .padding(6)
-                .background(
-                    Color.clear.background(.ultraThinMaterial)
-                        .opacity(UserPreferences.shared.liquidGlassOpacity)
-                )
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.8))
-                .scaleEffect(1.0)
-                .animation(.easeInOut(duration: 0.15), value: UserPreferences.shared.isLiquidGlassEnabled)
-                .buttonStyle(GlassyPressableButtonStyle())
-        } else {
-            self
-        }
+        self.modifier(GlassyToolbarButtonModifier())
     }
 
     @ViewBuilder
     func glassyPressEffect() -> some View {
-        if UserPreferences.shared.isLiquidGlassEnabled {
-            self
-                .scaleEffect(0.98)
-                .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
-        } else {
-            self
-        }
+        self.modifier(GlassyPressEffectModifier())
     }
 }
 
@@ -121,6 +180,7 @@ struct GlassyPressableButtonStyle: ButtonStyle {
 
 struct GlassySectionHeader: View {
     let title: String
+    @AppStorage("isLiquidGlassEnabled") private var isEnabled = false
 
     var body: some View {
         Text(title)
@@ -128,9 +188,9 @@ struct GlassySectionHeader: View {
             .textCase(.uppercase)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(UserPreferences.shared.isLiquidGlassEnabled ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
+            .background(isEnabled ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
             .clipShape(Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(UserPreferences.shared.isLiquidGlassEnabled ? 0.18 : 0.0), lineWidth: 0.8))
+            .overlay(Capsule().stroke(Color.white.opacity(isEnabled ? 0.18 : 0.0), lineWidth: 0.8))
             .foregroundColor(.secondary)
     }
 }

@@ -128,6 +128,7 @@ struct ContentView: View {
 
     private func applyFloatingTabBar(to tabBar: UITabBar) {
         let backgroundTag = 901
+        let blurTag = 902
         tabBar.isTranslucent = true
         tabBar.layer.cornerRadius = 24
         tabBar.layer.cornerCurve = .continuous
@@ -164,21 +165,27 @@ struct ContentView: View {
             tabBar.insertSubview(container, at: 0)
         }
 
-        // 更新或创建模糊层
-        container.subviews.forEach { $0.removeFromSuperview() }
-        let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
-        blurView.frame = container.bounds
-        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        blurView.layer.cornerRadius = 24
-        blurView.layer.cornerCurve = .continuous
-        blurView.layer.masksToBounds = true
+        // 复用模糊层，避免频繁销毁重建导致额外开销
+        let blurView: UIVisualEffectView
+        if let existing = container.viewWithTag(blurTag) as? UIVisualEffectView {
+            blurView = existing
+            blurView.frame = container.bounds
+        } else {
+            let created = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+            created.tag = blurTag
+            created.frame = container.bounds
+            created.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            created.layer.cornerRadius = 24
+            created.layer.cornerCurve = .continuous
+            created.layer.masksToBounds = true
+            container.addSubview(created)
+            blurView = created
+        }
         
         // 关键：将不透明度滑块应用到背景颜色和整体透明度上
         let opacity = CGFloat(preferences.liquidGlassOpacity)
         blurView.backgroundColor = UIColor.systemBackground.withAlphaComponent(max(0.05, opacity * 0.4))
         blurView.alpha = opacity
-        
-        container.addSubview(blurView)
     }
 
     private func updateSearchBarAppearance() {

@@ -239,6 +239,8 @@ class TTSManager: NSObject, ObservableObject {
     private func setupNotifications() {
         NotificationCenter.default.addObserver(self, selector: #selector(handleAudioInterruption), name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance())
         NotificationCenter.default.addObserver(self, selector: #selector(handleRouteChange), name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance())
+        NotificationCenter.default.addObserver(self, selector: #selector(handleAppDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleAppDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
     }
     
     @objc private func handleAudioInterruption(notification: Notification) {
@@ -272,6 +274,16 @@ class TTSManager: NSObject, ObservableObject {
             logger.log("音频设备断开，暂停播放", category: "TTS")
             if isPlaying && !isPaused { pause() }
         }
+    }
+
+    @objc private func handleAppDidEnterBackground() {
+        guard isPlaying else { return }
+        beginBackgroundTask()
+    }
+
+    @objc private func handleAppDidBecomeActive() {
+        stopKeepAlive()
+        endBackgroundTask()
     }
     
     private func updateNowPlayingInfo(chapterTitle: String) {
@@ -426,6 +438,7 @@ class TTSManager: NSObject, ObservableObject {
     }
     
     private func startKeepAlive() {
+        guard UIApplication.shared.applicationState != .active else { return }
         guard keepAlivePlayer == nil || !keepAlivePlayer!.isPlaying else { return }
         if let url = createSilentAudioUrl() {
             keepAlivePlayer = try? AVAudioPlayer(contentsOf: url)
@@ -441,8 +454,8 @@ class TTSManager: NSObject, ObservableObject {
     }
 
     private func beginBackgroundTask() {
+        guard UIApplication.shared.applicationState != .active else { return }
         endBackgroundTask()
-        startKeepAlive()
         backgroundTask = UIApplication.shared.beginBackgroundTask { [weak self] in self?.endBackgroundTask() }
     }
     
@@ -946,7 +959,7 @@ class TTSManager: NSObject, ObservableObject {
         let snapshotOffset = self.currentSentenceOffset
         let snapshotTitle = snapshotChapterIdx < chapters.count ? chapters[snapshotChapterIdx].title : nil
         let absoluteSentenceIdx = snapshotSentenceIdx + snapshotBaseIdx
-        UserPreferences.shared.saveTTSProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, sentenceIndex: absoluteSentenceIdx, sentenceOffset: snapshotOffset)
+        UserPreferences.shared.saveTTSProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, sentenceIndex: absoluteSentenceIdx, sentenceOffset: snapshotOffset, immediate: true)
         Task {
             guard !snapshotSentences.isEmpty else { return }
             var bodyIndex = 0
