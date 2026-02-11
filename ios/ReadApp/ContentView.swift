@@ -77,6 +77,9 @@ struct ContentView: View {
         .onChange(of: preferences.isLiquidGlassEnabled) { _ in
             updateTabBarAppearance()
         }
+        .onChange(of: preferences.liquidGlassOpacity) { _ in
+            updateTabBarAppearance()
+        }
     }
 
     private func updateTabBarAppearance() {
@@ -169,7 +172,12 @@ struct ContentView: View {
         blurView.layer.cornerRadius = 24
         blurView.layer.cornerCurve = .continuous
         blurView.layer.masksToBounds = true
-        blurView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.18)
+        
+        // 关键：将不透明度滑块应用到背景颜色和整体透明度上
+        let opacity = CGFloat(preferences.liquidGlassOpacity)
+        blurView.backgroundColor = UIColor.systemBackground.withAlphaComponent(max(0.05, opacity * 0.4))
+        blurView.alpha = opacity
+        
         container.addSubview(blurView)
     }
 

@@ -11,7 +11,7 @@ struct DisplaySettingsView: View {
                 if preferences.isLiquidGlassEnabled {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("玻璃透明度")
+                            Text("玻璃不透明度")
                             Spacer()
                             Text("\(Int(preferences.liquidGlassOpacity * 100))%")
                                 .font(.system(.body, design: .monospaced))

@@ -339,7 +339,7 @@ struct ReaderOptionsSheet: View {
 
                         if preferences.isLiquidGlassEnabled {
                             HStack {
-                                Text("玻璃透明度").font(.body)
+                                Text("玻璃不透明度").font(.body)
                                 Slider(value: $preferences.liquidGlassOpacity, in: 0.1...1.0, step: 0.05)
                                 Text("\(Int(preferences.liquidGlassOpacity * 100))%")
                                     .font(.system(.body, design: .monospaced))

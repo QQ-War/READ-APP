@@ -65,7 +65,10 @@ extension View {
             self
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
+                .background(
+                    Color.clear.background(.ultraThinMaterial)
+                        .opacity(UserPreferences.shared.liquidGlassOpacity)
+                )
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
                 .buttonStyle(GlassyPressableButtonStyle())
@@ -79,7 +82,10 @@ extension View {
         if UserPreferences.shared.isLiquidGlassEnabled {
             self
                 .padding(6)
-                .background(.ultraThinMaterial)
+                .background(
+                    Color.clear.background(.ultraThinMaterial)
+                        .opacity(UserPreferences.shared.liquidGlassOpacity)
+                )
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.8))
                 .scaleEffect(1.0)
