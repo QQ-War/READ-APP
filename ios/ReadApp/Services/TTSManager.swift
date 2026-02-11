@@ -23,6 +23,12 @@ class TTSManager: NSObject, ObservableObject {
     
     private var audioPlayer: AVAudioPlayer?
     private let speechSynthesizer = AVSpeechSynthesizer()
+    private enum PlaybackEngine {
+        case none
+        case httpAudio
+        case systemSpeech
+    }
+    private var activePlaybackEngine: PlaybackEngine = .none
     private var sentences: [String] = []
     var currentChapterIndex: Int = 0
     private var chapters: [BookChapter] = []
@@ -545,6 +551,7 @@ class TTSManager: NSObject, ObservableObject {
         isLoading = false
         stopKeepAlive()
         stopHTTPPlaybackIfNeeded()
+        activePlaybackEngine = .systemSpeech
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = preferredSystemVoice(for: text)
         let rate = Float(UserPreferences.shared.speechRate / 200.0)
@@ -557,6 +564,9 @@ class TTSManager: NSObject, ObservableObject {
             player.stop()
         }
         audioPlayer = nil
+        if activePlaybackEngine == .httpAudio {
+            activePlaybackEngine = .none
+        }
     }
 
     private func preferredSystemVoice(for text: String) -> AVSpeechSynthesisVoice? {
@@ -671,6 +681,7 @@ class TTSManager: NSObject, ObservableObject {
             audioPlayer?.delegate = self
             audioPlayer?.volume = 1.0
             if audioPlayer?.play() == true {
+                activePlaybackEngine = .httpAudio
                 stopKeepAlive()
                 isLoading = false
                 currentSentenceDuration = audioPlayer?.duration ?? 0
@@ -710,8 +721,13 @@ class TTSManager: NSObject, ObservableObject {
         if isPlaying && !isPaused {
             isPaused = true
             stopOffsetTimer()
-            if UserPreferences.shared.useSystemTTS { speechSynthesizer.pauseSpeaking(at: .immediate) }
-            else { audioPlayer?.pause() }
+            if speechSynthesizer.isSpeaking || speechSynthesizer.isPaused {
+                speechSynthesizer.pauseSpeaking(at: .immediate)
+                activePlaybackEngine = .systemSpeech
+            } else if let player = audioPlayer, player.isPlaying {
+                player.pause()
+                activePlaybackEngine = .httpAudio
+            }
             stopKeepAlive()
             deactivateAudioSession()
             updatePlaybackRate()
@@ -722,15 +738,14 @@ class TTSManager: NSObject, ObservableObject {
         if isPlaying && isPaused {
             isPaused = false
             activateAudioSession()
-            if UserPreferences.shared.useSystemTTS {
-                if speechSynthesizer.isPaused { speechSynthesizer.continueSpeaking() }
-                else { speakNextSentence() }
+            if speechSynthesizer.isPaused {
+                speechSynthesizer.continueSpeaking()
+                activePlaybackEngine = .systemSpeech
+            } else if activePlaybackEngine == .httpAudio, let player = audioPlayer {
+                player.play()
+                startOffsetTimer()
             } else {
-                if let player = audioPlayer { 
-                    player.play()
-                    startOffsetTimer()
-                }
-                else { speakNextSentence() }
+                speakNextSentence()
             }
             updatePlaybackRate()
         } else if !isPlaying {
@@ -789,7 +804,10 @@ class TTSManager: NSObject, ObservableObject {
         stopKeepAlive()
         audioPlayer?.stop()
         audioPlayer = nil
-        if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
+        if speechSynthesizer.isSpeaking || speechSynthesizer.isPaused {
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+        activePlaybackEngine = .none
         isPlaying = false; isPaused = false; isReady = false; currentSentenceIndex = 0; currentBaseSentenceIndex = 0; sentences = []
         currentSentenceOffset = 0
         isLoading = false; clearAudioCache(); updatePreloadQueue([]); setIsPreloading(false); clearNextChapterCache(); nextChapterSentences.removeAll()
@@ -838,15 +856,13 @@ class TTSManager: NSObject, ObservableObject {
         guard restartIfPlaying && isPlaying else { return }
         audioPlayer?.stop()
         audioPlayer = nil
-        if UserPreferences.shared.useSystemTTS {
-            if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
-        }
+        if speechSynthesizer.isSpeaking || speechSynthesizer.isPaused { speechSynthesizer.stopSpeaking(at: .immediate) }
         speakNextSentence()
     }
     
     private func loadAndReadChapter() {
         audioPlayer?.stop(); audioPlayer = nil
-        if speechSynthesizer.isSpeaking { speechSynthesizer.stopSpeaking(at: .immediate) }
+        if speechSynthesizer.isSpeaking || speechSynthesizer.isPaused { speechSynthesizer.stopSpeaking(at: .immediate) }
         
         // 跨章时立即更新标题播放权限
         let title = chapters.indices.contains(currentChapterIndex) ? chapters[currentChapterIndex].title : ""
