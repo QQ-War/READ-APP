@@ -94,6 +94,7 @@ struct ReadingView: View {
             .navigationBarHidden(true)
             .navigationBarBackButtonHidden(true)
             .onAppear { refreshCachedStatus() }
+            .task { await replaceRuleViewModel.fetchRules() }
             .onChange(of: chapters.count) { _ in refreshCachedStatus() }
         }
         .navigationViewStyle(StackNavigationViewStyle())

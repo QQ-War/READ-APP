@@ -154,9 +154,9 @@ enum ReaderConstants {
 
     enum UI {
         static let overlayCornerRadius: CGFloat = 10
-        static let topBarButtonSize: CGFloat = 20
-        static let topBarSecondaryButtonSize: CGFloat = 18
-        static let topBarButtonPadding: CGFloat = 8
+        static let topBarButtonSize: CGFloat = 24
+        static let topBarSecondaryButtonSize: CGFloat = 22
+        static let topBarButtonPadding: CGFloat = 12
         static let topBarHorizontalPadding: CGFloat = 16
         static let topBarBottomPadding: CGFloat = 10
         static let topBarSpacing: CGFloat = 12

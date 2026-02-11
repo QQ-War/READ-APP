@@ -458,7 +458,9 @@ class APIService {
     // MARK: - 替换净化规则
     
     func fetchReplaceRules() async throws -> [ReplaceRule] {
-        try await replaceRuleService.fetchReplaceRules()
+        let rules = try await replaceRuleService.fetchReplaceRules()
+        LocalReplaceRuleStore.shared.saveRules(rules)
+        return rules
     }
     
     func saveReplaceRule(rule: ReplaceRule) async throws {

@@ -9,6 +9,10 @@ class ReplaceRuleViewModel: ObservableObject {
 
     private let apiService = APIService.shared
 
+    init() {
+        self.rules = LocalReplaceRuleStore.shared.loadRules().sorted(by: { ($0.ruleorder ?? 0) < ($1.ruleorder ?? 0) })
+    }
+
     func fetchRules() async {
         isLoading = true
         errorMessage = nil
