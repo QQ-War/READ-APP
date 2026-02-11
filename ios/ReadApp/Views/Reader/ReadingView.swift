@@ -207,7 +207,7 @@ struct ReadingView: View {
                 }
                 .padding(.horizontal, ReaderConstants.UI.topBarHorizontalPadding).padding(.bottom, ReaderConstants.UI.topBarBottomPadding)
             }
-            .background(.thinMaterial)
+            .background(Color(UIColor.systemBackground))
         }
     }
     
@@ -228,7 +228,7 @@ struct ReadingView: View {
                 controlBar
                 Color.clear.frame(height: safeArea.bottom)
             }
-            .background(.thinMaterial)
+            .background(Color(UIColor.systemBackground))
         }
     }
 
