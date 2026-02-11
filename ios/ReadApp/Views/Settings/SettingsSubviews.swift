@@ -172,14 +172,13 @@ struct ReadingSettingsView: View {
                                 return Double(safeRate)
                             },
                             set: { (newValue: Double) in
-                                preferences.staticRefreshRate = Float(newValue)
+                                let rawMax = preferences.staticRefreshRateMax
+                                let safeMax = rawMax.isFinite ? max(10, min(60, rawMax)) : 30
+                                let clamped = max(10.0, min(Double(safeMax), newValue))
+                                preferences.staticRefreshRate = Float(clamped)
                             }
                         ),
-                        in: 10...{
-                            let rawMax = preferences.staticRefreshRateMax
-                            let safeMax = rawMax.isFinite ? max(10, min(60, rawMax)) : 30
-                            return Double(safeMax)
-                        }(),
+                        in: 10...60,
                         step: 10
                     )
                     Text("\(Int(preferences.staticRefreshRate.isFinite ? preferences.staticRefreshRate : 30))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
