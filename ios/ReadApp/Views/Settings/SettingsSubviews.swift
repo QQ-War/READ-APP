@@ -171,7 +171,9 @@ struct ReadingSettingsView: View {
                                 let safeRate = rawRate.isFinite ? max(10, min(safeMax, rawRate)) : min(30, safeMax)
                                 return Double(safeRate)
                             },
-                            set: { preferences.staticRefreshRate = Float($0) }
+                            set: { (newValue: Double) in
+                                preferences.staticRefreshRate = Float(newValue)
+                            }
                         ),
                         in: 10...{
                             let rawMax = preferences.staticRefreshRateMax
@@ -192,7 +194,9 @@ struct ReadingSettingsView: View {
                                 let safeMax = rawMax.isFinite ? max(10, min(60, rawMax)) : 30
                                 return Double(safeMax)
                             },
-                            set: { preferences.staticRefreshRateMax = Float($0) }
+                            set: { (newValue: Double) in
+                                preferences.staticRefreshRateMax = Float(newValue)
+                            }
                         ),
                         in: 10...60,
                         step: 10
