@@ -11,6 +11,11 @@ class UserPreferences: ObservableObject {
     }()
     private var ttsProgressCache: [String: (Int, Int, Int)] = [:]
     private var ttsProgressFlushWorkItem: DispatchWorkItem?
+    
+    private static func sanitizeRefreshRate(_ value: Float, fallback: Float, min minValue: Float, max maxValue: Float) -> Float {
+        guard value.isFinite else { return fallback }
+        return max(minValue, min(maxValue, value))
+    }
 
     @Published var apiBackend: ApiBackend {
         didSet {
@@ -343,7 +348,8 @@ class UserPreferences: ObservableObject {
     /// 静态阅读时的刷新率限制 (iOS 15+ ProMotion)
     @Published var staticRefreshRate: Float {
         didSet {
-            let clamped = max(10, min(staticRefreshRateMax, staticRefreshRate))
+            let safeMax = Self.sanitizeRefreshRate(staticRefreshRateMax, fallback: 30, min: 10, max: 60)
+            let clamped = Self.sanitizeRefreshRate(staticRefreshRate, fallback: min(30, safeMax), min: 10, max: safeMax)
             if clamped != staticRefreshRate {
                 staticRefreshRate = clamped
                 return
@@ -356,7 +362,7 @@ class UserPreferences: ObservableObject {
     /// 静态阅读时的刷新率上限 (iOS 15+ ProMotion)
     @Published var staticRefreshRateMax: Float {
         didSet {
-            let clamped = max(10, min(60, staticRefreshRateMax))
+            let clamped = Self.sanitizeRefreshRate(staticRefreshRateMax, fallback: 30, min: 10, max: 60)
             if clamped != staticRefreshRateMax {
                 staticRefreshRateMax = clamped
                 return
@@ -553,10 +559,14 @@ class UserPreferences: ObservableObject {
 
         let savedRefreshRate = UserDefaults.standard.float(forKey: "staticRefreshRate")
         let savedRefreshRateMax = UserDefaults.standard.float(forKey: "staticRefreshRateMax")
-        let initialStaticRefreshRateMax: Float = savedRefreshRateMax == 0 ? 30 : max(10, min(60, savedRefreshRateMax))
+        let initialStaticRefreshRateMax: Float = savedRefreshRateMax == 0
+            ? 30
+            : Self.sanitizeRefreshRate(savedRefreshRateMax, fallback: 30, min: 10, max: 60)
         self.staticRefreshRateMax = initialStaticRefreshRateMax
         let defaultStaticRate: Float = min(30, initialStaticRefreshRateMax)
-        self.staticRefreshRate = savedRefreshRate == 0 ? defaultStaticRate : max(10, min(initialStaticRefreshRateMax, savedRefreshRate))
+        self.staticRefreshRate = savedRefreshRate == 0
+            ? defaultStaticRate
+            : Self.sanitizeRefreshRate(savedRefreshRate, fallback: defaultStaticRate, min: 10, max: initialStaticRefreshRateMax)
 
         self.isProgressDynamicColorEnabled = UserDefaults.standard.object(forKey: "isProgressDynamicColorEnabled") as? Bool ?? true
         self.isLiquidGlassEnabled = UserDefaults.standard.bool(forKey: "isLiquidGlassEnabled")

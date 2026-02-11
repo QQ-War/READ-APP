@@ -165,29 +165,39 @@ struct ReadingSettingsView: View {
                     Slider(
                         value: Binding(
                             get: {
-                                let safeMax = max(10, min(60, preferences.staticRefreshRateMax))
-                                let safeRate = max(10, min(safeMax, preferences.staticRefreshRate))
+                                let rawMax = preferences.staticRefreshRateMax
+                                let safeMax = rawMax.isFinite ? max(10, min(60, rawMax)) : 30
+                                let rawRate = preferences.staticRefreshRate
+                                let safeRate = rawRate.isFinite ? max(10, min(safeMax, rawRate)) : min(30, safeMax)
                                 return Double(safeRate)
                             },
                             set: { preferences.staticRefreshRate = Float($0) }
                         ),
-                        in: 10...Double(max(10, min(60, preferences.staticRefreshRateMax))),
+                        in: 10...{
+                            let rawMax = preferences.staticRefreshRateMax
+                            let safeMax = rawMax.isFinite ? max(10, min(60, rawMax)) : 30
+                            return Double(safeMax)
+                        }(),
                         step: 10
                     )
-                    Text("\(Int(preferences.staticRefreshRate))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
+                    Text("\(Int(preferences.staticRefreshRate.isFinite ? preferences.staticRefreshRate : 30))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
                 }
 
                 HStack {
                     Text("静态刷新率上限")
                     Slider(
                         value: Binding(
-                            get: { Double(max(10, min(60, preferences.staticRefreshRateMax))) },
+                            get: {
+                                let rawMax = preferences.staticRefreshRateMax
+                                let safeMax = rawMax.isFinite ? max(10, min(60, rawMax)) : 30
+                                return Double(safeMax)
+                            },
                             set: { preferences.staticRefreshRateMax = Float($0) }
                         ),
                         in: 10...60,
                         step: 10
                     )
-                    Text("\(Int(preferences.staticRefreshRateMax))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
+                    Text("\(Int(preferences.staticRefreshRateMax.isFinite ? preferences.staticRefreshRateMax : 30))Hz").font(.caption).monospacedDigit().frame(width: 45, alignment: .trailing)
                 }
 
                 Toggle("进度条动态颜色", isOn: $preferences.isProgressDynamicColorEnabled)
