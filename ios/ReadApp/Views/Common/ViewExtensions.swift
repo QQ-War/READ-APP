@@ -29,9 +29,7 @@ extension View {
         if UserPreferences.shared.isLiquidGlassEnabled {
             self
                 .padding(padding)
-                .background {
-                    LiquidBackgroundView() // 注入液态背景（内部已含超薄材质）
-                }
+                .liquidGlassBackground()
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
