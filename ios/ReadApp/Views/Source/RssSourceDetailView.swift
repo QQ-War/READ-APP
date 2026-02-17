@@ -41,8 +41,17 @@ struct RssSourceDetailView: View {
                     Text(source.enabled ? "已启用" : "已禁用")
                         .foregroundColor(source.enabled ? .green : .secondary)
                 }
-                Button("复制链接") {
-                    UIPasteboard.general.string = source.sourceUrl
+                
+                HStack {
+                    Button("复制链接") {
+                        UIPasteboard.general.string = source.sourceUrl
+                    }
+                    Spacer()
+                    Button("打开网页") {
+                        if let url = URL(string: source.sourceUrl) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
                 }
             }
 

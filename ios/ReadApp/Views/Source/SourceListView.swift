@@ -299,6 +299,15 @@ struct SourceListView: View {
         .glassyCard(cornerRadius: 14, padding: 6)
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
+                if let url = URL(string: source.bookSourceUrl) {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Label("打开", systemImage: "safari")
+            }
+            .tint(.blue)
+
+            Button {
                 Task {
                     await exportSource(source, toFile: false)
                 }

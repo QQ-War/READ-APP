@@ -9,8 +9,6 @@ struct RssSourcesView: View {
     @State private var importURL = ""
     @State private var importResultMessage: String?
     @State private var showingImportResult = false
-    @State private var showingCustomSourceEditor = false
-    @State private var editingCustomSource: RssSource?
     @State private var showingRemoteSourceEditor = false
     @State private var editingRemoteSource: RssSource?
     @State private var detailSource: RssSource?
@@ -37,7 +35,7 @@ struct RssSourcesView: View {
                     }
                 }
             } else {
-            Section(header: GlassySectionHeader(title: "官方订阅")) {
+                Section(header: GlassySectionHeader(title: "我的订阅")) {
                     ForEach(viewModel.remoteSources) { source in
                         RssSourceRow(
                             source: source,
@@ -48,33 +46,6 @@ struct RssSourcesView: View {
                         ) { isEnabled in
                             Task {
                                 await viewModel.toggle(source: source, enable: isEnabled)
-                            }
-                        }
-                    }
-                }
-            }
-
-            Section(header: GlassySectionHeader(title: "自定义订阅"),
-                    footer: viewModel.customSources.isEmpty ? Text("添加后可在本地管理订阅。") : nil) {
-                if viewModel.customSources.isEmpty {
-                    Text("尚未添加自定义订阅源，可通过上方菜单新建或导入。")
-                        .foregroundColor(.secondary)
-                } else {
-                    ForEach(viewModel.customSources) { source in
-                        RssSourceRow(
-                            source: source,
-                            isBusy: false,
-                            isEnabled: source.enabled,
-                            canToggle: true,
-                            onTap: { editingCustomSource = source }
-                        ) { isEnabled in
-                            viewModel.toggleCustomSource(source, enable: isEnabled)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                viewModel.deleteCustomSource(source)
-                            } label: {
-                                Label("删除", systemImage: "trash")
                             }
                         }
                     }
@@ -106,24 +77,23 @@ struct RssSourcesView: View {
                 }
                 .glassyToolbarButton()
                 Menu {
-                    Button(action: { showingCustomSourceEditor = true }) {
-                        Label("新建本地订阅源", systemImage: "pencil.and.outline")
+                    Button(action: { showingRemoteSourceEditor = true }) {
+                        Label("新建订阅源", systemImage: "pencil.and.outline")
                     }
-                    if viewModel.canModifyRemoteSources {
-                        Button(action: { showingRemoteSourceEditor = true }) {
-                            Label("新建官方订阅源", systemImage: "globe")
-                        }
-                        .disabled(viewModel.isRemoteOperationInProgress)
-                    }
+                    .disabled(!viewModel.canEdit || viewModel.isRemoteOperationInProgress)
+                    
                     Button(action: { importFromClipboard() }) {
                         Label("从剪贴板导入", systemImage: "doc.on.clipboard")
                     }
+                    .disabled(!viewModel.canEdit || viewModel.isRemoteOperationInProgress)
                     Button(action: { showingFilePicker = true }) {
                         Label("本地导入", systemImage: "folder")
                     }
+                    .disabled(!viewModel.canEdit || viewModel.isRemoteOperationInProgress)
                     Button(action: { showingURLImportDialog = true }) {
                         Label("网络导入", systemImage: "link")
                     }
+                    .disabled(!viewModel.canEdit || viewModel.isRemoteOperationInProgress)
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -135,35 +105,12 @@ struct RssSourcesView: View {
                 Task {
                     do {
                         let data = try Data(contentsOf: url)
-                        let added = try viewModel.importCustomSources(from: data)
+                        let added = try await viewModel.importCustomSources(from: data)
                         importResultMessage = added.isEmpty ? "未找到有效订阅源" : "成功导入 \(added.count) 个订阅源"
                     } catch {
                         importResultMessage = "导入失败: \(error.localizedDescription)"
                     }
                     showingImportResult = true
-                }
-            }
-        }
-        .sheet(item: $editingCustomSource) { source in
-            NavigationView {
-                RssSourceEditView(
-                    initialSource: source,
-                    onSave: { updated in
-                        viewModel.addOrUpdateCustomSource(updated)
-                        editingCustomSource = nil
-                    },
-                    onDelete: {
-                        viewModel.deleteCustomSource(source)
-                        editingCustomSource = nil
-                    }
-                )
-            }
-        }
-        .sheet(isPresented: $showingCustomSourceEditor) {
-            NavigationView {
-                RssSourceEditView(initialSource: nil) { newSource in
-                    viewModel.addOrUpdateCustomSource(newSource)
-                    showingCustomSourceEditor = false
                 }
             }
         }
@@ -231,7 +178,7 @@ struct RssSourcesView: View {
                     }
                     do {
                         let (data, _) = try await URLSession.shared.data(from: url)
-                        let added = try viewModel.importCustomSources(from: data)
+                        let added = try await viewModel.importCustomSources(from: data)
                         importResultMessage = added.isEmpty ? "未找到有效订阅源" : "成功导入 \(added.count) 个订阅源"
                     } catch {
                         importResultMessage = "导入失败: \(error.localizedDescription)"
@@ -258,17 +205,27 @@ struct RssSourcesView: View {
             return
         }
         
-        do {
-            if let data = content.data(using: .utf8) {
-                let added = try viewModel.importCustomSources(from: data)
-                importResultMessage = added.isEmpty ? "未找到有效订阅源" : "成功导入 \(added.count) 个订阅源"
-            } else {
-                importResultMessage = "剪贴板内容无效"
+        Task {
+            do {
+                if let data = content.data(using: .utf8) {
+                    let added = try await viewModel.importCustomSources(from: data)
+                    await MainActor.run {
+                        importResultMessage = added.isEmpty ? "未找到有效订阅源" : "成功导入 \(added.count) 个订阅源"
+                        showingImportResult = true
+                    }
+                } else {
+                    await MainActor.run {
+                        importResultMessage = "剪贴板内容无效"
+                        showingImportResult = true
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    importResultMessage = "导入失败: \(error.localizedDescription)"
+                    showingImportResult = true
+                }
             }
-        } catch {
-            importResultMessage = "导入失败: \(error.localizedDescription)"
         }
-        showingImportResult = true
     }
 }
 
@@ -282,25 +239,32 @@ private struct RssSourceRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            if let iconUrl = source.sourceIcon, let url = URL(string: iconUrl) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        ProgressView()
-                            .frame(width: 40, height: 40)
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 40, height: 40)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    default:
-                        placeholderIcon
-                    }
+            Button(action: {
+                if let url = URL(string: source.sourceUrl) {
+                    UIApplication.shared.open(url)
                 }
-            } else {
-                placeholderIcon
+            }) {
+                if let iconUrl = source.sourceIcon, let url = URL(string: iconUrl) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                                .frame(width: 40, height: 40)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        default:
+                            placeholderIcon
+                        }
+                    }
+                } else {
+                    placeholderIcon
+                }
             }
+            .buttonStyle(PlainButtonStyle())
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(source.sourceName ?? source.sourceUrl)
@@ -318,6 +282,9 @@ private struct RssSourceRow: View {
                         .lineLimit(2)
                 }
             }
+            .onTapGesture {
+                onTap?()
+            }
 
             Spacer()
 
@@ -333,9 +300,6 @@ private struct RssSourceRow: View {
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())
-        .onTapGesture {
-            onTap?()
-        }
     }
 
     private var placeholderIcon: some View {

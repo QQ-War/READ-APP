@@ -3,7 +3,6 @@ import Foundation
 @MainActor
 final class RssSourcesViewModel: ObservableObject {
     @Published private(set) var remoteSources: [RssSource] = []
-    @Published private(set) var customSources: [RssSource] = LocalRssSourceStore.shared.loadSources()
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var canEdit = true
@@ -11,7 +10,6 @@ final class RssSourcesViewModel: ObservableObject {
     @Published var isRemoteOperationInProgress = false
 
     private let service: APIService
-    private let localStore = LocalRssSourceStore.shared
     private let remoteStore = LocalRemoteRssSourceStore.shared
 
     init(service: APIService = APIService.shared) {
@@ -84,31 +82,7 @@ final class RssSourcesViewModel: ObservableObject {
         }
     }
 
-    func addOrUpdateCustomSource(_ source: RssSource) {
-        var updated = customSources
-        if let index = updated.firstIndex(where: { $0.sourceUrl == source.sourceUrl }) {
-            updated[index] = source
-        } else {
-            updated.append(source)
-        }
-        saveCustomSources(updated)
-    }
-
-    func deleteCustomSource(_ source: RssSource) {
-        var updated = customSources
-        updated.removeAll { $0.sourceUrl == source.sourceUrl }
-        saveCustomSources(updated)
-    }
-
-    func toggleCustomSource(_ source: RssSource, enable: Bool) {
-        var updated = customSources
-        if let index = updated.firstIndex(where: { $0.sourceUrl == source.sourceUrl }) {
-            updated[index].enabled = enable
-            saveCustomSources(updated)
-        }
-    }
-
-    func importCustomSources(from data: Data) throws -> [RssSource] {
+    func importCustomSources(from data: Data) async throws -> [RssSource] {
         let decoder = JSONDecoder()
         let decoded: [RssSource]
         if let list = try? decoder.decode([RssSource].self, from: data) {
@@ -116,17 +90,19 @@ final class RssSourcesViewModel: ObservableObject {
         } else {
             decoded = [try decoder.decode(RssSource.self, from: data)]
         }
+        
         var added: [RssSource] = []
         for source in decoded {
-            if let normalized = normalizeCustomSource(source) {
-                addOrUpdateCustomSource(normalized)
+            if let normalized = normalizeSource(source) {
+                try await service.saveRssSource(normalized)
                 added.append(normalized)
             }
         }
+        await refresh()
         return added
     }
 
-    private func normalizeCustomSource(_ source: RssSource) -> RssSource? {
+    private func normalizeSource(_ source: RssSource) -> RssSource? {
         let trimmedUrl = source.sourceUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedUrl.isEmpty else { return nil }
         return RssSource(
@@ -139,10 +115,5 @@ final class RssSourcesViewModel: ObservableObject {
             variableComment: source.variableComment,
             enabled: true
         )
-    }
-
-    private func saveCustomSources(_ sources: [RssSource]) {
-        localStore.saveSources(sources)
-        customSources = sources
     }
 }
