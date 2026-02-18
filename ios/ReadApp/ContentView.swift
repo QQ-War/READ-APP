@@ -207,6 +207,7 @@ struct ContentView: View {
         if preferences.isLiquidGlassEnabled {
             searchBar.backgroundImage = UIImage()
             searchBar.backgroundColor = UIColor.clear
+            searchBar.tintColor = .systemBlue
             searchBar.barTintColor = UIColor.systemBackground.withAlphaComponent(0.2)
             if #available(iOS 13.0, *) {
                 let field = searchBar.searchTextField
@@ -217,6 +218,7 @@ struct ContentView: View {
         } else {
             searchBar.backgroundImage = nil
             searchBar.backgroundColor = nil
+            searchBar.tintColor = nil
             searchBar.barTintColor = nil
             if #available(iOS 13.0, *) {
                 let field = searchBar.searchTextField
