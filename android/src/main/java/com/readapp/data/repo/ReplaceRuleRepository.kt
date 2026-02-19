@@ -30,7 +30,10 @@ class ReplaceRuleRepository(
         if (result.isSuccess) {
             localDao.insertRules(listOf(rule))
         }
-        return result
+        return result.fold(
+            onSuccess = { Result.success(Unit) },
+            onFailure = { Result.failure(it) }
+        )
     }
 
     suspend fun deleteReplaceRule(baseUrl: String, publicUrl: String?, accessToken: String, rule: ReplaceRule): Result<Unit> {
@@ -38,7 +41,10 @@ class ReplaceRuleRepository(
         if (result.isSuccess) {
             localDao.deleteRule(rule)
         }
-        return result
+        return result.fold(
+            onSuccess = { Result.success(Unit) },
+            onFailure = { Result.failure(it) }
+        )
     }
 
     suspend fun toggleReplaceRule(
@@ -52,7 +58,10 @@ class ReplaceRuleRepository(
         if (result.isSuccess) {
             localDao.updateRule(rule.copy(isEnabled = isEnabled))
         }
-        return result
+        return result.fold(
+            onSuccess = { Result.success(Unit) },
+            onFailure = { Result.failure(it) }
+        )
     }
 
     suspend fun saveReplaceRules(baseUrl: String, publicUrl: String?, accessToken: String, jsonContent: String) =
