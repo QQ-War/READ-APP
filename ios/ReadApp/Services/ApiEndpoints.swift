@@ -25,6 +25,7 @@ enum ApiEndpoints {
     static let getBookSourcesPage = "getBookSourcesPage"
     static let getBookSources = "getBookSourcesNew"
     static let saveBookSource = "saveBookSource"
+    static let saveBookSources = "saveBookSources"
     static let deleteBookSource = "delbookSource"
     static let toggleBookSource = "stopbookSource"
     static let getBookSourceDetail = "getbookSources"

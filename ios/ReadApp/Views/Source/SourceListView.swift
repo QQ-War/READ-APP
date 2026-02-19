@@ -98,13 +98,23 @@ struct SourceListView: View {
             }
             .sheet(isPresented: $showingFilePicker) {
                 DocumentPicker { url in
-                            Task {
-                                if let content = try? String(contentsOf: url) {
-                            try? await APIService.shared.saveBookSource(jsonContent: content)
-                            viewModel.fetchSources()
-                                }
+                    Task {
+                        do {
+                            let content = try String(contentsOf: url)
+                            try await APIService.shared.saveBookSource(jsonContent: content)
+                            await MainActor.run {
+                                viewModel.fetchSources()
+                                addResultMessage = "导入成功"
+                                showAddResultAlert = true
+                            }
+                        } catch {
+                            await MainActor.run {
+                                addResultMessage = "导入失败: \(error.localizedDescription)"
+                                showAddResultAlert = true
                             }
                         }
+                    }
+                }
             }
             .sheet(item: $sharePayload) { payload in
                 ActivityView(activityItems: payload.items)
@@ -127,12 +137,22 @@ struct SourceListView: View {
     }
     
     private func importFromURL() async {
-        guard let url = URL(string: importURL) else { return }
+        guard let url = URL(string: importURL) else {
+            await MainActor.run {
+                addResultMessage = "请输入合法 URL"
+                showAddResultAlert = true
+            }
+            return
+        }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let content = String(data: data, encoding: .utf8) {
                 try await APIService.shared.saveBookSource(jsonContent: content)
-                viewModel.fetchSources()
+                await MainActor.run {
+                    viewModel.fetchSources()
+                    addResultMessage = "导入成功"
+                    showAddResultAlert = true
+                }
             }
         } catch {
             _ = await MainActor.run {
@@ -140,7 +160,9 @@ struct SourceListView: View {
                 showAddResultAlert = true
             }
         }
-        importURL = ""
+        await MainActor.run {
+            importURL = ""
+        }
     }
 
     private func importFromClipboard() {

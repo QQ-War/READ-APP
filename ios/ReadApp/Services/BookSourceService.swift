@@ -59,7 +59,7 @@ final class BookSourceService {
         if isReader {
             endpoint = isArray ? ApiEndpointsReader.saveBookSources : ApiEndpointsReader.saveBookSource
         } else {
-            endpoint = ApiEndpoints.saveBookSource
+            endpoint = isArray ? ApiEndpoints.saveBookSources : ApiEndpoints.saveBookSource
         }
         let url = try client.buildURL(endpoint: endpoint, queryItems: [URLQueryItem(name: "accessToken", value: client.accessToken)])
 
