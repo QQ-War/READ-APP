@@ -93,7 +93,11 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     internal val bookRepository = BookRepository(remoteDataSourceFactory, repository)
     private val sourceRepository = SourceRepository(repository, localSourceCache)
     private val ttsRepository = TtsRepository(remoteDataSourceFactory, repository)
-    private val replaceRuleRepository = ReplaceRuleRepository(remoteDataSourceFactory, repository)
+    private val replaceRuleRepository = ReplaceRuleRepository(
+        remoteDataSourceFactory, 
+        repository,
+        com.readapp.data.AppDatabase.getDatabase(appContext).replaceRuleDao()
+    )
     internal val chapterContentRepository = ChapterContentRepository(repository, localCache)
     private val packageDownloadManager by lazy {
         PackageDownloadManager(apiFactory(currentServerEndpoint()), localCache)
@@ -205,6 +209,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val mangaSwitchThreshold: StateFlow<Int> = readerSettings.mangaSwitchThreshold
     val verticalDampingFactor: StateFlow<Float> = readerSettings.verticalDampingFactor
     val mangaMaxZoom: StateFlow<Float> = readerSettings.mangaMaxZoom
+    val readingMaxRefreshRate: StateFlow<Float> = readerSettings.readingMaxRefreshRate
 
     val readingMode: StateFlow<com.readapp.data.ReadingMode> = readerSettings.readingMode
     val lockPageOnTTS: StateFlow<Boolean> = readerSettings.lockPageOnTTS
@@ -433,6 +438,13 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadReplaceRules() {
         viewModelScope.launch {
+            // 优先加载本地缓存
+            val cachedRules = replaceRuleRepository.getLocalReplaceRules()
+            if (cachedRules.isNotEmpty()) {
+                _replaceRules.value = cachedRules
+            }
+
+            // 异步刷新网络数据
             replaceRuleRepository.fetchReplaceRules(
                 currentServerEndpoint(),
                 _publicServerAddress.value.ifBlank { null },
@@ -440,7 +452,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             ).onSuccess {
                 _replaceRules.value = it
             }.onFailure {
-                _errorMessage.value = "加载净化规则失败: ${it.message}"
+                if (_replaceRules.value.isEmpty()) {
+                    _errorMessage.value = "加载净化规则失败: ${it.message}"
+                }
             }
         }
     }
@@ -1608,6 +1622,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun updateMangaSwitchThreshold(threshold: Int) { readerSettings.updateMangaSwitchThreshold(threshold) }
     fun updateVerticalDampingFactor(factor: Float) { readerSettings.updateVerticalDampingFactor(factor) }
     fun updateMangaMaxZoom(zoom: Float) { readerSettings.updateMangaMaxZoom(zoom) }
+    fun updateReadingMaxRefreshRate(rate: Float) { readerSettings.updateReadingMaxRefreshRate(rate) }
     fun clearCache() {
         viewModelScope.launch {
             ttsController.clearCache()

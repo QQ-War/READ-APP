@@ -359,12 +359,17 @@ class ReadRepository(
         val (backend, endpoints) = BackendResolver.resolveBackendAndEndpoints(baseUrl, publicUrl)
         val mediaType = if (backend == ApiBackend.Read) "text/plain" else "application/json"
         val requestBody = jsonContent.toRequestBody(mediaType.toMediaTypeOrNull())
+        val isArray = jsonContent.trimStart().startsWith("[")
+
         return when (backend) {
-            ApiBackend.Read -> executeWithFailover {
-                it.saveBookSource(accessToken, requestBody)
-            }(endpoints)
+            ApiBackend.Read -> {
+                if (isArray) {
+                    executeWithFailover { it.saveBookSources(accessToken, requestBody) }(endpoints)
+                } else {
+                    executeWithFailover { it.saveBookSource(accessToken, requestBody) }(endpoints)
+                }
+            }
             ApiBackend.Reader -> {
-                val isArray = jsonContent.trimStart().startsWith("[")
                 if (isArray) {
                     executeWithFailoverReader { it.saveBookSources(accessToken, requestBody) }(endpoints)
                 } else {

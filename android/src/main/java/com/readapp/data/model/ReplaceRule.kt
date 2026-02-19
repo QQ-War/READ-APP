@@ -1,11 +1,15 @@
 package com.readapp.data.model
 
 import android.os.Parcelable
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 import com.google.gson.annotations.SerializedName
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
+@Entity(tableName = "replace_rules")
 data class ReplaceRule(
+    @PrimaryKey
     val id: String = "",
     val name: String,
     @SerializedName("group", alternate = ["groupname"])

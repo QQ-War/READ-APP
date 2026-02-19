@@ -196,6 +196,12 @@ interface ReadApiService {
         @Body content: RequestBody
     ): Response<ApiResponse<Any>>
 
+    @POST(ApiEndpoints.SaveBookSources)
+    suspend fun saveBookSources(
+        @Query("accessToken") accessToken: String,
+        @Body content: RequestBody
+    ): Response<ApiResponse<Any>>
+
     @GET(ApiEndpoints.DeleteBookSource)
     suspend fun deleteBookSource(
         @Query("accessToken") accessToken: String,

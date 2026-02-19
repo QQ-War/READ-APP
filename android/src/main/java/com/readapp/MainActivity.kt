@@ -1,5 +1,6 @@
 package com.readapp
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.Intent
 import android.os.Bundle
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -21,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.readapp.ui.screens.BookshelfScreen
@@ -81,11 +84,40 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ReadAppMain(bookViewModel: BookViewModel) {
     val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
     val accessToken by bookViewModel.accessToken.collectAsState()
     val isInitialized by bookViewModel.isInitialized.collectAsState()
     val isLoading by bookViewModel.isLoading.collectAsState()
     val toastMessage by bookViewModel.toastMessage.collectAsState()
+    val readingMaxRefreshRate by bookViewModel.readingMaxRefreshRate.collectAsState()
     val context = LocalContext.current
+    val activity = context as? Activity
+
+    DisposableEffect(activity, currentRoute, readingMaxRefreshRate) {
+        val window = activity?.window
+        if (window != null) {
+            val targetRate = if (currentRoute == Screen.Reading.route && readingMaxRefreshRate > 0f) {
+                readingMaxRefreshRate
+            } else {
+                0f
+            }
+            val attrs = window.attributes
+            if (attrs.preferredRefreshRate != targetRate) {
+                attrs.preferredRefreshRate = targetRate
+                window.attributes = attrs
+            }
+        }
+        onDispose {
+            if (window != null && currentRoute == Screen.Reading.route) {
+                val attrs = window.attributes
+                if (attrs.preferredRefreshRate != 0f) {
+                    attrs.preferredRefreshRate = 0f
+                    window.attributes = attrs
+                }
+            }
+        }
+    }
 
     val importBookLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -315,10 +347,12 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val mangaSwitchThreshold by bookViewModel.mangaSwitchThreshold.collectAsState()
                 val verticalDampingFactor by bookViewModel.verticalDampingFactor.collectAsState()
                 val mangaMaxZoom by bookViewModel.mangaMaxZoom.collectAsState()
+                val readingMaxRefreshRate by bookViewModel.readingMaxRefreshRate.collectAsState()
                 ReadingSettingsScreen(
                     readingMode = readerState.readingMode,
                     fontSize = readerState.readingFontSize,
                     horizontalPadding = readerState.readingHorizontalPadding,
+                    readingMaxRefreshRate = readingMaxRefreshRate,
                     darkModeConfig = readerState.darkModeConfig,
                     infiniteScrollEnabled = readerState.infiniteScrollEnabled,
                     mangaSwitchThreshold = mangaSwitchThreshold,
@@ -327,6 +361,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                     onReadingModeChange = bookViewModel::updateReadingMode,
                     onFontSizeChange = bookViewModel::updateReadingFontSize,
                     onHorizontalPaddingChange = bookViewModel::updateReadingHorizontalPadding,
+                    onReadingMaxRefreshRateChange = bookViewModel::updateReadingMaxRefreshRate,
                     onDarkModeChange = bookViewModel::updateDarkModeConfig,
                     onInfiniteScrollEnabledChange = bookViewModel::updateInfiniteScrollEnabled,
                     onMangaSwitchThresholdChange = bookViewModel::updateMangaSwitchThreshold,

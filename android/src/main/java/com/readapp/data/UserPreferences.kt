@@ -77,6 +77,7 @@ class UserPreferences(private val context: Context) {
         val MangaSwitchThreshold = intPreferencesKey("mangaSwitchThreshold")
         val VerticalDampingFactor = floatPreferencesKey("verticalDampingFactor")
         val MangaMaxZoom = floatPreferencesKey("mangaMaxZoom")
+        val ReadingMaxRefreshRate = floatPreferencesKey("readingMaxRefreshRate")
         val CachedTtsEngines = stringPreferencesKey("cachedTtsEngines")
         val CachedRssSources = stringPreferencesKey("cachedRssSources")
     }
@@ -105,6 +106,9 @@ class UserPreferences(private val context: Context) {
     val mangaSwitchThreshold: Flow<Int> = context.dataStore.data.map { it[Keys.MangaSwitchThreshold] ?: 80 }
     val verticalDampingFactor: Flow<Float> = context.dataStore.data.map { it[Keys.VerticalDampingFactor] ?: 0.15f }
     val mangaMaxZoom: Flow<Float> = context.dataStore.data.map { it[Keys.MangaMaxZoom] ?: 3.0f }
+    val readingMaxRefreshRate: Flow<Float> = context.dataStore.data.map {
+        (it[Keys.ReadingMaxRefreshRate] ?: 0f).coerceIn(0f, 120f)
+    }
 
     suspend fun saveCachedTtsEngines(engines: List<HttpTTS>) {
         val json = gson.toJson(engines)
@@ -219,6 +223,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveMangaMaxZoom(value: Float) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.MangaMaxZoom] = value
+        }
+    }
+
+    suspend fun saveReadingMaxRefreshRate(value: Float) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.ReadingMaxRefreshRate] = value.coerceIn(0f, 120f)
         }
     }
 

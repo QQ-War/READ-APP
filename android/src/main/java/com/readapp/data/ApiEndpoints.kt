@@ -26,6 +26,7 @@ object ApiEndpoints {
     const val GetBookSourcesPage = "getBookSourcesPage"
     const val GetBookSources = "getBookSourcesNew"
     const val SaveBookSource = "saveBookSource"
+    const val SaveBookSources = "saveBookSources"
     const val DeleteBookSource = "delbookSource"
     const val ToggleBookSource = "stopbookSource"
     const val GetBookSourceDetail = "getbookSources"

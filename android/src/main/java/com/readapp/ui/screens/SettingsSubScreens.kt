@@ -156,6 +156,7 @@ fun ReadingSettingsScreen(
     readingMode: com.readapp.data.ReadingMode,
     fontSize: Float,
     horizontalPadding: Float,
+    readingMaxRefreshRate: Float,
     darkModeConfig: com.readapp.data.DarkModeConfig,
     infiniteScrollEnabled: Boolean,
     mangaSwitchThreshold: Int,
@@ -164,6 +165,7 @@ fun ReadingSettingsScreen(
     onReadingModeChange: (com.readapp.data.ReadingMode) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onHorizontalPaddingChange: (Float) -> Unit,
+    onReadingMaxRefreshRateChange: (Float) -> Unit,
     onDarkModeChange: (com.readapp.data.DarkModeConfig) -> Unit,
     onInfiniteScrollEnabledChange: (Boolean) -> Unit,
     onMangaSwitchThresholdChange: (Int) -> Unit,
@@ -201,6 +203,22 @@ fun ReadingSettingsScreen(
             Column {
                 Text("页边距: ${horizontalPadding.toInt()}", style = MaterialTheme.typography.titleSmall)
                 Slider(value = horizontalPadding, onValueChange = onHorizontalPaddingChange, valueRange = 0f..48f)
+            }
+
+            Column {
+                val rateLabel = if (readingMaxRefreshRate <= 0f) "系统默认" else "${readingMaxRefreshRate.toInt()}Hz"
+                Text("阅读页最大刷新率: $rateLabel", style = MaterialTheme.typography.titleSmall)
+                Slider(
+                    value = readingMaxRefreshRate,
+                    onValueChange = onReadingMaxRefreshRateChange,
+                    valueRange = 0f..120f,
+                    steps = 12
+                )
+                Text(
+                    "仅在阅读页生效，0 表示跟随系统",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
 
             Column {

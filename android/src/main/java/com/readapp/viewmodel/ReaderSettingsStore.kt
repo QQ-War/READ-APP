@@ -60,6 +60,9 @@ class ReaderSettingsStore(
     private val _mangaMaxZoom = MutableStateFlow(3.0f)
     val mangaMaxZoom: StateFlow<Float> = _mangaMaxZoom.asStateFlow()
 
+    private val _readingMaxRefreshRate = MutableStateFlow(0f)
+    val readingMaxRefreshRate: StateFlow<Float> = _readingMaxRefreshRate.asStateFlow()
+
     private val _manualMangaUrls = MutableStateFlow<Set<String>>(emptySet())
     val manualMangaUrls: StateFlow<Set<String>> = _manualMangaUrls.asStateFlow()
 
@@ -82,6 +85,7 @@ class ReaderSettingsStore(
         _mangaSwitchThreshold.value = preferences.mangaSwitchThreshold.first()
         _verticalDampingFactor.value = preferences.verticalDampingFactor.first()
         _mangaMaxZoom.value = preferences.mangaMaxZoom.first()
+        _readingMaxRefreshRate.value = preferences.readingMaxRefreshRate.first()
         val manualRaw = preferences.manualMangaUrls.first()
         _manualMangaUrls.value = if (manualRaw.isBlank()) emptySet() else manualRaw.split(";").toSet()
         _forceMangaProxy.value = preferences.forceMangaProxy.first()
@@ -152,6 +156,11 @@ class ReaderSettingsStore(
     fun updateMangaMaxZoom(zoom: Float) {
         _mangaMaxZoom.value = zoom.coerceIn(1f, 10f)
         scope.launch { preferences.saveMangaMaxZoom(_mangaMaxZoom.value) }
+    }
+
+    fun updateReadingMaxRefreshRate(rate: Float) {
+        _readingMaxRefreshRate.value = rate.coerceIn(0f, 120f)
+        scope.launch { preferences.saveReadingMaxRefreshRate(_readingMaxRefreshRate.value) }
     }
 
     fun updatePageTurningMode(mode: PageTurningMode) {
