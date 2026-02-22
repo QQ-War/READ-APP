@@ -92,6 +92,11 @@ struct BookListView: View {
         .onChange(of: preferences.searchSourcesFromBookshelf) { _ in
             listViewModel.handleSearchChange()
         }
+        .onReceive(sourceStore.$availableSources) { _ in
+            guard preferences.searchSourcesFromBookshelf else { return }
+            guard !listViewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            listViewModel.handleSearchChange()
+        }
         .refreshable { await listViewModel.loadBooks() }
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker { url in Task { await importBook(from: url) } }

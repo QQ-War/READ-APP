@@ -25,13 +25,6 @@ class SourceListViewModel: ObservableObject {
     }
     
     private var cancellables = Set<AnyCancellable>()
-    
-    private var cacheURL: URL? {
-        guard let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            return nil
-        }
-        return url.appendingPathComponent("sources.json")
-    }
 
     init() {
         Task { @MainActor in
@@ -41,21 +34,11 @@ class SourceListViewModel: ObservableObject {
 
     @MainActor
     private func loadFromCache() {
-        guard let url = cacheURL, let data = try? Data(contentsOf: url) else { return }
-        let decoder = JSONDecoder()
-        if let cachedSources = try? decoder.decode([BookSource].self, from: data) {
-            self.sources = cachedSources
-        }
+        self.sources = SourceCacheStore.load()
     }
 
     private func saveToCache() {
-        guard let url = cacheURL else { return }
-        let encoder = JSONEncoder()
-        DispatchQueue.global(qos: .background).async {
-            if let data = try? encoder.encode(self.sources) {
-                try? data.write(to: url)
-            }
-        }
+        SourceCacheStore.save(self.sources)
     }
 
     @MainActor

@@ -92,11 +92,27 @@ final class BookshelfListViewModel: ObservableObject {
         currentSearchToken = token
         isSearchingOnline = true
 
-        let sources = sourceStore.availableSources.isEmpty ? (await refreshSources()) : sourceStore.availableSources
+        var sources = sourceStore.availableSources
+        if sources.isEmpty {
+            sources = await refreshSources()
+        }
+        if sources.isEmpty {
+            // Fallback: avoid being blocked by store refresh timing/errors.
+            sources = (try? await APIService.shared.fetchBookSources()) ?? []
+        }
+
         let enabledSources = sources.filter { $0.enabled }
-        let targetSources = preferences.preferredSearchSourceUrls.isEmpty ?
-            enabledSources :
-            enabledSources.filter { preferences.preferredSearchSourceUrls.contains($0.bookSourceUrl) }
+        let preferredSet = Set(preferences.preferredSearchSourceUrls)
+        let preferredSources = enabledSources.filter { preferredSet.contains($0.bookSourceUrl) }
+        // If preferred list becomes stale (no matching source), fallback to all enabled sources.
+        let targetSources: [BookSource]
+        if preferredSet.isEmpty {
+            targetSources = enabledSources
+        } else if preferredSources.isEmpty {
+            targetSources = enabledSources
+        } else {
+            targetSources = preferredSources
+        }
 
         onlineResults = []
         onlineSearchCompleted = 0
