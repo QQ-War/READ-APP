@@ -45,7 +45,8 @@ jobs:
         run: |
           ts=$(date -u +%s)
           suffix=$(date -u +%Y%m%d%H%M%S)
-          gradle assembleUnsigned assembleDebug --parallel --no-daemon --build-cache -PciBuildTimestamp="$ts" -PciVersionSuffix="$suffix"
+          ts_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          gradle assembleUnsigned assembleDebug --parallel --no-daemon --build-cache -PciBuildTimestamp="$ts" -PciVersionSuffix="$suffix" -PciBuildTimeUtc="$ts_utc"
         working-directory: android
 
       - name: Prepare APK artifacts

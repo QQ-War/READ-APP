@@ -7,8 +7,9 @@ plugins {
 
 val ciBuildTimestampProp = providers.gradleProperty("ciBuildTimestamp").orNull
 val ciVersionSuffixProp = providers.gradleProperty("ciVersionSuffix").orNull?.trim().orEmpty()
+val ciBuildTimeUtcProp = providers.gradleProperty("ciBuildTimeUtc").orNull
 val resolvedBuildUnixTime = ciBuildTimestampProp?.toLongOrNull() ?: (System.currentTimeMillis() / 1000L)
-val resolvedBuildTimeUtc = java.time.Instant.ofEpochSecond(resolvedBuildUnixTime).toString()
+val resolvedBuildTimeUtc = ciBuildTimeUtcProp?.trim().orEmpty().ifBlank { resolvedBuildUnixTime.toString() }
 
 android {
     namespace = "com.readapp"
