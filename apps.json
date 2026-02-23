@@ -10,7 +10,7 @@
       "bundleIdentifier": "com.readapp.ios",
       "developerName": "QQ-War",
       "version": "1.0",
-      "versionDate": "2026-02-22",
+      "versionDate": "2026-02-23",
       "versionDescription": "主分支 CI 构建版本",
       "downloadURL": "https://github.com/QQ-War/READ-APP/releases/download/ci-build-main/ReadApp-unsigned-main.ipa",
       "localizedDescription": "ReadApp iOS 客户端（书架、阅读、听书与书源管理）。",
