@@ -3,7 +3,7 @@
   "identifier": "com.qqwar.readapp.source",
   "subtitle": "ReadApp iOS 分发",
   "description": "通过 SideStore 分发 ReadApp iOS 版本。",
-  "iconURL": "https://cdn.jsdelivr.net/gh/QQ-War/READ-APP@main/ios/ReadApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+  "iconURL": "https://raw.githubusercontent.com/QQ-War/READ-APP/main/icon.png",
   "apps": [
     {
       "name": "ReadApp",
@@ -14,7 +14,7 @@
       "versionDescription": "主分支 CI 构建版本",
       "downloadURL": "https://github.com/QQ-War/READ-APP/releases/download/ci-build-main/ReadApp-unsigned-main.ipa",
       "localizedDescription": "ReadApp iOS 客户端（书架、阅读、听书与书源管理）。",
-      "iconURL": "https://cdn.jsdelivr.net/gh/QQ-War/READ-APP@main/ios/ReadApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+      "iconURL": "https://raw.githubusercontent.com/QQ-War/READ-APP/main/icon.png",
       "size": 1953352
     }
   ]
