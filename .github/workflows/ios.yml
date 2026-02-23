@@ -111,7 +111,14 @@ jobs:
               data = json.load(f)
 
           app = data["apps"][0]
-          app["version"] = os.environ["VERSION"]
+          new_version = os.environ["VERSION"]
+          current_version = str(app.get("version", "")).strip()
+
+          # Only update source metadata when app version changes.
+          if current_version == new_version:
+              raise SystemExit(0)
+
+          app["version"] = new_version
           app["versionDate"] = os.environ["VERSION_DATE"]
           app["downloadURL"] = os.environ["DOWNLOAD_URL"]
           app["size"] = int(os.environ["SIZE_BYTES"])
