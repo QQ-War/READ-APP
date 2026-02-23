@@ -432,7 +432,8 @@ fun TtsSettingsScreen(
                 )
                 
                 if (showVoiceDialog) {
-                    val bookViewModel: com.readapp.viewmodel.BookViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    val bookViewModel: com.readapp.viewmodel.BookViewModel =
+                        androidx.lifecycle.viewmodel.compose.viewModel(factory = com.readapp.viewmodel.BookViewModel.Factory)
                     val voices by bookViewModel.availableSystemVoices.collectAsState()
                     
                     AlertDialog(

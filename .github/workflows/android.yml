@@ -42,7 +42,10 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Build release APK
-        run: gradle assembleUnsigned assembleDebug --parallel --no-daemon --build-cache
+        run: |
+          ts=$(date -u +%s)
+          suffix=$(date -u +%Y%m%d%H%M%S)
+          gradle assembleUnsigned assembleDebug --parallel --no-daemon --build-cache -PciBuildTimestamp="$ts" -PciVersionSuffix="$suffix"
         working-directory: android
 
       - name: Prepare APK artifacts

@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReplaceRuleScreen(
-    bookViewModel: BookViewModel = viewModel(),
+    bookViewModel: BookViewModel = viewModel(factory = BookViewModel.Factory),
     onNavigateBack: () -> Unit
 ) {
     val replaceRules by bookViewModel.replaceRules.collectAsState()

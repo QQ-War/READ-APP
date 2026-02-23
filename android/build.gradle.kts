@@ -5,6 +5,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.parcelize") version "1.9.10"
 }
 
+val ciBuildTimestampProp = providers.gradleProperty("ciBuildTimestamp").orNull
+val ciVersionSuffixProp = providers.gradleProperty("ciVersionSuffix").orNull?.trim().orEmpty()
+val resolvedBuildUnixTime = ciBuildTimestampProp?.toLongOrNull() ?: (System.currentTimeMillis() / 1000L)
+val resolvedBuildTimeUtc = java.time.Instant.ofEpochSecond(resolvedBuildUnixTime).toString()
+
 android {
     namespace = "com.readapp"
     compileSdk = 34
@@ -14,7 +19,10 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = if (ciVersionSuffixProp.isBlank()) "1.0.0" else "1.0.0+$ciVersionSuffixProp"
+
+        buildConfigField("long", "BUILD_UNIX_TIME", "${resolvedBuildUnixTime}L")
+        buildConfigField("String", "BUILD_TIME_UTC", "\"${resolvedBuildTimeUtc}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -63,6 +71,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

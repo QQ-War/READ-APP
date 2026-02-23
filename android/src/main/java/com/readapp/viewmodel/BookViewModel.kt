@@ -355,62 +355,68 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            // Load all preferences
-            val storedServer = preferences.serverUrl.first()
-            val storedPublic = preferences.publicServerUrl.first()
-            val storedBackend = preferences.getApiBackendSetting()
-            val detectedBackend = detectApiBackend(storedServer)
-            val resolvedBackend = storedBackend ?: detectedBackend
-            if (storedBackend == null) {
-                preferences.saveApiBackend(resolvedBackend)
-            }
-            val normalizedServer = stripApiBasePath(storedServer)
-            if (normalizedServer != storedServer) {
-                preferences.saveServerUrl(normalizedServer)
-            }
-            val normalizedPublic = if (storedPublic.isBlank()) storedPublic else stripApiBasePath(storedPublic)
-            if (normalizedPublic != storedPublic) {
-                preferences.savePublicServerUrl(normalizedPublic)
-            }
-            _serverAddress.value = normalizedServer
-            _publicServerAddress.value = normalizedPublic
-            _apiBackend.value = resolvedBackend
-            _accessToken.value = preferences.accessToken.first()
-            _username.value = preferences.username.first()
-            _selectedTtsEngine.value = preferences.selectedTtsId.firstOrNull().orEmpty()
-            _useSystemTts.value = preferences.useSystemTts.first()
-            _systemVoiceId.value = preferences.systemVoiceId.firstOrNull().orEmpty()
-            _narrationTtsEngine.value = preferences.narrationTtsId.firstOrNull().orEmpty()
-            _dialogueTtsEngine.value = preferences.dialogueTtsId.firstOrNull().orEmpty()
-            _speakerTtsMapping.value = parseSpeakerMapping(preferences.speakerTtsMapping.firstOrNull().orEmpty())
-            _speechSpeed.value = preferences.speechRate.first().toInt()
-            _preloadCount.value = preferences.preloadCount.first().toInt()
-            _loggingEnabled.value = preferences.loggingEnabled.first()
-            _bookshelfSortByRecent.value = preferences.bookshelfSortByRecent.first()
-            _searchSourcesFromBookshelf.value = preferences.searchSourcesFromBookshelf.first()
-            val urls = preferences.preferredSearchSourceUrls.first()
-            _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
-            readerSettings.loadInitial()
-
-            localCache.loadBookshelfCache()?.let { cached ->
-                if (cached.isNotEmpty()) {
-                    allBooks = cached
-                    applyBooksFilterAndSort()
+            try {
+                // Load all preferences
+                val storedServer = preferences.serverUrl.first()
+                val storedPublic = preferences.publicServerUrl.first()
+                val storedBackend = preferences.getApiBackendSetting()
+                val detectedBackend = detectApiBackend(storedServer)
+                val resolvedBackend = storedBackend ?: detectedBackend
+                if (storedBackend == null) {
+                    preferences.saveApiBackend(resolvedBackend)
                 }
-            }
-
-            if (_accessToken.value.isNotBlank()) {
-                _isLoading.value = true
-                try {
-                    loadTtsEnginesInternal()
-                    loadBookSources()
-                    refreshBooksInternal(showLoading = true)
-                    loadReplaceRules()
-                } finally {
-                    _isLoading.value = false
+                val normalizedServer = stripApiBasePath(storedServer)
+                if (normalizedServer != storedServer) {
+                    preferences.saveServerUrl(normalizedServer)
                 }
+                val normalizedPublic = if (storedPublic.isBlank()) storedPublic else stripApiBasePath(storedPublic)
+                if (normalizedPublic != storedPublic) {
+                    preferences.savePublicServerUrl(normalizedPublic)
+                }
+                _serverAddress.value = normalizedServer
+                _publicServerAddress.value = normalizedPublic
+                _apiBackend.value = resolvedBackend
+                _accessToken.value = preferences.accessToken.first()
+                _username.value = preferences.username.first()
+                _selectedTtsEngine.value = preferences.selectedTtsId.firstOrNull().orEmpty()
+                _useSystemTts.value = preferences.useSystemTts.first()
+                _systemVoiceId.value = preferences.systemVoiceId.firstOrNull().orEmpty()
+                _narrationTtsEngine.value = preferences.narrationTtsId.firstOrNull().orEmpty()
+                _dialogueTtsEngine.value = preferences.dialogueTtsId.firstOrNull().orEmpty()
+                _speakerTtsMapping.value = parseSpeakerMapping(preferences.speakerTtsMapping.firstOrNull().orEmpty())
+                _speechSpeed.value = preferences.speechRate.first().toInt()
+                _preloadCount.value = preferences.preloadCount.first().toInt()
+                _loggingEnabled.value = preferences.loggingEnabled.first()
+                _bookshelfSortByRecent.value = preferences.bookshelfSortByRecent.first()
+                _searchSourcesFromBookshelf.value = preferences.searchSourcesFromBookshelf.first()
+                val urls = preferences.preferredSearchSourceUrls.first()
+                _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
+                readerSettings.loadInitial()
+
+                localCache.loadBookshelfCache()?.let { cached ->
+                    if (cached.isNotEmpty()) {
+                        allBooks = cached
+                        applyBooksFilterAndSort()
+                    }
+                }
+
+                if (_accessToken.value.isNotBlank()) {
+                    _isLoading.value = true
+                    try {
+                        loadTtsEnginesInternal()
+                        loadBookSources()
+                        refreshBooksInternal(showLoading = true)
+                        loadReplaceRules()
+                    } finally {
+                        _isLoading.value = false
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Initialization failed", e)
+                _errorMessage.value = "初始化失败: ${e.message ?: "未知错误"}"
+            } finally {
+                _isInitialized.value = true
             }
-            _isInitialized.value = true
         }
 
         ttsController.initSystemTts()
@@ -420,7 +426,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             val sessionToken = SessionToken(appContext, ComponentName(appContext, ReadAudioService::class.java))
             val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
             controllerFuture.addListener({
-                ttsController.bindMediaController(controllerFuture.get())
+                runCatching { controllerFuture.get() }
+                    .onSuccess { ttsController.bindMediaController(it) }
+                    .onFailure { Log.e(TAG, "Failed to bind ReadAudioService media controller", it) }
             }, MoreExecutors.directExecutor())
         }
 
@@ -428,7 +436,9 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             val sessionToken = SessionToken(appContext, ComponentName(appContext, com.readapp.media.AudioBookService::class.java))
             val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
             controllerFuture.addListener({
-                audioController.bindMediaController(controllerFuture.get())
+                runCatching { controllerFuture.get() }
+                    .onSuccess { audioController.bindMediaController(it) }
+                    .onFailure { Log.e(TAG, "Failed to bind AudioBookService media controller", it) }
             }, MoreExecutors.directExecutor())
         }
     }

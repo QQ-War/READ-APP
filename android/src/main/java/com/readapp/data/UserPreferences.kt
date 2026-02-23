@@ -150,13 +150,16 @@ class UserPreferences(private val context: Context) {
         it[Keys.LockPageOnTTS] ?: false
     }
     val readingMode: Flow<ReadingMode> = context.dataStore.data.map {
-        ReadingMode.valueOf(it[Keys.ReadingMode] ?: ReadingMode.Vertical.name)
+        runCatching { ReadingMode.valueOf(it[Keys.ReadingMode] ?: ReadingMode.Vertical.name) }
+            .getOrDefault(ReadingMode.Vertical)
     }
     val pageTurningMode: Flow<PageTurningMode> = context.dataStore.data.map {
-        PageTurningMode.valueOf(it[Keys.PageTurningMode] ?: PageTurningMode.Scroll.name)
+        runCatching { PageTurningMode.valueOf(it[Keys.PageTurningMode] ?: PageTurningMode.Scroll.name) }
+            .getOrDefault(PageTurningMode.Scroll)
     }
     val darkMode: Flow<DarkModeConfig> = context.dataStore.data.map {
-        DarkModeConfig.valueOf(it[Keys.DarkMode] ?: DarkModeConfig.OFF.name)
+        runCatching { DarkModeConfig.valueOf(it[Keys.DarkMode] ?: DarkModeConfig.OFF.name) }
+            .getOrDefault(DarkModeConfig.OFF)
     }
     val readingTheme: Flow<ReaderTheme> = context.dataStore.data.map {
         runCatching { ReaderTheme.valueOf(it[Keys.ReadingTheme] ?: ReaderTheme.System.name) }
