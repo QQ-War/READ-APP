@@ -90,3 +90,47 @@ jobs:
           prerelease: true
           files: |
             ios/build/ReadApp-unsigned-${{ github.ref_name }}.ipa
+
+      - name: Sync apps.json metadata (main only)
+        if: github.ref == 'refs/heads/main'
+        env:
+          IPA_PATH: ios/build/ReadApp-unsigned-${{ github.ref_name }}.ipa
+          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/ci-build-${{ github.ref_name }}/ReadApp-unsigned-${{ github.ref_name }}.ipa
+        run: |
+          set -euo pipefail
+          VERSION="$(awk -F' = ' '/MARKETING_VERSION = / {gsub(/;/, "", $2); print $2; exit}' ios/ReadApp.xcodeproj/project.pbxproj)"
+          VERSION_DATE="$(date -u +%Y-%m-%d)"
+          SIZE_BYTES="$(stat -f%z "${IPA_PATH}")"
+          export VERSION VERSION_DATE SIZE_BYTES DOWNLOAD_URL
+          python3 - <<'PY'
+          import json
+          import os
+
+          path = "apps.json"
+          with open(path, "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          app = data["apps"][0]
+          app["version"] = os.environ["VERSION"]
+          app["versionDate"] = os.environ["VERSION_DATE"]
+          app["downloadURL"] = os.environ["DOWNLOAD_URL"]
+          app["size"] = int(os.environ["SIZE_BYTES"])
+
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+              f.write("\n")
+          PY
+
+      - name: Commit synced apps.json (main only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- apps.json; then
+            echo "apps.json is already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps.json
+          git commit -m "chore(ci): sync apps.json for iOS build"
+          git push
