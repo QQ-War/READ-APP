@@ -52,14 +52,8 @@ fun LoginScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.customColors.gradientStart.copy(alpha = 0.1f),
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            )
+            .navigationBarsPadding()
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(
             modifier = Modifier

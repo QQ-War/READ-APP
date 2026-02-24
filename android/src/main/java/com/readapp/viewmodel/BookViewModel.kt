@@ -419,27 +419,35 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        ttsController.initSystemTts()
+        runCatching { ttsController.initSystemTts() }
 
         // Connect to MediaSession
         viewModelScope.launch {
-            val sessionToken = SessionToken(appContext, ComponentName(appContext, ReadAudioService::class.java))
-            val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
-            controllerFuture.addListener({
-                runCatching { controllerFuture.get() }
-                    .onSuccess { ttsController.bindMediaController(it) }
-                    .onFailure { Log.e(TAG, "Failed to bind ReadAudioService media controller", it) }
-            }, MoreExecutors.directExecutor())
+            try {
+                val sessionToken = SessionToken(appContext, ComponentName(appContext, ReadAudioService::class.java))
+                val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
+                controllerFuture.addListener({
+                    runCatching { controllerFuture.get() }
+                        .onSuccess { ttsController.bindMediaController(it) }
+                        .onFailure { Log.e(TAG, "Failed to bind ReadAudioService", it) }
+                }, MoreExecutors.directExecutor())
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create ReadAudioService session token", e)
+            }
         }
 
         viewModelScope.launch {
-            val sessionToken = SessionToken(appContext, ComponentName(appContext, com.readapp.media.AudioBookService::class.java))
-            val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
-            controllerFuture.addListener({
-                runCatching { controllerFuture.get() }
-                    .onSuccess { audioController.bindMediaController(it) }
-                    .onFailure { Log.e(TAG, "Failed to bind AudioBookService media controller", it) }
-            }, MoreExecutors.directExecutor())
+            try {
+                val sessionToken = SessionToken(appContext, ComponentName(appContext, com.readapp.media.AudioBookService::class.java))
+                val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
+                controllerFuture.addListener({
+                    runCatching { controllerFuture.get() }
+                        .onSuccess { audioController.bindMediaController(it) }
+                        .onFailure { Log.e(TAG, "Failed to bind AudioBookService", it) }
+                }, MoreExecutors.directExecutor())
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create AudioBookService session token", e)
+            }
         }
     }
 
@@ -861,8 +869,12 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun loadBookSources() {
         val (baseUrl, publicUrl, token) = preferences.getCredentials()
         if (token == null) return
-        sourceRepository.getBookSources(appContext, baseUrl, publicUrl, token).collect { result ->
-            result.onSuccess { _availableBookSources.value = it }
+        try {
+            sourceRepository.getBookSources(appContext, baseUrl, publicUrl, token).collect { result ->
+                result.onSuccess { _availableBookSources.value = it }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load book sources", e)
         }
     }
 
