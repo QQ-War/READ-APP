@@ -347,8 +347,21 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
         if view.bounds.size != lastViewSize {
             let wasAtBottom = oldContentHeight > 0 && oldOffset >= (oldContentHeight - collectionView.bounds.height - 10)
             let relativeProgress = oldContentHeight > 0 ? (oldOffset / oldContentHeight) : 0
+            
+            let oldWidth = lastViewSize.width
+            let newWidth = view.bounds.width
 
             lastViewSize = view.bounds.size
+            
+            // 宽度变化时重算所有已加载图片的高度缓存
+            if oldWidth > 0 && abs(oldWidth - newWidth) > 0.1 {
+                for i in 0..<estimatedHeights.count {
+                    if let ratio = imageAspectRatios[i] {
+                        estimatedHeights[i] = newWidth * ratio
+                    }
+                }
+            }
+
             if isChapterZoomEnabled {
                 zoomScrollView.frame = view.bounds
                 collectionView.frame = zoomScrollView.bounds
@@ -1059,12 +1072,16 @@ class MangaReaderViewController: UIViewController, UICollectionViewDelegate, UIC
     // MARK: - UICollectionViewDelegateFlowLayout
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         let width = max(1, collectionView.bounds.width)
-        if estimatedHeights.indices.contains(indexPath.item), let height = estimatedHeights[indexPath.item] {
-            return CGSize(width: width, height: height)
-        }
+        
+        // 优先使用比例动态计算，确保宽度变化时高度同步
         if imageAspectRatios.indices.contains(indexPath.item), let ratio = imageAspectRatios[indexPath.item] {
             return CGSize(width: width, height: width * ratio)
         }
+        
+        if estimatedHeights.indices.contains(indexPath.item), let height = estimatedHeights[indexPath.item] {
+            return CGSize(width: width, height: height)
+        }
+        
         return CGSize(width: width, height: 300)
     }
 }
