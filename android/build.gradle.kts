@@ -10,7 +10,6 @@ val ciVersionSuffixProp = providers.gradleProperty("ciVersionSuffix").orNull?.tr
 val ciBuildTimeUtcProp = providers.gradleProperty("ciBuildTimeUtc").orNull
 val resolvedBuildUnixTime = ciBuildTimestampProp?.toLongOrNull() ?: (System.currentTimeMillis() / 1000L)
 val resolvedBuildTimeUtc = ciBuildTimeUtcProp?.trim().orEmpty().ifBlank { resolvedBuildUnixTime.toString() }
-val resolvedVersionCode = resolvedBuildUnixTime.coerceIn(1L, 2_100_000_000L).toInt()
 
 android {
     namespace = "com.readapp"
@@ -20,7 +19,7 @@ android {
         applicationId = "com.readapp"
         minSdk = 24
         targetSdk = 34
-        versionCode = resolvedVersionCode
+        versionCode = 1
         versionName = if (ciVersionSuffixProp.isBlank()) "1.0.0" else "1.0.0+$ciVersionSuffixProp"
 
         buildConfigField("long", "BUILD_UNIX_TIME", "${resolvedBuildUnixTime}L")
