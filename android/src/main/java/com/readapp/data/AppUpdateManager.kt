@@ -89,9 +89,13 @@ class AppUpdateManager(
                     .ifBlank { release.optString("published_at") }
                 val remoteBuildUnixTime = releaseMeta.buildUnixTime?.takeIf { it > 0L }
                     ?: parseIsoTime(fallbackUpdatedAt)
-                val remoteUpdatedAt = releaseMeta.buildTimeUtc?.ifBlank { null }
-                    ?: if (remoteBuildUnixTime > 0L) formatUnixTimeUtc(remoteBuildUnixTime)
-                    ?: fallbackUpdatedAt
+                val remoteUpdatedAt = releaseMeta.buildTimeUtc
+                    ?.takeIf { it.isNotBlank() }
+                    ?: if (remoteBuildUnixTime > 0L) {
+                        formatUnixTimeUtc(remoteBuildUnixTime)
+                    } else {
+                        fallbackUpdatedAt
+                    }
                 val localBuildUnixTime = BuildConfig.BUILD_UNIX_TIME
 
                 AppUpdateInfo(
