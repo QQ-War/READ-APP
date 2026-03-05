@@ -11,11 +11,13 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
 class AudioBookService : MediaSessionService() {
+    private val sessionId = "readapp.audiobook.session"
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
 
     override fun onCreate() {
         super.onCreate()
+        if (mediaSession != null) return
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -31,7 +33,9 @@ class AudioBookService : MediaSessionService() {
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
 
-        mediaSession = MediaSession.Builder(this, player).build()
+        mediaSession = MediaSession.Builder(this, player)
+            .setId(sessionId)
+            .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -41,7 +45,9 @@ class AudioBookService : MediaSessionService() {
     override fun onDestroy() {
         mediaSession?.release()
         mediaSession = null
-        player.release()
+        if (::player.isInitialized) {
+            player.release()
+        }
         super.onDestroy()
     }
 

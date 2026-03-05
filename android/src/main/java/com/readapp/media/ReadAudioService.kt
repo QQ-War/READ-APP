@@ -14,6 +14,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 
 class ReadAudioService : MediaSessionService() {
+    private val sessionId = "readapp.tts.session"
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
 
@@ -53,6 +54,7 @@ class ReadAudioService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        if (mediaSession != null) return
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -68,6 +70,7 @@ class ReadAudioService : MediaSessionService() {
             .build()
 
         mediaSession = MediaSession.Builder(this, player)
+            .setId(sessionId)
             .setCallback(TtsMediaSessionCallback())
             .build()
     }
@@ -83,7 +86,9 @@ class ReadAudioService : MediaSessionService() {
     override fun onDestroy() {
         mediaSession?.release()
         mediaSession = null
-        player.release()
+        if (::player.isInitialized) {
+            player.release()
+        }
         super.onDestroy()
     }
 
