@@ -13,6 +13,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
@@ -62,6 +63,7 @@ class AppUpdateManager(
                 val release = JSONObject(body)
                 val assets = release.optJSONArray("assets")
                     ?: error("Release 资产为空")
+                val releaseBody = release.optString("body")
 
                 var selectedAsset: JSONObject? = null
                 for (i in 0 until assets.length()) {
@@ -82,9 +84,14 @@ class AppUpdateManager(
                 }
                 val asset = selectedAsset ?: error("未找到可安装 APK 资产")
 
-                val remoteUpdatedAt = asset.optString("updated_at")
+                val releaseMeta = parseReleaseBuildMetadata(releaseBody)
+                val fallbackUpdatedAt = asset.optString("updated_at")
                     .ifBlank { release.optString("published_at") }
-                val remoteBuildUnixTime = parseIsoTime(remoteUpdatedAt)
+                val remoteBuildUnixTime = releaseMeta.buildUnixTime?.takeIf { it > 0L }
+                    ?: parseIsoTime(fallbackUpdatedAt)
+                val remoteUpdatedAt = releaseMeta.buildTimeUtc?.ifBlank { null }
+                    ?: if (remoteBuildUnixTime > 0L) formatUnixTimeUtc(remoteBuildUnixTime)
+                    ?: fallbackUpdatedAt
                 val localBuildUnixTime = BuildConfig.BUILD_UNIX_TIME
 
                 AppUpdateInfo(
@@ -158,4 +165,29 @@ class AppUpdateManager(
             (parser.parse(isoString)?.time ?: 0L) / 1000L
         }.getOrDefault(0L)
     }
+
+    private fun formatUnixTimeUtc(unixTime: Long): String {
+        if (unixTime <= 0L) return ""
+        val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        return formatter.format(Date(unixTime * 1000L))
+    }
+
+    private fun parseReleaseBuildMetadata(body: String): ReleaseBuildMetadata {
+        if (body.isBlank()) return ReleaseBuildMetadata()
+        val unixRegex = Regex("""(?im)^\s*build_unix_time\s*[:=]\s*(\d{1,20})\s*$""")
+        val utcRegex = Regex("""(?im)^\s*build_time_utc\s*[:=]\s*([0-9TZ:\-]+)\s*$""")
+        val unixTime = unixRegex.find(body)?.groupValues?.getOrNull(1)?.toLongOrNull()
+        val utcTime = utcRegex.find(body)?.groupValues?.getOrNull(1)
+        return ReleaseBuildMetadata(
+            buildUnixTime = unixTime,
+            buildTimeUtc = utcTime
+        )
+    }
 }
+
+private data class ReleaseBuildMetadata(
+    val buildUnixTime: Long? = null,
+    val buildTimeUtc: String? = null
+)
