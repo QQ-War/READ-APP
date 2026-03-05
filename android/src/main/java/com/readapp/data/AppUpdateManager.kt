@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.content.SharedPreferences
 import androidx.core.content.FileProvider
 import com.readapp.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +23,6 @@ data class AppUpdateInfo(
     val localBuildTimeUtc: String,
     val localBuildUnixTime: Long,
     val remoteTag: String,
-    val remoteReleaseStamp: String,
     val remoteUpdatedAt: String,
     val remoteBuildUnixTime: Long,
     val downloadUrl: String,
@@ -44,12 +42,6 @@ class AppUpdateManager(
     companion object {
         private const val RELEASE_API = "https://api.github.com/repos/QQ-War/READ-APP/releases/tags/ci-build-main"
         private const val TARGET_ASSET = "ReadApp-android-debug-main.apk"
-        private const val PREFS_NAME = "app_update_prefs"
-        private const val KEY_INSTALLED_RELEASE_STAMP = "installed_release_stamp"
-    }
-
-    private val prefs: SharedPreferences by lazy {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
     fun currentVersionText(): String {
@@ -100,23 +92,14 @@ class AppUpdateManager(
                 val remoteUpdatedAt = releaseMeta.buildTimeUtc?.ifBlank { null }
                     ?: if (remoteBuildUnixTime > 0L) formatUnixTimeUtc(remoteBuildUnixTime)
                     ?: fallbackUpdatedAt
-                val remoteReleaseStamp = releaseMeta.buildUnixTime?.toString()
-                    ?: fallbackUpdatedAt
                 val localBuildUnixTime = BuildConfig.BUILD_UNIX_TIME
-                val installedReleaseStamp = getInstalledReleaseStamp()
-                val hasUpdate = if (installedReleaseStamp.isNotBlank() && remoteReleaseStamp.isNotBlank()) {
-                    installedReleaseStamp != remoteReleaseStamp
-                } else {
-                    remoteBuildUnixTime > localBuildUnixTime
-                }
 
                 AppUpdateInfo(
-                    hasUpdate = hasUpdate,
+                    hasUpdate = remoteBuildUnixTime > localBuildUnixTime,
                     localVersionName = BuildConfig.VERSION_NAME,
                     localBuildTimeUtc = BuildConfig.BUILD_TIME_UTC,
                     localBuildUnixTime = localBuildUnixTime,
                     remoteTag = release.optString("tag_name"),
-                    remoteReleaseStamp = remoteReleaseStamp,
                     remoteUpdatedAt = remoteUpdatedAt,
                     remoteBuildUnixTime = remoteBuildUnixTime,
                     downloadUrl = asset.optString("browser_download_url"),
@@ -172,15 +155,6 @@ class AppUpdateManager(
             context.startActivity(installIntent)
             AppInstallLaunchResult.Started
         }.getOrElse { AppInstallLaunchResult.Failed(it.message ?: "无法拉起安装器") }
-    }
-
-    fun saveInstalledReleaseStamp(stamp: String) {
-        if (stamp.isBlank()) return
-        prefs.edit().putString(KEY_INSTALLED_RELEASE_STAMP, stamp).apply()
-    }
-
-    private fun getInstalledReleaseStamp(): String {
-        return prefs.getString(KEY_INSTALLED_RELEASE_STAMP, "").orEmpty()
     }
 
     private fun parseIsoTime(isoString: String): Long {
