@@ -204,6 +204,7 @@ fun SettingsScreen(
                             downloadResult.onSuccess { apkFile ->
                                 when (val installResult = updateManager.launchInstall(apkFile)) {
                                     AppInstallLaunchResult.Started -> {
+                                        updateManager.saveInstalledReleaseStamp(info.remoteReleaseStamp)
                                         updateStatus = "已拉起安装器，请完成安装"
                                     }
                                     AppInstallLaunchResult.NeedUnknownSourcesPermission -> {
