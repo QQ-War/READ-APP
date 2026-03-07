@@ -40,6 +40,9 @@ class TTSManager: NSObject, ObservableObject {
     private var onChapterChange: ((Int) -> Void)?
     private var textProcessor: ((String) -> String)?
     var replaceRules: [ReplaceRule]?
+    private let speakerMatchCacheQueue = DispatchQueue(label: "com.readapp.tts.speakerMatchCache")
+    private var cachedSpeakerKeysSignature = ""
+    private var cachedSortedSpeakerKeys: [String] = []
     
     // Preload Cache
     private var audioCache: [Int: Data] = [: ]
@@ -386,8 +389,6 @@ class TTSManager: NSObject, ObservableObject {
             currentSentenceOffset = 0
         }
         
-        logger.log("开始朗读: \(bookTitle), 章节索引: \(currentIndex), 起始段落: \(currentSentenceIndex), 句内偏移: \(currentSentenceOffset)", category: "TTS")
-        
         if currentIndex < chapters.count { updateNowPlayingInfo(chapterTitle: chapters[currentIndex].title) }
         isPlaying = true
         isPaused = false
@@ -528,10 +529,45 @@ class TTSManager: NSObject, ObservableObject {
         return ReadingTextProcessor.splitSentences(text, rules: self.replaceRules, chunkLimit: chunkLimit)
     }
 
+    private func sortedSpeakerKeys(from mapping: [String: String]) -> [String] {
+        let signature = mapping.keys.sorted().joined(separator: "|")
+        return speakerMatchCacheQueue.sync {
+            if signature != cachedSpeakerKeysSignature {
+                cachedSortedSpeakerKeys = mapping.keys.sorted { $0.count > $1.count }
+                cachedSpeakerKeysSignature = signature
+            }
+            return cachedSortedSpeakerKeys
+        }
+    }
+
     private func ttsId(for sentence: String, isChapterTitle: Bool = false) -> String? {
         let prefs = UserPreferences.shared
-        var targetId = isChapterTitle ? (prefs.narrationTTSId.isEmpty ? prefs.selectedTTSId : prefs.narrationTTSId) : (prefs.narrationTTSId.isEmpty ? prefs.selectedTTSId : prefs.narrationTTSId)
-        if !isChapterTitle && (sentence.contains("“") || sentence.contains("”") || sentence.contains("\"")) {
+        
+        // 1. 处理章节标题：直接使用旁白 ID
+        if isChapterTitle {
+            let id = prefs.narrationTTSId.isEmpty ? prefs.selectedTTSId : prefs.narrationTTSId
+            return id.isEmpty ? nil : id
+        }
+        
+        // 2. 角色匹配逻辑：优先根据发言人前缀匹配
+        let mapping = prefs.speakerTTSMapping
+        if !mapping.isEmpty {
+            let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+            let sortedSpeakers = sortedSpeakerKeys(from: mapping)
+            for speaker in sortedSpeakers {
+                // 匹配模式：名字+冒号，或名字+说+冒号（支持中英文冒号）
+                let patterns = ["\(speaker)：", "\(speaker)说：", "\(speaker):", "\(speaker)说:"]
+                if patterns.contains(where: { trimmed.hasPrefix($0) }) {
+                    if let mappedId = mapping[speaker], !mappedId.isEmpty {
+                        return mappedId
+                    }
+                }
+            }
+        }
+
+        // 3. 默认回落逻辑：区分旁白和对话
+        var targetId = prefs.narrationTTSId.isEmpty ? prefs.selectedTTSId : prefs.narrationTTSId
+        if sentence.contains("“") || sentence.contains("”") || sentence.contains("\"") {
             targetId = prefs.dialogueTTSId.isEmpty ? targetId : prefs.dialogueTTSId
         }
         return targetId.isEmpty ? nil : targetId
@@ -556,8 +592,6 @@ class TTSManager: NSObject, ObservableObject {
         } else {
             sentenceToSpeak = sentence
         }
-        logger.log("TTS play snapshot - chapter=\(currentChapterIndex) sentenceIdx=\(currentSentenceIndex) sentenceOffset=\(currentSentenceOffset) text=\(sanitizedPreviewText(sentenceToSpeak, limit: 120))", category: "TTS")
-        
         if sentenceToSpeak.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             currentSentenceIndex += 1
             currentSentenceOffset = 0
@@ -889,7 +923,6 @@ class TTSManager: NSObject, ObservableObject {
         clearFallbackIndices(); clearNextChapterFallbackIndices()
         coverArtwork = nil; endBackgroundTask()
         deactivateAudioSession()
-        logger.log("TTS 停止", category: "TTS")
     }
     
     func nextChapter() {
@@ -1034,7 +1067,6 @@ class TTSManager: NSObject, ObservableObject {
             let pos = totalLen > 0 ? Double(bodyIndex) / Double(totalLen) : 0.0
             UserPreferences.shared.saveReadingProgress(bookUrl: snapshotBookUrl, chapterIndex: snapshotChapterIdx, pageIndex: 0, bodyCharIndex: bodyIndex)
             try? await APIService.shared.saveBookProgress(bookUrl: snapshotBookUrl, index: snapshotChapterIdx, pos: pos, title: snapshotTitle)
-            logger.log("TTS 进度快照已保存: \(snapshotBookUrl), 章节: \(snapshotChapterIdx), 比例: \(pos)", category: "TTS")
         }
     }
     
