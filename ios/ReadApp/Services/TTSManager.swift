@@ -540,6 +540,66 @@ class TTSManager: NSObject, ObservableObject {
         }
     }
 
+    private func outsideQuotedText(from sentence: String) -> String {
+        var result = sentence
+        let patterns = [
+            #"“[^”]*”"#,
+            #"「[^」]*」"#,
+            #""[^"]*""#
+        ]
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                result = regex.stringByReplacingMatches(
+                    in: result,
+                    options: [],
+                    range: NSRange(location: 0, length: result.utf16.count),
+                    withTemplate: " "
+                )
+            }
+        }
+        return result
+    }
+
+    private func normalizeSpeakerMatchingText(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "　", with: "")
+    }
+
+    private func mappedTtsIdBySpeechContext(sentence: String, mapping: [String: String], sortedSpeakers: [String], triggerRegexes: [String]) -> String? {
+        let hasQuote = sentence.contains("“") || sentence.contains("”") || sentence.contains("\"") || sentence.contains("「") || sentence.contains("」")
+        guard hasQuote else { return nil }
+
+        let outside = normalizeSpeakerMatchingText(outsideQuotedText(from: sentence))
+        guard !outside.isEmpty else { return nil }
+
+        let triggers = triggerRegexes
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .sorted { $0.count > $1.count }
+        for trigger in triggers {
+            for speaker in sortedSpeakers {
+                guard let mappedId = mapping[speaker], !mappedId.isEmpty else { continue }
+                let escapedSpeaker = NSRegularExpression.escapedPattern(for: speaker)
+                let patternA = "\(escapedSpeaker)\(trigger)"
+                let patternB = "\(trigger)\(escapedSpeaker)"
+                let hitA: Bool = {
+                    guard let regex = try? NSRegularExpression(pattern: patternA, options: []) else { return false }
+                    let range = NSRange(location: 0, length: outside.utf16.count)
+                    return regex.firstMatch(in: outside, options: [], range: range) != nil
+                }()
+                let hitB: Bool = {
+                    guard let regex = try? NSRegularExpression(pattern: patternB, options: []) else { return false }
+                    let range = NSRange(location: 0, length: outside.utf16.count)
+                    return regex.firstMatch(in: outside, options: [], range: range) != nil
+                }()
+                if hitA || hitB {
+                    return mappedId
+                }
+            }
+        }
+        return nil
+    }
+
     private func ttsId(for sentence: String, isChapterTitle: Bool = false) -> String? {
         let prefs = UserPreferences.shared
         
@@ -552,16 +612,10 @@ class TTSManager: NSObject, ObservableObject {
         // 2. 角色匹配逻辑：优先根据发言人前缀匹配
         let mapping = prefs.speakerTTSMapping
         if !mapping.isEmpty {
-            let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
             let sortedSpeakers = sortedSpeakerKeys(from: mapping)
-            for speaker in sortedSpeakers {
-                // 匹配模式：名字+冒号，或名字+说+冒号（支持中英文冒号）
-                let patterns = ["\(speaker)：", "\(speaker)说：", "\(speaker):", "\(speaker)说:"]
-                if patterns.contains(where: { trimmed.hasPrefix($0) }) {
-                    if let mappedId = mapping[speaker], !mappedId.isEmpty {
-                        return mappedId
-                    }
-                }
+            let triggerRegexes = prefs.speakerTriggerRegexes
+            if let mapped = mappedTtsIdBySpeechContext(sentence: sentence, mapping: mapping, sortedSpeakers: sortedSpeakers, triggerRegexes: triggerRegexes) {
+                return mapped
             }
         }
 

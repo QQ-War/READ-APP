@@ -46,6 +46,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
@@ -64,6 +65,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         private const val TAG = "BookViewModel"
         private const val LOG_FILE_NAME = "reader_logs.txt"
         private const val LOG_EXPORT_NAME = "reader_logs_export.txt"
+        private val DEFAULT_SPEAKER_TRIGGER_REGEXES = listOf("笑着说", "笑道", "哭道", "怒道", "说道", "说", "道", "问", "答", "喊")
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
@@ -177,6 +179,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     val dialogueTtsEngine: StateFlow<String> = _dialogueTtsEngine.asStateFlow()
     private val _speakerTtsMapping = MutableStateFlow<Map<String, String>>(emptyMap())
     val speakerTtsMapping: StateFlow<Map<String, String>> = _speakerTtsMapping.asStateFlow()
+    private val _speakerTriggerRegexes = MutableStateFlow(DEFAULT_SPEAKER_TRIGGER_REGEXES)
+    val speakerTriggerRegexes: StateFlow<List<String>> = _speakerTriggerRegexes.asStateFlow()
     private val _availableTtsEngines = MutableStateFlow<List<HttpTTS>>(emptyList())
     val availableTtsEngines: StateFlow<List<HttpTTS>> = _availableTtsEngines.asStateFlow()
     
@@ -384,6 +388,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _narrationTtsEngine.value = preferences.narrationTtsId.firstOrNull().orEmpty()
                 _dialogueTtsEngine.value = preferences.dialogueTtsId.firstOrNull().orEmpty()
                 _speakerTtsMapping.value = parseSpeakerMapping(preferences.speakerTtsMapping.firstOrNull().orEmpty())
+                _speakerTriggerRegexes.value = parseSpeakerTriggerRegexes(preferences.speakerTriggerRegexes.firstOrNull().orEmpty())
                 _speechSpeed.value = preferences.speechRate.first().toInt()
                 _preloadCount.value = preferences.preloadCount.first().toInt()
                 _loggingEnabled.value = preferences.loggingEnabled.first()
@@ -1506,6 +1511,14 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         _speakerTtsMapping.value = updated
         viewModelScope.launch { preferences.saveSpeakerTtsMapping(serializeSpeakerMapping(updated)) }
     }
+    fun updateSpeakerTriggerRegexes(regexes: List<String>) {
+        val sanitized = regexes
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .ifEmpty { DEFAULT_SPEAKER_TRIGGER_REGEXES }
+        _speakerTriggerRegexes.value = sanitized
+        viewModelScope.launch { preferences.saveSpeakerTriggerRegexes(serializeSpeakerTriggerRegexes(sanitized)) }
+    }
     fun updateServerAddress(address: String) {
         val (baseHost, backend) = resolveServerInput(address)
         _serverAddress.value = baseHost
@@ -1711,6 +1724,23 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     }
     private fun parseSpeakerMapping(raw: String): Map<String, String> { if (raw.isBlank()) return emptyMap(); return runCatching { val obj = JSONObject(raw); obj.keys().asSequence().associateWith { key -> obj.optString(key) } }.getOrDefault(emptyMap()) }
     private fun serializeSpeakerMapping(mapping: Map<String, String>): String { val obj = JSONObject(); mapping.forEach { (key, value) -> obj.put(key, value) }; return obj.toString() }
+    private fun parseSpeakerTriggerRegexes(raw: String): List<String> {
+        if (raw.isBlank()) return DEFAULT_SPEAKER_TRIGGER_REGEXES
+        return runCatching {
+            val arr = JSONArray(raw)
+            val list = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                val v = arr.optString(i).trim()
+                if (v.isNotBlank()) list.add(v)
+            }
+            list
+        }.getOrDefault(DEFAULT_SPEAKER_TRIGGER_REGEXES).ifEmpty { DEFAULT_SPEAKER_TRIGGER_REGEXES }
+    }
+    private fun serializeSpeakerTriggerRegexes(regexes: List<String>): String {
+        val arr = JSONArray()
+        regexes.forEach { arr.put(it) }
+        return arr.toString()
+    }
     fun exportLogs(context: android.content.Context): android.net.Uri? { if (!logFile.exists()) return null; return runCatching { val exportFile = File(context.cacheDir, LOG_EXPORT_NAME); logFile.copyTo(exportFile, overwrite = true); androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", exportFile) }.getOrNull() }
     fun clearLogs() { runCatching { if (logFile.exists()) { logFile.writeText("") } } }
     private fun appendLog(message: String) { if (!_loggingEnabled.value) return; val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date()); val line = "[$timestamp] $message\n"; runCatching { logFile.appendText(line) } }
@@ -1734,12 +1764,54 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         return String.format("%02d:%02d", minutes, seconds)
     }
 
-    private fun resolveTtsIdForSentence(sentence: String, isChapterTitle: Boolean): String? {
-        // Check speaker mapping first
-        _speakerTtsMapping.value.forEach { (speaker, ttsId) ->
-            if (sentence.contains(speaker, ignoreCase = true)) {
-                return ttsId
+    private fun outsideQuotedText(sentence: String): String {
+        var result = sentence
+        val patterns = listOf(
+            "“[^”]*”",
+            "「[^」]*」",
+            "\"[^\"]*\""
+        )
+        patterns.forEach { pattern ->
+            result = result.replace(Regex(pattern), " ")
+        }
+        return result
+    }
+
+    private fun normalizeSpeakerMatchingText(text: String): String {
+        return text.replace(Regex("\\s+"), "").replace("　", "")
+    }
+
+    private fun resolveSpeakerMappedTtsId(sentence: String, mapping: Map<String, String>): String? {
+        val hasQuote = sentence.contains("“") || sentence.contains("”") || sentence.contains("\"") || sentence.contains("「") || sentence.contains("」")
+        if (!hasQuote || mapping.isEmpty()) return null
+
+        val outside = normalizeSpeakerMatchingText(outsideQuotedText(sentence))
+        if (outside.isBlank()) return null
+
+        val sortedSpeakers = mapping.keys.sortedByDescending { it.length }
+        val triggerKeywords = _speakerTriggerRegexes.value
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .sortedByDescending { it.length }
+
+        for (trigger in triggerKeywords) {
+            for (speaker in sortedSpeakers) {
+                val ttsId = mapping[speaker].orEmpty()
+                if (ttsId.isBlank()) continue
+                val speakerPattern = Regex.escape(speaker)
+                val hitA = runCatching { Regex("$speakerPattern$trigger").containsMatchIn(outside) }.getOrDefault(false)
+                val hitB = runCatching { Regex("$trigger$speakerPattern").containsMatchIn(outside) }.getOrDefault(false)
+                if (hitA || hitB) {
+                    return ttsId
+                }
             }
+        }
+        return null
+    }
+
+    private fun resolveTtsIdForSentence(sentence: String, isChapterTitle: Boolean): String? {
+        resolveSpeakerMappedTtsId(sentence, _speakerTtsMapping.value)?.let { mapped ->
+            return mapped
         }
 
         // Then consider narration/dialogue if available

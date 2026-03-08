@@ -112,6 +112,15 @@ class UserPreferences: ObservableObject {
         }
     }
 
+    /// 发言触发词正则（匹配引号外上下文）
+    @Published var speakerTriggerRegexes: [String] {
+        didSet {
+            if let data = try? JSONEncoder().encode(speakerTriggerRegexes) {
+                UserDefaults.standard.set(data, forKey: "speakerTriggerRegexes")
+            }
+        }
+    }
+
     @Published var selectedTTSId: String {
         didSet {
             UserDefaults.standard.set(selectedTTSId, forKey: "selectedTTSId")
@@ -618,6 +627,13 @@ class UserPreferences: ObservableObject {
         } else {
             self.speakerTTSMapping = [:]
         }
+        if let regexData = UserDefaults.standard.data(forKey: "speakerTriggerRegexes"),
+           let regexes = try? JSONDecoder().decode([String].self, from: regexData),
+           !regexes.isEmpty {
+            self.speakerTriggerRegexes = regexes
+        } else {
+            self.speakerTriggerRegexes = Self.defaultSpeakerTriggerRegexes
+        }
         self.bookshelfSortByRecent = UserDefaults.standard.bool(forKey: "bookshelfSortByRecent")
         self.searchSourcesFromBookshelf = UserDefaults.standard.bool(forKey: "searchSourcesFromBookshelf")
         self.preferredSearchSourceUrls = UserDefaults.standard.stringArray(forKey: "preferredSearchSourceUrls") ?? []
@@ -674,6 +690,21 @@ class UserPreferences: ObservableObject {
         username = ""
         isLoggedIn = false
     }
+}
+
+private extension UserPreferences {
+    static let defaultSpeakerTriggerRegexes: [String] = [
+        "笑着说",
+        "笑道",
+        "哭道",
+        "怒道",
+        "说道",
+        "说",
+        "道",
+        "问",
+        "答",
+        "喊"
+    ]
 }
 
 enum SettingItem: String, CaseIterable, Identifiable {

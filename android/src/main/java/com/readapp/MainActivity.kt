@@ -380,6 +380,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val narrationTtsEngine by bookViewModel.narrationTtsEngine.collectAsState()
                 val dialogueTtsEngine by bookViewModel.dialogueTtsEngine.collectAsState()
                 val speakerTtsMapping by bookViewModel.speakerTtsMapping.collectAsState()
+                val speakerTriggerRegexes by bookViewModel.speakerTriggerRegexes.collectAsState()
                 val availableTtsEngines by bookViewModel.availableTtsEngines.collectAsState()
                 val speechSpeed by bookViewModel.speechSpeed.collectAsState()
                 val preloadCount by bookViewModel.preloadCount.collectAsState()
@@ -394,6 +395,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                     narrationTtsEngine = narrationTtsEngine,
                     dialogueTtsEngine = dialogueTtsEngine,
                     speakerTtsMapping = speakerTtsMapping,
+                    speakerTriggerRegexes = speakerTriggerRegexes,
                     availableTtsEngines = availableTtsEngines,
                     speechSpeed = speechSpeed,
                     preloadCount = preloadCount,
@@ -407,6 +409,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                     onSelectDialogueTtsEngine = bookViewModel::selectDialogueTtsEngine,
                     onAddSpeakerMapping = bookViewModel::updateSpeakerMapping,
                     onRemoveSpeakerMapping = bookViewModel::removeSpeakerMapping,
+                    onUpdateSpeakerTriggerRegexes = bookViewModel::updateSpeakerTriggerRegexes,
                     onReloadTtsEngines = bookViewModel::loadTtsEngines,
                     onSpeechSpeedChange = bookViewModel::updateSpeechSpeed,
                     onPreloadCountChange = bookViewModel::updatePreloadCount,

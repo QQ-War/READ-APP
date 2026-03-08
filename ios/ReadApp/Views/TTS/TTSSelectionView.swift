@@ -12,6 +12,7 @@ struct TTSSelectionView: View {
     @State private var speakerMappings: [String: String] = [:]
     @State private var newSpeakerName = ""
     @State private var newSpeakerTTSId: String?
+    @State private var speakerTriggerRegexText = ""
     
     var body: some View {
         Group {
@@ -76,6 +77,7 @@ struct TTSSelectionView: View {
         }
         .onAppear {
             speakerMappings = preferences.speakerTTSMapping
+            speakerTriggerRegexText = preferences.speakerTriggerRegexes.joined(separator: "\n")
         }
         .sheet(item: $errorSheet) { sheet in
             SelectableMessageSheet(title: sheet.title, message: sheet.message) {
@@ -227,10 +229,11 @@ private extension TTSSelectionView {
         Section {
             speakerMappingList
             speakerMappingEditor
+            speakerTriggerRegexEditor
         } header: {
             Text("发言人和 TTS 对应")
         } footer: {
-            Text("对话句子会优先匹配上方绑定的发言人 TTS；未匹配时使用默认对话 TTS。")
+            Text("对话句子会优先在引号外文本中按“发言人+触发词正则”匹配；未匹配时使用默认对话 TTS。")
                 .foregroundColor(.secondary)
         }
     }
@@ -276,6 +279,35 @@ private extension TTSSelectionView {
                 addSpeakerMapping()
             }
             .disabled(newSpeakerName.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+    }
+
+    var speakerTriggerRegexEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("触发词正则（每行一条）")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            TextEditor(text: $speakerTriggerRegexText)
+                .frame(minHeight: 90, maxHeight: 160)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                )
+            HStack {
+                Button("重置默认") {
+                    let defaults = ["笑着说", "笑道", "哭道", "怒道", "说道", "说", "道", "问", "答", "喊"]
+                    speakerTriggerRegexText = defaults.joined(separator: "\n")
+                    preferences.speakerTriggerRegexes = defaults
+                }
+                Spacer()
+                Button("保存正则") {
+                    let regexes = speakerTriggerRegexText
+                        .split(whereSeparator: \.isNewline)
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    preferences.speakerTriggerRegexes = regexes
+                }
+            }
         }
     }
 }

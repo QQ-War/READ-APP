@@ -325,6 +325,7 @@ fun TtsSettingsScreen(
     narrationTtsEngine: String,
     dialogueTtsEngine: String,
     speakerTtsMapping: Map<String, String>,
+    speakerTriggerRegexes: List<String>,
     availableTtsEngines: List<HttpTTS>,
     speechSpeed: Int,
     preloadCount: Int,
@@ -338,6 +339,7 @@ fun TtsSettingsScreen(
     onSelectDialogueTtsEngine: (String) -> Unit,
     onAddSpeakerMapping: (String, String) -> Unit,
     onRemoveSpeakerMapping: (String) -> Unit,
+    onUpdateSpeakerTriggerRegexes: (List<String>) -> Unit,
     onReloadTtsEngines: () -> Unit,
     onSpeechSpeedChange: (Int) -> Unit,
     onPreloadCountChange: (Int) -> Unit,
@@ -354,6 +356,9 @@ fun TtsSettingsScreen(
     val selectedTtsName = availableTtsEngines.firstOrNull { it.id == selectedTtsEngine }?.name ?: "未选择"
     val narrationTtsName = availableTtsEngines.firstOrNull { it.id == narrationTtsEngine }?.name ?: "未选择"
     val dialogueTtsName = availableTtsEngines.firstOrNull { it.id == dialogueTtsEngine }?.name ?: "未选择"
+    var triggerRegexInput by remember(speakerTriggerRegexes) {
+        mutableStateOf(speakerTriggerRegexes.joinToString("\n"))
+    }
 
     Scaffold(
         topBar = {
@@ -479,6 +484,34 @@ fun TtsSettingsScreen(
                     Text("预加载段数: $preloadCount", style = MaterialTheme.typography.titleSmall)
                     Slider(value = preloadCount.toFloat(), onValueChange = { onPreloadCountChange(it.toInt()) }, valueRange = 1f..10f)
                 }
+
+                SectionHeader("发言识别正则")
+                OutlinedTextField(
+                    value = triggerRegexInput,
+                    onValueChange = { triggerRegexInput = it },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+                    label = { Text("每行一个触发词/正则") },
+                    placeholder = { Text("如：笑着说\n怒道\n说道") }
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        val defaults = listOf("笑着说", "笑道", "哭道", "怒道", "说道", "说", "道", "问", "答", "喊")
+                        triggerRegexInput = defaults.joinToString("\n")
+                        onUpdateSpeakerTriggerRegexes(defaults)
+                    }) {
+                        Text("重置默认")
+                    }
+                    Button(onClick = {
+                        val regexes = triggerRegexInput
+                            .lines()
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() }
+                        onUpdateSpeakerTriggerRegexes(regexes)
+                    }) {
+                        Text("保存正则")
+                    }
+                }
+                Text("匹配规则：在引号外文本中，按触发词优先级匹配发言人。支持正则。", style = MaterialTheme.typography.bodySmall)
             }
         }
     }

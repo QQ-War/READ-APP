@@ -52,6 +52,7 @@ class UserPreferences(private val context: Context) {
         val NarrationTtsId = stringPreferencesKey("narrationTtsId")
         val DialogueTtsId = stringPreferencesKey("dialogueTtsId")
         val SpeakerTtsMapping = stringPreferencesKey("speakerTtsMapping")
+        val SpeakerTriggerRegexes = stringPreferencesKey("speakerTriggerRegexes")
         val ReadingFontSize = floatPreferencesKey("readingFontSize")
         val ReadingHorizontalPadding = floatPreferencesKey("readingHorizontalPadding")
         val ReadingMode = stringPreferencesKey("readingMode")
@@ -136,6 +137,7 @@ class UserPreferences(private val context: Context) {
     val narrationTtsId: Flow<String> = context.dataStore.data.map { it[Keys.NarrationTtsId] ?: "" }
     val dialogueTtsId: Flow<String> = context.dataStore.data.map { it[Keys.DialogueTtsId] ?: "" }
     val speakerTtsMapping: Flow<String> = context.dataStore.data.map { it[Keys.SpeakerTtsMapping] ?: "" }
+    val speakerTriggerRegexes: Flow<String> = context.dataStore.data.map { it[Keys.SpeakerTriggerRegexes] ?: "" }
     val readingFontSize: Flow<Float> = context.dataStore.data.map { it[Keys.ReadingFontSize] ?: 16f }
     val readingHorizontalPadding: Flow<Float> = context.dataStore.data.map { it[Keys.ReadingHorizontalPadding] ?: 24f }
     val speechRate: Flow<Double> = context.dataStore.data.map { it[Keys.SpeechRate] ?: 1.0 }
@@ -208,6 +210,12 @@ class UserPreferences(private val context: Context) {
     suspend fun saveTtsSentenceChunkLimit(value: Int) {
         context.dataStore.edit { prefs: MutablePreferences ->
             prefs[Keys.TtsSentenceChunkLimit] = value
+        }
+    }
+
+    suspend fun saveSpeakerTriggerRegexes(value: String) {
+        context.dataStore.edit { prefs: MutablePreferences ->
+            prefs[Keys.SpeakerTriggerRegexes] = value
         }
     }
 
