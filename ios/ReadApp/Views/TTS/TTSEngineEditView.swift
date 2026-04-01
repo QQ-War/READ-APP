@@ -234,11 +234,7 @@ struct TTSEngineEditView: View {
 
         Task {
             do {
-                let data = try await APIService.shared.fetchReaderTtsAudio(
-                    ttsId: id,
-                    text: text,
-                    speechRate: UserPreferences.shared.speechRate
-                )
+                let data = try await fetchPreviewAudioData(ttsId: id, text: text)
                 await MainActor.run {
                     do {
                         stopPreviewPlayback()
@@ -269,6 +265,26 @@ struct TTSEngineEditView: View {
                 }
             }
         }
+    }
+
+    private func fetchPreviewAudioData(ttsId: String, text: String) async throws -> Data {
+        let speechRate = UserPreferences.shared.speechRate
+        if APIClient.shared.backend == .reader {
+            return try await APIService.shared.fetchReaderTtsAudio(ttsId: ttsId, text: text, speechRate: speechRate)
+        }
+        guard let url = APIService.shared.buildTTSAudioURL(ttsId: ttsId, text: text, speechRate: speechRate) else {
+            throw NSError(domain: "TTSEngineEditView", code: -1, userInfo: [NSLocalizedDescriptionKey: "无法构建试听请求"])
+        }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw NSError(domain: "TTSEngineEditView", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: "试听请求失败"])
+        }
+        let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
+        guard contentType.contains("audio") else {
+            if (try? AVAudioPlayer(data: data)) != nil { return data }
+            throw NSError(domain: "TTSEngineEditView", code: -1, userInfo: [NSLocalizedDescriptionKey: "试听返回非音频数据"])
+        }
+        return data
     }
 
     private func stopPreviewPlayback() {
