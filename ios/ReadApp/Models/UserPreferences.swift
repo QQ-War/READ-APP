@@ -726,10 +726,13 @@ class UserPreferences: ObservableObject {
                 speakerTTSMapping: speakerTTSMapping,
                 preferredSearchSourceUrls: preferredSearchSourceUrls
             )
-            self.accounts = [defaultAccount]
-            self.currentAccountId = defaultId
-            if !accessToken.isEmpty {
-                KeychainHelper.shared.save(accessToken, service: "com.readapp.ios", account: defaultId)
+            // Defer assignment until init completes to avoid early self access issues in CI builds.
+            DispatchQueue.main.async {
+                self.accounts = [defaultAccount]
+                self.currentAccountId = defaultId
+                if !self.accessToken.isEmpty {
+                    KeychainHelper.shared.save(self.accessToken, service: "com.readapp.ios", account: defaultId)
+                }
             }
         }
 
