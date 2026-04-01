@@ -1734,7 +1734,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                     throw IllegalStateException("试听请求失败: HTTP ${response.code}")
                 }
                 val body = response.body?.bytes()
-                if (body.isNullOrEmpty()) {
+                if (body == null || body.isEmpty()) {
                     throw IllegalStateException("试听返回空音频")
                 }
                 body

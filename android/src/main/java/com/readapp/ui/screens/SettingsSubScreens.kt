@@ -794,7 +794,7 @@ private fun TtsEngineEditDialog(
                 OutlinedTextField(value = contentType, onValueChange = { contentType = it }, label = { Text("Content Type") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = concurrentRate, onValueChange = { concurrentRate = it }, label = { Text("并发频率") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = header, onValueChange = { header = it }, label = { Text("自定义 Header (JSON)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-                HorizontalDivider()
+                Divider()
                 OutlinedTextField(
                     value = testText,
                     onValueChange = { testText = it },
