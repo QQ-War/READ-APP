@@ -428,6 +428,7 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                     onAddEngine = bookViewModel::addTtsEngine,
                     onAddEngines = bookViewModel::saveTtsBatch,
                     onDeleteEngine = bookViewModel::deleteTtsEngine,
+                    onTestEngine = bookViewModel::testTtsEngine,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

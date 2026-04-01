@@ -1,5 +1,11 @@
 import Foundation
 import SwiftUI
+import CryptoKit
+import CryptoKit
+
+extension Notification.Name {
+    static let accountChanged = Notification.Name("com.readapp.accountChanged")
+}
 
 class UserPreferences: ObservableObject {
     static let shared = UserPreferences()
@@ -20,30 +26,79 @@ class UserPreferences: ObservableObject {
     @Published var apiBackend: ApiBackend {
         didSet {
             UserDefaults.standard.set(apiBackend.rawValue, forKey: "apiBackend")
+            updateCurrentAccount { $0.apiBackend = apiBackend }
         }
     }
 
     @Published var serverURL: String {
         didSet {
             UserDefaults.standard.set(serverURL, forKey: "serverURL")
+            updateCurrentAccount { $0.serverURL = serverURL }
         }
     }
 
     @Published var publicServerURL: String {
         didSet {
             UserDefaults.standard.set(publicServerURL, forKey: "publicServerURL")
+            updateCurrentAccount { $0.publicServerURL = publicServerURL }
+        }
+    }
+
+    struct UserAccount: Codable, Identifiable, Equatable {
+        var id: String
+        var username: String
+        var serverURL: String
+        var publicServerURL: String
+        var apiBackend: ApiBackend
+        
+        // 账号/服务器相关的设置
+        var selectedTTSId: String?
+        var narrationTTSId: String?
+        var dialogueTTSId: String?
+        var speakerTTSMapping: [String: String]?
+        var preferredSearchSourceUrls: [String]?
+        
+        var displayName: String {
+            if username.isEmpty {
+                return serverURL
+            }
+            return "\(username) (\(serverURL))"
+        }
+    }
+
+    @Published var accounts: [UserAccount] {
+        didSet {
+            if let data = try? JSONEncoder().encode(accounts) {
+                UserDefaults.standard.set(data, forKey: "userAccounts")
+            }
+        }
+    }
+
+    private func updateCurrentAccount(_ transform: (inout UserAccount) -> Void) {
+        guard let id = currentAccountId,
+              let index = accounts.firstIndex(where: { $0.id == id }) else { return }
+        var account = accounts[index]
+        transform(&account)
+        accounts[index] = account
+    }
+
+    @Published var currentAccountId: String? {
+        didSet {
+            UserDefaults.standard.set(currentAccountId, forKey: "currentAccountId")
         }
     }
 
     @Published var accessToken: String {
         didSet {
-            KeychainHelper.shared.save(accessToken, service: "com.readapp.ios", account: "accessToken")
+            let accountKey = currentAccountId ?? "accessToken"
+            KeychainHelper.shared.save(accessToken, service: "com.readapp.ios", account: accountKey)
         }
     }
 
     @Published var username: String {
         didSet {
             UserDefaults.standard.set(username, forKey: "username")
+            updateCurrentAccount { $0.username = username }
         }
     }
 
@@ -93,6 +148,7 @@ class UserPreferences: ObservableObject {
     @Published var narrationTTSId: String {
         didSet {
             UserDefaults.standard.set(narrationTTSId, forKey: "narrationTTSId")
+            updateCurrentAccount { $0.narrationTTSId = narrationTTSId }
         }
     }
 
@@ -100,6 +156,7 @@ class UserPreferences: ObservableObject {
     @Published var dialogueTTSId: String {
         didSet {
             UserDefaults.standard.set(dialogueTTSId, forKey: "dialogueTTSId")
+            updateCurrentAccount { $0.dialogueTTSId = dialogueTTSId }
         }
     }
 
@@ -109,6 +166,7 @@ class UserPreferences: ObservableObject {
             if let data = try? JSONEncoder().encode(speakerTTSMapping) {
                 UserDefaults.standard.set(data, forKey: "speakerTTSMapping")
             }
+            updateCurrentAccount { $0.speakerTTSMapping = speakerTTSMapping }
         }
     }
 
@@ -124,6 +182,7 @@ class UserPreferences: ObservableObject {
     @Published var selectedTTSId: String {
         didSet {
             UserDefaults.standard.set(selectedTTSId, forKey: "selectedTTSId")
+            updateCurrentAccount { $0.selectedTTSId = selectedTTSId }
         }
     }
 
@@ -154,6 +213,7 @@ class UserPreferences: ObservableObject {
     @Published var preferredSearchSourceUrls: [String] {
         didSet {
             UserDefaults.standard.set(preferredSearchSourceUrls, forKey: "preferredSearchSourceUrls")
+            updateCurrentAccount { $0.preferredSearchSourceUrls = preferredSearchSourceUrls }
         }
     }
 
@@ -601,6 +661,14 @@ class UserPreferences: ObservableObject {
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 100.0 : savedSpeechRate
 
+        if let accountsData = UserDefaults.standard.data(forKey: "userAccounts"),
+           let savedAccounts = try? JSONDecoder().decode([UserAccount].self, from: accountsData) {
+            self.accounts = savedAccounts
+        } else {
+            self.accounts = []
+        }
+        self.currentAccountId = UserDefaults.standard.string(forKey: "currentAccountId")
+
         let rawServerURL = UserDefaults.standard.string(forKey: "serverURL") ?? ""
         let rawPublicURL = UserDefaults.standard.string(forKey: "publicServerURL") ?? ""
         let savedBackendRaw = UserDefaults.standard.string(forKey: "apiBackend")
@@ -612,9 +680,24 @@ class UserPreferences: ObservableObject {
         }
         self.serverURL = ApiBackendResolver.stripApiBasePath(rawServerURL)
         self.publicServerURL = ApiBackendResolver.stripApiBasePath(rawPublicURL)
-        self.accessToken = KeychainHelper.shared.read(service: "com.readapp.ios", account: "accessToken") ?? UserDefaults.standard.string(forKey: "accessToken") ?? ""
+        
+        let accountKey = currentAccountId ?? "accessToken"
+        self.accessToken = KeychainHelper.shared.read(service: "com.readapp.ios", account: accountKey) ?? UserDefaults.standard.string(forKey: "accessToken") ?? ""
         self.username = UserDefaults.standard.string(forKey: "username") ?? ""
         self.isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
+        
+        // 如果是从旧版本升级，还没有 accounts 且已经登录，则创建一个默认账户
+        if accounts.isEmpty && isLoggedIn && !serverURL.isEmpty {
+            let defaultId = "\(serverURL):\(username)"
+            let defaultAccount = UserAccount(id: defaultId, username: username, serverURL: serverURL, publicServerURL: publicServerURL, apiBackend: apiBackend)
+            self.accounts = [defaultAccount]
+            self.currentAccountId = defaultId
+            // 迁移旧 Token 到新的 Keychain Key
+            if !accessToken.isEmpty {
+                KeychainHelper.shared.save(accessToken, service: "com.readapp.ios", account: defaultId)
+            }
+        }
+
         self.selectedTTSId = UserDefaults.standard.string(forKey: "selectedTTSId") ?? ""
         self.useSystemTTS = UserDefaults.standard.bool(forKey: "useSystemTTS")
         self.systemVoiceId = UserDefaults.standard.string(forKey: "systemVoiceId") ?? ""
@@ -685,11 +768,54 @@ class UserPreferences: ObservableObject {
     }
 
     func logout() {
-        accessToken = ""
-        KeychainHelper.shared.delete(service: "com.readapp.ios", account: "accessToken")
-        username = ""
-        isLoggedIn = false
+        if let id = currentAccountId {
+            accounts.removeAll(where: { $0.id == id })
+            KeychainHelper.shared.delete(service: "com.readapp.ios", account: id)
+        }
+        
+        if let nextAccount = accounts.first {
+            switchAccount(to: nextAccount.id)
+        } else {
+            accessToken = ""
+            KeychainHelper.shared.delete(service: "com.readapp.ios", account: "accessToken")
+            username = ""
+            isLoggedIn = false
+            currentAccountId = nil
+            serverURL = ""
+            publicServerURL = ""
+        }
     }
+
+    func switchAccount(to id: String) {
+        guard let account = accounts.first(where: { $0.id == id }) else { return }
+        currentAccountId = id
+        username = account.username
+        serverURL = account.serverURL
+        publicServerURL = account.publicServerURL
+        apiBackend = account.apiBackend
+        accessToken = KeychainHelper.shared.read(service: "com.readapp.ios", account: id) ?? ""
+        isLoggedIn = !accessToken.isEmpty
+        
+        // 同步账号相关的设置项
+        self.selectedTTSId = account.selectedTTSId ?? ""
+        self.narrationTTSId = account.narrationTTSId ?? ""
+        self.dialogueTTSId = account.dialogueTTSId ?? ""
+        self.speakerTTSMapping = account.speakerTTSMapping ?? [:]
+        self.preferredSearchSourceUrls = account.preferredSearchSourceUrls ?? []
+        
+        NotificationCenter.default.post(name: .accountChanged, object: nil)
+    }
+
+    func addAccount(account: UserAccount, token: String) {
+        if let existingIndex = accounts.firstIndex(where: { $0.id == account.id }) {
+            accounts[existingIndex] = account
+        } else {
+            accounts.append(account)
+        }
+        KeychainHelper.shared.save(token, service: "com.readapp.ios", account: account.id)
+        switchAccount(to: account.id)
+    }
+
 }
 
 private extension UserPreferences {
@@ -705,6 +831,12 @@ private extension UserPreferences {
         "答",
         "喊"
     ]
+}
+
+func md5Hex(_ input: String) -> String {
+    let inputData = Data(input.utf8)
+    let hashed = Insecure.MD5.hash(data: inputData)
+    return hashed.map { String(format: "%02hhx", $0) }.joined()
 }
 
 enum SettingItem: String, CaseIterable, Identifiable {

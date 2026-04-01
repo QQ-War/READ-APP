@@ -1696,6 +1696,51 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             }
         )
     }
+
+    suspend fun testTtsEngine(engine: HttpTTS, text: String): Result<ByteArray> {
+        if (_accessToken.value.isBlank()) {
+            return Result.failure(IllegalStateException("请先登录"))
+        }
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) {
+            return Result.failure(IllegalArgumentException("试听文本不能为空"))
+        }
+        val speechRate = (_speechSpeed.value / 20.0).coerceIn(0.1, 4.0)
+        val request = ttsRepository.buildTtsAudioRequest(
+            currentServerEndpoint(),
+            _accessToken.value,
+            engine,
+            trimmed,
+            speechRate,
+            false
+        ) ?: return Result.failure(IllegalStateException("无法构建试听请求，请先保存引擎"))
+
+        return when (request) {
+            is TtsAudioRequest.Url -> fetchAudioFromUrl(request.url)
+            is TtsAudioRequest.Reader -> ttsRepository.requestReaderTtsAudio(
+                currentServerEndpoint(),
+                _accessToken.value,
+                request
+            )
+        }
+    }
+
+    private suspend fun fetchAudioFromUrl(url: String): Result<ByteArray> = withContext(Dispatchers.IO) {
+        runCatching {
+            val client = okhttp3.OkHttpClient()
+            val request = okhttp3.Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("试听请求失败: HTTP ${response.code}")
+                }
+                val body = response.body?.bytes()
+                if (body.isNullOrEmpty()) {
+                    throw IllegalStateException("试听返回空音频")
+                }
+                body
+            }
+        }
+    }
     private fun applyBooksFilterAndSort() {
         val filtered = if (currentSearchQuery.isBlank()) allBooks else allBooks.filter { it.name.orEmpty().lowercase().contains(currentSearchQuery.lowercase()) || it.author.orEmpty().lowercase().contains(currentSearchQuery.lowercase()) }
         val sorted = if (_bookshelfSortByRecent.value) {
