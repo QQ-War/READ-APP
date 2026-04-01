@@ -426,11 +426,21 @@ class APIService {
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw NSError(domain: "APIService", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: "TTS请求失败"])
         }
-        let apiResponse = try JSONDecoder().decode(APIResponse<String>.self, from: data)
-        guard apiResponse.isSuccess, let base64 = apiResponse.data, let decoded = Data(base64Encoded: base64) else {
-            throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "TTS音频响应异常"])
+        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
+        if contentType.lowercased().contains("audio") {
+            return data
         }
-        return decoded
+        if let apiResponse = try? JSONDecoder().decode(APIResponse<String>.self, from: data),
+           apiResponse.isSuccess,
+           let base64 = apiResponse.data,
+           let decoded = Data(base64Encoded: base64) {
+            return decoded
+        }
+        if let raw = String(data: data, encoding: .utf8),
+           let decoded = Data(base64Encoded: raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return decoded
+        }
+        throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "TTS音频响应异常"])
     }
     
     func buildTTSAudioURL(ttsId: String, text: String, speechRate: Double) -> URL? {
