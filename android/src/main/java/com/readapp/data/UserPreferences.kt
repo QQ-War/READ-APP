@@ -48,6 +48,8 @@ class UserPreferences(private val context: Context) {
         val PublicServerUrl = stringPreferencesKey("publicServerUrl")
         val AccessToken = stringPreferencesKey("accessToken")
         val Username = stringPreferencesKey("username")
+        val Accounts = stringPreferencesKey("accounts")
+        val CurrentAccountId = stringPreferencesKey("currentAccountId")
         val SelectedTtsId = stringPreferencesKey("selectedTtsId")
         val NarrationTtsId = stringPreferencesKey("narrationTtsId")
         val DialogueTtsId = stringPreferencesKey("dialogueTtsId")
@@ -79,7 +81,6 @@ class UserPreferences(private val context: Context) {
         val VerticalDampingFactor = floatPreferencesKey("verticalDampingFactor")
         val MangaMaxZoom = floatPreferencesKey("mangaMaxZoom")
         val ReadingMaxRefreshRate = floatPreferencesKey("readingMaxRefreshRate")
-        val CachedTtsEngines = stringPreferencesKey("cachedTtsEngines")
         val CachedRssSources = stringPreferencesKey("cachedRssSources")
     }
 
@@ -111,25 +112,41 @@ class UserPreferences(private val context: Context) {
         (it[Keys.ReadingMaxRefreshRate] ?: 0f).coerceIn(0f, 120f)
     }
 
+    private fun cachedTtsKeyFor(accountId: String): String {
+        return "cachedTtsEngines_${accountId}"
+    }
+
     suspend fun saveCachedTtsEngines(engines: List<HttpTTS>) {
         val json = gson.toJson(engines)
-        context.dataStore.edit { prefs -> prefs[Keys.CachedTtsEngines] = json }
+        val currentId = getCurrentAccountId().ifBlank { "default" }
+        context.dataStore.edit { prefs ->
+            prefs[stringPreferencesKey(cachedTtsKeyFor(currentId))] = json
+        }
     }
 
     suspend fun loadCachedTtsEngines(): List<HttpTTS> {
-        val json = context.dataStore.data.first()[Keys.CachedTtsEngines].orEmpty()
+        val currentId = getCurrentAccountId().ifBlank { "default" }
+        val json = context.dataStore.data.first()[stringPreferencesKey(cachedTtsKeyFor(currentId))].orEmpty()
         if (json.isBlank()) return emptyList()
         val type = object : TypeToken<List<HttpTTS>>() {}.type
         return runCatching { gson.fromJson<List<HttpTTS>>(json, type) }.getOrElse { emptyList() }
     }
 
+    private fun cachedRssKeyFor(accountId: String): String {
+        return "cachedRssSources_${accountId}"
+    }
+
     suspend fun saveCachedRssSources(sources: List<RssSourceItem>) {
         val json = gson.toJson(sources)
-        context.dataStore.edit { prefs -> prefs[Keys.CachedRssSources] = json }
+        val currentId = getCurrentAccountId().ifBlank { "default" }
+        context.dataStore.edit { prefs ->
+            prefs[stringPreferencesKey(cachedRssKeyFor(currentId))] = json
+        }
     }
 
     suspend fun loadCachedRssSources(): List<RssSourceItem> {
-        val json = context.dataStore.data.first()[Keys.CachedRssSources].orEmpty()
+        val currentId = getCurrentAccountId().ifBlank { "default" }
+        val json = context.dataStore.data.first()[stringPreferencesKey(cachedRssKeyFor(currentId))].orEmpty()
         if (json.isBlank()) return emptyList()
         val type = object : TypeToken<List<RssSourceItem>>() {}.type
         return runCatching { gson.fromJson<List<RssSourceItem>>(json, type) }.getOrElse { emptyList() }
@@ -169,6 +186,104 @@ class UserPreferences(private val context: Context) {
     }
     val readingFontPath: Flow<String> = context.dataStore.data.map { it[Keys.ReadingFontPath] ?: "" }
     val readingFontName: Flow<String> = context.dataStore.data.map { it[Keys.ReadingFontName] ?: "" }
+
+    suspend fun getCurrentAccountId(): String {
+        return context.dataStore.data.first()[Keys.CurrentAccountId].orEmpty()
+    }
+
+    data class UserAccount(
+        val id: String,
+        val username: String,
+        val serverUrl: String,
+        val publicServerUrl: String,
+        val apiBackend: ApiBackend,
+        val accessToken: String
+    )
+
+    private fun accountId(serverUrl: String, username: String, apiBackend: ApiBackend): String {
+        return "${apiBackend.name}:${serverUrl}:${username}"
+    }
+
+    private fun parseAccounts(json: String): List<UserAccount> {
+        if (json.isBlank()) return emptyList()
+        val type = object : TypeToken<List<UserAccount>>() {}.type
+        return runCatching { gson.fromJson<List<UserAccount>>(json, type) }.getOrElse { emptyList() }
+    }
+
+    private fun encodeAccounts(accounts: List<UserAccount>): String {
+        return gson.toJson(accounts)
+    }
+
+    suspend fun addAccount(serverUrl: String, publicServerUrl: String, username: String, apiBackend: ApiBackend, accessToken: String) {
+        val normalizedServer = stripApiBasePath(serverUrl)
+        val normalizedPublic = if (publicServerUrl.isBlank()) "" else stripApiBasePath(publicServerUrl)
+        val id = accountId(normalizedServer, username, apiBackend)
+        context.dataStore.edit { prefs ->
+            val existing = parseAccounts(prefs[Keys.Accounts].orEmpty()).toMutableList()
+            val filtered = existing.filterNot { it.id == id }
+            val updated = filtered + UserAccount(
+                id = id,
+                username = username,
+                serverUrl = normalizedServer,
+                publicServerUrl = normalizedPublic,
+                apiBackend = apiBackend,
+                accessToken = accessToken
+            )
+            prefs[Keys.Accounts] = encodeAccounts(updated)
+            prefs[Keys.CurrentAccountId] = id
+            prefs[Keys.ServerUrl] = normalizedServer
+            prefs[Keys.PublicServerUrl] = normalizedPublic
+            prefs[Keys.ApiBackend] = apiBackend.name
+            prefs[Keys.Username] = username
+            prefs[Keys.AccessToken] = accessToken
+        }
+        secureStorage.saveAccessToken(accessToken)
+        AccountContext.currentAccountId = id
+    }
+
+    suspend fun switchAccount(id: String): Boolean {
+        val accounts = parseAccounts(context.dataStore.data.first()[Keys.Accounts].orEmpty())
+        val account = accounts.firstOrNull { it.id == id } ?: return false
+        context.dataStore.edit { prefs ->
+            prefs[Keys.CurrentAccountId] = id
+            prefs[Keys.ServerUrl] = account.serverUrl
+            prefs[Keys.PublicServerUrl] = account.publicServerUrl
+            prefs[Keys.ApiBackend] = account.apiBackend.name
+            prefs[Keys.Username] = account.username
+            prefs[Keys.AccessToken] = account.accessToken
+        }
+        secureStorage.saveAccessToken(account.accessToken)
+        AccountContext.currentAccountId = id
+        return true
+    }
+
+    suspend fun removeAccount(id: String) {
+        context.dataStore.edit { prefs ->
+            val existing = parseAccounts(prefs[Keys.Accounts].orEmpty())
+            val updated = existing.filterNot { it.id == id }
+            prefs[Keys.Accounts] = encodeAccounts(updated)
+            if (prefs[Keys.CurrentAccountId] == id) {
+                prefs[Keys.CurrentAccountId] = updated.firstOrNull()?.id ?: ""
+                val next = updated.firstOrNull()
+                if (next != null) {
+                    prefs[Keys.ServerUrl] = next.serverUrl
+                    prefs[Keys.PublicServerUrl] = next.publicServerUrl
+                    prefs[Keys.ApiBackend] = next.apiBackend.name
+                    prefs[Keys.Username] = next.username
+                    prefs[Keys.AccessToken] = next.accessToken
+                } else {
+                    prefs[Keys.AccessToken] = ""
+                    prefs[Keys.Username] = ""
+                }
+            }
+        }
+        val current = getCurrentAccountId()
+        AccountContext.currentAccountId = current.ifBlank { "default" }
+    }
+
+    suspend fun listAccounts(): List<UserAccount> {
+        return parseAccounts(context.dataStore.data.first()[Keys.Accounts].orEmpty())
+    }
 
     suspend fun saveReadingMode(value: ReadingMode) {
         context.dataStore.edit { prefs: MutablePreferences ->

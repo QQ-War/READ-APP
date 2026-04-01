@@ -4,9 +4,27 @@ import CryptoKit
 class LocalCacheManager {
     static let shared = LocalCacheManager()
     private let fileManager = FileManager.default
+
+    private var legacyBaseDir: URL {
+        fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("BookCache")
+    }
     
     private var baseDir: URL {
-        fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("BookCache")
+        let accountId = UserPreferences.shared.currentAccountId ?? "default"
+        let safeId = md5Hex(accountId)
+        let url = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BookCache")
+            .appendingPathComponent(safeId)
+        if accountId == "default" {
+            let legacyPath = legacyBaseDir.path
+            if fileManager.fileExists(atPath: legacyPath), !fileManager.fileExists(atPath: url.path) {
+                return legacyBaseDir
+            }
+        }
+        if !fileManager.fileExists(atPath: url.path) {
+            try? fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        return url
     }
     
     private init() {
@@ -19,12 +37,6 @@ class LocalCacheManager {
         return baseDir.appendingPathComponent(hashString)
     }
 
-    private func md5Hex(_ input: String) -> String {
-        let inputData = Data(input.utf8)
-        let hashed = Insecure.MD5.hash(data: inputData)
-        return hashed.map { String(format: "%02hhx", $0) }.joined()
-    }
-    
     // MARK: - 章节正文缓存
     
     func saveChapter(bookUrl: String, index: Int, content: String) {

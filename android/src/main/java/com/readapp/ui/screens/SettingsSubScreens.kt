@@ -37,6 +37,11 @@ fun AccountSettingsView(
     serverUrl: String,
     publicServerUrl: String,
     backend: ApiBackend,
+    accounts: List<com.readapp.data.UserPreferences.UserAccount>,
+    currentAccountId: String,
+    onSwitchAccount: (String) -> Unit,
+    onAddAccount: () -> Unit,
+    onRemoveAccount: (String) -> Unit,
     onLogout: () -> Unit,
     onConfirmPasswordChange: (String, String) -> Unit,
     onNavigateBack: () -> Unit
@@ -77,6 +82,27 @@ fun AccountSettingsView(
             if (publicServerUrl.isNotBlank()) {
                 SettingsItem(title = "公网服务器", subtitle = publicServerUrl, icon = Icons.Default.Public) {}
             }
+
+            SectionHeader("切换账号")
+            if (accounts.isEmpty()) {
+                Text("暂无其他账号", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    accounts.forEach { account ->
+                        val title = if (account.username.isBlank()) account.serverUrl else account.username
+                        val subtitle = account.serverUrl
+                        SettingsItem(title = title, subtitle = subtitle, icon = Icons.Default.Person) {
+                            onSwitchAccount(account.id)
+                        }
+                        if (account.id == currentAccountId) {
+                            Text("当前账号", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        } else {
+                            TextButton(onClick = { onRemoveAccount(account.id) }) { Text("移除") }
+                        }
+                    }
+                }
+            }
+            Button(onClick = onAddAccount, modifier = Modifier.fillMaxWidth()) { Text("添加账号") }
 
             SectionHeader("安全与操作")
             SettingsItem(title = "修改密码", subtitle = "更新您的登录凭据", icon = Icons.Default.Lock) {
@@ -616,6 +642,7 @@ fun TtsEngineManageScreen(
     onAddEngine: (HttpTTS) -> Unit,
     onAddEngines: (String) -> Unit,
     onDeleteEngine: (String) -> Unit,
+    onTestEngine: suspend (HttpTTS, String) -> Result<ByteArray>,
     onNavigateBack: () -> Unit
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
@@ -741,6 +768,7 @@ fun TtsEngineManageScreen(
     if (showEditDialog) {
         TtsEngineEditDialog(
             engine = engineToEdit,
+            onTestEngine = onTestEngine,
             onSave = {
                 onAddEngine(it)
                 showEditDialog = false
@@ -753,14 +781,34 @@ fun TtsEngineManageScreen(
 @Composable
 private fun TtsEngineEditDialog(
     engine: HttpTTS?,
+    onTestEngine: suspend (HttpTTS, String) -> Result<ByteArray>,
     onSave: (HttpTTS) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(engine?.name ?: "") }
     var url by remember { mutableStateOf(engine?.url ?: "") }
     var contentType by remember { mutableStateOf(engine?.contentType ?: "audio/mpeg") }
     var concurrentRate by remember { mutableStateOf(engine?.concurrentRate ?: "1") }
     var header by remember { mutableStateOf(engine?.header ?: "") }
+    var testText by remember { mutableStateOf("这是一段 TTS 试听文本。") }
+    var isTesting by remember { mutableStateOf(false) }
+    var testMessage by remember { mutableStateOf<String?>(null) }
+    var previewPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    var previewFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    fun releasePreview() {
+        previewPlayer?.runCatching { stop() }
+        previewPlayer?.release()
+        previewPlayer = null
+        previewFile?.delete()
+        previewFile = null
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { releasePreview() }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -772,10 +820,106 @@ private fun TtsEngineEditDialog(
                 OutlinedTextField(value = contentType, onValueChange = { contentType = it }, label = { Text("Content Type") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = concurrentRate, onValueChange = { concurrentRate = it }, label = { Text("并发频率") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = header, onValueChange = { header = it }, label = { Text("自定义 Header (JSON)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+                Divider()
+                OutlinedTextField(
+                    value = testText,
+                    onValueChange = { testText = it },
+                    label = { Text("试听文本") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+                Button(
+                    onClick = {
+                        if (previewPlayer?.isPlaying == true) {
+                            releasePreview()
+                            return@Button
+                        }
+                        if (engine == null) {
+                            testMessage = "请先保存引擎后再试听"
+                            return@Button
+                        }
+                        val text = testText.trim()
+                        if (text.isEmpty()) {
+                            testMessage = "试听文本不能为空"
+                            return@Button
+                        }
+                        isTesting = true
+                        testMessage = null
+                        val draft = HttpTTS(
+                            id = engine.id,
+                            userid = engine.userid,
+                            name = name,
+                            url = url,
+                            contentType = contentType,
+                            concurrentRate = concurrentRate,
+                            loginUrl = engine.loginUrl,
+                            loginUi = engine.loginUi,
+                            header = header,
+                            enabledCookieJar = engine.enabledCookieJar,
+                            loginCheckJs = engine.loginCheckJs,
+                            lastUpdateTime = System.currentTimeMillis()
+                        )
+                        scope.launch {
+                            val result = onTestEngine(draft, text)
+                            isTesting = false
+                            result.onSuccess { bytes ->
+                                runCatching {
+                                    releasePreview()
+                                    val ext = when (contentType.lowercase()) {
+                                        "audio/wav", "audio/x-wav" -> ".wav"
+                                        "audio/ogg", "audio/opus" -> ".ogg"
+                                        else -> ".mp3"
+                                    }
+                                    val file = java.io.File.createTempFile("tts_preview_", ext, context.cacheDir)
+                                    file.writeBytes(bytes)
+                                    val player = android.media.MediaPlayer().apply {
+                                        setDataSource(file.absolutePath)
+                                        setOnCompletionListener {
+                                            releasePreview()
+                                            testMessage = "试听完成"
+                                        }
+                                        setOnErrorListener { _, _, _ ->
+                                            releasePreview()
+                                            testMessage = "试听播放失败"
+                                            true
+                                        }
+                                        prepare()
+                                        start()
+                                    }
+                                    previewPlayer = player
+                                    previewFile = file
+                                    testMessage = "正在试听"
+                                }.onFailure {
+                                    releasePreview()
+                                    testMessage = "试听播放失败: ${it.message}"
+                                }
+                            }.onFailure {
+                                releasePreview()
+                                testMessage = "试听失败: ${it.message}"
+                            }
+                        }
+                    },
+                    enabled = !isTesting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isTesting) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text(if (previewPlayer?.isPlaying == true) "停止试听" else "试听当前引擎")
+                    }
+                }
+                if (!testMessage.isNullOrBlank()) {
+                    Text(
+                        text = testMessage!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
             }
         },
         confirmButton = {
             Button(onClick = {
+                releasePreview()
                 onSave(HttpTTS(
                     id = engine?.id ?: java.util.UUID.randomUUID().toString(),
                     userid = engine?.userid,
@@ -795,7 +939,10 @@ private fun TtsEngineEditDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = {
+                releasePreview()
+                onDismiss()
+            }) { Text("取消") }
         }
     )
 }

@@ -14,6 +14,11 @@ final class BookshelfStore: ObservableObject {
         if let cachedBooks = LocalCacheManager.shared.loadBookshelfCache() {
             self.books = cachedBooks
         }
+        
+        NotificationCenter.default.addObserver(forName: .accountChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.books = LocalCacheManager.shared.loadBookshelfCache() ?? []
+            Task { await self?.refreshBookshelf() }
+        }
     }
 
     func refreshBookshelf() async {

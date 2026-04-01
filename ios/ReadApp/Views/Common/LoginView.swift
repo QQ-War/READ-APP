@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LoginView: View {
     @StateObject private var preferences = UserPreferences.shared
+    @Environment(\.dismiss) var dismiss
     @State private var username = ""
     @State private var password = ""
     @State private var isLoading = false
@@ -94,7 +95,17 @@ struct LoginView: View {
                 
                 Spacer()
             }
-            .navigationBarHidden(true)
+            .navigationBarHidden(false)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if preferences.isLoggedIn {
+                        Button("取消") {
+                            dismiss()
+                        }
+                    }
+                }
+            }
             .sheet(isPresented: $showServerSettings) {
                 ServerSettingsView()
             }
@@ -117,10 +128,17 @@ struct LoginView: View {
                 let accessToken = try await APIService.shared.login(username: username, password: password)
                 
                 await MainActor.run {
-                    preferences.accessToken = accessToken
-                    preferences.username = username
-                    preferences.isLoggedIn = true
+                    let accountId = "\(preferences.apiBackend.rawValue):\(preferences.serverURL):\(username)"
+                    let account = UserPreferences.UserAccount(
+                        id: accountId,
+                        username: username,
+                        serverURL: preferences.serverURL,
+                        publicServerURL: preferences.publicServerURL,
+                        apiBackend: preferences.apiBackend
+                    )
+                    preferences.addAccount(account: account, token: accessToken)
                     isLoading = false
+                    dismiss()
                 }
             } catch {
                 await MainActor.run {
