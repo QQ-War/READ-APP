@@ -17,9 +17,12 @@ final class BooksService {
         guard !client.accessToken.isEmpty else {
             throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
         }
-        let queryItems = [
+        var queryItems = [
             URLQueryItem(name: "version", value: "1.0.0")
         ]
+        if client.backend == .read {
+            queryItems.append(URLQueryItem(name: "accessToken", value: client.accessToken))
+        }
         let endpoint = client.backend == .reader ? ApiEndpointsReader.getBookshelf : ApiEndpoints.getBookshelf
         let (data, httpResponse) = try await client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)
         guard httpResponse.statusCode == 200 else {
