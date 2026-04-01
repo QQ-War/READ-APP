@@ -682,6 +682,22 @@ class UserPreferences: ObservableObject {
         let serverURLValue = ApiBackendResolver.stripApiBasePath(rawServerURL)
         let publicServerURLValue = ApiBackendResolver.stripApiBasePath(rawPublicURL)
 
+        var migratedAccounts = [UserAccount]()
+        var migratedCurrentAccountId = currentAccountIdValue
+        if !accountsValue.isEmpty {
+            var indexById = [String: UserAccount]()
+            for account in accountsValue {
+                let newId = Self.accountId(serverURL: account.serverURL, username: account.username, apiBackend: account.apiBackend)
+                var updated = account
+                updated.id = newId
+                indexById[newId] = updated
+                if account.id == currentAccountIdValue {
+                    migratedCurrentAccountId = newId
+                }
+            }
+            migratedAccounts = Array(indexById.values)
+        }
+
         let accountKey = migratedCurrentAccountId ?? currentAccountIdValue ?? "accessToken"
         let accessTokenValue = KeychainHelper.shared.read(service: "com.readapp.ios", account: accountKey) ?? UserDefaults.standard.string(forKey: "accessToken") ?? ""
         let usernameValue = UserDefaults.standard.string(forKey: "username") ?? ""
@@ -711,22 +727,6 @@ class UserPreferences: ObservableObject {
         let bookshelfSortByRecentValue = UserDefaults.standard.bool(forKey: "bookshelfSortByRecent")
         let searchSourcesFromBookshelfValue = UserDefaults.standard.bool(forKey: "searchSourcesFromBookshelf")
         let preferredSearchSourceUrlsValue = UserDefaults.standard.stringArray(forKey: "preferredSearchSourceUrls") ?? []
-
-        var migratedAccounts = [UserAccount]()
-        var migratedCurrentAccountId = currentAccountIdValue
-        if !accountsValue.isEmpty {
-            var indexById = [String: UserAccount]()
-            for account in accountsValue {
-                let newId = Self.accountId(serverURL: account.serverURL, username: account.username, apiBackend: account.apiBackend)
-                var updated = account
-                updated.id = newId
-                indexById[newId] = updated
-                if account.id == currentAccountIdValue {
-                    migratedCurrentAccountId = newId
-                }
-            }
-            migratedAccounts = Array(indexById.values)
-        }
 
         let needsBootstrapAccount = migratedAccounts.isEmpty && isLoggedInValue && !serverURLValue.isEmpty
 
