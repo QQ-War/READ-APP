@@ -128,7 +128,7 @@ struct LoginView: View {
                 let accessToken = try await APIService.shared.login(username: username, password: password)
                 
                 await MainActor.run {
-                    let accountId = "\(preferences.serverURL):\(username)"
+                    let accountId = "\(preferences.apiBackend.rawValue):\(preferences.serverURL):\(username)"
                     let account = UserPreferences.UserAccount(
                         id: accountId,
                         username: username,

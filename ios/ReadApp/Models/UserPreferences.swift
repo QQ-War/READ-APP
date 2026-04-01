@@ -23,6 +23,10 @@ class UserPreferences: ObservableObject {
         return max(minValue, min(maxValue, value))
     }
 
+    private static func accountId(serverURL: String, username: String, apiBackend: ApiBackend) -> String {
+        "\(apiBackend.rawValue):\(serverURL):\(username)"
+    }
+
     @Published var apiBackend: ApiBackend {
         didSet {
             UserDefaults.standard.set(apiBackend.rawValue, forKey: "apiBackend")
@@ -678,7 +682,7 @@ class UserPreferences: ObservableObject {
         let serverURLValue = ApiBackendResolver.stripApiBasePath(rawServerURL)
         let publicServerURLValue = ApiBackendResolver.stripApiBasePath(rawPublicURL)
 
-        let accountKey = currentAccountIdValue ?? "accessToken"
+        let accountKey = migratedCurrentAccountId ?? currentAccountIdValue ?? "accessToken"
         let accessTokenValue = KeychainHelper.shared.read(service: "com.readapp.ios", account: accountKey) ?? UserDefaults.standard.string(forKey: "accessToken") ?? ""
         let usernameValue = UserDefaults.standard.string(forKey: "username") ?? ""
         let isLoggedInValue = UserDefaults.standard.bool(forKey: "isLoggedIn")
@@ -708,10 +712,26 @@ class UserPreferences: ObservableObject {
         let searchSourcesFromBookshelfValue = UserDefaults.standard.bool(forKey: "searchSourcesFromBookshelf")
         let preferredSearchSourceUrlsValue = UserDefaults.standard.stringArray(forKey: "preferredSearchSourceUrls") ?? []
 
-        let needsBootstrapAccount = accountsValue.isEmpty && isLoggedInValue && !serverURLValue.isEmpty
+        var migratedAccounts = [UserAccount]()
+        var migratedCurrentAccountId = currentAccountIdValue
+        if !accountsValue.isEmpty {
+            var indexById = [String: UserAccount]()
+            for account in accountsValue {
+                let newId = Self.accountId(serverURL: account.serverURL, username: account.username, apiBackend: account.apiBackend)
+                var updated = account
+                updated.id = newId
+                indexById[newId] = updated
+                if account.id == currentAccountIdValue {
+                    migratedCurrentAccountId = newId
+                }
+            }
+            migratedAccounts = Array(indexById.values)
+        }
 
-        self.accounts = accountsValue
-        self.currentAccountId = currentAccountIdValue
+        let needsBootstrapAccount = migratedAccounts.isEmpty && isLoggedInValue && !serverURLValue.isEmpty
+
+        self.accounts = migratedAccounts
+        self.currentAccountId = migratedCurrentAccountId
         self.apiBackend = apiBackendValue
         self.serverURL = serverURLValue
         self.publicServerURL = publicServerURLValue
@@ -730,7 +750,7 @@ class UserPreferences: ObservableObject {
         self.preferredSearchSourceUrls = preferredSearchSourceUrlsValue
 
         if needsBootstrapAccount {
-            let defaultId = "\(serverURLValue):\(usernameValue)"
+            let defaultId = Self.accountId(serverURL: serverURLValue, username: usernameValue, apiBackend: apiBackendValue)
             let defaultAccount = UserAccount(
                 id: defaultId,
                 username: usernameValue,
@@ -836,13 +856,16 @@ class UserPreferences: ObservableObject {
     }
 
     func addAccount(account: UserAccount, token: String) {
-        if let existingIndex = accounts.firstIndex(where: { $0.id == account.id }) {
-            accounts[existingIndex] = account
+        let normalizedId = Self.accountId(serverURL: account.serverURL, username: account.username, apiBackend: account.apiBackend)
+        var normalizedAccount = account
+        normalizedAccount.id = normalizedId
+        if let existingIndex = accounts.firstIndex(where: { $0.id == normalizedId }) {
+            accounts[existingIndex] = normalizedAccount
         } else {
-            accounts.append(account)
+            accounts.append(normalizedAccount)
         }
-        KeychainHelper.shared.save(token, service: "com.readapp.ios", account: account.id)
-        switchAccount(to: account.id)
+        KeychainHelper.shared.save(token, service: "com.readapp.ios", account: normalizedId)
+        switchAccount(to: normalizedId)
     }
 
 }
