@@ -687,16 +687,7 @@ class UserPreferences: ObservableObject {
         self.isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
         
         // 如果是从旧版本升级，还没有 accounts 且已经登录，则创建一个默认账户
-        if accounts.isEmpty && isLoggedIn && !serverURL.isEmpty {
-            let defaultId = "\(serverURL):\(username)"
-            let defaultAccount = UserAccount(id: defaultId, username: username, serverURL: serverURL, publicServerURL: publicServerURL, apiBackend: apiBackend)
-            self.accounts = [defaultAccount]
-            self.currentAccountId = defaultId
-            // 迁移旧 Token 到新的 Keychain Key
-            if !accessToken.isEmpty {
-                KeychainHelper.shared.save(accessToken, service: "com.readapp.ios", account: defaultId)
-            }
-        }
+        let needsBootstrapAccount = accounts.isEmpty && isLoggedIn && !serverURL.isEmpty
 
         self.selectedTTSId = UserDefaults.standard.string(forKey: "selectedTTSId") ?? ""
         self.useSystemTTS = UserDefaults.standard.bool(forKey: "useSystemTTS")
@@ -720,6 +711,27 @@ class UserPreferences: ObservableObject {
         self.bookshelfSortByRecent = UserDefaults.standard.bool(forKey: "bookshelfSortByRecent")
         self.searchSourcesFromBookshelf = UserDefaults.standard.bool(forKey: "searchSourcesFromBookshelf")
         self.preferredSearchSourceUrls = UserDefaults.standard.stringArray(forKey: "preferredSearchSourceUrls") ?? []
+
+        if needsBootstrapAccount {
+            let defaultId = "\(serverURL):\(username)"
+            let defaultAccount = UserAccount(
+                id: defaultId,
+                username: username,
+                serverURL: serverURL,
+                publicServerURL: publicServerURL,
+                apiBackend: apiBackend,
+                selectedTTSId: selectedTTSId,
+                narrationTTSId: narrationTTSId,
+                dialogueTTSId: dialogueTTSId,
+                speakerTTSMapping: speakerTTSMapping,
+                preferredSearchSourceUrls: preferredSearchSourceUrls
+            )
+            self.accounts = [defaultAccount]
+            self.currentAccountId = defaultId
+            if !accessToken.isEmpty {
+                KeychainHelper.shared.save(accessToken, service: "com.readapp.ios", account: defaultId)
+            }
+        }
 
         let savedPreloadCount = UserDefaults.standard.integer(forKey: "ttsPreloadCount")
         self.ttsPreloadCount = savedPreloadCount == 0 ? 10 : savedPreloadCount
