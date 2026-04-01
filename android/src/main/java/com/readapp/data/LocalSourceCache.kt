@@ -7,9 +7,7 @@ import java.io.File
 
 class LocalSourceCache(context: Context) {
     private val gson = Gson()
-    private val accountRoot = File(context.filesDir, "accounts").apply { if (!exists()) mkdirs() }
-    private val accountDir = File(accountRoot, AccountContext.currentAccountId).apply { if (!exists()) mkdirs() }
-    private val cacheFile = File(accountDir, "sources_cache.json")
+    private val cacheFile = File(context.filesDir, "sources_cache.json")
 
     fun loadSources(): List<BookSource>? {
         if (!cacheFile.exists()) return null

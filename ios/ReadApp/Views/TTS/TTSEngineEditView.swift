@@ -1,5 +1,4 @@
 import SwiftUI
-import AVFoundation
 
 struct TTSEngineEditView: View {
     @Environment(\.dismiss) var dismiss
@@ -16,11 +15,6 @@ struct TTSEngineEditView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var errorSheet: SelectableMessage?
-    @State private var testText: String = "这是一段 TTS 试听文本。"
-    @State private var isTesting = false
-    @State private var isPreviewPlaying = false
-    @State private var previewPlayer: AVAudioPlayer?
-    @State private var previewToken: Int = 0
     
     var isEditing: Bool { ttsToEdit != nil }
     
@@ -89,29 +83,6 @@ struct TTSEngineEditView: View {
             }
             
             Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("试听文本")
-                    TextEditor(text: $testText)
-                        .frame(minHeight: 80)
-                        .font(.system(.body))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                        )
-                    Button(action: togglePreviewPlayback) {
-                        HStack {
-                            Spacer()
-                            if isTesting {
-                                ProgressView()
-                            } else {
-                                Text(isPreviewPlaying ? "停止试听" : "试听当前引擎")
-                            }
-                            Spacer()
-                        }
-                    }
-                    .disabled(isLoading || isTesting)
-                }
-
                 Button(action: saveTTS) {
                     if isLoading {
                         HStack {
@@ -148,9 +119,6 @@ struct TTSEngineEditView: View {
         .onChange(of: errorMessage) { newValue in
             guard let message = newValue, !message.isEmpty else { return }
             errorSheet = SelectableMessage(title: "错误", message: message)
-        }
-        .onDisappear {
-            stopPreviewPlayback()
         }
     }
     
@@ -207,75 +175,5 @@ struct TTSEngineEditView: View {
                 }
             }
         }
-    }
-
-    private func togglePreviewPlayback() {
-        if isPreviewPlaying {
-            stopPreviewPlayback()
-        } else {
-            startPreviewPlayback()
-        }
-    }
-
-    private func startPreviewPlayback() {
-        guard let id = ttsToEdit?.id, !id.isEmpty else {
-            errorMessage = "请先保存引擎后再试听"
-            return
-        }
-        let text = testText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            errorMessage = "试听文本不能为空"
-            return
-        }
-        isTesting = true
-        errorMessage = nil
-        let token = previewToken + 1
-        previewToken = token
-
-        Task {
-            do {
-                let data = try await APIService.shared.fetchReaderTtsAudio(
-                    ttsId: id,
-                    text: text,
-                    speechRate: UserPreferences.shared.speechRate
-                )
-                await MainActor.run {
-                    do {
-                        stopPreviewPlayback()
-                        let player = try AVAudioPlayer(data: data)
-                        player.prepareToPlay()
-                        guard player.play() else {
-                            throw NSError(domain: "TTSEngineEditView", code: -1, userInfo: [NSLocalizedDescriptionKey: "试听播放失败"])
-                        }
-                        previewPlayer = player
-                        isPreviewPlaying = true
-                        isTesting = false
-                        let duration = player.duration
-                        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.2) {
-                            guard previewToken == token, !(previewPlayer?.isPlaying ?? false) else { return }
-                            isPreviewPlaying = false
-                        }
-                    } catch {
-                        isTesting = false
-                        isPreviewPlaying = false
-                        errorMessage = error.localizedDescription
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    isTesting = false
-                    isPreviewPlaying = false
-                    errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func stopPreviewPlayback() {
-        previewToken += 1
-        previewPlayer?.stop()
-        previewPlayer = nil
-        isPreviewPlaying = false
-        isTesting = false
     }
 }

@@ -328,18 +328,11 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                 val publicServerUrl by bookViewModel.publicServerAddress.collectAsState()
                 val username by bookViewModel.username.collectAsState()
                 val apiBackend by bookViewModel.apiBackend.collectAsState()
-                val accounts by bookViewModel.accounts.collectAsState()
-                val currentAccountId by bookViewModel.currentAccountId.collectAsState()
                 AccountSettingsView(
                     username = username,
                     serverUrl = serverAddress,
                     publicServerUrl = publicServerUrl,
                     backend = apiBackend,
-                    accounts = accounts,
-                    currentAccountId = currentAccountId,
-                    onSwitchAccount = { bookViewModel.switchAccount(it) },
-                    onAddAccount = { navController.navigate(Screen.Login.route) },
-                    onRemoveAccount = { bookViewModel.removeAccount(it) },
                     onLogout = {
                         bookViewModel.logout()
                         navController.navigate(Screen.Login.route) { popUpTo(0) }
@@ -435,7 +428,6 @@ fun ReadAppMain(bookViewModel: BookViewModel) {
                     onAddEngine = bookViewModel::addTtsEngine,
                     onAddEngines = bookViewModel::saveTtsBatch,
                     onDeleteEngine = bookViewModel::deleteTtsEngine,
-                    onTestEngine = bookViewModel::testTtsEngine,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

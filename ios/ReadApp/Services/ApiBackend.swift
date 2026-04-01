@@ -1,6 +1,6 @@
 import Foundation
 
-enum ApiBackend: String, CaseIterable, Identifiable, Codable {
+enum ApiBackend: String, CaseIterable, Identifiable {
     case read
     case reader
 

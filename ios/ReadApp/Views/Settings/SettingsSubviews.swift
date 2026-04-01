@@ -5,11 +5,10 @@ struct AccountSettingsView: View {
     @Environment(\.dismiss) var dismiss
     @State private var showLogoutAlert = false
     @State private var showChangePasswordSheet = false
-    @State private var showAddAccountSheet = false
 
     var body: some View {
         Form {
-            Section(header: GlassySectionHeader(title: "当前账号")) {
+            Section(header: GlassySectionHeader(title: "用户信息")) {
                 HStack {
                     Text("用户名")
                     Spacer()
@@ -47,33 +46,6 @@ struct AccountSettingsView: View {
                     }
                 }
             }
-
-            Section(header: GlassySectionHeader(title: "切换账号")) {
-                ForEach(preferences.accounts) { account in
-                    Button(action: { preferences.switchAccount(to: account.id) }) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(account.username)
-                                    .foregroundColor(.primary)
-                                Text(account.serverURL)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            if preferences.currentAccountId == account.id {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.blue)
-                            }
-                        }
-                    }
-                }
-                .onDelete(perform: deleteAccount)
-                
-                Button(action: { showAddAccountSheet = true }) {
-                    Label("添加或登录新账号", systemImage: "person.badge.plus")
-                        .foregroundColor(.blue)
-                }
-            }
             
             Section {
                 Button(action: { showChangePasswordSheet = true }) {
@@ -83,7 +55,7 @@ struct AccountSettingsView: View {
                 Button(action: { showLogoutAlert = true }) {
                     HStack {
                         Spacer()
-                        Text("退出当前账号")
+                        Text("退出登录")
                             .foregroundColor(.red)
                         Spacer()
                     }
@@ -96,28 +68,13 @@ struct AccountSettingsView: View {
         .sheet(isPresented: $showChangePasswordSheet) {
             ChangePasswordView()
         }
-        .sheet(isPresented: $showAddAccountSheet) {
-            LoginView()
-        }
         .alert("退出登录", isPresented: $showLogoutAlert) {
             Button("取消", role: .cancel) { }
             Button("退出", role: .destructive) {
                 preferences.logout()
             }
         } message: {
-            Text("确定要退出当前账号吗？")
-        }
-    }
-
-    private func deleteAccount(at offsets: IndexSet) {
-        offsets.forEach { index in
-            let account = preferences.accounts[index]
-            if account.id == preferences.currentAccountId {
-                preferences.logout()
-            } else {
-                preferences.accounts.remove(at: index)
-                KeychainHelper.shared.delete(service: "com.readapp.ios", account: account.id)
-            }
+            Text("确定要退出登录吗？")
         }
     }
 }
