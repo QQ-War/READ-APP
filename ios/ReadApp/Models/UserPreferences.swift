@@ -661,78 +661,92 @@ class UserPreferences: ObservableObject {
         let savedSpeechRate = UserDefaults.standard.double(forKey: "speechRate")
         self.speechRate = savedSpeechRate == 0 ? 100.0 : savedSpeechRate
 
+        let accountsValue: [UserAccount]
         if let accountsData = UserDefaults.standard.data(forKey: "userAccounts"),
            let savedAccounts = try? JSONDecoder().decode([UserAccount].self, from: accountsData) {
-            self.accounts = savedAccounts
+            accountsValue = savedAccounts
         } else {
-            self.accounts = []
+            accountsValue = []
         }
-        self.currentAccountId = UserDefaults.standard.string(forKey: "currentAccountId")
+        let currentAccountIdValue = UserDefaults.standard.string(forKey: "currentAccountId")
 
         let rawServerURL = UserDefaults.standard.string(forKey: "serverURL") ?? ""
         let rawPublicURL = UserDefaults.standard.string(forKey: "publicServerURL") ?? ""
         let savedBackendRaw = UserDefaults.standard.string(forKey: "apiBackend")
         let detectedBackend = ApiBackendResolver.detect(from: rawServerURL)
-        if let savedBackendRaw, let savedBackend = ApiBackend(rawValue: savedBackendRaw) {
-            self.apiBackend = savedBackend
-        } else {
-            self.apiBackend = detectedBackend
-        }
-        self.serverURL = ApiBackendResolver.stripApiBasePath(rawServerURL)
-        self.publicServerURL = ApiBackendResolver.stripApiBasePath(rawPublicURL)
-        
-        let accountKey = currentAccountId ?? "accessToken"
-        self.accessToken = KeychainHelper.shared.read(service: "com.readapp.ios", account: accountKey) ?? UserDefaults.standard.string(forKey: "accessToken") ?? ""
-        self.username = UserDefaults.standard.string(forKey: "username") ?? ""
-        self.isLoggedIn = UserDefaults.standard.bool(forKey: "isLoggedIn")
-        
-        // 如果是从旧版本升级，还没有 accounts 且已经登录，则创建一个默认账户
-        let needsBootstrapAccount = accounts.isEmpty && isLoggedIn && !serverURL.isEmpty
+        let apiBackendValue = (savedBackendRaw.flatMap { ApiBackend(rawValue: $0) }) ?? detectedBackend
+        let serverURLValue = ApiBackendResolver.stripApiBasePath(rawServerURL)
+        let publicServerURLValue = ApiBackendResolver.stripApiBasePath(rawPublicURL)
 
-        self.selectedTTSId = UserDefaults.standard.string(forKey: "selectedTTSId") ?? ""
-        self.useSystemTTS = UserDefaults.standard.bool(forKey: "useSystemTTS")
-        self.systemVoiceId = UserDefaults.standard.string(forKey: "systemVoiceId") ?? ""
-        self.narrationTTSId = UserDefaults.standard.string(forKey: "narrationTTSId") ?? ""
-        self.dialogueTTSId = UserDefaults.standard.string(forKey: "dialogueTTSId") ?? ""
+        let accountKey = currentAccountIdValue ?? "accessToken"
+        let accessTokenValue = KeychainHelper.shared.read(service: "com.readapp.ios", account: accountKey) ?? UserDefaults.standard.string(forKey: "accessToken") ?? ""
+        let usernameValue = UserDefaults.standard.string(forKey: "username") ?? ""
+        let isLoggedInValue = UserDefaults.standard.bool(forKey: "isLoggedIn")
 
+        let selectedTTSIdValue = UserDefaults.standard.string(forKey: "selectedTTSId") ?? ""
+        let useSystemTTSValue = UserDefaults.standard.bool(forKey: "useSystemTTS")
+        let systemVoiceIdValue = UserDefaults.standard.string(forKey: "systemVoiceId") ?? ""
+        let narrationTTSIdValue = UserDefaults.standard.string(forKey: "narrationTTSId") ?? ""
+        let dialogueTTSIdValue = UserDefaults.standard.string(forKey: "dialogueTTSId") ?? ""
+
+        let speakerTTSMappingValue: [String: String]
         if let mappingData = UserDefaults.standard.data(forKey: "speakerTTSMapping"),
            let mapping = try? JSONDecoder().decode([String: String].self, from: mappingData) {
-            self.speakerTTSMapping = mapping
+            speakerTTSMappingValue = mapping
         } else {
-            self.speakerTTSMapping = [:]
+            speakerTTSMappingValue = [:]
         }
+        let speakerTriggerRegexesValue: [String]
         if let regexData = UserDefaults.standard.data(forKey: "speakerTriggerRegexes"),
            let regexes = try? JSONDecoder().decode([String].self, from: regexData),
            !regexes.isEmpty {
-            self.speakerTriggerRegexes = regexes
+            speakerTriggerRegexesValue = regexes
         } else {
-            self.speakerTriggerRegexes = Self.defaultSpeakerTriggerRegexes
+            speakerTriggerRegexesValue = Self.defaultSpeakerTriggerRegexes
         }
-        self.bookshelfSortByRecent = UserDefaults.standard.bool(forKey: "bookshelfSortByRecent")
-        self.searchSourcesFromBookshelf = UserDefaults.standard.bool(forKey: "searchSourcesFromBookshelf")
-        self.preferredSearchSourceUrls = UserDefaults.standard.stringArray(forKey: "preferredSearchSourceUrls") ?? []
+        let bookshelfSortByRecentValue = UserDefaults.standard.bool(forKey: "bookshelfSortByRecent")
+        let searchSourcesFromBookshelfValue = UserDefaults.standard.bool(forKey: "searchSourcesFromBookshelf")
+        let preferredSearchSourceUrlsValue = UserDefaults.standard.stringArray(forKey: "preferredSearchSourceUrls") ?? []
+
+        let needsBootstrapAccount = accountsValue.isEmpty && isLoggedInValue && !serverURLValue.isEmpty
+
+        self.accounts = accountsValue
+        self.currentAccountId = currentAccountIdValue
+        self.apiBackend = apiBackendValue
+        self.serverURL = serverURLValue
+        self.publicServerURL = publicServerURLValue
+        self.accessToken = accessTokenValue
+        self.username = usernameValue
+        self.isLoggedIn = isLoggedInValue
+        self.selectedTTSId = selectedTTSIdValue
+        self.useSystemTTS = useSystemTTSValue
+        self.systemVoiceId = systemVoiceIdValue
+        self.narrationTTSId = narrationTTSIdValue
+        self.dialogueTTSId = dialogueTTSIdValue
+        self.speakerTTSMapping = speakerTTSMappingValue
+        self.speakerTriggerRegexes = speakerTriggerRegexesValue
+        self.bookshelfSortByRecent = bookshelfSortByRecentValue
+        self.searchSourcesFromBookshelf = searchSourcesFromBookshelfValue
+        self.preferredSearchSourceUrls = preferredSearchSourceUrlsValue
 
         if needsBootstrapAccount {
-            let defaultId = "\(serverURL):\(username)"
+            let defaultId = "\(serverURLValue):\(usernameValue)"
             let defaultAccount = UserAccount(
                 id: defaultId,
-                username: username,
-                serverURL: serverURL,
-                publicServerURL: publicServerURL,
-                apiBackend: apiBackend,
-                selectedTTSId: selectedTTSId,
-                narrationTTSId: narrationTTSId,
-                dialogueTTSId: dialogueTTSId,
-                speakerTTSMapping: speakerTTSMapping,
-                preferredSearchSourceUrls: preferredSearchSourceUrls
+                username: usernameValue,
+                serverURL: serverURLValue,
+                publicServerURL: publicServerURLValue,
+                apiBackend: apiBackendValue,
+                selectedTTSId: selectedTTSIdValue,
+                narrationTTSId: narrationTTSIdValue,
+                dialogueTTSId: dialogueTTSIdValue,
+                speakerTTSMapping: speakerTTSMappingValue,
+                preferredSearchSourceUrls: preferredSearchSourceUrlsValue
             )
-            // Defer assignment until init completes to avoid early self access issues in CI builds.
-            DispatchQueue.main.async {
-                self.accounts = [defaultAccount]
-                self.currentAccountId = defaultId
-                if !self.accessToken.isEmpty {
-                    KeychainHelper.shared.save(self.accessToken, service: "com.readapp.ios", account: defaultId)
-                }
+            self.accounts = [defaultAccount]
+            self.currentAccountId = defaultId
+            if !accessTokenValue.isEmpty {
+                KeychainHelper.shared.save(accessTokenValue, service: "com.readapp.ios", account: defaultId)
             }
         }
 
