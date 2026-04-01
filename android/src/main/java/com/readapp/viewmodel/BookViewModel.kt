@@ -402,6 +402,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
                 _accounts.value = preferences.listAccounts()
                 _currentAccountId.value = preferences.getCurrentAccountId()
+                AccountContext.currentAccountId = _currentAccountId.value.ifBlank { "default" }
                 readerSettings.loadInitial()
 
                 localCache.loadBookshelfCache()?.let { cached ->
@@ -794,6 +795,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 _accounts.value = preferences.listAccounts()
                 _currentAccountId.value = preferences.getCurrentAccountId()
+                AccountContext.currentAccountId = _currentAccountId.value.ifBlank { "default" }
                 loadTtsEnginesInternal()
                 refreshBooksInternal(showLoading = true)
                 loadReplaceRules()
@@ -807,6 +809,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             preferences.saveAccessToken("")
             _currentAccountId.value = ""
+            AccountContext.currentAccountId = "default"
             _accessToken.value = ""
             _username.value = ""
             _books.value = emptyList()
@@ -838,6 +841,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             }
             _currentAccountId.value = accountId
             _accounts.value = preferences.listAccounts()
+            AccountContext.currentAccountId = accountId
             val storedServer = preferences.serverUrl.first()
             val storedPublic = preferences.publicServerUrl.first()
             val storedBackend = preferences.getApiBackendSetting() ?: detectApiBackend(storedServer)
@@ -891,6 +895,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             preferences.removeAccount(accountId)
             _accounts.value = preferences.listAccounts()
             _currentAccountId.value = preferences.getCurrentAccountId()
+            AccountContext.currentAccountId = _currentAccountId.value.ifBlank { "default" }
         }
     }
 

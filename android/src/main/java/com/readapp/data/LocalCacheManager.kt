@@ -8,8 +8,10 @@ import java.io.File
 import java.security.MessageDigest
 
 class LocalCacheManager(context: Context) {
-    private val baseDir = File(context.filesDir, "BookCache").apply { if (!exists()) mkdirs() }
-    private val bookshelfFile = File(context.filesDir, "bookshelf_cache.json")
+    private val accountRoot = File(context.filesDir, "accounts").apply { if (!exists()) mkdirs() }
+    private val accountDir = File(accountRoot, AccountContext.currentAccountId).apply { if (!exists()) mkdirs() }
+    private val baseDir = File(accountDir, "BookCache").apply { if (!exists()) mkdirs() }
+    private val bookshelfFile = File(accountDir, "bookshelf_cache.json")
     private val gson = Gson()
 
     private fun getBookDir(bookUrl: String): File {

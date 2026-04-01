@@ -81,7 +81,6 @@ class UserPreferences(private val context: Context) {
         val VerticalDampingFactor = floatPreferencesKey("verticalDampingFactor")
         val MangaMaxZoom = floatPreferencesKey("mangaMaxZoom")
         val ReadingMaxRefreshRate = floatPreferencesKey("readingMaxRefreshRate")
-        val CachedTtsEngines = stringPreferencesKey("cachedTtsEngines")
         val CachedRssSources = stringPreferencesKey("cachedRssSources")
     }
 
@@ -113,25 +112,41 @@ class UserPreferences(private val context: Context) {
         (it[Keys.ReadingMaxRefreshRate] ?: 0f).coerceIn(0f, 120f)
     }
 
+    private fun cachedTtsKeyFor(accountId: String): String {
+        return "cachedTtsEngines_${accountId}"
+    }
+
     suspend fun saveCachedTtsEngines(engines: List<HttpTTS>) {
         val json = gson.toJson(engines)
-        context.dataStore.edit { prefs -> prefs[Keys.CachedTtsEngines] = json }
+        val currentId = getCurrentAccountId().ifBlank { "default" }
+        context.dataStore.edit { prefs ->
+            prefs[stringPreferencesKey(cachedTtsKeyFor(currentId))] = json
+        }
     }
 
     suspend fun loadCachedTtsEngines(): List<HttpTTS> {
-        val json = context.dataStore.data.first()[Keys.CachedTtsEngines].orEmpty()
+        val currentId = getCurrentAccountId().ifBlank { "default" }
+        val json = context.dataStore.data.first()[stringPreferencesKey(cachedTtsKeyFor(currentId))].orEmpty()
         if (json.isBlank()) return emptyList()
         val type = object : TypeToken<List<HttpTTS>>() {}.type
         return runCatching { gson.fromJson<List<HttpTTS>>(json, type) }.getOrElse { emptyList() }
     }
 
+    private fun cachedRssKeyFor(accountId: String): String {
+        return "cachedRssSources_${accountId}"
+    }
+
     suspend fun saveCachedRssSources(sources: List<RssSourceItem>) {
         val json = gson.toJson(sources)
-        context.dataStore.edit { prefs -> prefs[Keys.CachedRssSources] = json }
+        val currentId = getCurrentAccountId().ifBlank { "default" }
+        context.dataStore.edit { prefs ->
+            prefs[stringPreferencesKey(cachedRssKeyFor(currentId))] = json
+        }
     }
 
     suspend fun loadCachedRssSources(): List<RssSourceItem> {
-        val json = context.dataStore.data.first()[Keys.CachedRssSources].orEmpty()
+        val currentId = getCurrentAccountId().ifBlank { "default" }
+        val json = context.dataStore.data.first()[stringPreferencesKey(cachedRssKeyFor(currentId))].orEmpty()
         if (json.isBlank()) return emptyList()
         val type = object : TypeToken<List<RssSourceItem>>() {}.type
         return runCatching { gson.fromJson<List<RssSourceItem>>(json, type) }.getOrElse { emptyList() }
@@ -223,6 +238,7 @@ class UserPreferences(private val context: Context) {
             prefs[Keys.AccessToken] = accessToken
         }
         secureStorage.saveAccessToken(accessToken)
+        AccountContext.currentAccountId = id
     }
 
     suspend fun switchAccount(id: String): Boolean {
@@ -237,6 +253,7 @@ class UserPreferences(private val context: Context) {
             prefs[Keys.AccessToken] = account.accessToken
         }
         secureStorage.saveAccessToken(account.accessToken)
+        AccountContext.currentAccountId = id
         return true
     }
 
@@ -260,6 +277,8 @@ class UserPreferences(private val context: Context) {
                 }
             }
         }
+        val current = getCurrentAccountId()
+        AccountContext.currentAccountId = current.ifBlank { "default" }
     }
 
     suspend fun listAccounts(): List<UserAccount> {

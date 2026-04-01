@@ -40,11 +40,15 @@ class ReadRepository(
 
     private fun saveSourcesToCache(context: Context, sources: List<com.readapp.data.model.BookSource>) {
         val json = gson.toJson(sources)
-        File(context.filesDir, SOURCES_CACHE_FILE).writeText(json)
+        val accountRoot = File(context.filesDir, "accounts").apply { if (!exists()) mkdirs() }
+        val accountDir = File(accountRoot, AccountContext.currentAccountId).apply { if (!exists()) mkdirs() }
+        File(accountDir, SOURCES_CACHE_FILE).writeText(json)
     }
 
     private fun loadSourcesFromCache(context: Context): List<com.readapp.data.model.BookSource>? {
-        val file = File(context.filesDir, SOURCES_CACHE_FILE)
+        val accountRoot = File(context.filesDir, "accounts").apply { if (!exists()) mkdirs() }
+        val accountDir = File(accountRoot, AccountContext.currentAccountId).apply { if (!exists()) mkdirs() }
+        val file = File(accountDir, SOURCES_CACHE_FILE)
         if (!file.exists()) return null
         val json = file.readText()
         return gson.fromJson(json, Array<com.readapp.data.model.BookSource>::class.java)?.toList()
