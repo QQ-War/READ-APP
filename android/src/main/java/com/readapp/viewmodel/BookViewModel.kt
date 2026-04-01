@@ -20,6 +20,9 @@ import com.readapp.data.LocalCacheManager
 import com.readapp.data.LocalSourceCache
 import com.readapp.data.ChapterContentRepository
 import com.readapp.data.AccountContext
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import android.util.Base64
 import com.readapp.data.ApiBackend
 import com.readapp.data.PackageDownloadManager
 import com.readapp.data.detectApiBackend
@@ -1819,6 +1822,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 val body = response.body?.bytes()
                 if (body == null || body.isEmpty()) {
                     throw IllegalStateException("试听返回空音频")
+                }
+                val contentType = response.header("Content-Type").orEmpty().lowercase()
+                if (contentType.contains("application/json") || body.firstOrNull() == '{'.code.toByte()) {
+                    val json = body.toString(Charsets.UTF_8)
+                    val type = object : TypeToken<com.readapp.data.model.ApiResponse<String>>() {}.type
+                    val parsed = Gson().fromJson<com.readapp.data.model.ApiResponse<String>>(json, type)
+                    val base64 = parsed.data?.takeIf { it.isNotBlank() }
+                        ?: throw IllegalStateException(parsed.errorMsg ?: "TTS返回空音频数据")
+                    return@use Base64.decode(base64, Base64.DEFAULT)
                 }
                 body
             }
