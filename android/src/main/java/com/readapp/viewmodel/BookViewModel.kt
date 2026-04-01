@@ -79,6 +79,10 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
 
     internal val appContext = getApplication<Application>()
     val preferences = UserPreferences(appContext)
+    private val _accounts = MutableStateFlow<List<UserPreferences.UserAccount>>(emptyList())
+    val accounts: StateFlow<List<UserPreferences.UserAccount>> = _accounts.asStateFlow()
+    private val _currentAccountId = MutableStateFlow("")
+    val currentAccountId: StateFlow<String> = _currentAccountId.asStateFlow()
     private val readerSettings = ReaderSettingsStore(preferences, viewModelScope)
     private val localCache = LocalCacheManager(appContext)
     private val localSourceCache = LocalSourceCache(appContext)
@@ -396,6 +400,8 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _searchSourcesFromBookshelf.value = preferences.searchSourcesFromBookshelf.first()
                 val urls = preferences.preferredSearchSourceUrls.first()
                 _preferredSearchSourceUrls.value = if (urls.isBlank()) emptySet() else urls.split(";").toSet()
+                _accounts.value = preferences.listAccounts()
+                _currentAccountId.value = preferences.getCurrentAccountId()
                 readerSettings.loadInitial()
 
                 localCache.loadBookshelfCache()?.let { cached ->
@@ -779,10 +785,15 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
                 _username.value = username
                 _serverAddress.value = baseHost
                 _apiBackend.value = backend
-                preferences.saveAccessToken(loginData.accessToken)
-                preferences.saveUsername(username)
-                preferences.saveServerUrl(baseHost)
-                preferences.saveApiBackend(backend)
+                preferences.addAccount(
+                    serverUrl = baseHost,
+                    publicServerUrl = _publicServerAddress.value,
+                    username = username,
+                    apiBackend = backend,
+                    accessToken = loginData.accessToken
+                )
+                _accounts.value = preferences.listAccounts()
+                _currentAccountId.value = preferences.getCurrentAccountId()
                 loadTtsEnginesInternal()
                 refreshBooksInternal(showLoading = true)
                 loadReplaceRules()
@@ -795,6 +806,7 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
     fun logout() {
         viewModelScope.launch {
             preferences.saveAccessToken("")
+            _currentAccountId.value = ""
             _accessToken.value = ""
             _username.value = ""
             _books.value = emptyList()
@@ -814,6 +826,71 @@ class BookViewModel(application: Application) : AndroidViewModel(application) {
             _dialogueTtsEngine.value = ""
             _speakerTtsMapping.value = emptyMap()
             _replaceRules.value = emptyList()
+        }
+    }
+
+    fun switchAccount(accountId: String) {
+        viewModelScope.launch {
+            val switched = preferences.switchAccount(accountId)
+            if (!switched) {
+                _errorMessage.value = "切换账号失败"
+                return@launch
+            }
+            _currentAccountId.value = accountId
+            _accounts.value = preferences.listAccounts()
+            val storedServer = preferences.serverUrl.first()
+            val storedPublic = preferences.publicServerUrl.first()
+            val storedBackend = preferences.getApiBackendSetting() ?: detectApiBackend(storedServer)
+            _serverAddress.value = stripApiBasePath(storedServer)
+            _publicServerAddress.value = if (storedPublic.isBlank()) storedPublic else stripApiBasePath(storedPublic)
+            _apiBackend.value = storedBackend
+            _accessToken.value = preferences.accessToken.first()
+            _username.value = preferences.username.first()
+            _selectedTtsEngine.value = preferences.selectedTtsId.firstOrNull().orEmpty()
+            _useSystemTts.value = preferences.useSystemTts.first()
+            _systemVoiceId.value = preferences.systemVoiceId.firstOrNull().orEmpty()
+            _narrationTtsEngine.value = preferences.narrationTtsId.firstOrNull().orEmpty()
+            _dialogueTtsEngine.value = preferences.dialogueTtsId.firstOrNull().orEmpty()
+            _speakerTtsMapping.value = parseSpeakerMapping(preferences.speakerTtsMapping.firstOrNull().orEmpty())
+            _speakerTriggerRegexes.value = parseSpeakerTriggerRegexes(preferences.speakerTriggerRegexes.firstOrNull().orEmpty())
+
+            _books.value = emptyList()
+            allBooks = emptyList()
+            _selectedBook.value = null
+            _chapters.value = emptyList()
+            _currentChapterIndex.value = 0
+            _currentChapterContent.value = ""
+            _currentParagraphIndex.value = -1
+            currentParagraphs = emptyList()
+            currentSentences = emptyList()
+            chapterContentRepository.clearMemoryCache()
+
+            _availableTtsEngines.value = emptyList()
+            _selectedTtsEngine.value = ""
+            _narrationTtsEngine.value = ""
+            _dialogueTtsEngine.value = ""
+            _speakerTtsMapping.value = emptyMap()
+            _replaceRules.value = emptyList()
+
+            if (_accessToken.value.isNotBlank()) {
+                _isLoading.value = true
+                try {
+                    loadTtsEnginesInternal()
+                    loadBookSources()
+                    refreshBooksInternal(showLoading = true)
+                    loadReplaceRules()
+                } finally {
+                    _isLoading.value = false
+                }
+            }
+        }
+    }
+
+    fun removeAccount(accountId: String) {
+        viewModelScope.launch {
+            preferences.removeAccount(accountId)
+            _accounts.value = preferences.listAccounts()
+            _currentAccountId.value = preferences.getCurrentAccountId()
         }
     }
 

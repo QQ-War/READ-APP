@@ -37,6 +37,11 @@ fun AccountSettingsView(
     serverUrl: String,
     publicServerUrl: String,
     backend: ApiBackend,
+    accounts: List<com.readapp.data.UserPreferences.UserAccount>,
+    currentAccountId: String,
+    onSwitchAccount: (String) -> Unit,
+    onAddAccount: () -> Unit,
+    onRemoveAccount: (String) -> Unit,
     onLogout: () -> Unit,
     onConfirmPasswordChange: (String, String) -> Unit,
     onNavigateBack: () -> Unit
@@ -77,6 +82,27 @@ fun AccountSettingsView(
             if (publicServerUrl.isNotBlank()) {
                 SettingsItem(title = "公网服务器", subtitle = publicServerUrl, icon = Icons.Default.Public) {}
             }
+
+            SectionHeader("切换账号")
+            if (accounts.isEmpty()) {
+                Text("暂无其他账号", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    accounts.forEach { account ->
+                        val title = if (account.username.isBlank()) account.serverUrl else account.username
+                        val subtitle = account.serverUrl
+                        SettingsItem(title = title, subtitle = subtitle, icon = Icons.Default.Person) {
+                            onSwitchAccount(account.id)
+                        }
+                        if (account.id == currentAccountId) {
+                            Text("当前账号", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        } else {
+                            TextButton(onClick = { onRemoveAccount(account.id) }) { Text("移除") }
+                        }
+                    }
+                }
+            }
+            Button(onClick = onAddAccount, modifier = Modifier.fillMaxWidth()) { Text("添加账号") }
 
             SectionHeader("安全与操作")
             SettingsItem(title = "修改密码", subtitle = "更新您的登录凭据", icon = Icons.Default.Lock) {
