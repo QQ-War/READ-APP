@@ -15,6 +15,11 @@ final class RssSourcesViewModel: ObservableObject {
     init(service: APIService = APIService.shared) {
         self.service = service
         self.remoteSources = remoteStore.loadSources()
+        NotificationCenter.default.addObserver(forName: .accountChanged, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.remoteSources = self.remoteStore.loadSources()
+            Task { await self.refresh() }
+        }
         Task {
             await refresh()
         }
