@@ -8,6 +8,9 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showServerSettings = false
+    @State private var selectedBackend: ApiBackend = .read
+    @State private var serverURL: String = ""
+    @State private var publicServerURL: String = ""
     
     var body: some View {
         NavigationView {
@@ -26,11 +29,11 @@ struct LoginView: View {
                 Spacer()
                 
                 // 服务器地址显示
-                if !preferences.serverURL.isEmpty {
+                if !serverURL.isEmpty {
                     HStack {
                         Text("服务器:")
                             .foregroundColor(.secondary)
-                        Text("\(preferences.serverURL) (\(preferences.apiBackend.displayName))")
+                        Text("\(serverURL) (\(selectedBackend.displayName))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Spacer()
@@ -82,7 +85,7 @@ struct LoginView: View {
                 .glassyCard(cornerRadius: 18, padding: 16)
                 
                 // 服务器设置按钮
-                if preferences.serverURL.isEmpty {
+                if serverURL.isEmpty {
                     Button(action: { showServerSettings = true }) {
                         HStack {
                             Image(systemName: "server.rack")
@@ -107,14 +110,25 @@ struct LoginView: View {
                 }
             }
             .sheet(isPresented: $showServerSettings) {
-                ServerSettingsView()
+                ServerSettingsView(
+                    apiBackend: $selectedBackend,
+                    serverURL: $serverURL,
+                    publicServerURL: $publicServerURL
+                )
             }
             .liquidGlassBackground()
+        }
+        .onAppear {
+            if serverURL.isEmpty {
+                selectedBackend = preferences.apiBackend
+                serverURL = preferences.serverURL
+                publicServerURL = preferences.publicServerURL
+            }
         }
     }
     
     private var canLogin: Bool {
-        !username.isEmpty && !password.isEmpty && !preferences.serverURL.isEmpty
+        !username.isEmpty && !password.isEmpty && !serverURL.isEmpty
     }
     
     private func handleLogin() {
@@ -125,16 +139,21 @@ struct LoginView: View {
         
         Task {
             do {
-                let accessToken = try await APIService.shared.login(username: username, password: password)
+                let accessToken = try await APIService.shared.login(
+                    serverURL: serverURL,
+                    publicServerURL: publicServerURL.isEmpty ? nil : publicServerURL,
+                    backend: selectedBackend,
+                    username: username,
+                    password: password
+                )
                 
                 await MainActor.run {
-                    let accountId = "\(preferences.apiBackend.rawValue):\(preferences.serverURL):\(username)"
                     let account = UserPreferences.UserAccount(
-                        id: accountId,
+                        id: "",
                         username: username,
-                        serverURL: preferences.serverURL,
-                        publicServerURL: preferences.publicServerURL,
-                        apiBackend: preferences.apiBackend
+                        serverURL: serverURL,
+                        publicServerURL: publicServerURL,
+                        apiBackend: selectedBackend
                     )
                     preferences.addAccount(account: account, token: accessToken)
                     isLoading = false
@@ -152,7 +171,9 @@ struct LoginView: View {
 
 // MARK: - 服务器设置视图
 struct ServerSettingsView: View {
-    @StateObject private var preferences = UserPreferences.shared
+    @Binding var apiBackend: ApiBackend
+    @Binding var serverURL: String
+    @Binding var publicServerURL: String
     @Environment(\.dismiss) var dismiss
     @State private var testingConnection = false
     @State private var testResult: String?
@@ -160,28 +181,28 @@ struct ServerSettingsView: View {
 
     private var serverBinding: Binding<String> {
         Binding(
-            get: { preferences.serverURL },
+            get: { serverURL },
             set: { newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 let hasSuffix = trimmed.contains("/api/") || trimmed.contains("/reader3")
                 if hasSuffix {
-                    preferences.apiBackend = ApiBackendResolver.detect(from: trimmed)
+                    apiBackend = ApiBackendResolver.detect(from: trimmed)
                 }
-                preferences.serverURL = ApiBackendResolver.stripApiBasePath(trimmed)
+                serverURL = ApiBackendResolver.stripApiBasePath(trimmed)
             }
         )
     }
 
     private var publicServerBinding: Binding<String> {
         Binding(
-            get: { preferences.publicServerURL },
+            get: { publicServerURL },
             set: { newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 let hasSuffix = trimmed.contains("/api/") || trimmed.contains("/reader3")
                 if hasSuffix {
-                    preferences.apiBackend = ApiBackendResolver.detect(from: trimmed)
+                    apiBackend = ApiBackendResolver.detect(from: trimmed)
                 }
-                preferences.publicServerURL = ApiBackendResolver.stripApiBasePath(trimmed)
+                publicServerURL = ApiBackendResolver.stripApiBasePath(trimmed)
             }
         )
     }
@@ -190,7 +211,7 @@ struct ServerSettingsView: View {
         NavigationView {
             Form {
                 Section(header: GlassySectionHeader(title: "服务端类型")) {
-                    Picker("服务端类型", selection: $preferences.apiBackend) {
+                    Picker("服务端类型", selection: $apiBackend) {
                         ForEach(ApiBackend.allCases) { backend in
                             Text(backend.displayName).tag(backend)
                         }
@@ -247,7 +268,7 @@ struct ServerSettingsView: View {
                             Spacer()
                         }
                     }
-                    .disabled(preferences.serverURL.isEmpty || testingConnection)
+                    .disabled(serverURL.isEmpty || testingConnection)
                     
                     if let result = testResult {
                         HStack {
@@ -290,20 +311,20 @@ struct ServerSettingsView: View {
                     Button("完成") {
                         dismiss()
                     }
-                    .disabled(preferences.serverURL.isEmpty)
+                    .disabled(serverURL.isEmpty)
                 }
             }
         }
     }
     
     private func testConnection() {
+        guard !serverURL.isEmpty else { return }
         testingConnection = true
         testResult = nil
         
         Task {
             do {
-                let serverURL = preferences.serverURL
-                let backend = preferences.apiBackend
+                let backend = apiBackend
                 let baseURL = ApiBackendResolver.normalizeBaseURL(serverURL, backend: backend, apiVersion: APIService.apiVersion)
                 let testURL: String
                 if backend == .reader {

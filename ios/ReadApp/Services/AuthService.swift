@@ -60,6 +60,65 @@ final class AuthService {
         }
     }
 
+    func login(serverURL: String, publicServerURL: String?, backend: ApiBackend, username: String, password: String) async throws -> String {
+        _ = publicServerURL
+        let baseURL = ApiBackendResolver.normalizeBaseURL(serverURL, backend: backend, apiVersion: APIService.apiVersion)
+        let request: URLRequest
+        switch backend {
+        case .read:
+            let deviceModel = await MainActor.run { UIDevice.current.model }
+            let urlString = "\(baseURL)/\(ApiEndpoints.login)"
+            guard let url = URL(string: urlString) else {
+                throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL: \(urlString)"])
+            }
+            var newRequest = URLRequest(url: url)
+            newRequest.httpMethod = "POST"
+            newRequest.timeoutInterval = 15
+            newRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            let apiVersion = APIService.apiVersion
+            let bodyString = "username=\(username)&password=\(password)&model=\(deviceModel)&v=\(apiVersion)"
+            newRequest.httpBody = bodyString.data(using: .utf8)
+            request = newRequest
+        case .reader:
+            let urlString = "\(baseURL)/\(ApiEndpointsReader.login)"
+            guard let url = URL(string: urlString) else {
+                throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "无效的URL: \(urlString)"])
+            }
+            var newRequest = URLRequest(url: url)
+            newRequest.httpMethod = "POST"
+            newRequest.timeoutInterval = 15
+            newRequest.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            struct LoginPayload: Codable {
+                let username: String
+                let password: String
+                let isLogin: Bool
+            }
+            newRequest.httpBody = try JSONEncoder().encode(LoginPayload(username: username, password: password, isLogin: true))
+            request = newRequest
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(domain: "APIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "无效的响应类型"])
+            }
+            if httpResponse.statusCode != 200 {
+                throw NSError(domain: "APIService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "服务器错误(状态码: \(httpResponse.statusCode))"])
+            }
+            let apiResponse = try JSONDecoder().decode(APIResponse<LoginResponse>.self, from: data)
+            if apiResponse.isSuccess, let loginData = apiResponse.data {
+                return loginData.accessToken
+            } else {
+                throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: apiResponse.errorMsg ?? "登录失败"])
+            }
+        } catch let error as NSError {
+            if error.domain == NSURLErrorDomain {
+                throw NSError(domain: "APIService", code: error.code, userInfo: [NSLocalizedDescriptionKey: "网络连接失败: \(error.localizedDescription)"])
+            }
+            throw error
+        }
+    }
+
     func changePassword(oldPassword: String, newPassword: String) async throws {
         if client.backend == .reader {
             throw NSError(domain: "APIService", code: 400, userInfo: [NSLocalizedDescriptionKey: "当前服务端不支持修改密码"])

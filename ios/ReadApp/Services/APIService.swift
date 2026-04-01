@@ -60,6 +60,10 @@ class APIService {
     func login(username: String, password: String) async throws -> String {
         try await authService.login(username: username, password: password)
     }
+
+    func login(serverURL: String, publicServerURL: String?, backend: ApiBackend, username: String, password: String) async throws -> String {
+        try await authService.login(serverURL: serverURL, publicServerURL: publicServerURL, backend: backend, username: username, password: password)
+    }
     
     func changePassword(oldPassword: String, newPassword: String) async throws {
         try await authService.changePassword(oldPassword: oldPassword, newPassword: newPassword)
