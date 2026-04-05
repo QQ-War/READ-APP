@@ -163,6 +163,9 @@ class APIService {
             if let bookSourceUrl = bookSourceUrl {
                 queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
             }
+            if client.backend == .read {
+                queryItems.append(URLQueryItem(name: "accessToken", value: client.accessToken))
+            }
             
             let endpoint = self.client.backend == .reader ? ApiEndpointsReader.getBookContent : ApiEndpoints.getBookContent
             let (data, httpResponse) = try await self.client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)

@@ -44,6 +44,9 @@ final class BooksService {
         if let bookSourceUrl = bookSourceUrl {
             queryItems.append(URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl))
         }
+        if client.backend == .read {
+            queryItems.append(URLQueryItem(name: "accessToken", value: client.accessToken))
+        }
 
         do {
             let endpoint = client.backend == .reader ? ApiEndpointsReader.getChapterList : ApiEndpoints.getChapterList
@@ -84,6 +87,7 @@ final class BooksService {
                 if let title = title {
                     items.append(URLQueryItem(name: "title", value: title))
                 }
+                items.append(URLQueryItem(name: "accessToken", value: client.accessToken))
                 return items
             }()
             let url = try client.buildURL(endpoint: ApiEndpoints.saveBookProgress, queryItems: queryItems)
@@ -122,11 +126,14 @@ final class BooksService {
             throw NSError(domain: "APIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "请先登录"])
         }
 
-        let queryItems = [
+        var queryItems = [
             URLQueryItem(name: "bookSourceUrl", value: bookSourceUrl),
             URLQueryItem(name: "page", value: "\(page)"),
             URLQueryItem(name: "key", value: keyword)
         ]
+        if client.backend == .read {
+            queryItems.append(URLQueryItem(name: "accessToken", value: client.accessToken))
+        }
 
         let endpoint = client.backend == .reader ? ApiEndpointsReader.searchBook : ApiEndpoints.searchBook
         let (data, httpResponse) = try await client.requestWithFailback(endpoint: endpoint, queryItems: queryItems)
